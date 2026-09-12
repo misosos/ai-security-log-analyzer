@@ -1,0 +1,3 @@
+2026-09-11 10:00:01 INFO user_login user=alice ip=192.168.1.10
+2026-09-11 10:01:12 INFO file_access user=alice file=report.pdf
+2026-09-11 10:03:25 INFO user_logout user=alice
