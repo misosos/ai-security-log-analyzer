@@ -18,7 +18,12 @@ def build_risk_context(result):
     context["correlation"] = result.get(
         "correlation",
         {
-            "is_correlated": False,
+            "authentication": {
+                "is_correlated": False,
+            },
+            "post_authentication": {
+                "is_correlated": False,
+            },
         },
     )
 
@@ -98,7 +103,13 @@ def evaluate_likelihood(features):
         and path_traversal.is_detected
     )
 
-    correlated = correlation["is_correlated"]
+    authentication_correlated = (
+        correlation["authentication"]["is_correlated"]
+    )
+
+    post_authentication_correlated = (
+        correlation["post_authentication"]["is_correlated"]
+    )
 
     failure_count = features["failure_count"]
     target_scope = features["unique_target_count"]
@@ -128,7 +139,10 @@ def evaluate_likelihood(features):
         }
 
     # 2. Brute Force + Failed → Successful Login
-    if brute_force_detected and correlated:
+    if (
+        brute_force_detected
+        and authentication_correlated
+    ):
 
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
@@ -174,7 +188,10 @@ def evaluate_likelihood(features):
         }
 
     # 4. Password Spraying-like + Failed → Successful Login
-    if password_spray_detected and correlated:
+    if (
+        password_spray_detected
+        and authentication_correlated
+    ):
 
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
@@ -230,7 +247,11 @@ def evaluate_likelihood(features):
         }
 
     # 6. 반복 실패 + Failed → Successful Login
-    if failure_count >= 3 and within_window and correlated:
+    if (
+        failure_count >= 3
+        and within_window
+        and authentication_correlated
+    ):
 
         rationale.append(
             f"{failure_count}회의 인증 실패가 짧은 시간에 발생함"
@@ -246,7 +267,10 @@ def evaluate_likelihood(features):
         }
 
     # 7. 일반적인 반복 인증 실패
-    if failure_count >= 3 and within_window:
+    if (
+        failure_count >= 3
+        and within_window
+    ):
 
         rationale.append(
             f"{failure_count}회의 인증 실패가 짧은 시간에 발생함"
@@ -576,7 +600,13 @@ def evaluate_confidence(features):
         and path_traversal.is_detected
     )
 
-    correlated = correlation["is_correlated"]
+    authentication_correlated = (
+        correlation["authentication"]["is_correlated"]
+    )
+
+    post_authentication_correlated = (
+        correlation["post_authentication"]["is_correlated"]
+    )
 
     # Path Traversal
     if path_traversal_detected:
@@ -590,7 +620,10 @@ def evaluate_confidence(features):
         }
 
     # Brute Force + Failed → Successful Login
-    if brute_force_detected and correlated:
+    if (
+        brute_force_detected
+        and authentication_correlated
+    ):
 
         return {
             "level": "HIGH",
@@ -622,13 +655,24 @@ def evaluate_confidence(features):
         }
 
     # Failed → Successful Login
-    if correlated:
+    if authentication_correlated:
 
         return {
             "level": "MEDIUM",
             "rationale": [
                 "동일 계정에서 인증 실패 이후 로그인 성공 전이가 확인됨",
                 "이벤트 간 연관관계는 확인되지만 공격 행위 자체를 확정할 수는 없음",
+            ],
+        }
+
+    # Post-authentication activity
+    if post_authentication_correlated:
+
+        return {
+            "level": "MEDIUM",
+            "rationale": [
+                "로그인 성공 이후 동일 계정의 후속 파일 접근 행위가 확인됨",
+                "정상적인 사용자 활동일 가능성을 배제할 수 없어 공격 행위 자체를 확정할 수는 없음",
             ],
         }
 
@@ -657,7 +701,19 @@ def evaluate_correlation_signal(features):
 
     correlation = features["correlation"]
 
-    if correlation["is_correlated"]:
+    authentication_correlated = (
+        correlation["authentication"]["is_correlated"]
+    )
+
+    post_authentication_correlated = (
+        correlation["post_authentication"]["is_correlated"]
+    )
+
+    if (
+        authentication_correlated
+        or post_authentication_correlated
+    ):
         return "MEDIUM"
 
     return "LOW"
+

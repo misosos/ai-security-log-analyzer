@@ -108,8 +108,15 @@ def make_features(
         "interval_variability": interval_variability,
         "unique_target_count": len(target_users),
         "detections": detections,
+
+        # 새로운 Correlation 구조
         "correlation": {
-            "is_correlated": correlated,
+            "authentication": {
+                "is_correlated": correlated,
+            },
+            "post_authentication": {
+                "is_correlated": False,
+            },
         },
     }
 
@@ -135,7 +142,12 @@ def test_build_risk_context():
             "password_spray": empty_detection(),
         },
         "correlation": {
-            "is_correlated": False,
+            "authentication": {
+                "is_correlated": False,
+            },
+            "post_authentication": {
+                "is_correlated": False,
+            },
         },
     }
 
@@ -146,7 +158,16 @@ def test_build_risk_context():
     assert context["within_window"] is True
     assert context["window_seconds"] == 16.0
     assert context["detections"]["brute_force"].is_detected is True
-    assert context["correlation"]["is_correlated"] is False
+
+    assert (
+        context["correlation"]["authentication"]["is_correlated"]
+        is False
+    )
+
+    assert (
+        context["correlation"]["post_authentication"]["is_correlated"]
+        is False
+    )
 
 
 # ---------------------------------------------------------
@@ -556,6 +577,34 @@ def test_evaluate_correlation_signal():
     )
 
 
+def test_evaluate_correlation_signal_post_authentication():
+    features = make_features()
+
+    features["correlation"]["post_authentication"] = {
+        "is_correlated": True,
+    }
+
+    assert (
+        evaluate_correlation_signal(features)
+        == "MEDIUM"
+    )
+
+
+def test_evaluate_correlation_signal_both():
+    features = make_features(
+        correlated=True
+    )
+
+    features["correlation"]["post_authentication"] = {
+        "is_correlated": True,
+    }
+
+    assert (
+        evaluate_correlation_signal(features)
+        == "MEDIUM"
+    )
+
+
 # ---------------------------------------------------------
 # evaluate_risk_level
 # ---------------------------------------------------------
@@ -668,4 +717,75 @@ def test_build_risk_factors_path_traversal():
     assert (
         result["impact"]["basis"]["exploit_success_confirmed"]
         is False
+    )
+
+
+def test_risk_handles_new_correlation_structure():
+    result = {
+        "features": {
+            "failure_count": 5,
+            "target_users": ["admin"],
+            "login_succeeded": True,
+            "within_window": True,
+            "window_seconds": 8.0,
+            "average_interval": 2.0,
+            "interval_variability": 0.0,
+            "unique_target_count": 1,
+        },
+
+        "detections": {
+            "brute_force": DetectionResult(
+                is_detected=False,
+                detection_type=None,
+                evidence=[],
+            ),
+            "password_spray": DetectionResult(
+                is_detected=False,
+                detection_type=None,
+                evidence=[],
+            ),
+            "path_traversal": DetectionResult(
+                is_detected=False,
+                detection_type=None,
+                evidence=[],
+            ),
+        },
+
+        "correlation": {
+            "authentication": {
+                "is_correlated": True,
+                "type": "failed_to_successful_login",
+                "user": "admin",
+            },
+            "post_authentication": {
+                "is_correlated": True,
+                "type": "successful_login_to_file_access",
+                "user": "admin",
+            },
+        },
+    }
+
+    context = build_risk_context(result)
+
+    risk_factors = build_risk_factors(
+        context,
+        account_privilege_risk=False,
+    )
+
+    assert "authentication" in context["correlation"]
+    assert "post_authentication" in context["correlation"]
+
+    assert (
+        context["correlation"]["authentication"]["is_correlated"]
+        is True
+    )
+
+    assert (
+        context["correlation"]["post_authentication"]["is_correlated"]
+        is True
+    )
+
+    assert (
+        risk_factors["likelihood"]["signals"]["correlation"]
+        == "MEDIUM"
     )

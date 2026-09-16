@@ -6,7 +6,10 @@ from app.detector.brute_force import (
 )
 from app.detector.password_spray import detect_password_spray
 from app.detector.web_attack import detect_path_traversal
-from app.correlation.attack_chain import correlate_authentication_transition
+from app.correlation.attack_chain import (
+    correlate_authentication_transition,
+    correlate_post_authentication_activity,
+)
 from app.analyzer.risk import (
     load_account_metadata,
     build_risk_context,
@@ -169,21 +172,29 @@ def detect_attacks(logs):
 
 
 def correlate_attacks(logs, results):
-
     grouped_logs = group_logs_by_ip(logs)
 
     for ip, result in results.items():
-
         ip_logs = grouped_logs.get(ip, [])
 
-        correlation_result = correlate_authentication_transition(
-            ip_logs
+        authentication_result = (
+            correlate_authentication_transition(
+                ip_logs
+            )
         )
 
-        result["correlation"] = correlation_result
+        post_authentication_result = (
+            correlate_post_authentication_activity(
+                ip_logs
+            )
+        )
+
+        result["correlation"] = {
+            "authentication": authentication_result,
+            "post_authentication": post_authentication_result,
+        }
 
     return results
-
 
 def assess_risk(results):
 
