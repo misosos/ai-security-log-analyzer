@@ -28,17 +28,31 @@ def load_normalized_logs(log_sources):
 
     return logs
 
+def group_logs_by_ip(logs):
+
+    grouped = {}
+
+    for log in logs:
+
+        if log.src_ip is None:
+            continue
+
+        if log.src_ip not in grouped:
+            grouped[log.src_ip] = []
+
+        grouped[log.src_ip].append(log)
+
+    return grouped
+
 
 def detect_attacks(logs):
 
     results = summarize_ip_failures(logs)
+    grouped_logs = group_logs_by_ip(logs)
 
     for ip, features in results.items():
 
-        ip_logs = [
-            log for log in logs
-            if log.src_ip == ip
-        ]
+        ip_logs = grouped_logs[ip]
 
         failures = [
             log for log in ip_logs
@@ -57,12 +71,11 @@ def detect_attacks(logs):
 
 def correlate_attacks(logs, results):
 
+    grouped_logs = group_logs_by_ip(logs)
+
     for ip, features in results.items():
 
-        ip_logs = [
-            log for log in logs
-            if log.src_ip == ip
-        ]
+        ip_logs = grouped_logs[ip]
 
         correlation_result = correlate_authentication_transition(
             ip_logs
