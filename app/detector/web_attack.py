@@ -1,17 +1,29 @@
-
 from urllib.parse import unquote
 
 from app.models.schemas import Evidence, DetectionResult
 
 
 def decode_url(value):
-    return unquote(value)
+    decoded = value
+
+    while True:
+        next_decoded = unquote(decoded)
+
+        if next_decoded == decoded:
+            break
+
+        decoded = next_decoded
+
+    return decoded
 
 
 def is_path_traversal(path):
     decoded_path = decode_url(path)
 
-    return "../" in decoded_path
+    return (
+        "../" in decoded_path
+        or "..\\" in decoded_path
+    )
 
 
 def detect_path_traversal(
@@ -38,8 +50,16 @@ def detect_path_traversal(
 
     for value in values_to_check:
 
-        if "../" not in value:
+        if (
+            "../" not in value
+            and "..\\" not in value
+        ):
             continue
+
+        if "../" in value:
+            path_pattern = "../"
+        else:
+            path_pattern = "..\\"
 
         evidence = [
             Evidence(
@@ -49,7 +69,7 @@ def detect_path_traversal(
             ),
             Evidence(
                 type="path_pattern",
-                value="../",
+                value=path_pattern,
                 source="path_traversal_detector",
             ),
         ]
@@ -101,4 +121,3 @@ def detect_path_traversal(
         detection_type=None,
         evidence=[],
     )
-
