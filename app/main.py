@@ -1,10 +1,7 @@
 from app.analyzer.pipeline import (
     load_normalized_logs,
     detect_attacks,
-)
-
-from app.correlation.attack_chain import (
-    correlate_authentication_transition
+    correlate_attacks,
 )
 
 from app.analyzer.risk import (
@@ -14,6 +11,8 @@ from app.analyzer.risk import (
     evaluate_account_privilege_risk,
     evaluate_risk_level,
 )
+
+
 
 
 LOG_SOURCES = [
@@ -31,6 +30,7 @@ LOG_SOURCES = [
 logs = load_normalized_logs(LOG_SOURCES)
 
 result = detect_attacks(logs)
+result = correlate_attacks(logs, result)
 
 account_metadata = load_account_metadata()
 
@@ -38,19 +38,6 @@ print(account_metadata)
 
 
 for ip, features in result.items():
-
-    ip_logs = [
-        log for log in logs
-        if log.src_ip == ip
-    ]
-
-    correlation_result = correlate_authentication_transition(
-        ip_logs
-    )
-
-    features["correlation"] = correlation_result
-
-    print(ip, correlation_result)
 
 
     account_context = get_account_context(
