@@ -2,17 +2,8 @@ from app.analyzer.pipeline import (
     load_normalized_logs,
     detect_attacks,
     correlate_attacks,
+    assess_risk,
 )
-
-from app.analyzer.risk import (
-    build_risk_factors,
-    load_account_metadata,
-    get_account_context,
-    evaluate_account_privilege_risk,
-    evaluate_risk_level,
-)
-
-
 
 
 LOG_SOURCES = [
@@ -30,37 +21,10 @@ LOG_SOURCES = [
 logs = load_normalized_logs(LOG_SOURCES)
 
 result = detect_attacks(logs)
+
 result = correlate_attacks(logs, result)
 
-account_metadata = load_account_metadata()
-
-print(account_metadata)
-
-
-for ip, features in result.items():
-
-
-    account_context = get_account_context(
-        features,
-        account_metadata
-    )
-
-    account_privilege_risk = evaluate_account_privilege_risk(
-        account_context
-    )
-
-    risk_factors = build_risk_factors(
-        features,
-        account_privilege_risk
-    )
-
-    risk_factors["account_context"] = account_context
-
-    features["risk_factors"] = risk_factors
-
-    risk_level = evaluate_risk_level(features)
-
-    features["risk_level"] = risk_level
+result = assess_risk(result)
 
 
 print("분석 결과:")
