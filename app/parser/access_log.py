@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 from app.models.schemas import HttpContext, NormalizedEvent
 
 
-def parse_access_log(line):
+def parse_access_log(line, timezone=None):
     # 1. IP
     ip_match = re.match(r'^(\S+)', line)
 

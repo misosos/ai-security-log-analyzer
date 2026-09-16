@@ -1,15 +1,21 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.models.schemas import NormalizedEvent
 
 
-def parse_ssh_auth_log(log):
+def parse_ssh_auth_log(log, timezone=None):
     parts = log.split()
 
     timestamp = datetime.strptime(
         parts[0] + " " + parts[1],
         "%Y-%m-%d %H:%M:%S",
     )
+
+    if timestamp.tzinfo is None and timezone:
+        timestamp = timestamp.replace(
+            tzinfo=ZoneInfo(timezone)
+        )
 
     event_type = None
     user = None

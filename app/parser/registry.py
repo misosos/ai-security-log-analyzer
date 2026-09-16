@@ -4,11 +4,24 @@ from app.parser.access_log import parse_access_log
 
 
 PARSERS = {
-    "application": parse_auth_log,
-    "ssh": parse_ssh_auth_log,
-    "access": parse_access_log,
+    "application": {
+        "parser": parse_auth_log,
+        "timezone": "Asia/Seoul",
+    },
+    "ssh": {
+        "parser": parse_ssh_auth_log,
+        "timezone": "Asia/Seoul",
+    },
+    "access": {
+        "parser": parse_access_log,
+        "timezone": None,
+    },
 }
 
 
 def get_parser(source):
-    return PARSERS[source]
+    return PARSERS[source]["parser"]
+
+
+def get_timezone(source):
+    return PARSERS[source]["timezone"]

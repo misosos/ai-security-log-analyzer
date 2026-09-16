@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from app.parser.access_log import parse_access_log
 from app.parser.registry import get_parser
 
+from app.analyzer.pipeline import load_normalized_logs
+
 
 def test_parse_access_log():
     line = '192.168.1.10 - - [14/Sep/2026:12:00:01 +0900] "GET /index.php HTTP/1.1" 200 1024'
@@ -59,3 +61,26 @@ def test_get_access_parser():
     parser = get_parser("access")
 
     assert parser is parse_access_log
+
+
+def test_load_normalized_logs_applies_utc_normalization():
+    log_sources = [
+        {
+            "source": "ssh",
+            "path": "sample_logs/ssh_auth.log",
+        }
+    ]
+
+    logs = load_normalized_logs(log_sources)
+
+    assert logs
+
+    assert logs[0].timestamp == datetime(
+        2026,
+        9,
+        14,
+        2,
+        0,
+        1,
+        tzinfo=timezone.utc,
+    )

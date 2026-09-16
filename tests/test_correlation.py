@@ -1,5 +1,4 @@
-from datetime import datetime
-
+from datetime import datetime, timedelta, timezone
 from app.models.schemas import NormalizedEvent
 from app.analyzer.pipeline import correlate_attacks
 
@@ -264,3 +263,54 @@ def test_pipeline_correlates_authentication_and_post_authentication():
 
     assert correlation["authentication"]["is_correlated"] is True
     assert correlation["post_authentication"]["is_correlated"] is True
+
+
+def test_correlation_handles_different_timezones():
+    failed = NormalizedEvent(
+        timestamp=datetime(
+            2026,
+            9,
+            14,
+            11,
+            0,
+            0,
+            tzinfo=timezone(timedelta(hours=9)),
+        ),
+        event_type="login_failed",
+        source="application",
+        user="admin",
+        src_ip="192.168.1.20",
+        dst_ip=None,
+        application=None,
+        protocol=None,
+        user_agent=None,
+        raw="test log",
+    )
+
+    success = NormalizedEvent(
+        timestamp=datetime(
+            2026,
+            9,
+            14,
+            2,
+            0,
+            30,
+            tzinfo=timezone.utc,
+        ),
+        event_type="user_login",
+        source="ssh",
+        user="admin",
+        src_ip="192.168.1.20",
+        dst_ip=None,
+        application="sshd",
+        protocol="ssh",
+        user_agent=None,
+        raw="test log",
+    )
+
+    result = correlate_authentication_transition(
+        [failed, success]
+    )
+
+    assert result["is_correlated"] is True
+    assert result["time_delta_seconds"] == 30

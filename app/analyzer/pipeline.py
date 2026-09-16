@@ -1,5 +1,5 @@
 from app.loader.file_loader import load_log_lines
-from app.parser.registry import get_parser
+from app.parser.registry import get_parser, get_timezone
 from app.detector.brute_force import (
     summarize_ip_failures,
     detect_brute_force,
@@ -20,6 +20,8 @@ from app.analyzer.risk import (
 )
 from app.models.schemas import DetectionResult
 
+from app.parser.time_utils import normalize_to_utc
+
 
 def load_normalized_logs(log_sources):
 
@@ -27,13 +29,20 @@ def load_normalized_logs(log_sources):
 
     for config in log_sources:
 
-        parser = get_parser(config["source"])
+        source = config["source"]
+
+        parser = get_parser(source)
+        timezone = get_timezone(source)
 
         for line in load_log_lines(config["path"]):
 
-            parsed = parser(line)
+            parsed = parser(line, timezone)
 
             if parsed is not None:
+                parsed.timestamp = normalize_to_utc(
+                    parsed.timestamp
+                )
+
                 logs.append(parsed)
 
     return logs
@@ -172,9 +181,11 @@ def detect_attacks(logs):
 
 
 def correlate_attacks(logs, results):
+
     grouped_logs = group_logs_by_ip(logs)
 
     for ip, result in results.items():
+
         ip_logs = grouped_logs.get(ip, [])
 
         authentication_result = (
@@ -195,6 +206,7 @@ def correlate_attacks(logs, results):
         }
 
     return results
+
 
 def assess_risk(results):
 
