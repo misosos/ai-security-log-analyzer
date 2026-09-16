@@ -1,3 +1,6 @@
+from app.models.schemas import NormalizedEvent
+
+
 def parse_auth_log(log):
     parts = log.split()
 
@@ -9,12 +12,18 @@ def parse_auth_log(log):
 
     for part in parts[4:]:
         if "=" in part:
-            key, value = part.split("=")
+            key, value = part.split("=", 1)
             data[key] = value
 
-    return {
-        "timestamp": timestamp,
-        "level": level,
-        "event": event,
-        **data
-    }
+    return NormalizedEvent(
+        timestamp=timestamp,
+        event_type=event,
+        source="application",
+        user=data.get("user"),
+        src_ip=data.get("ip"),
+        dst_ip=None,
+        application=data.get("application"),
+        protocol=data.get("protocol"),
+        user_agent=data.get("user_agent"),
+        raw=log,
+    )

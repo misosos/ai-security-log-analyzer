@@ -1,0 +1,18 @@
+2026-09-11 10:00:01 INFO login_failed user=alice ip=192.168.1.10
+2026-09-11 10:00:10 INFO login_failed user=alice ip=192.168.1.10
+2026-09-11 10:00:40 INFO user_login user=alice ip=192.168.1.10
+
+2026-09-11 10:01:01 INFO login_failed user=admin ip=192.168.1.20
+2026-09-11 10:01:05 INFO login_failed user=admin ip=192.168.1.20
+2026-09-11 10:01:09 INFO login_failed user=admin ip=192.168.1.20
+2026-09-11 10:01:13 INFO login_failed user=admin ip=192.168.1.20
+2026-09-11 10:01:17 INFO login_failed user=admin ip=192.168.1.20
+
+2026-09-11 10:02:01 INFO login_failed user=alice ip=192.168.1.30
+2026-09-11 10:02:03 INFO login_failed user=bob ip=192.168.1.30
+2026-09-11 10:02:05 INFO login_failed user=admin ip=192.168.1.30
+2026-09-11 10:02:07 INFO login_failed user=guest ip=192.168.1.30
+
+2026-09-11 10:05:00 INFO login_failed user=admin ip=192.168.1.40
+2026-09-11 10:10:00 INFO login_failed user=admin ip=192.168.1.40
+2026-09-11 10:15:00 INFO login_failed user=admin ip=192.168.1.40

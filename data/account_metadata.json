@@ -1,0 +1,14 @@
+{
+    "admin": {
+      "privilege": "privileged"
+    },
+    "alice": {
+      "privilege": "normal"
+    },
+    "bob": {
+      "privilege": "normal"
+    },
+    "guest": {
+      "privilege": "low"
+    }
+  }
