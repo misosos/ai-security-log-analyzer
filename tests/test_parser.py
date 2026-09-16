@@ -1,8 +1,7 @@
-from app.parser.access_log import parse_access_log
+from datetime import datetime, timedelta, timezone
 
+from app.parser.access_log import parse_access_log
 from app.parser.registry import get_parser
-from app.parser.access_log import parse_access_log
-
 
 
 def test_parse_access_log():
@@ -11,12 +10,21 @@ def test_parse_access_log():
     result = parse_access_log(line)
 
     assert result.src_ip == "192.168.1.10"
-    assert result.timestamp == "14/Sep/2026:12:00:01 +0900"
+    assert result.timestamp == datetime(
+        2026,
+        9,
+        14,
+        12,
+        0,
+        1,
+        tzinfo=timezone(timedelta(hours=9)),
+    )
 
     assert result.http.method == "GET"
     assert result.http.path == "/index.php"
     assert result.http.status_code == 200
     assert result.http.response_size == 1024
+
 
 def test_parse_access_log_without_response_size():
     line = '192.168.1.10 - - [14/Sep/2026:12:00:01 +0900] "GET /index.php HTTP/1.1" 200 -'
@@ -26,12 +34,14 @@ def test_parse_access_log_without_response_size():
     assert result.http.status_code == 200
     assert result.http.response_size is None
 
+
 def test_parse_access_log_invalid_request():
     line = '192.168.1.10 - - [14/Sep/2026:12:00:01 +0900] "GET" 200 1024'
 
     result = parse_access_log(line)
 
     assert result is None
+
 
 def test_parse_access_log_server_error():
     line = '192.168.1.30 - - [14/Sep/2026:12:02:20 +0900] "POST /api/login HTTP/1.1" 500 128'

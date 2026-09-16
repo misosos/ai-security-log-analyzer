@@ -1,10 +1,16 @@
+from datetime import datetime
+
 from app.models.schemas import NormalizedEvent
 
 
 def parse_auth_log(log):
     parts = log.split()
 
-    timestamp = parts[0] + " " + parts[1]
+    timestamp = datetime.strptime(
+        parts[0] + " " + parts[1],
+        "%Y-%m-%d %H:%M:%S",
+    )
+
     level = parts[2]
     event = parts[3]
 

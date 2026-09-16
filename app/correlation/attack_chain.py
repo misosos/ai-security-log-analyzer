@@ -1,6 +1,3 @@
-from datetime import datetime
-
-
 def correlate_authentication_transition(
     ip_logs,
     correlation_window_seconds=60,
@@ -26,15 +23,8 @@ def correlate_authentication_transition(
             if failure.user != success.user:
                 continue
 
-            failure_time = datetime.strptime(
-                failure.timestamp,
-                "%Y-%m-%d %H:%M:%S"
-            )
-
-            success_time = datetime.strptime(
-                success.timestamp,
-                "%Y-%m-%d %H:%M:%S"
-            )
+            failure_time = failure.timestamp
+            success_time = success.timestamp
 
             # 성공 이후에 발생한 실패는 제외
             if failure_time >= success_time:
@@ -108,15 +98,8 @@ def correlate_post_authentication_activity(
             if success.user != file_access.user:
                 continue
 
-            success_time = datetime.strptime(
-                success.timestamp,
-                "%Y-%m-%d %H:%M:%S"
-            )
-
-            file_access_time = datetime.strptime(
-                file_access.timestamp,
-                "%Y-%m-%d %H:%M:%S"
-            )
+            success_time = success.timestamp
+            file_access_time = file_access.timestamp
 
             # 로그인 성공 이후의 파일 접근만 확인
             if success_time >= file_access_time:

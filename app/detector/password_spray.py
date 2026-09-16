@@ -1,14 +1,4 @@
-
-from datetime import datetime
-
 from app.models.schemas import Evidence, DetectionResult
-
-
-def parse_timestamp(timestamp):
-    return datetime.strptime(
-        timestamp,
-        "%Y-%m-%d %H:%M:%S"
-    )
 
 
 def detect_password_spray(features, failures):
@@ -32,7 +22,7 @@ def detect_password_spray(features, failures):
         and concentrated_in_time
     ):
         timestamps = [
-            parse_timestamp(log.timestamp)
+            log.timestamp
             for log in failures
         ]
 
@@ -82,4 +72,3 @@ def detect_password_spray(features, failures):
         detection_type=None,
         evidence=[],
     )
-

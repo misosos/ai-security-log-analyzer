@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from urllib.parse import urlsplit
 
 from app.models.schemas import HttpContext, NormalizedEvent
@@ -22,7 +23,10 @@ def parse_access_log(line):
     if not timestamp_match:
         return None
 
-    timestamp = timestamp_match.group(1)
+    timestamp = datetime.strptime(
+        timestamp_match.group(1),
+        "%d/%b/%Y:%H:%M:%S %z",
+    )
 
     # 3. request
     request_match = re.search(

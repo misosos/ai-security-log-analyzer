@@ -1,10 +1,15 @@
+from datetime import datetime
+
 from app.models.schemas import NormalizedEvent
 
 
 def parse_ssh_auth_log(log):
     parts = log.split()
 
-    timestamp = parts[0] + " " + parts[1]
+    timestamp = datetime.strptime(
+        parts[0] + " " + parts[1],
+        "%Y-%m-%d %H:%M:%S",
+    )
 
     event_type = None
     user = None

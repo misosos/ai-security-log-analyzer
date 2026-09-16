@@ -1,3 +1,4 @@
+from datetime import datetime
 
 from app.models.schemas import NormalizedEvent
 from app.analyzer.pipeline import correlate_attacks
@@ -15,7 +16,10 @@ def make_event(
     src_ip="192.168.1.20",
 ):
     return NormalizedEvent(
-        timestamp=timestamp,
+        timestamp=datetime.strptime(
+            timestamp,
+            "%Y-%m-%d %H:%M:%S",
+        ),
         event_type=event_type,
         source="application",
         user=user,
@@ -182,10 +186,23 @@ def test_selects_closest_failure_before_success():
     result = correlate_authentication_transition(logs)
 
     assert result["is_correlated"] is True
-    assert result["failure_timestamp"] == "2026-09-16 10:00:05"
-    assert result["success_timestamp"] == "2026-09-16 10:00:08"
+    assert result["failure_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        5,
+    )
+    assert result["success_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        8,
+    )
     assert result["time_delta_seconds"] == 3.0
-
 
 
 def test_successful_login_followed_by_file_access():

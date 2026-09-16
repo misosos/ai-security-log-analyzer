@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -21,7 +22,7 @@ class HttpContext:
 
 @dataclass
 class NormalizedEvent:
-    timestamp: str
+    timestamp: datetime
     event_type: str
     source: str
     user: str | None

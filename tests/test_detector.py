@@ -1,13 +1,12 @@
-
 from app.detector.web_attack import (
     is_path_traversal,
     detect_path_traversal,
 )
 from app.detector.brute_force import detect_brute_force
-from app.models.schemas import NormalizedEvent
-
 from app.detector.password_spray import detect_password_spray
 from app.models.schemas import NormalizedEvent
+
+from datetime import datetime
 
 
 def test_path_traversal():
@@ -33,7 +32,7 @@ def test_detect_path_traversal():
 def test_detect_password_spray():
     failures = [
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:01",
+            timestamp=datetime(2026, 9, 11, 10, 0, 1),
             event_type="login_failed",
             source="auth_log",
             user="admin",
@@ -45,7 +44,7 @@ def test_detect_password_spray():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:03",
+            timestamp=datetime(2026, 9, 11, 10, 0, 3),
             event_type="login_failed",
             source="auth_log",
             user="alice",
@@ -57,7 +56,7 @@ def test_detect_password_spray():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:05",
+            timestamp=datetime(2026, 9, 11, 10, 0, 5),
             event_type="login_failed",
             source="auth_log",
             user="bob",
@@ -69,7 +68,7 @@ def test_detect_password_spray():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:07",
+            timestamp=datetime(2026, 9, 11, 10, 0, 7),
             event_type="login_failed",
             source="auth_log",
             user="guest",
@@ -112,7 +111,7 @@ def test_detect_password_spray():
 def test_detect_brute_force():
     failures = [
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:01",
+            timestamp=datetime(2026, 9, 11, 10, 0, 1),
             event_type="login_failed",
             source="auth_log",
             user="admin",
@@ -124,7 +123,7 @@ def test_detect_brute_force():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:05",
+            timestamp=datetime(2026, 9, 11, 10, 0, 5),
             event_type="login_failed",
             source="auth_log",
             user="admin",
@@ -136,7 +135,7 @@ def test_detect_brute_force():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:09",
+            timestamp=datetime(2026, 9, 11, 10, 0, 9),
             event_type="login_failed",
             source="auth_log",
             user="admin",
@@ -148,7 +147,7 @@ def test_detect_brute_force():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:13",
+            timestamp=datetime(2026, 9, 11, 10, 0, 13),
             event_type="login_failed",
             source="auth_log",
             user="admin",
@@ -160,7 +159,7 @@ def test_detect_brute_force():
             raw="login failed",
         ),
         NormalizedEvent(
-            timestamp="2026-09-11 10:00:17",
+            timestamp=datetime(2026, 9, 11, 10, 0, 17),
             event_type="login_failed",
             source="auth_log",
             user="admin",

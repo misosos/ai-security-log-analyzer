@@ -1,17 +1,8 @@
-from datetime import datetime
-
 from app.models.schemas import Evidence, DetectionResult
 
 
 def is_login_failure(log):
     return log.event_type == "login_failed"
-
-
-def parse_timestamp(timestamp):
-    return datetime.strptime(
-        timestamp,
-        "%Y-%m-%d %H:%M:%S"
-    )
 
 
 def group_failures_by_ip(logs):
@@ -36,7 +27,7 @@ def is_within_window(logs, window_seconds):
         return False
 
     timestamps = [
-        parse_timestamp(log.timestamp)
+        log.timestamp
         for log in logs
     ]
 
@@ -100,7 +91,7 @@ def get_failure_window_seconds(logs):
         return 0
 
     timestamps = [
-        parse_timestamp(log.timestamp)
+        log.timestamp
         for log in logs
     ]
 
@@ -115,7 +106,7 @@ def get_average_interval(logs):
         return 0
 
     timestamps = [
-        parse_timestamp(log.timestamp)
+        log.timestamp
         for log in logs
     ]
 
@@ -138,7 +129,7 @@ def get_interval_variability(logs):
         return 0
 
     timestamps = [
-        parse_timestamp(log.timestamp)
+        log.timestamp
         for log in logs
     ]
 
@@ -190,7 +181,7 @@ def detect_brute_force(features, failures):
         and concentrated_in_time
     ):
         timestamps = [
-            parse_timestamp(log.timestamp)
+            log.timestamp
             for log in failures
         ]
 
