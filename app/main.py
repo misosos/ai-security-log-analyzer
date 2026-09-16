@@ -15,6 +15,10 @@ LOG_SOURCES = [
         "source": "ssh",
         "path": "sample_logs/ssh_auth.log",
     },
+    {
+        "source": "access",
+        "path": "sample_logs/web_shell.log",
+    },
 ]
 
 

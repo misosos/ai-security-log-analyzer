@@ -1,5 +1,6 @@
 from datetime import datetime
-from app.models.schemas import Evidence
+
+from app.models.schemas import Evidence, DetectionResult
 
 
 def is_login_failure(log):
@@ -7,7 +8,10 @@ def is_login_failure(log):
 
 
 def parse_timestamp(timestamp):
-    return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(
+        timestamp,
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 
 def group_failures_by_ip(logs):
@@ -59,20 +63,21 @@ def summarize_ip_failures(logs):
             "failure_count": len(failures),
             "target_users": sorted(users),
             "login_succeeded": has_login_success(logs, ip),
-            "within_window": is_within_window(failures, 60),
-            "window_seconds": get_failure_window_seconds(failures),
-            "average_interval": get_average_interval(failures),
-            "interval_variability": get_interval_variability(failures),
+            "within_window": is_within_window(
+                failures,
+                60
+            ),
+            "window_seconds": get_failure_window_seconds(
+                failures
+            ),
+            "average_interval": get_average_interval(
+                failures
+            ),
+            "interval_variability": get_interval_variability(
+                failures
+            ),
             "unique_target_count": len(users),
         }
-
-        brute_force_result = detect_brute_force(features, failures)
-
-        detections = {
-            "brute_force": brute_force_result
-        }
-
-        features["detections"] = detections
 
         results[ip] = features
 
@@ -153,9 +158,13 @@ def get_interval_variability(logs):
     differences = []
 
     for interval in intervals:
-        differences.append(abs(interval - average))
+        differences.append(
+            abs(interval - average)
+        )
 
-    average_difference = sum(differences) / len(differences)
+    average_difference = (
+        sum(differences) / len(differences)
+    )
 
     return average_difference
 
@@ -163,10 +172,22 @@ def get_interval_variability(logs):
 def detect_brute_force(features, failures):
     evidence = []
 
-    if (
+    enough_failures = (
         features["failure_count"] >= 5
-        and features["unique_target_count"] == 1
-        and features["within_window"]
+    )
+
+    single_target = (
+        features["unique_target_count"] == 1
+    )
+
+    concentrated_in_time = (
+        features["within_window"]
+    )
+
+    if (
+        enough_failures
+        and single_target
+        and concentrated_in_time
     ):
         timestamps = [
             parse_timestamp(log.timestamp)
@@ -182,9 +203,13 @@ def detect_brute_force(features, failures):
                 value=features["failure_count"],
                 source="brute_force_detector",
                 time_range=(
-                    start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    end_time.strftime("%Y-%m-%d %H:%M:%S")
-                )
+                    start_time.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    end_time.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                ),
             )
         )
 
@@ -192,7 +217,7 @@ def detect_brute_force(features, failures):
             Evidence(
                 type="single_target_user",
                 value=features["unique_target_count"],
-                source="brute_force_detector"
+                source="brute_force_detector",
             )
         )
 
@@ -200,16 +225,18 @@ def detect_brute_force(features, failures):
             Evidence(
                 type="failures_within_short_window",
                 value=features["window_seconds"],
-                source="brute_force_detector"
+                source="brute_force_detector",
             )
         )
 
-        return {
-            "is_detected": True,
-            "evidence": evidence,
-        }
+        return DetectionResult(
+            is_detected=True,
+            detection_type="brute_force",
+            evidence=evidence,
+        )
 
-    return {
-        "is_detected": False,
-        "evidence": [],
-    }
+    return DetectionResult(
+        is_detected=False,
+        detection_type=None,
+        evidence=[],
+    )

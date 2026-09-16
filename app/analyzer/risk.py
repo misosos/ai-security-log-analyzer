@@ -1,3 +1,4 @@
+
 import json
 
 
@@ -6,10 +7,33 @@ def load_account_metadata():
         return json.load(f)
 
 
+def build_risk_context(result):
+
+    context = {}
+
+    context.update(result["features"])
+
+    context["detections"] = result["detections"]
+
+    context["correlation"] = result.get(
+        "correlation",
+        {
+            "is_correlated": False,
+        },
+    )
+
+    return context
+
+
 def build_risk_factors(features, account_privilege_risk):
 
     likelihood = evaluate_likelihood(features)
-    impact = evaluate_impact(account_privilege_risk)
+
+    impact = evaluate_impact(
+        features,
+        account_privilege_risk,
+    )
+
     confidence = evaluate_confidence(features)
 
     volume_signal = evaluate_volume_signal(features)
@@ -40,6 +64,7 @@ def build_risk_factors(features, account_privilege_risk):
         "impact": {
             "level": impact["level"],
             "rationale": impact["rationale"],
+            "basis": impact["basis"],
             "privileged_account_targeted": account_privilege_risk,
             "authentication_success": features["login_succeeded"],
         },
@@ -49,15 +74,30 @@ def build_risk_factors(features, account_privilege_risk):
             "rationale": confidence["rationale"],
         },
 
-        "detections": features["detections"]
+        "detections": features["detections"],
     }
 
+
 def evaluate_likelihood(features):
+
     detections = features["detections"]
     correlation = features["correlation"]
 
-    brute_force_detected = detections["brute_force"]["is_detected"]
-    password_spray_detected = detections["password_spray"]["is_detected"]
+    brute_force_detected = (
+        detections["brute_force"].is_detected
+    )
+
+    password_spray_detected = (
+        detections["password_spray"].is_detected
+    )
+
+    path_traversal = detections.get("path_traversal")
+
+    path_traversal_detected = (
+        path_traversal is not None
+        and path_traversal.is_detected
+    )
+
     correlated = correlation["is_correlated"]
 
     failure_count = features["failure_count"]
@@ -67,11 +107,29 @@ def evaluate_likelihood(features):
 
     rationale = []
 
-    # 1. Brute Force + Failed → Successful Login
-    #
-    # 반복적인 인증 실패가 탐지되었고
-    # 이후 동일 계정의 로그인 성공까지 연결된 경우
+    # 1. Path Traversal
+    if path_traversal_detected:
+
+        rationale.append(
+            "Path Traversal 공격 패턴이 HTTP 요청에서 직접 확인됨"
+        )
+
+        rationale.append(
+            "URL 디코딩 이후 상위 경로 접근 패턴(../)이 확인됨"
+        )
+
+        rationale.append(
+            "실제 대상 파일 접근 성공 여부는 현재 로그만으로 확인할 수 없음"
+        )
+
+        return {
+            "level": "HIGH",
+            "rationale": rationale,
+        }
+
+    # 2. Brute Force + Failed → Successful Login
     if brute_force_detected and correlated:
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
         )
@@ -94,8 +152,9 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 2. Brute Force
+    # 3. Brute Force
     if brute_force_detected:
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
         )
@@ -114,12 +173,9 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 3. Password Spraying-like + Failed → Successful Login
-    #
-    # 현재 로그에는 비밀번호 재사용 여부가 없으므로
-    # Password Spraying 자체가 아니라
-    # Password Spraying-like로 표현한다.
+    # 4. Password Spraying-like + Failed → Successful Login
     if password_spray_detected and correlated:
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
         )
@@ -145,12 +201,13 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 4. Password Spraying-like
+    # 5. Password Spraying-like
     if (
         password_spray_detected
         and target_scope >= 3
         and within_window
     ):
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 발생함"
         )
@@ -172,11 +229,9 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 5. 반복 실패 + Failed → Successful Login
-    #
-    # 공격 탐지까지는 되지 않았지만
-    # 반복적인 실패와 이후 성공이 함께 확인된 경우
+    # 6. 반복 실패 + Failed → Successful Login
     if failure_count >= 3 and within_window and correlated:
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 짧은 시간에 발생함"
         )
@@ -190,8 +245,9 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 6. 일반적인 반복 인증 실패
+    # 7. 일반적인 반복 인증 실패
     if failure_count >= 3 and within_window:
+
         rationale.append(
             f"{failure_count}회의 인증 실패가 짧은 시간에 발생함"
         )
@@ -201,7 +257,7 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
-    # 7. 강한 공격 증거가 없는 경우
+    # 8. 강한 공격 증거가 없는 경우
     rationale.append(
         "공격으로 판단할 만큼 강한 인증 이상 징후가 확인되지 않음"
     )
@@ -213,6 +269,7 @@ def evaluate_likelihood(features):
 
 
 def evaluate_volume_signal(features):
+
     failure_count = features["failure_count"]
 
     if failure_count >= 5:
@@ -225,20 +282,30 @@ def evaluate_volume_signal(features):
 
 
 def evaluate_temporal_signal(features):
+
     failure_count = features["failure_count"]
     average_interval = features["average_interval"]
     within_window = features["within_window"]
 
-    if failure_count >= 5 and within_window and average_interval <= 5:
+    if (
+        failure_count >= 5
+        and within_window
+        and average_interval <= 5
+    ):
         return "HIGH"
 
-    if failure_count >= 3 and within_window and average_interval <= 10:
+    if (
+        failure_count >= 3
+        and within_window
+        and average_interval <= 10
+    ):
         return "MEDIUM"
 
     return "LOW"
 
 
 def evaluate_targeting_signal(features):
+
     target_scope = features["unique_target_count"]
 
     if target_scope >= 3:
@@ -251,19 +318,31 @@ def evaluate_targeting_signal(features):
 
 
 def evaluate_detection_signal(features):
+
     detections = features["detections"]
 
     detection_types = []
 
-    if detections["brute_force"]["is_detected"]:
+    if detections["brute_force"].is_detected:
         detection_types.append("brute_force")
 
-    if detections["password_spray"]["is_detected"]:
+    if detections["password_spray"].is_detected:
         detection_types.append(
-            detections["password_spray"]["detection_type"]
+            detections["password_spray"].detection_type
+        )
+
+    path_traversal = detections.get("path_traversal")
+
+    if (
+        path_traversal is not None
+        and path_traversal.is_detected
+    ):
+        detection_types.append(
+            path_traversal.detection_type
         )
 
     if detection_types:
+
         return {
             "level": "HIGH",
             "types": detection_types,
@@ -275,20 +354,149 @@ def evaluate_detection_signal(features):
     }
 
 
-def evaluate_impact(account_privilege_risk):
+def evaluate_impact(features, account_privilege_risk):
+
+    detections = features["detections"]
+
+    brute_force_detected = (
+        detections["brute_force"].is_detected
+    )
+
+    password_spray_detected = (
+        detections["password_spray"].is_detected
+    )
+
+    path_traversal = detections.get("path_traversal")
+
+    path_traversal_detected = (
+        path_traversal is not None
+        and path_traversal.is_detected
+    )
+
+    # 1. Web Attack
+    if path_traversal_detected:
+
+        status_code = None
+        response_size = None
+
+        for evidence in path_traversal.evidence:
+
+            if evidence.type == "http_status_code":
+                status_code = evidence.value
+
+            elif evidence.type == "http_response_size":
+                response_size = evidence.value
+
+        # 현재 로그에서 HTTP 응답은 확인되지만
+        # 실제 민감 파일 노출 여부는 확인되지 않은 경우
+        if status_code is not None:
+
+            if 200 <= status_code < 300:
+
+                return {
+                    "level": "MEDIUM",
+                    "rationale": [
+                        "Path Traversal 공격 패턴이 확인됨",
+                        f"공격 요청에 대해 HTTP {status_code} 응답이 확인됨",
+                        "요청이 애플리케이션에서 처리된 정황이 확인됨",
+                        "실제 민감 파일의 내용이 반환되었는지는 현재 로그만으로 확인되지 않음",
+                    ],
+                    "basis": {
+                        "attack_type": "path_traversal",
+                        "http_status_code": status_code,
+                        "response_size": response_size,
+                        "impact_status": "insufficient_evidence",
+                        "exploit_success_confirmed": False,
+                    },
+                }
+
+            # 4xx / 5xx 등
+            return {
+                "level": "LOW",
+                "rationale": [
+                    "Path Traversal 공격 패턴이 확인됨",
+                    f"공격 요청에 대해 HTTP {status_code} 응답이 확인됨",
+                    "현재 로그만으로 실제 파일 접근 또는 정보 노출 여부는 확인되지 않음",
+                ],
+                "basis": {
+                    "attack_type": "path_traversal",
+                    "http_status_code": status_code,
+                    "response_size": response_size,
+                    "impact_status": "insufficient_evidence",
+                    "exploit_success_confirmed": False,
+                },
+            }
+
+        # HTTP 결과 자체가 없는 경우
+        return {
+            "level": "LOW",
+            "rationale": [
+                "Path Traversal 공격 패턴이 확인됨",
+                "실제 대상 파일 접근 또는 정보 노출 여부를 판단할 HTTP 결과가 확인되지 않음",
+            ],
+            "basis": {
+                "attack_type": "path_traversal",
+                "http_status_code": None,
+                "response_size": None,
+                "impact_status": "insufficient_evidence",
+                "exploit_success_confirmed": False,
+            },
+        }
+
+    # 2. Authentication Attack
+    if brute_force_detected or password_spray_detected:
+
+        attack_type = (
+            "brute_force"
+            if brute_force_detected
+            else "password_spraying_like"
+        )
+
+        if account_privilege_risk:
+
+            return {
+                "level": "HIGH",
+                "rationale": [
+                    "인증 공격의 대상에 Privileged 계정이 포함됨"
+                ],
+                "basis": {
+                    "attack_type": attack_type,
+                    "privileged_account_targeted": True,
+                },
+            }
+
+        return {
+            "level": "LOW",
+            "rationale": [
+                "인증 공격 패턴은 확인되었으나 Privileged 계정 대상은 확인되지 않음"
+            ],
+            "basis": {
+                "attack_type": attack_type,
+                "privileged_account_targeted": False,
+            },
+        }
+
+    # 3. 기타 인증 이상
     if account_privilege_risk:
+
         return {
             "level": "HIGH",
             "rationale": [
-                "Privileged 계정이 공격 대상으로 확인됨"
+                "Privileged 계정이 인증 이상 행위의 대상으로 확인됨"
             ],
+            "basis": {
+                "privileged_account_targeted": True,
+            },
         }
 
     return {
         "level": "LOW",
         "rationale": [
-            "Privileged 계정이 공격 대상으로 확인되지 않음"
+            "영향도를 높일 수 있는 대상 중요도 정보가 확인되지 않음"
         ],
+        "basis": {
+            "privileged_account_targeted": False,
+        },
     }
 
 
@@ -309,9 +517,11 @@ def evaluate_time_window_risk(features):
 
 
 def get_account_context(features, account_metadata):
+
     context = {}
 
     for user in features["target_users"]:
+
         if user in account_metadata:
             context[user] = account_metadata[user]
 
@@ -319,7 +529,9 @@ def get_account_context(features, account_metadata):
 
 
 def evaluate_account_privilege_risk(account_context):
+
     for user, context in account_context.items():
+
         privilege = context["privilege"]
 
         if privilege == "privileged":
@@ -328,9 +540,9 @@ def evaluate_account_privilege_risk(account_context):
     return False
 
 
-def evaluate_risk_level(features):
+def evaluate_risk_level(result):
 
-    risk_factors = features["risk_factors"]
+    risk_factors = result["risk_factors"]
 
     likelihood = risk_factors["likelihood"]["level"]
     impact = risk_factors["impact"]["level"]
@@ -345,15 +557,41 @@ def evaluate_risk_level(features):
 
 
 def evaluate_confidence(features):
+
     detections = features["detections"]
     correlation = features["correlation"]
 
-    brute_force_detected = detections["brute_force"]["is_detected"]
-    password_spray_detected = detections["password_spray"]["is_detected"]
+    brute_force_detected = (
+        detections["brute_force"].is_detected
+    )
+
+    password_spray_detected = (
+        detections["password_spray"].is_detected
+    )
+
+    path_traversal = detections.get("path_traversal")
+
+    path_traversal_detected = (
+        path_traversal is not None
+        and path_traversal.is_detected
+    )
+
     correlated = correlation["is_correlated"]
+
+    # Path Traversal
+    if path_traversal_detected:
+
+        return {
+            "level": "MEDIUM",
+            "rationale": [
+                "HTTP 요청에서 Path Traversal 공격 패턴이 직접 확인됨",
+                "실제 대상 파일 접근 성공 여부는 현재 로그에서 확인되지 않음",
+            ],
+        }
 
     # Brute Force + Failed → Successful Login
     if brute_force_detected and correlated:
+
         return {
             "level": "HIGH",
             "rationale": [
@@ -364,6 +602,7 @@ def evaluate_confidence(features):
 
     # Brute Force
     if brute_force_detected:
+
         return {
             "level": "HIGH",
             "rationale": [
@@ -373,6 +612,7 @@ def evaluate_confidence(features):
 
     # Password Spraying-like
     if password_spray_detected:
+
         return {
             "level": "MEDIUM",
             "rationale": [
@@ -383,6 +623,7 @@ def evaluate_confidence(features):
 
     # Failed → Successful Login
     if correlated:
+
         return {
             "level": "MEDIUM",
             "rationale": [
@@ -392,7 +633,11 @@ def evaluate_confidence(features):
         }
 
     # 반복적인 인증 실패
-    if features["failure_count"] >= 3 and features["within_window"]:
+    if (
+        features["failure_count"] >= 3
+        and features["within_window"]
+    ):
+
         return {
             "level": "MEDIUM",
             "rationale": [
@@ -407,7 +652,9 @@ def evaluate_confidence(features):
         ],
     }
 
+
 def evaluate_correlation_signal(features):
+
     correlation = features["correlation"]
 
     if correlation["is_correlated"]:
