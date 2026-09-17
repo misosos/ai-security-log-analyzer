@@ -1,7 +1,7 @@
+from datetime import datetime
 from urllib.parse import unquote
 
 from app.models.schemas import Evidence, DetectionResult
-
 
 def decode_url(value):
     decoded = value
@@ -32,6 +32,7 @@ def detect_path_traversal(
     method=None,
     status_code=None,
     response_size=None,
+    timestamp=None,
 ):
 
     decoded_path = decode_url(path)
@@ -66,11 +67,13 @@ def detect_path_traversal(
                 type="url_decoded_path",
                 value=decoded_path,
                 source="path_traversal_detector",
+                timestamp=timestamp,
             ),
             Evidence(
                 type="path_pattern",
                 value=path_pattern,
                 source="path_traversal_detector",
+                timestamp=timestamp,
             ),
         ]
 
@@ -80,6 +83,7 @@ def detect_path_traversal(
                     type="url_decoded_query",
                     value=decoded_query,
                     source="path_traversal_detector",
+                    timestamp=timestamp,
                 )
             )
 
@@ -89,6 +93,7 @@ def detect_path_traversal(
                     type="http_method",
                     value=method,
                     source="path_traversal_detector",
+                    timestamp=timestamp,
                 )
             )
 
@@ -98,6 +103,7 @@ def detect_path_traversal(
                     type="http_status_code",
                     value=status_code,
                     source="path_traversal_detector",
+                    timestamp=timestamp,
                 )
             )
 
@@ -107,6 +113,7 @@ def detect_path_traversal(
                     type="http_response_size",
                     value=response_size,
                     source="path_traversal_detector",
+                    timestamp=timestamp,
                 )
             )
 

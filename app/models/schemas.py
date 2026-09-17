@@ -4,12 +4,16 @@ from datetime import datetime
 
 @dataclass
 class Evidence:
-    type: str
-    value: str | int | float | bool
-    source: str
-    timestamp: str | None = None
-    time_range: tuple[str, str] | None = None
 
+    type: str
+
+    value: str | int | float | bool
+
+    source: str
+
+    timestamp: datetime | None = None
+
+    time_range: tuple[datetime, datetime] | None = None
 
 @dataclass
 class HttpContext:

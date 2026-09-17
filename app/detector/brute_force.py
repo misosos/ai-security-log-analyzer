@@ -194,12 +194,8 @@ def detect_brute_force(features, failures):
                 value=features["failure_count"],
                 source="brute_force_detector",
                 time_range=(
-                    start_time.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    end_time.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
+                    start_time,
+                    end_time,
                 ),
             )
         )

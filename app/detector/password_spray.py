@@ -35,12 +35,8 @@ def detect_password_spray(features, failures):
                 value=features["failure_count"],
                 source="password_spray_detector",
                 time_range=(
-                    start_time.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    end_time.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
+                    start_time,
+                    end_time,
                 ),
             )
         )

@@ -16,9 +16,10 @@ from app.analyzer.risk import (
     evaluate_risk_level,
     evaluate_confidence,
     evaluate_correlation_signal,
+    extract_correlation_evidence,
 )
 from app.models.schemas import DetectionResult, Evidence
-
+from datetime import datetime
 
 def empty_detection():
     return DetectionResult(
@@ -117,6 +118,12 @@ def make_features(
             "post_authentication": {
                 "is_correlated": False,
             },
+            "brute_force_to_success": {
+                "is_correlated": False,
+            },
+            "password_spray_to_success": {
+                "is_correlated": False,
+            },
         },
     }
 
@@ -124,6 +131,66 @@ def make_features(
 # ---------------------------------------------------------
 # build_risk_context
 # ---------------------------------------------------------
+
+
+def test_build_risk_factors_includes_correlation_types():
+    features = make_features(
+        correlated=True,
+    )
+
+    features["correlation"]["authentication"] = {
+        "is_correlated": True,
+        "type": "failed_to_successful_login",
+    }
+
+    features["correlation"]["post_authentication"] = {
+        "is_correlated": True,
+        "type": "successful_login_to_file_access",
+    }
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=False,
+    )
+
+    correlation = result["likelihood"]["signals"]["correlation"]
+
+    assert correlation["level"] == "MEDIUM"
+    assert correlation["types"] == [
+        "failed_to_successful_login",
+        "successful_login_to_file_access",
+    ]
+
+def test_build_risk_factors_includes_correlation_signal():
+    features = make_features(
+        correlated=True,
+    )
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=False,
+    )
+
+    correlation = result["likelihood"]["signals"]["correlation"]
+
+    assert correlation["level"] == "MEDIUM"
+    assert correlation["types"] == []
+
+
+def test_build_risk_factors_includes_detection_signal():
+    features = make_features(
+        brute_force=detected_brute_force(),
+    )
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=False,
+    )
+
+    detection = result["likelihood"]["signals"]["detection"]
+
+    assert detection["level"] == "HIGH"
+    assert detection["types"] == ["brute_force"]
 
 def test_build_risk_context():
     result = {
@@ -146,6 +213,12 @@ def test_build_risk_context():
                 "is_correlated": False,
             },
             "post_authentication": {
+                "is_correlated": False,
+            },
+            "brute_force_to_success": {
+                "is_correlated": False,
+            },
+            "password_spray_to_success": {
                 "is_correlated": False,
             },
         },
@@ -651,12 +724,168 @@ def test_evaluate_risk_level_medium():
         }
     }
 
+    assert evaluate_risk_level(result) == "HIGH"
+
+def test_evaluate_risk_level_low_likelihood_high_impact():
+    result = {
+        "risk_factors": {
+            "likelihood": {
+                "level": "LOW"
+            },
+            "impact": {
+                "level": "HIGH"
+            },
+        }
+    }
+
     assert evaluate_risk_level(result) == "MEDIUM"
+
+def test_evaluate_risk_level_medium_likelihood_high_impact():
+    result = {
+        "risk_factors": {
+            "likelihood": {
+                "level": "MEDIUM"
+            },
+            "impact": {
+                "level": "HIGH"
+            },
+        }
+    }
+
+    assert evaluate_risk_level(result) == "HIGH"
+
+def test_evaluate_risk_level_low_likelihood_medium_impact():
+    result = {
+        "risk_factors": {
+            "likelihood": {
+                "level": "LOW"
+            },
+            "impact": {
+                "level": "MEDIUM"
+            },
+        }
+    }
+
+    assert evaluate_risk_level(result) == "LOW"
 
 
 # ---------------------------------------------------------
 # build_risk_factors
 # ---------------------------------------------------------
+
+def test_build_risk_factors_volume_signal_includes_rationale():
+    features = make_features(
+        failure_count=5,
+    )
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=False,
+    )
+
+    volume = result["likelihood"]["signals"]["volume"]
+
+    assert volume["level"] == "HIGH"
+    assert volume["rationale"] == "인증 실패가 5회 발생함"
+
+def test_build_risk_factors_preserves_evidence_timestamp():
+    from datetime import datetime, timezone
+
+    timestamp = datetime(
+        2026,
+        9,
+        14,
+        3,
+        1,
+        10,
+        tzinfo=timezone.utc,
+    )
+
+    evidence = [
+        Evidence(
+            type="url_decoded_path",
+            value="/etc/passwd",
+            source="path_traversal_detector",
+            timestamp=timestamp,
+        ),
+    ]
+
+    path_traversal = DetectionResult(
+        is_detected=True,
+        detection_type="path_traversal",
+        evidence=evidence,
+    )
+
+    features = make_features(
+        path_traversal=path_traversal,
+    )
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=False,
+    )
+
+    assert len(result["evidence"]) == 1
+    assert result["evidence"][0]["type"] == "url_decoded_path"
+    assert result["evidence"][0]["value"] == "/etc/passwd"
+    assert result["evidence"][0]["source"] == (
+        "path_traversal_detector"
+    )
+    assert result["evidence"][0]["timestamp"] == timestamp
+
+
+
+
+
+def test_build_risk_factors_includes_evidence():
+    evidence = [
+        Evidence(
+            type="multiple_login_failures",
+            value=5,
+            source="brute_force_detector",
+        ),
+        Evidence(
+            type="single_target_user",
+            value=1,
+            source="brute_force_detector",
+        ),
+    ]
+
+    brute_force = DetectionResult(
+        is_detected=True,
+        detection_type="brute_force",
+        evidence=evidence,
+    )
+
+    features = make_features(
+        failure_count=5,
+        target_users=["admin"],
+        within_window=True,
+        window_seconds=16,
+        average_interval=4,
+        brute_force=brute_force,
+    )
+
+    result = build_risk_factors(
+        features,
+        account_privilege_risk=True,
+    )
+
+    assert len(result["evidence"]) == 2
+
+    assert result["evidence"][0]["type"] == (
+        "multiple_login_failures"
+    )
+    assert result["evidence"][0]["value"] == 5
+    assert result["evidence"][0]["source"] == (
+        "brute_force_detector"
+    )
+
+    assert result["evidence"][1]["type"] == (
+        "single_target_user"
+    )
+    assert result["evidence"][1]["value"] == 1
+
 
 def test_build_risk_factors_brute_force():
     features = make_features(
@@ -690,6 +919,7 @@ def test_build_risk_factors_brute_force():
         result["impact"]["authentication_success"]
         is False
     )
+
 
 
 def test_build_risk_factors_path_traversal():
@@ -762,6 +992,12 @@ def test_risk_handles_new_correlation_structure():
                 "type": "successful_login_to_file_access",
                 "user": "admin",
             },
+            "brute_force_to_success": {
+                "is_correlated": False,
+            },
+            "password_spray_to_success": {
+                "is_correlated": False,
+            },
         },
     }
 
@@ -774,6 +1010,8 @@ def test_risk_handles_new_correlation_structure():
 
     assert "authentication" in context["correlation"]
     assert "post_authentication" in context["correlation"]
+    assert "brute_force_to_success" in context["correlation"]
+    assert "password_spray_to_success" in context["correlation"]
 
     assert (
         context["correlation"]["authentication"]["is_correlated"]
@@ -786,6 +1024,57 @@ def test_risk_handles_new_correlation_structure():
     )
 
     assert (
-        risk_factors["likelihood"]["signals"]["correlation"]
+        risk_factors["likelihood"]["signals"]["correlation"]["level"]
         == "MEDIUM"
+    )
+
+    assert (
+        risk_factors["likelihood"]["signals"]["correlation"]["types"]
+        == [
+            "failed_to_successful_login",
+            "successful_login_to_file_access",
+        ]
+    )
+
+def test_extract_correlation_evidence():
+    result = {
+        "correlation": {
+            "authentication": {
+                "is_correlated": True,
+                "type": "failed_to_successful_login",
+                "user": "admin",
+                "failure_timestamp": datetime(
+                    2026, 9, 14, 2, 0, 9
+                ),
+                "success_timestamp": datetime(
+                    2026, 9, 14, 2, 0, 20
+                ),
+                "time_delta_seconds": 11.0,
+            }
+        }
+    }
+
+    evidence = extract_correlation_evidence(result)
+
+    assert len(evidence) == 4
+
+    assert evidence[0]["type"] == "correlation_type"
+    assert evidence[0]["value"] == "failed_to_successful_login"
+
+    assert evidence[1]["type"] == "correlation_user"
+    assert evidence[1]["value"] == "admin"
+
+    assert evidence[2]["type"] == "correlation_time_delta"
+    assert evidence[2]["value"] == 11.0
+
+    assert evidence[3]["type"] == "correlation_time_range"
+
+    assert evidence[3]["value"] == (
+        datetime(2026, 9, 14, 2, 0, 9),
+        datetime(2026, 9, 14, 2, 0, 20),
+    )
+
+    assert evidence[3]["time_range"] == (
+        datetime(2026, 9, 14, 2, 0, 9),
+        datetime(2026, 9, 14, 2, 0, 20),
     )

@@ -1,4 +1,3 @@
-
 import json
 
 
@@ -54,11 +53,37 @@ def build_risk_factors(features, account_privilege_risk):
             "rationale": likelihood["rationale"],
 
             "signals": {
-                "volume": volume_signal,
-                "temporal": temporal_signal,
-                "targeting": targeting_signal,
+                "volume": {
+                    "level": volume_signal,
+                    "rationale": (
+                        f"인증 실패가 {features['failure_count']}회 발생함"
+                    ),
+                },
+                "temporal": {
+                    "level": temporal_signal,
+                    "rationale": (
+                        f"인증 실패가 {features['window_seconds']:.1f}초 동안 발생했으며 "
+                        f"평균 실패 간격은 {features['average_interval']:.1f}초임"
+                    ),
+                },
+                "targeting": {
+                    "level": targeting_signal,
+                    "rationale": (
+                        f"{features['unique_target_count']}개의 계정이 "
+                        "인증 실패 대상으로 확인됨"
+                    ),
+                },
                 "detection": detection_signal,
-                "correlation": correlation_signal,
+                "correlation": {
+                    "level": correlation_signal,
+                    "types": [
+                        correlation_result["type"]
+                        for correlation_result
+                        in features["correlation"].values()
+                        if correlation_result["is_correlated"]
+                        and correlation_result.get("type") is not None
+                    ],
+                },
             },
 
             "failure_count": features["failure_count"],
@@ -79,7 +104,15 @@ def build_risk_factors(features, account_privilege_risk):
             "rationale": confidence["rationale"],
         },
 
-        "detections": features["detections"],
+        "evidence": (
+            extract_evidence({
+                "detections": features["detections"],
+            })
+            + extract_correlation_evidence({
+                "correlation": features["correlation"],
+            })
+        ),
+                
     }
 
 
@@ -88,8 +121,10 @@ def evaluate_likelihood(features):
     detections = features["detections"]
     correlation = features["correlation"]
 
+    brute_force = detections["brute_force"]
+
     brute_force_detected = (
-        detections["brute_force"].is_detected
+        brute_force.is_detected
     )
 
     password_spray_detected = (
@@ -109,6 +144,14 @@ def evaluate_likelihood(features):
 
     post_authentication_correlated = (
         correlation["post_authentication"]["is_correlated"]
+    )
+
+    brute_force_to_success = (
+        correlation["brute_force_to_success"]["is_correlated"]
+    )
+
+    password_spray_to_success = (
+        correlation["password_spray_to_success"]["is_correlated"]
     )
 
     failure_count = features["failure_count"]
@@ -141,24 +184,32 @@ def evaluate_likelihood(features):
     # 2. Brute Force + Failed → Successful Login
     if (
         brute_force_detected
-        and authentication_correlated
+        and brute_force_to_success
     ):
 
-        rationale.append(
-            f"{failure_count}회의 인증 실패가 발생함"
-        )
+        for evidence in brute_force.evidence:
 
-        if within_window:
-            rationale.append(
-                f"평균 실패 간격이 {average_interval:.1f}초로 짧음"
-            )
+            if evidence.type == "multiple_login_failures":
+                rationale.append(
+                    f"{evidence.value}회의 인증 실패가 발생함"
+                )
+
+            elif evidence.type == "single_target_user":
+                rationale.append(
+                    "단일 계정에 인증 실패가 집중됨"
+                )
+
+            elif evidence.type == "failures_within_short_window":
+                rationale.append(
+                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                )
 
         rationale.append(
             "Brute Force 탐지 조건을 충족함"
         )
 
         rationale.append(
-            "인증 실패 이후 동일 계정의 로그인 성공이 확인됨"
+            "Brute Force 탐지 이후 동일 계정의 로그인 성공이 확인됨"
         )
 
         return {
@@ -169,14 +220,22 @@ def evaluate_likelihood(features):
     # 3. Brute Force
     if brute_force_detected:
 
-        rationale.append(
-            f"{failure_count}회의 인증 실패가 발생함"
-        )
+        for evidence in brute_force.evidence:
 
-        if within_window:
-            rationale.append(
-                f"평균 실패 간격이 {average_interval:.1f}초로 짧음"
-            )
+            if evidence.type == "multiple_login_failures":
+                rationale.append(
+                    f"{evidence.value}회의 인증 실패가 발생함"
+                )
+
+            elif evidence.type == "single_target_user":
+                rationale.append(
+                    "단일 계정에 인증 실패가 집중됨"
+                )
+
+            elif evidence.type == "failures_within_short_window":
+                rationale.append(
+                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                )
 
         rationale.append(
             "Brute Force 탐지 조건을 충족함"
@@ -190,27 +249,36 @@ def evaluate_likelihood(features):
     # 4. Password Spraying-like + Failed → Successful Login
     if (
         password_spray_detected
-        and authentication_correlated
+        and password_spray_to_success
     ):
 
-        rationale.append(
-            f"{failure_count}회의 인증 실패가 발생함"
+        password_spray = (
+            detections["password_spray"]
         )
 
-        rationale.append(
-            f"{target_scope}개의 계정이 대상으로 확인됨"
-        )
+        for evidence in password_spray.evidence:
 
-        rationale.append(
-            f"실패가 {features['window_seconds']:.1f}초 내에 집중됨"
-        )
+            if evidence.type == "multiple_login_failures":
+                rationale.append(
+                    f"{evidence.value}회의 인증 실패가 발생함"
+                )
+
+            elif evidence.type == "multiple_target_users":
+                rationale.append(
+                    f"{evidence.value}개의 계정이 대상으로 확인됨"
+                )
+
+            elif evidence.type == "failures_within_short_window":
+                rationale.append(
+                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                )
 
         rationale.append(
             "Password Spraying-like 탐지 조건을 충족함"
         )
 
         rationale.append(
-            "인증 실패 이후 동일 계정의 로그인 성공이 확인됨"
+            "Password Spraying-like 탐지 이후 동일 계정의 로그인 성공이 확인됨"
         )
 
         return {
@@ -225,17 +293,26 @@ def evaluate_likelihood(features):
         and within_window
     ):
 
-        rationale.append(
-            f"{failure_count}회의 인증 실패가 발생함"
+        password_spray = (
+            detections["password_spray"]
         )
 
-        rationale.append(
-            f"{target_scope}개의 계정이 대상으로 확인됨"
-        )
+        for evidence in password_spray.evidence:
 
-        rationale.append(
-            f"실패가 {features['window_seconds']:.1f}초 내에 집중됨"
-        )
+            if evidence.type == "multiple_login_failures":
+                rationale.append(
+                    f"{evidence.value}회의 인증 실패가 발생함"
+                )
+
+            elif evidence.type == "multiple_target_users":
+                rationale.append(
+                    f"{evidence.value}개의 계정이 대상으로 확인됨"
+                )
+
+            elif evidence.type == "failures_within_short_window":
+                rationale.append(
+                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                )
 
         rationale.append(
             "Password Spraying-like 탐지 조건을 충족함"
@@ -565,19 +642,28 @@ def evaluate_account_privilege_risk(account_context):
 
 
 def evaluate_risk_level(result):
+    likelihood = result["risk_factors"]["likelihood"]["level"]
+    impact = result["risk_factors"]["impact"]["level"]
 
-    risk_factors = result["risk_factors"]
+    risk_matrix = {
+        "LOW": {
+            "LOW": "LOW",
+            "MEDIUM": "LOW",
+            "HIGH": "MEDIUM",
+        },
+        "MEDIUM": {
+            "LOW": "MEDIUM",
+            "MEDIUM": "MEDIUM",
+            "HIGH": "HIGH",
+        },
+        "HIGH": {
+            "LOW": "MEDIUM",
+            "MEDIUM": "HIGH",
+            "HIGH": "HIGH",
+        },
+    }
 
-    likelihood = risk_factors["likelihood"]["level"]
-    impact = risk_factors["impact"]["level"]
-
-    if likelihood == "HIGH" and impact == "HIGH":
-        return "HIGH"
-
-    if likelihood == "LOW" and impact == "LOW":
-        return "LOW"
-
-    return "MEDIUM"
+    return risk_matrix[likelihood][impact]
 
 
 def evaluate_confidence(features):
@@ -608,6 +694,14 @@ def evaluate_confidence(features):
         correlation["post_authentication"]["is_correlated"]
     )
 
+    brute_force_to_success = (
+        correlation["brute_force_to_success"]["is_correlated"]
+    )
+
+    password_spray_to_success = (
+        correlation["password_spray_to_success"]["is_correlated"]
+    )
+
     # Path Traversal
     if path_traversal_detected:
 
@@ -622,7 +716,7 @@ def evaluate_confidence(features):
     # Brute Force + Failed → Successful Login
     if (
         brute_force_detected
-        and authentication_correlated
+        and brute_force_to_success
     ):
 
         return {
@@ -640,6 +734,22 @@ def evaluate_confidence(features):
             "level": "HIGH",
             "rationale": [
                 "Brute Force의 주요 행동 증거가 로그에서 직접 확인됨"
+            ],
+        }
+
+    # Password Spraying-like + Failed → Successful Login
+    if (
+        password_spray_detected
+        and password_spray_to_success
+    ):
+
+        return {
+            "level": "HIGH",
+            "rationale": [
+                "여러 계정에 대한 짧은 시간 내 인증 실패가 확인됨",
+                "Password Spraying-like 탐지 조건을 충족함",
+                "Password Spraying-like 탐지 이후 동일 계정의 로그인 성공이 확인됨",
+                "실제 비밀번호 재사용 여부는 로그에서 확인되지 않음",
             ],
         }
 
@@ -709,11 +819,99 @@ def evaluate_correlation_signal(features):
         correlation["post_authentication"]["is_correlated"]
     )
 
+    brute_force_to_success = (
+        correlation["brute_force_to_success"]["is_correlated"]
+    )
+
+    password_spray_to_success = (
+        correlation["password_spray_to_success"]["is_correlated"]
+    )
+
     if (
         authentication_correlated
         or post_authentication_correlated
+        or brute_force_to_success
+        or password_spray_to_success
     ):
         return "MEDIUM"
 
     return "LOW"
 
+
+def extract_evidence(result):
+
+    evidence = []
+
+    detections = result["detections"]
+
+    for detection in detections.values():
+
+        if not detection.is_detected:
+            continue
+
+        for item in detection.evidence:
+
+            evidence.append({
+                "type": item.type,
+                "value": item.value,
+                "source": item.source,
+                "timestamp": item.timestamp,
+                "time_range": item.time_range,
+            })
+
+    return evidence
+
+
+def extract_correlation_evidence(result):
+
+    evidence = []
+
+    correlation = result["correlation"]
+
+    for correlation_key, correlation_result in correlation.items():
+
+        if not correlation_result["is_correlated"]:
+            continue
+
+        correlation_type = correlation_result.get("type")
+        user = correlation_result.get("user")
+        failure_timestamp = correlation_result.get("failure_timestamp")
+        success_timestamp = correlation_result.get("success_timestamp")
+        time_delta = correlation_result.get("time_delta_seconds")
+
+        if correlation_type:
+            evidence.append({
+                "type": "correlation_type",
+                "value": correlation_type,
+                "source": f"{correlation_key}_correlation",
+            })
+
+        if user:
+            evidence.append({
+                "type": "correlation_user",
+                "value": user,
+                "source": f"{correlation_key}_correlation",
+            })
+
+        if time_delta is not None:
+            evidence.append({
+                "type": "correlation_time_delta",
+                "value": time_delta,
+                "source": f"{correlation_key}_correlation",
+            })
+
+        if failure_timestamp and success_timestamp:
+            evidence.append({
+                "type": "correlation_time_range",
+                "value": (
+                    failure_timestamp,
+                    success_timestamp,
+                ),
+                "source": f"{correlation_key}_correlation",
+                "time_range": (
+                    failure_timestamp,
+                    success_timestamp,
+                ),
+            })
+
+    return evidence

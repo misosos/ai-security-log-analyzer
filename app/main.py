@@ -5,6 +5,8 @@ from app.analyzer.pipeline import (
     assess_risk,
 )
 
+from app.analyzer.report import print_analysis_result
+
 
 LOG_SOURCES = [
     {
@@ -30,6 +32,4 @@ result = correlate_attacks(logs, result)
 
 result = assess_risk(result)
 
-
-print("분석 결과:")
-print(result)
+print_analysis_result(result)

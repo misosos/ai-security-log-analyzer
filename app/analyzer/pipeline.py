@@ -9,6 +9,8 @@ from app.detector.web_attack import detect_path_traversal
 from app.correlation.attack_chain import (
     correlate_authentication_transition,
     correlate_post_authentication_activity,
+    correlate_brute_force_to_success,
+    correlate_password_spray_to_success,
 )
 from app.analyzer.risk import (
     load_account_metadata,
@@ -162,11 +164,18 @@ def detect_attacks(logs):
             continue
 
         path_result = detect_path_traversal(
+          
             log.http.path,
+
             log.http.query,
+
             log.http.method,
+
             log.http.status_code,
+
             log.http.response_size,
+
+            log.timestamp,
         )
 
         if path_result.is_detected:
@@ -200,9 +209,25 @@ def correlate_attacks(logs, results):
             )
         )
 
+        brute_force_result = (
+            correlate_brute_force_to_success(
+                ip_logs,
+                result["detections"]["brute_force"],
+            )
+        )
+
+        password_spray_result = (
+            correlate_password_spray_to_success(
+                ip_logs,
+                result["detections"]["password_spray"],
+            )
+        )
+
         result["correlation"] = {
             "authentication": authentication_result,
             "post_authentication": post_authentication_result,
+            "brute_force_to_success": brute_force_result,
+            "password_spray_to_success": password_spray_result,
         }
 
     return results

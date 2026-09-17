@@ -1,10 +1,17 @@
 from datetime import datetime, timedelta, timezone
-from app.models.schemas import NormalizedEvent
+
 from app.analyzer.pipeline import correlate_attacks
 
 from app.correlation.attack_chain import (
     correlate_authentication_transition,
     correlate_post_authentication_activity,
+    correlate_brute_force_to_success,
+    correlate_password_spray_to_success,
+)
+
+from app.models.schemas import (
+    NormalizedEvent,
+    DetectionResult,
 )
 
 
@@ -14,11 +21,14 @@ def make_event(
     user,
     src_ip="192.168.1.20",
 ):
-    return NormalizedEvent(
-        timestamp=datetime.strptime(
+    if isinstance(timestamp, str):
+        timestamp = datetime.strptime(
             timestamp,
             "%Y-%m-%d %H:%M:%S",
-        ),
+        )
+
+    return NormalizedEvent(
+        timestamp=timestamp,
         event_type=event_type,
         source="application",
         user=user,
@@ -185,6 +195,7 @@ def test_selects_closest_failure_before_success():
     result = correlate_authentication_transition(logs)
 
     assert result["is_correlated"] is True
+
     assert result["failure_timestamp"] == datetime(
         2026,
         9,
@@ -193,6 +204,7 @@ def test_selects_closest_failure_before_success():
         0,
         5,
     )
+
     assert result["success_timestamp"] == datetime(
         2026,
         9,
@@ -201,6 +213,7 @@ def test_selects_closest_failure_before_success():
         0,
         8,
     )
+
     assert result["time_delta_seconds"] == 3.0
 
 
@@ -253,11 +266,25 @@ def test_pipeline_correlates_authentication_and_post_authentication():
     results = {
         "192.168.1.20": {
             "features": {},
-            "detections": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            }
         }
     }
 
-    result = correlate_attacks(logs, results)
+    result = correlate_attacks(
+        logs,
+        results,
+    )
 
     correlation = result["192.168.1.20"]["correlation"]
 
@@ -314,3 +341,396 @@ def test_correlation_handles_different_timezones():
 
     assert result["is_correlated"] is True
     assert result["time_delta_seconds"] == 30
+
+
+def test_correlates_brute_force_to_successful_login():
+    logs = [
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                1,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                3,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                5,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                7,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                9,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                20,
+                tzinfo=timezone.utc,
+            ),
+            "user_login",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+    ]
+
+    brute_force_detection = DetectionResult(
+        is_detected=True,
+        detection_type="brute_force",
+        evidence=[],
+    )
+
+    result = correlate_brute_force_to_success(
+        logs,
+        brute_force_detection,
+    )
+
+    assert result["is_correlated"] is True
+    assert result["type"] == (
+        "brute_force_to_successful_login"
+    )
+    assert result["user"] == "admin"
+    assert result["time_delta_seconds"] == 11
+
+
+def test_pipeline_correlates_brute_force_to_successful_login():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:00",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            "2026-09-16 10:00:02",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            "2026-09-16 10:00:04",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            "2026-09-16 10:00:06",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            "2026-09-16 10:00:08",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.50",
+        ),
+    ]
+
+    results = {
+        "10.0.0.50": {
+            "features": {
+                "failure_count": 5,
+                "target_users": ["admin"],
+                "login_succeeded": True,
+                "within_window": True,
+                "window_seconds": 8.0,
+                "average_interval": 2.0,
+                "interval_variability": 0,
+                "unique_target_count": 1,
+            },
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=True,
+                    detection_type="brute_force",
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        }
+    }
+
+    result = correlate_attacks(
+        logs,
+        results,
+    )
+
+    correlation = result["10.0.0.50"]["correlation"]
+
+    assert correlation["brute_force_to_success"]["is_correlated"] is True
+    assert correlation["brute_force_to_success"]["type"] == (
+        "brute_force_to_successful_login"
+    )
+    assert correlation["brute_force_to_success"]["user"] == "admin"
+    assert correlation["brute_force_to_success"]["time_delta_seconds"] == 12
+
+
+def test_correlates_password_spray_to_successful_login():
+    logs = [
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                1,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                3,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "alice",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                5,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "bob",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                7,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "guest",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                12,
+                tzinfo=timezone.utc,
+            ),
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            datetime(
+                2026,
+                9,
+                14,
+                2,
+                0,
+                20,
+                tzinfo=timezone.utc,
+            ),
+            "user_login",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+    ]
+
+    password_spray_detection = DetectionResult(
+        is_detected=True,
+        detection_type="password_spraying_like",
+        evidence=[],
+    )
+
+    result = correlate_password_spray_to_success(
+        logs,
+        password_spray_detection,
+    )
+
+    assert result["is_correlated"] is True
+    assert result["type"] == (
+        "password_spray_to_successful_login"
+    )
+    assert result["user"] == "admin"
+    assert result["time_delta_seconds"] == 8
+
+def test_pipeline_correlates_password_spray_to_successful_login():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:00",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            "2026-09-16 10:00:02",
+            "login_failed",
+            "alice",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            "2026-09-16 10:00:04",
+            "login_failed",
+            "bob",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            "2026-09-16 10:00:06",
+            "login_failed",
+            "guest",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            "2026-09-16 10:00:08",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.60",
+        ),
+    ]
+
+    results = {
+        "10.0.0.60": {
+            "features": {
+                "failure_count": 5,
+                "target_users": [
+                    "admin",
+                    "alice",
+                    "bob",
+                    "guest",
+                ],
+                "login_succeeded": True,
+                "within_window": True,
+                "window_seconds": 8.0,
+                "average_interval": 2.0,
+                "interval_variability": 0,
+                "unique_target_count": 4,
+            },
+            "detections": {
+                "password_spray": DetectionResult(
+                    is_detected=True,
+                    detection_type="password_spraying_like",
+                    evidence=[],
+                ),
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        }
+    }
+
+    result = correlate_attacks(
+        logs,
+        results,
+    )
+
+    correlation = result["10.0.0.60"]["correlation"]
+
+    assert correlation[
+        "password_spray_to_success"
+    ]["is_correlated"] is True
+
+    assert correlation[
+        "password_spray_to_success"
+    ]["type"] == (
+        "password_spray_to_successful_login"
+    )
+
+    assert correlation[
+        "password_spray_to_success"
+    ]["user"] == "admin"
+
+    assert correlation[
+        "password_spray_to_success"
+    ]["time_delta_seconds"] == 12
