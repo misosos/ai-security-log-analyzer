@@ -156,12 +156,20 @@ def print_global_correlation(
         [],
     )
 
-    if not multi_ip_results and not distributed_success_results:
-        return
+    lifecycle_results = [
+        result
+        for result in global_correlation.get(
+            "linux_audit_session_lifecycle",
+            [],
+        ) or []
+        if isinstance(result, dict)
+        and result.get("is_correlated") is True
+    ]
 
-    print(
-        "\n===== Global Correlation ====="
-    )
+    if multi_ip_results or distributed_success_results:
+        print(
+            "\n===== Global Correlation ====="
+        )
 
     for multi_ip_result in multi_ip_results:
 
@@ -237,6 +245,48 @@ def print_global_correlation(
 
         for rationale in result.get("rationale", []):
             print(f"    - {rationale}")
+
+    if not lifecycle_results:
+        return
+
+    print(
+        "\n===== Telemetry Relations ====="
+    )
+
+    for result in lifecycle_results:
+
+        print(
+            "  - Linux Audit 세션 시작/종료 연관"
+        )
+
+        fields = (
+            ("계정", "user"),
+            ("Linux Audit 세션 ID", "audit_session_id"),
+            ("시작 이벤트 관찰", "start_timestamp"),
+            ("종료 이벤트 관찰", "end_timestamp"),
+            (
+                "시작/종료 이벤트 간 관찰 간격",
+                "observed_session_lifecycle_interval_seconds",
+            ),
+        )
+
+        for label, field in fields:
+            value = result.get(field)
+
+            if value is None:
+                continue
+
+            suffix = "초" if field.endswith("_seconds") else ""
+            print(f"    {label}: {value}{suffix}")
+
+    print(
+        "    ※ 이 연관은 Linux Audit에서 관찰된 시작/종료 "
+        "이벤트와 source-scoped context의 일치를 나타냅니다."
+    )
+    print(
+        "      물리적 세션 동일성, 사용자·공격자 활동, 침해 또는 "
+        "인과관계를 확인하지 않습니다."
+    )
 
 
 def print_analysis_result(analysis):
