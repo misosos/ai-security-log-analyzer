@@ -1263,6 +1263,7 @@ def test_realistic_lifecycle_does_not_change_analysis_or_risk():
     assert analysis["global_correlation"] == {
         "multi_ip_authentication": [],
         "distributed_authentication_to_success": [],
+        "linux_audit_session_lifecycle": [],
     }
     assert all(
         not correlation["is_correlated"]
@@ -1546,6 +1547,7 @@ def test_source_identity_fixture_does_not_change_analysis_or_risk():
     assert analysis["global_correlation"] == {
         "multi_ip_authentication": [],
         "distributed_authentication_to_success": [],
+        "linux_audit_session_lifecycle": [],
     }
     assert all(
         not correlation["is_correlated"]

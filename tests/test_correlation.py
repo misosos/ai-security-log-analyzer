@@ -5,6 +5,7 @@ from app.analyzer.pipeline import (
     assess_risk,
     correlate_attacks,
     detect_attacks,
+    load_normalized_logs,
 )
 
 from app.correlation.attack_chain import (
@@ -1505,4 +1506,56 @@ def test_pipeline_exposes_both_global_collections_and_isolates_risk():
 
     assert with_global_risk["results"] == (
         without_global_risk["results"]
+    )
+
+
+def test_pipeline_exposes_linux_audit_session_lifecycle_and_isolates_risk(
+    tmp_path,
+):
+    path = tmp_path / "session-lifecycle.log"
+    path.write_text(
+        "\n".join([
+            "node=host-a type=USER_START "
+            "msg=audit(1790200000.001:801): "
+            "uid=0 auid=1000 ses=71 "
+            "msg='op=PAM:session_open acct=training-user "
+            "exe=/usr/sbin/sshd hostname=remote-a "
+            "addr=198.51.100.80 terminal=ssh res=success'",
+            "node=host-a type=USER_END "
+            "msg=audit(1790200010.001:802): "
+            "uid=0 auid=1000 ses=71 "
+            "msg='op=PAM:session_close acct=training-user "
+            "exe=/usr/sbin/sshd hostname=remote-a "
+            "addr=198.51.100.80 terminal=ssh res=success'",
+        ]),
+        encoding="utf-8",
+    )
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "feed-a",
+        "path": path,
+    }])
+    correlated = correlate_attacks(logs, detect_attacks(logs))
+
+    lifecycle = correlated["global_correlation"][
+        "linux_audit_session_lifecycle"
+    ]
+
+    assert len(lifecycle) == 1
+    assert lifecycle[0]["type"] == (
+        "linux_audit_session_lifecycle"
+    )
+    assert lifecycle[0]["source_instance"] == "feed-a"
+    assert lifecycle[0]["node"] == "host-a"
+    assert lifecycle[0][
+        "observed_session_lifecycle_interval_seconds"
+    ] == 10.0
+
+    without_lifecycle = deepcopy(correlated)
+    without_lifecycle["global_correlation"][
+        "linux_audit_session_lifecycle"
+    ] = []
+
+    assert assess_risk(deepcopy(correlated))["results"] == (
+        assess_risk(without_lifecycle)["results"]
     )

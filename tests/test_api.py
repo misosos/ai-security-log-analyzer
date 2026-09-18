@@ -79,6 +79,34 @@ def test_build_analysis_response_uses_canonical_contract():
                 "rationale": [],
             },
         ],
+        "linux_audit_session_lifecycle": [
+            {
+                "is_correlated": True,
+                "type": "linux_audit_session_lifecycle",
+                "source": "linux_audit",
+                "source_instance": "prod-audit-feed",
+                "node": "producer-a.example",
+                "audit_session_id": 61,
+                "user": "training-user",
+                "start_event_id": "1790100000.001:601",
+                "end_event_id": "1790100120.002:650",
+                "start_timestamp": "2026-09-18T01:00:00Z",
+                "end_timestamp": "2026-09-18T01:02:00Z",
+                "observed_session_lifecycle_interval_seconds": (
+                    120.0
+                ),
+                "matched_fields": [
+                    "source",
+                    "source_instance",
+                    "node",
+                    "audit_session_id",
+                    "user",
+                ],
+                "missing_fields": [],
+                "context_differences": ["operation"],
+                "rationale": [],
+            },
+        ],
     }
 
     analysis = {
@@ -110,3 +138,9 @@ def test_build_analysis_response_uses_canonical_contract():
     ]
 
     assert response.global_correlation == global_correlation
+    assert response.global_correlation[
+        "linux_audit_session_lifecycle"
+    ][0]["source_instance"] == "prod-audit-feed"
+    assert response.global_correlation[
+        "linux_audit_session_lifecycle"
+    ][0]["node"] == "producer-a.example"

@@ -15,6 +15,9 @@ from app.correlation.attack_chain import (
     correlate_multi_ip_authentication,
     correlate_distributed_authentication_to_success,
 )
+from app.correlation.linux_audit_session import (
+    correlate_linux_audit_session_lifecycle,
+)
 from app.analyzer.risk import (
     load_account_metadata,
     build_risk_context,
@@ -215,6 +218,10 @@ def correlate_attacks(logs, results):
         )
     )
 
+    linux_audit_session_results = (
+        correlate_linux_audit_session_lifecycle(logs)
+    )
+
     # IP별 Correlation
     for ip, result in results.items():
 
@@ -260,6 +267,9 @@ def correlate_attacks(logs, results):
             "multi_ip_authentication": multi_ip_results,
             "distributed_authentication_to_success": (
                 distributed_success_results
+            ),
+            "linux_audit_session_lifecycle": (
+                linux_audit_session_results
             ),
         },
     }

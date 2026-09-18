@@ -47,3 +47,18 @@ def test_report_prints_distributed_authentication_observations(capsys):
     assert "Success from failure source: False" in output
     assert "Last failure → success: 15.0 seconds" in output
     assert limitation in output
+
+
+def test_report_ignores_unpresented_session_lifecycle_collection(capsys):
+    print_global_correlation({
+        "multi_ip_authentication": [],
+        "distributed_authentication_to_success": [],
+        "linux_audit_session_lifecycle": [
+            {
+                "is_correlated": True,
+                "type": "linux_audit_session_lifecycle",
+            }
+        ],
+    })
+
+    assert capsys.readouterr().out == ""
