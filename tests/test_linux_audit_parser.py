@@ -12,6 +12,7 @@ from app.loader.linux_audit_loader import (
     load_linux_audit_events,
     parse_audit_record,
 )
+from app.models.schemas import LinuxAuditContext
 from app.parser.linux_audit import parse_linux_audit_events
 
 
@@ -20,6 +21,7 @@ def audit_line(
     timestamp="1789693201.123",
     serial="101",
     details=None,
+    node=None,
 ):
     if details is None:
         details = (
@@ -32,7 +34,9 @@ def audit_line(
             "res=failed'"
         )
 
-    return (
+    prefix = f"node={node} " if node is not None else ""
+
+    return prefix + (
         f"type={record_type} "
         f"msg=audit({timestamp}:{serial}): {details}"
     )
@@ -124,7 +128,10 @@ def test_grouping_uses_full_event_identity_and_handles_interleaving(
         encoding="utf-8",
     )
 
-    events = load_linux_audit_events(path, "host-a")
+    events = load_linux_audit_events(
+        path,
+        source_instance="host-a",
+    )
 
     assert [event.event_id for event in events] == [
         "1789693201.123:101",
@@ -1212,26 +1219,312 @@ def test_realistic_lifecycle_preserves_incomplete_and_ambiguous_observations():
 def test_realistic_lifecycle_characterizes_source_and_pid_gaps():
     first = load_linux_audit_events(
         REALISTIC_LIFECYCLE_FIXTURE,
-        source_identity="audit-host-a",
+        source_instance="audit-host-a",
     )
     second = load_linux_audit_events(
         REALISTIC_LIFECYCLE_FIXTURE,
-        source_identity="audit-host-b",
+        source_instance="audit-host-b",
     )
 
-    assert first == second
+    assert first != second
+    assert first[0].source_instance == "audit-host-a"
+    assert second[0].source_instance == "audit-host-b"
     assert first[0].records[0].fields["pid"] == "5100"
 
     normalized = parse_linux_audit_events(first[0])[0]
 
     assert normalized.source == "linux_audit"
-    assert not hasattr(normalized.linux_audit, "source_identity")
+    assert normalized.linux_audit.source_instance == "audit-host-a"
+    assert normalized.linux_audit.node is None
     assert not hasattr(normalized.linux_audit, "process_id")
     assert "pid=5100" in normalized.raw
 
 
 def test_realistic_lifecycle_does_not_change_analysis_or_risk():
     logs = load_realistic_lifecycle_logs()
+    detections = detect_attacks(logs)
+
+    assert all(
+        result["features"]["failure_count"] == 0
+        for result in detections.values()
+    )
+    assert all(
+        result["features"]["login_succeeded"] is False
+        for result in detections.values()
+    )
+    assert all(
+        not detection.is_detected
+        for result in detections.values()
+        for detection in result["detections"].values()
+    )
+
+    analysis = correlate_attacks(logs, detections)
+
+    assert analysis["global_correlation"] == {
+        "multi_ip_authentication": [],
+        "distributed_authentication_to_success": [],
+    }
+    assert all(
+        not correlation["is_correlated"]
+        for result in analysis["results"].values()
+        for correlation in result["correlation"].values()
+    )
+
+    assessed = assess_risk(analysis)
+
+    assert all(
+        result["risk_level"] == "LOW"
+        for result in assessed["results"].values()
+    )
+
+
+SOURCE_IDENTITY_FIXTURE = (
+    "sample_logs/linux_audit_source_identity.log"
+)
+
+
+def test_linux_audit_context_provenance_fields_are_optional():
+    context = LinuxAuditContext(
+        event_id="1790100000.001:601",
+        record_types=("USER_START",),
+    )
+
+    assert context.source_instance is None
+    assert context.node is None
+
+
+def test_node_prefixed_record_preserves_opaque_node_and_raw():
+    line = audit_line(
+        record_type="USER_START",
+        node="192.0.2.10",
+    )
+    record = parse_audit_record(
+        line,
+        source_instance="configured-feed",
+    )
+
+    assert record.node == "192.0.2.10"
+    assert record.source_instance == "configured-feed"
+    assert record.raw == line
+
+
+def test_node_preamble_is_parsed_conservatively():
+    assert parse_audit_record(
+        audit_line(node="custom-name")
+    ).node == "custom-name"
+    assert parse_audit_record(
+        "node= type=USER_START "
+        "msg=audit(1790100000.001:601): res=success"
+    ) is None
+    assert parse_audit_record(
+        "node=host-a msg=audit(1790100000.001:601): "
+        "res=success"
+    ) is None
+    assert parse_audit_record(
+        "node=host-a type=USER_START "
+        "msg=audit(not-a-time): res=success"
+    ) is None
+    assert parse_audit_record(
+        "node=host-a type=USER_START "
+        "msg=audit(1790100000.001:601): "
+        "msg='acct=training-user"
+    ) is None
+
+
+def test_grouping_scopes_event_id_by_node_and_missing_node(tmp_path):
+    node_a_auth = audit_line(node="producer-a.example")
+    node_a_account = audit_line(
+        record_type="USER_ACCT",
+        node="producer-a.example",
+    )
+    node_b = audit_line(node="producer-b.example")
+    node_less = audit_line()
+    path = tmp_path / "multi-node.log"
+    path.write_text(
+        "\n".join([
+            node_b,
+            node_a_account,
+            node_less,
+            node_a_auth,
+        ]),
+        encoding="utf-8",
+    )
+
+    events = load_linux_audit_events(
+        path,
+        source_instance="central-feed",
+    )
+
+    assert len(events) == 3
+    assert [event.node for event in events] == [
+        None,
+        "producer-a.example",
+        "producer-b.example",
+    ]
+    assert [len(event.records) for event in events] == [1, 2, 1]
+    assert all(
+        event.source_instance == "central-feed"
+        for event in events
+    )
+
+
+def test_multi_node_grouping_is_independent_of_arrival_order(tmp_path):
+    lines = [
+        audit_line(node="producer-a.example"),
+        audit_line(
+            record_type="USER_ACCT",
+            node="producer-a.example",
+        ),
+        audit_line(node="producer-b.example"),
+        audit_line(),
+    ]
+    first_path = tmp_path / "first.log"
+    second_path = tmp_path / "second.log"
+    first_path.write_text("\n".join(lines), encoding="utf-8")
+    second_path.write_text(
+        "\n".join(reversed(lines)),
+        encoding="utf-8",
+    )
+
+    first = load_linux_audit_events(
+        first_path,
+        source_instance="central-feed",
+    )
+    second = load_linux_audit_events(
+        second_path,
+        source_instance="central-feed",
+    )
+
+    assert first == second
+
+
+def test_pipeline_preserves_source_instance_node_hostname_and_address():
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "prod-audit-feed",
+        "path": SOURCE_IDENTITY_FIXTURE,
+    }])
+
+    producer_a = next(
+        log
+        for log in logs
+        if log.user == "training-source-a"
+    )
+    node_less = next(
+        log
+        for log in logs
+        if log.user == "training-node-less"
+    )
+
+    assert producer_a.source == "linux_audit"
+    assert producer_a.linux_audit.source_instance == (
+        "prod-audit-feed"
+    )
+    assert producer_a.linux_audit.node == "producer-a.example"
+    assert producer_a.linux_audit.hostname == "remote-a.example"
+    assert producer_a.src_ip == "198.51.100.70"
+    assert producer_a.raw.startswith(
+        "node=producer-a.example type=USER_START "
+    )
+    assert node_less.linux_audit.node is None
+    assert node_less.linux_audit.source_instance == (
+        "prod-audit-feed"
+    )
+
+
+def test_all_supported_stages_preserve_source_provenance(tmp_path):
+    record_types = [
+        "USER_AUTH",
+        "USER_ACCT",
+        "USER_LOGIN",
+        "USER_START",
+        "USER_END",
+    ]
+    path = tmp_path / "all-stages.log"
+    path.write_text(
+        "\n".join(
+            audit_line(
+                record_type=record_type,
+                serial=str(700 + index),
+                node="producer-a.example",
+            )
+            for index, record_type in enumerate(record_types)
+        ),
+        encoding="utf-8",
+    )
+
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "all-stage-feed",
+        "path": path,
+    }])
+
+    assert [log.event_type for log in logs] == [
+        "authentication_attempt",
+        "account_authorization_attempt",
+        "login_establishment",
+        "session_start",
+        "session_end",
+    ]
+    assert all(
+        log.linux_audit.source_instance == "all-stage-feed"
+        and log.linux_audit.node == "producer-a.example"
+        for log in logs
+    )
+
+
+def test_source_instance_is_not_inferred_from_source_or_path():
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "path": SOURCE_IDENTITY_FIXTURE,
+    }])
+
+    assert all(
+        log.linux_audit.source_instance is None
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.source_instance != log.source
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.source_instance
+        != SOURCE_IDENTITY_FIXTURE
+        for log in logs
+    )
+
+
+def test_different_source_instances_remain_distinct_after_normalization():
+    first = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "feed-a",
+        "path": SOURCE_IDENTITY_FIXTURE,
+    }])
+    second = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "feed-b",
+        "path": SOURCE_IDENTITY_FIXTURE,
+    }])
+
+    assert [
+        log.linux_audit.source_instance
+        for log in first
+    ] == ["feed-a"] * len(first)
+    assert [
+        log.linux_audit.source_instance
+        for log in second
+    ] == ["feed-b"] * len(second)
+    assert [log.linux_audit.node for log in first] == [
+        log.linux_audit.node for log in second
+    ]
+
+
+def test_source_identity_fixture_does_not_change_analysis_or_risk():
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "prod-audit-feed",
+        "path": SOURCE_IDENTITY_FIXTURE,
+    }])
     detections = detect_attacks(logs)
 
     assert all(

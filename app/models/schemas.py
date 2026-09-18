@@ -47,6 +47,8 @@ class LinuxAuditContext:
     audit_session_id: int | None = None
     terminal: str | None = None
     hostname: str | None = None
+    source_instance: str | None = None
+    node: str | None = None
 
 
 @dataclass

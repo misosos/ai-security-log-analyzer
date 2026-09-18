@@ -6,7 +6,8 @@ import shlex
 
 
 AUDIT_PREAMBLE = re.compile(
-    r"^type=(?P<record_type>[A-Z0-9_]+) "
+    r"^(?:node=(?P<node>\S+) )?"
+    r"type=(?P<record_type>[A-Z0-9_]+) "
     r"msg=audit\("
     r"(?P<seconds>\d+)\."
     r"(?P<fraction>\d+):"
@@ -23,6 +24,8 @@ class AuditRecord:
     serial: int
     fields: dict[str, str]
     raw: str
+    source_instance: str | None = None
+    node: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,8 @@ class GroupedAuditEvent:
     timestamp: datetime
     serial: int
     records: tuple[AuditRecord, ...]
+    source_instance: str | None = None
+    node: str | None = None
 
 
 def _parse_key_values(text):
@@ -60,7 +65,7 @@ def _parse_key_values(text):
     return fields
 
 
-def parse_audit_record(line):
+def parse_audit_record(line, source_instance=None):
     match = AUDIT_PREAMBLE.match(line)
 
     if match is None:
@@ -90,10 +95,12 @@ def parse_audit_record(line):
         serial=serial,
         fields=fields,
         raw=line,
+        source_instance=source_instance,
+        node=match.group("node"),
     )
 
 
-def load_linux_audit_events(path, source_identity="linux_audit"):
+def load_linux_audit_events(path, source_instance=None):
     grouped = {}
 
     with Path(path).open("r", encoding="utf-8") as audit_file:
@@ -103,12 +110,19 @@ def load_linux_audit_events(path, source_identity="linux_audit"):
             if not line.strip():
                 continue
 
-            record = parse_audit_record(line)
+            record = parse_audit_record(
+                line,
+                source_instance=source_instance,
+            )
 
             if record is None:
                 continue
 
-            key = (source_identity, record.event_id)
+            key = (
+                record.source_instance,
+                record.node,
+                record.event_id,
+            )
             grouped.setdefault(key, []).append(record)
 
     events = []
@@ -127,6 +141,8 @@ def load_linux_audit_events(path, source_identity="linux_audit"):
             timestamp=first_record.timestamp,
             serial=first_record.serial,
             records=ordered_records,
+            source_instance=first_record.source_instance,
+            node=first_record.node,
         ))
 
     return sorted(
@@ -135,6 +151,9 @@ def load_linux_audit_events(path, source_identity="linux_audit"):
             event.timestamp,
             event.serial,
             event.event_id,
-            source_identity,
+            event.source_instance is not None,
+            event.source_instance or "",
+            event.node is not None,
+            event.node or "",
         ),
     )

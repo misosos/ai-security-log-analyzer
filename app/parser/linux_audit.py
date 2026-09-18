@@ -107,6 +107,8 @@ def _normalize_semantic_record(record, event, record_types):
             audit_session_id=_numeric_id(fields.get("ses")),
             terminal=_known_text(fields.get("terminal")),
             hostname=_known_text(fields.get("hostname")),
+            source_instance=event.source_instance,
+            node=event.node,
         ),
     )
 

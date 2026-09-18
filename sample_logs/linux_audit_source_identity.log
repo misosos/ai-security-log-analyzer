@@ -1,0 +1,4 @@
+node=producer-a.example type=USER_START msg=audit(1790100000.001:601): pid=6100 uid=0 auid=1800 ses=61 msg='op=PAM:session_open acct="training-source-a" exe="/usr/sbin/sshd" hostname=remote-a.example addr=198.51.100.70 terminal=ssh res=success'
+node=producer-b.example type=USER_START msg=audit(1790100000.001:601): pid=6200 uid=0 auid=1900 ses=62 msg='op=PAM:session_open acct="training-source-b" exe="/usr/sbin/sshd" hostname=remote-b.example addr=198.51.100.71 terminal=ssh res=success'
+type=USER_END msg=audit(1790100000.001:601): pid=6300 uid=0 auid=2000 ses=63 msg='op=PAM:session_close acct="training-node-less" exe="/usr/sbin/sshd" hostname=remote-c.example addr=198.51.100.72 terminal=ssh res=success'
+node=producer-a.example type=EOE msg=audit(1790100000.001:601):

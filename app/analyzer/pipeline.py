@@ -39,7 +39,7 @@ def load_normalized_logs(log_sources):
         if source == "linux_audit":
             audit_events = load_linux_audit_events(
                 config["path"],
-                source_identity=source,
+                source_instance=config.get("source_instance"),
             )
 
             for audit_event in audit_events:
