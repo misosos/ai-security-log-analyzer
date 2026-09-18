@@ -166,6 +166,16 @@ def print_global_correlation(
         and result.get("is_correlated") is True
     ]
 
+    login_start_results = [
+        result
+        for result in global_correlation.get(
+            "linux_audit_login_start_co_observation",
+            [],
+        ) or []
+        if isinstance(result, dict)
+        and result.get("is_correlated") is True
+    ]
+
     if multi_ip_results or distributed_success_results:
         print(
             "\n===== Global Correlation ====="
@@ -246,7 +256,7 @@ def print_global_correlation(
         for rationale in result.get("rationale", []):
             print(f"    - {rationale}")
 
-    if not lifecycle_results:
+    if not lifecycle_results and not login_start_results:
         return
 
     print(
@@ -279,14 +289,59 @@ def print_global_correlation(
             suffix = "초" if field.endswith("_seconds") else ""
             print(f"    {label}: {value}{suffix}")
 
-    print(
-        "    ※ 이 연관은 Linux Audit에서 관찰된 시작/종료 "
-        "이벤트와 source-scoped context의 일치를 나타냅니다."
-    )
-    print(
-        "      물리적 세션 동일성, 사용자·공격자 활동, 침해 또는 "
-        "인과관계를 확인하지 않습니다."
-    )
+    if lifecycle_results:
+        print(
+            "    ※ 이 연관은 Linux Audit에서 관찰된 시작/종료 "
+            "이벤트와 source-scoped context의 일치를 나타냅니다."
+        )
+        print(
+            "      물리적 세션 동일성, 사용자·공격자 활동, 침해 또는 "
+            "인과관계를 확인하지 않습니다."
+        )
+
+    if lifecycle_results and login_start_results:
+        print()
+
+    for result in login_start_results:
+        print(
+            "  - Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
+        )
+
+        fields = (
+            ("계정", "user"),
+            ("Linux Audit 세션 ID", "audit_session_id"),
+            ("USER_LOGIN 이벤트 관찰 시각", "login_timestamp"),
+            ("USER_START 이벤트 관찰 시각", "start_timestamp"),
+        )
+
+        for label, field in fields:
+            value = result.get(field)
+
+            if value is None:
+                continue
+
+            print(f"    {label}: {value}")
+
+    if login_start_results:
+        print(
+            "    ※ 이 공동 관찰은 일치하는 source-scoped Linux Audit "
+            "context에서"
+        )
+        print(
+            "      USER_LOGIN 및 USER_START 이벤트가 각각 관찰되었음을 "
+            "나타냅니다."
+        )
+        print(
+            "      표시 순서는 이벤트 순서나 전이를 의미하지 않으며, "
+            "물리적 세션"
+        )
+        print(
+            "      동일성, PAM transaction, SSH connection, "
+            "사용자·공격자 활동,"
+        )
+        print(
+            "      침해 또는 인과관계를 확인하지 않습니다."
+        )
 
 
 def print_analysis_result(analysis):

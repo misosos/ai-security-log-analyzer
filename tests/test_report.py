@@ -73,6 +73,27 @@ def lifecycle_result(**overrides):
     return result
 
 
+def login_start_result(**overrides):
+    result = {
+        "is_correlated": True,
+        "type": "linux_audit_login_start_co_observation",
+        "source_instance": "hidden-login-source",
+        "node": "hidden-login-node.example",
+        "audit_session_id": 71,
+        "user": "training-account",
+        "login_event_id": "hidden-login-event",
+        "start_event_id": "hidden-session-start-event",
+        "login_timestamp": datetime(2026, 9, 18, 1, 0, 2),
+        "start_timestamp": datetime(2026, 9, 18, 1, 0, 1),
+        "matched_fields": ["audit_user_id"],
+        "missing_fields": ["terminal"],
+        "context_differences": ["operation"],
+        "rationale": ["hidden-engine-rationale"],
+    }
+    result.update(overrides)
+    return result
+
+
 def test_report_prints_bounded_session_lifecycle_observation(capsys):
     print_global_correlation({
         "multi_ip_authentication": [],
@@ -167,3 +188,145 @@ def test_report_accepts_missing_global_and_lifecycle_keys(capsys):
     })
 
     assert capsys.readouterr().out == ""
+
+
+def test_report_prints_bounded_login_start_co_observation(capsys):
+    print_global_correlation({
+        "linux_audit_login_start_co_observation": [
+            login_start_result(),
+        ],
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Telemetry Relations" in output
+    assert (
+        "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
+        in output
+    )
+    assert "계정: training-account" in output
+    assert "Linux Audit 세션 ID: 71" in output
+    assert (
+        "USER_LOGIN 이벤트 관찰 시각: 2026-09-18 01:00:02"
+        in output
+    )
+    assert (
+        "USER_START 이벤트 관찰 시각: 2026-09-18 01:00:01"
+        in output
+    )
+    assert "USER_LOGIN 및 USER_START 이벤트가 각각 관찰" in output
+    assert "표시 순서는 이벤트 순서나 전이를 의미하지 않으며" in output
+    assert "물리적 세션" in output
+    assert "PAM transaction" in output
+    assert "SSH connection" in output
+    assert "사용자·공격자 활동" in output
+    assert "침해 또는 인과관계" in output
+
+
+def test_report_hides_login_start_provenance_and_interval(capsys):
+    print_global_correlation({
+        "linux_audit_login_start_co_observation": [
+            login_start_result(),
+        ],
+    })
+
+    output = capsys.readouterr().out
+
+    for hidden in [
+        "source_instance",
+        "hidden-login-source",
+        "node",
+        "hidden-login-node.example",
+        "login_event_id",
+        "hidden-login-event",
+        "start_event_id",
+        "hidden-session-start-event",
+        "matched_fields",
+        "missing_fields",
+        "context_differences",
+        "hidden-engine-rationale",
+    ]:
+        assert hidden not in output
+
+    for forbidden in [
+        "→",
+        "로그인 후",
+        "세션 생성",
+        "same session",
+        "관찰 간격",
+        "경과 시간",
+        "duration",
+        "latency",
+        "observed_login_to_start_interval_seconds",
+    ]:
+        assert forbidden not in output
+
+
+def test_report_preserves_login_start_engine_order_and_note_once(capsys):
+    print_global_correlation({
+        "linux_audit_login_start_co_observation": [
+            login_start_result(user="first-account"),
+            login_start_result(user="second-account"),
+        ],
+    })
+
+    output = capsys.readouterr().out
+
+    assert output.index("계정: first-account") < output.index(
+        "계정: second-account"
+    )
+    assert output.count(
+        "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
+    ) == 2
+    assert output.count(
+        "USER_LOGIN 및 USER_START 이벤트가 각각 관찰"
+    ) == 1
+
+
+def test_report_omits_empty_false_or_missing_login_start_collection(
+    capsys,
+):
+    print_global_correlation({
+        "linux_audit_login_start_co_observation": [],
+    })
+    print_global_correlation({
+        "linux_audit_login_start_co_observation": [
+            login_start_result(is_correlated=False),
+        ],
+    })
+    print_global_correlation({})
+
+    output = capsys.readouterr().out
+
+    assert "Telemetry Relations" not in output
+    assert (
+        "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
+        not in output
+    )
+
+
+def test_report_renders_lifecycle_and_login_start_as_independent_groups(
+    capsys,
+):
+    print_global_correlation({
+        "linux_audit_session_lifecycle": [lifecycle_result()],
+        "linux_audit_login_start_co_observation": [
+            login_start_result(),
+        ],
+    })
+
+    output = capsys.readouterr().out
+
+    lifecycle_label = "Linux Audit 세션 시작/종료 연관"
+    login_start_label = (
+        "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
+    )
+
+    assert output.count("===== Telemetry Relations =====") == 1
+    assert output.index(lifecycle_label) < output.index(login_start_label)
+    assert output.count("source-scoped context의 일치") == 1
+    assert output.count(
+        "USER_LOGIN 및 USER_START 이벤트가 각각 관찰"
+    ) == 1
+    assert "시작/종료 이벤트 간 관찰 간격: 120.0초" in output
+    assert "로그인·세션 시작 이벤트 공동 관찰 →" not in output
