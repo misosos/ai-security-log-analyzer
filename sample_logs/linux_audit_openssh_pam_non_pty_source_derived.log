@@ -1,0 +1,2 @@
+node=fixture-sshd-pam-non-pty type=USER_START msg=audit(1790300020.020:721): pid=7300 uid=0 auid=2300 ses=73 msg='op=PAM:session_open acct="training-command" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.81 terminal=ssh res=success'
+node=fixture-sshd-pam-non-pty type=USER_END msg=audit(1790300021.021:722): pid=7300 uid=0 auid=2300 ses=73 msg='op=PAM:session_close acct="training-command" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.81 terminal=ssh res=success'

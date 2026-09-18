@@ -1,0 +1,2 @@
+node=fixture-sshd-pam type=USER_START msg=audit(1790300010.010:711): pid=7200 uid=0 auid=2200 ses=72 msg='op=PAM:session_open acct="training-remote" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.80 terminal=ssh res=success'
+node=fixture-sshd-pam type=USER_LOGIN msg=audit(1790300011.011:712): pid=7201 uid=0 auid=2200 ses=72 msg='op=login acct="training-remote" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.80 terminal=pts/0 res=success'

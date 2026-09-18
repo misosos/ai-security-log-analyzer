@@ -1,0 +1,1 @@
+node=fixture-sshd-no-pam type=USER_LOGIN msg=audit(1790300030.030:731): pid=7400 uid=0 auid=2400 ses=74 msg='op=login acct="training-no-pam" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.82 terminal=pts/1 res=success'

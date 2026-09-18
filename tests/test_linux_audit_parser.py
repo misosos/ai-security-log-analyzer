@@ -1561,3 +1561,216 @@ def test_source_identity_fixture_does_not_change_analysis_or_risk():
         result["risk_level"] == "LOW"
         for result in assessed["results"].values()
     )
+
+
+# Fixture provenance for Phase 3J.
+#
+# The four `upstream-source-derived` fixtures encode stage presence,
+# absence, and source-code ordering from current util-linux, Linux-PAM,
+# and OpenSSH upstream implementations. They are not captured logs.
+# The ambiguity fixture is `synthetic-realistic` and exists only to
+# preserve repeated observations without pairing or deduplication.
+# In every fixture, timestamps, serials, PIDs, account names, addresses,
+# session IDs, and node labels are synthetic training values.
+SOURCE_DERIVED_FIXTURES = {
+    "util_linux": {
+        "path": (
+            "sample_logs/"
+            "linux_audit_util_linux_login_pam_source_derived.log"
+        ),
+        "classification": "upstream-source-derived",
+        "producer": "util-linux login + Linux-PAM + Audit",
+        "source_basis": (
+            "util-linux login.c opens PAM session before successful "
+            "AUDIT_USER_LOGIN; Linux-PAM maps PAM_OPEN_SESSION to "
+            "USER_START"
+        ),
+    },
+    "openssh_pam_pty": {
+        "path": (
+            "sample_logs/"
+            "linux_audit_openssh_pam_pty_source_derived.log"
+        ),
+        "classification": "upstream-source-derived",
+        "producer": "OpenSSH UsePAM=yes + Linux Audit + PTY",
+        "source_basis": (
+            "OpenSSH opens the PAM session before channel handling; "
+            "the PTY login-record path can later emit USER_LOGIN"
+        ),
+    },
+    "openssh_pam_non_pty": {
+        "path": (
+            "sample_logs/"
+            "linux_audit_openssh_pam_non_pty_source_derived.log"
+        ),
+        "classification": "upstream-source-derived",
+        "producer": "OpenSSH UsePAM=yes + non-PTY command",
+        "source_basis": (
+            "OpenSSH opens the PAM session independently of the PTY "
+            "login-record path"
+        ),
+    },
+    "openssh_no_pam": {
+        "path": (
+            "sample_logs/"
+            "linux_audit_openssh_no_pam_source_derived.log"
+        ),
+        "classification": "upstream-source-derived",
+        "producer": "OpenSSH UsePAM=no + Linux Audit + PTY",
+        "source_basis": (
+            "OpenSSH Linux Audit can emit USER_LOGIN without the "
+            "Linux-PAM session records"
+        ),
+    },
+    "ambiguous": {
+        "path": (
+            "sample_logs/"
+            "linux_audit_login_start_ambiguous_synthetic.log"
+        ),
+        "classification": "synthetic-realistic",
+        "producer": "ambiguous repeated observations",
+        "source_basis": (
+            "future relation ambiguity characterization only"
+        ),
+    },
+}
+
+
+def load_source_derived_fixture(name):
+    fixture = SOURCE_DERIVED_FIXTURES[name]
+    return load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": f"phase-3j-{name}",
+        "path": fixture["path"],
+    }])
+
+
+def test_util_linux_source_derived_fixture_preserves_start_before_login():
+    logs = load_source_derived_fixture("util_linux")
+
+    assert [log.event_type for log in logs] == [
+        "authentication_attempt",
+        "account_authorization_attempt",
+        "session_start",
+        "login_establishment",
+        "session_end",
+    ]
+    assert all(log.authentication.outcome == "success" for log in logs)
+
+    start = logs[2]
+    login = logs[3]
+
+    assert start.timestamp < login.timestamp
+    assert start.linux_audit.event_id != login.linux_audit.event_id
+    assert start.user == login.user == "training-local"
+    assert start.linux_audit.audit_session_id == 71
+    assert login.linux_audit.audit_session_id == 71
+    assert start.linux_audit.audit_user_id == 2100
+    assert login.linux_audit.audit_user_id == 2100
+    assert start.linux_audit.source_instance == "phase-3j-util_linux"
+    assert start.linux_audit.node == "fixture-util-login"
+    assert logs[0].linux_audit.audit_user_id is None
+    assert logs[0].linux_audit.audit_session_id is None
+
+
+def test_openssh_pam_pty_source_derived_fixture_preserves_start_before_login():
+    logs = load_source_derived_fixture("openssh_pam_pty")
+
+    assert [log.event_type for log in logs] == [
+        "session_start",
+        "login_establishment",
+    ]
+
+    start, login = logs
+
+    assert start.timestamp < login.timestamp
+    assert start.linux_audit.event_id != login.linux_audit.event_id
+    assert start.user == login.user == "training-remote"
+    assert start.linux_audit.audit_session_id == 72
+    assert login.linux_audit.audit_session_id == 72
+    assert start.linux_audit.audit_user_id == 2200
+    assert login.linux_audit.audit_user_id == 2200
+    assert start.linux_audit.source_instance == (
+        "phase-3j-openssh_pam_pty"
+    )
+    assert start.linux_audit.node == "fixture-sshd-pam"
+
+
+def test_openssh_pam_non_pty_fixture_preserves_start_without_login():
+    logs = load_source_derived_fixture("openssh_pam_non_pty")
+
+    assert [log.event_type for log in logs] == [
+        "session_start",
+        "session_end",
+    ]
+    assert not any(
+        log.event_type == "login_establishment"
+        for log in logs
+    )
+    assert all(log.user == "training-command" for log in logs)
+    assert all(
+        log.linux_audit.audit_session_id == 73
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.source_instance
+        == "phase-3j-openssh_pam_non_pty"
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.node == "fixture-sshd-pam-non-pty"
+        for log in logs
+    )
+
+
+def test_openssh_no_pam_fixture_preserves_login_without_start():
+    logs = load_source_derived_fixture("openssh_no_pam")
+
+    assert [log.event_type for log in logs] == [
+        "login_establishment",
+    ]
+    assert not any(log.event_type == "session_start" for log in logs)
+    assert logs[0].authentication.outcome == "success"
+    assert logs[0].user == "training-no-pam"
+    assert logs[0].linux_audit.audit_session_id == 74
+    assert logs[0].linux_audit.audit_user_id == 2400
+    assert logs[0].linux_audit.source_instance == (
+        "phase-3j-openssh_no_pam"
+    )
+    assert logs[0].linux_audit.node == "fixture-sshd-no-pam"
+
+
+def test_ambiguous_fixture_preserves_repeated_observations_without_pairing():
+    logs = load_source_derived_fixture("ambiguous")
+
+    assert [log.event_type for log in logs] == [
+        "session_start",
+        "login_establishment",
+        "login_establishment",
+    ]
+    assert sum(
+        log.event_type == "session_start"
+        for log in logs
+    ) == 1
+    assert sum(
+        log.event_type == "login_establishment"
+        for log in logs
+    ) == 2
+    assert [log.linux_audit.event_id for log in logs] == [
+        "1790300040.040:741",
+        "1790300041.041:742",
+        "1790300042.042:743",
+    ]
+    assert all(log.user == "training-shared" for log in logs)
+    assert all(
+        log.linux_audit.audit_session_id == 75
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.source_instance == "phase-3j-ambiguous"
+        for log in logs
+    )
+    assert all(
+        log.linux_audit.node == "fixture-ambiguous"
+        for log in logs
+    )

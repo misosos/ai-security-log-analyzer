@@ -1,0 +1,3 @@
+node=fixture-ambiguous type=USER_LOGIN msg=audit(1790300042.042:743): pid=7502 uid=0 auid=2500 ses=75 msg='op=login acct="training-shared" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.83 terminal=pts/3 res=success'
+node=fixture-ambiguous type=USER_START msg=audit(1790300040.040:741): pid=7500 uid=0 auid=2500 ses=75 msg='op=PAM:session_open acct="training-shared" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.83 terminal=ssh res=success'
+node=fixture-ambiguous type=USER_LOGIN msg=audit(1790300041.041:742): pid=7501 uid=0 auid=2500 ses=75 msg='op=login acct="training-shared" exe="/usr/sbin/sshd" hostname=training-client addr=198.51.100.83 terminal=pts/2 res=success'

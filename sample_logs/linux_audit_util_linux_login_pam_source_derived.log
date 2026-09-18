@@ -1,0 +1,5 @@
+node=fixture-util-login type=USER_AUTH msg=audit(1790300000.001:701): pid=7100 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="training-local" exe="/bin/login" hostname=? addr=? terminal=tty2 res=success'
+node=fixture-util-login type=USER_ACCT msg=audit(1790300001.002:702): pid=7100 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:accounting acct="training-local" exe="/bin/login" hostname=? addr=? terminal=tty2 res=success'
+node=fixture-util-login type=USER_START msg=audit(1790300002.003:703): pid=7100 uid=0 auid=2100 ses=71 msg='op=PAM:session_open acct="training-local" exe="/bin/login" hostname=? addr=? terminal=tty2 res=success'
+node=fixture-util-login type=USER_LOGIN msg=audit(1790300003.004:704): pid=7100 uid=0 auid=2100 ses=71 msg='op=login acct="training-local" exe="/bin/login" hostname=? addr=? terminal=tty2 res=success'
+node=fixture-util-login type=USER_END msg=audit(1790300004.005:705): pid=7100 uid=0 auid=2100 ses=71 msg='op=PAM:session_close acct="training-local" exe="/bin/login" hostname=? addr=? terminal=tty2 res=success'
