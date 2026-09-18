@@ -18,6 +18,9 @@ from app.correlation.attack_chain import (
 from app.correlation.linux_audit_session import (
     correlate_linux_audit_session_lifecycle,
 )
+from app.correlation.linux_audit_login_session import (
+    correlate_linux_audit_login_start_co_observation,
+)
 from app.analyzer.risk import (
     load_account_metadata,
     build_risk_context,
@@ -222,6 +225,10 @@ def correlate_attacks(logs, results):
         correlate_linux_audit_session_lifecycle(logs)
     )
 
+    linux_audit_login_start_results = (
+        correlate_linux_audit_login_start_co_observation(logs)
+    )
+
     # IP별 Correlation
     for ip, result in results.items():
 
@@ -270,6 +277,9 @@ def correlate_attacks(logs, results):
             ),
             "linux_audit_session_lifecycle": (
                 linux_audit_session_results
+            ),
+            "linux_audit_login_start_co_observation": (
+                linux_audit_login_start_results
             ),
         },
     }

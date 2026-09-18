@@ -107,6 +107,31 @@ def test_build_analysis_response_uses_canonical_contract():
                 "rationale": [],
             },
         ],
+        "linux_audit_login_start_co_observation": [
+            {
+                "is_correlated": True,
+                "type": "linux_audit_login_start_co_observation",
+                "source": "linux_audit",
+                "source_instance": "prod-audit-feed",
+                "node": "producer-a.example",
+                "audit_session_id": 61,
+                "user": "training-user",
+                "login_event_id": "1790100002.003:603",
+                "start_event_id": "1790100001.002:602",
+                "login_timestamp": "2026-09-18T01:00:02Z",
+                "start_timestamp": "2026-09-18T01:00:01Z",
+                "matched_fields": [
+                    "source",
+                    "source_instance",
+                    "node",
+                    "audit_session_id",
+                    "user",
+                ],
+                "missing_fields": [],
+                "context_differences": ["operation"],
+                "rationale": [],
+            },
+        ],
     }
 
     analysis = {
@@ -143,4 +168,10 @@ def test_build_analysis_response_uses_canonical_contract():
     ][0]["source_instance"] == "prod-audit-feed"
     assert response.global_correlation[
         "linux_audit_session_lifecycle"
+    ][0]["node"] == "producer-a.example"
+    assert response.global_correlation[
+        "linux_audit_login_start_co_observation"
+    ][0]["source_instance"] == "prod-audit-feed"
+    assert response.global_correlation[
+        "linux_audit_login_start_co_observation"
     ][0]["node"] == "producer-a.example"

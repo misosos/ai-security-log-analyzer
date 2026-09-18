@@ -1559,3 +1559,100 @@ def test_pipeline_exposes_linux_audit_session_lifecycle_and_isolates_risk(
     assert assess_risk(deepcopy(correlated))["results"] == (
         assess_risk(without_lifecycle)["results"]
     )
+
+
+def test_pipeline_exposes_login_start_co_observation_and_isolates_risk():
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "phase-3l-openssh-pam-pty",
+        "path": (
+            "sample_logs/"
+            "linux_audit_openssh_pam_pty_source_derived.log"
+        ),
+    }])
+    correlated = correlate_attacks(logs, detect_attacks(logs))
+
+    observations = correlated["global_correlation"][
+        "linux_audit_login_start_co_observation"
+    ]
+
+    assert len(observations) == 1
+    assert observations[0]["type"] == (
+        "linux_audit_login_start_co_observation"
+    )
+    assert observations[0]["source_instance"] == (
+        "phase-3l-openssh-pam-pty"
+    )
+    assert observations[0]["node"] == "fixture-sshd-pam"
+    assert observations[0]["start_timestamp"] < (
+        observations[0]["login_timestamp"]
+    )
+    assert "observed_login_to_start_interval_seconds" not in (
+        observations[0]
+    )
+    assert correlated["global_correlation"][
+        "linux_audit_session_lifecycle"
+    ] == []
+
+    without_observation = deepcopy(correlated)
+    without_observation["global_correlation"][
+        "linux_audit_login_start_co_observation"
+    ] = []
+
+    assert assess_risk(deepcopy(correlated))["results"] == (
+        assess_risk(without_observation)["results"]
+    )
+
+
+def test_pipeline_preserves_presence_only_and_ambiguous_empty_semantics():
+    fixture_paths = (
+        "sample_logs/"
+        "linux_audit_openssh_pam_non_pty_source_derived.log",
+        "sample_logs/"
+        "linux_audit_openssh_no_pam_source_derived.log",
+        "sample_logs/"
+        "linux_audit_login_start_ambiguous_synthetic.log",
+    )
+
+    for index, path in enumerate(fixture_paths):
+        logs = load_normalized_logs([{
+            "source": "linux_audit",
+            "source_instance": f"phase-3l-negative-{index}",
+            "path": path,
+        }])
+        correlated = correlate_attacks(logs, detect_attacks(logs))
+
+        assert correlated["global_correlation"][
+            "linux_audit_login_start_co_observation"
+        ] == []
+
+
+def test_util_linux_fixture_populates_independent_telemetry_relations():
+    logs = load_normalized_logs([{
+        "source": "linux_audit",
+        "source_instance": "phase-3l-util-linux",
+        "path": (
+            "sample_logs/"
+            "linux_audit_util_linux_login_pam_source_derived.log"
+        ),
+    }])
+    correlated = correlate_attacks(logs, detect_attacks(logs))
+
+    login_start = correlated["global_correlation"][
+        "linux_audit_login_start_co_observation"
+    ]
+    start_end = correlated["global_correlation"][
+        "linux_audit_session_lifecycle"
+    ]
+
+    assert len(login_start) == 1
+    assert len(start_end) == 1
+    assert login_start[0]["start_timestamp"] < (
+        login_start[0]["login_timestamp"]
+    )
+    assert login_start[0]["type"] == (
+        "linux_audit_login_start_co_observation"
+    )
+    assert start_end[0]["type"] == (
+        "linux_audit_session_lifecycle"
+    )
