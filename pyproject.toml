@@ -9,6 +9,7 @@ dependencies = [
     "google-genai>=2.24.0",
     "pandas>=3.0.5",
     "python-dotenv>=1.2.3",
+    "python-multipart>=0.0.32",
     "uvicorn>=0.52.4",
 ]
 

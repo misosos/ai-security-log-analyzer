@@ -24,12 +24,27 @@ LOG_SOURCES = [
 ]
 
 
-logs = load_normalized_logs(LOG_SOURCES)
+def analyze(log_sources=None):
 
-result = detect_attacks(logs)
+    if log_sources is None:
+        log_sources = LOG_SOURCES
 
-result = correlate_attacks(logs, result)
+    logs = load_normalized_logs(log_sources)
 
-result = assess_risk(result)
+    result = detect_attacks(logs)
 
-print_analysis_result(result)
+    result = correlate_attacks(
+        logs,
+        result,
+    )
+
+    result = assess_risk(result)
+
+    return result
+
+
+if __name__ == "__main__":
+
+    result = analyze()
+
+    print_analysis_result(result)

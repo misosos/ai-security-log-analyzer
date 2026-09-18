@@ -1,12 +1,19 @@
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
-from app.analyzer.pipeline import correlate_attacks
+from app.analyzer.pipeline import (
+    assess_risk,
+    correlate_attacks,
+    detect_attacks,
+)
 
 from app.correlation.attack_chain import (
     correlate_authentication_transition,
     correlate_post_authentication_activity,
     correlate_brute_force_to_success,
     correlate_password_spray_to_success,
+    correlate_multi_ip_authentication,
+    correlate_distributed_authentication_to_success,
 )
 
 from app.models.schemas import (
@@ -277,7 +284,7 @@ def test_pipeline_correlates_authentication_and_post_authentication():
                     detection_type=None,
                     evidence=[],
                 ),
-            }
+            },
         }
     }
 
@@ -286,10 +293,13 @@ def test_pipeline_correlates_authentication_and_post_authentication():
         results,
     )
 
-    correlation = result["192.168.1.20"]["correlation"]
+    correlation = result["results"]["192.168.1.20"]["correlation"]
 
     assert correlation["authentication"]["is_correlated"] is True
-    assert correlation["post_authentication"]["is_correlated"] is True
+    assert (
+        correlation["post_authentication"]["is_correlated"]
+        is True
+    )
 
 
 def test_correlation_handles_different_timezones():
@@ -522,14 +532,23 @@ def test_pipeline_correlates_brute_force_to_successful_login():
         results,
     )
 
-    correlation = result["10.0.0.50"]["correlation"]
+    correlation = result["results"]["10.0.0.50"]["correlation"]
 
-    assert correlation["brute_force_to_success"]["is_correlated"] is True
+    assert (
+        correlation["brute_force_to_success"]["is_correlated"]
+        is True
+    )
+
     assert correlation["brute_force_to_success"]["type"] == (
         "brute_force_to_successful_login"
     )
+
     assert correlation["brute_force_to_success"]["user"] == "admin"
-    assert correlation["brute_force_to_success"]["time_delta_seconds"] == 12
+
+    assert (
+        correlation["brute_force_to_success"]["time_delta_seconds"]
+        == 12
+    )
 
 
 def test_correlates_password_spray_to_successful_login():
@@ -638,6 +657,7 @@ def test_correlates_password_spray_to_successful_login():
     assert result["user"] == "admin"
     assert result["time_delta_seconds"] == 8
 
+
 def test_pipeline_correlates_password_spray_to_successful_login():
     logs = [
         make_event(
@@ -715,22 +735,774 @@ def test_pipeline_correlates_password_spray_to_successful_login():
         results,
     )
 
-    correlation = result["10.0.0.60"]["correlation"]
+    correlation = result["results"]["10.0.0.60"]["correlation"]
 
-    assert correlation[
-        "password_spray_to_success"
-    ]["is_correlated"] is True
-
-    assert correlation[
-        "password_spray_to_success"
-    ]["type"] == (
-        "password_spray_to_successful_login"
+    assert (
+        correlation["password_spray_to_success"]["is_correlated"]
+        is True
     )
 
-    assert correlation[
-        "password_spray_to_success"
-    ]["user"] == "admin"
+    assert (
+        correlation["password_spray_to_success"]["type"]
+        == "password_spray_to_successful_login"
+    )
 
-    assert correlation[
-        "password_spray_to_success"
-    ]["time_delta_seconds"] == 12
+    assert (
+        correlation["password_spray_to_success"]["user"]
+        == "admin"
+    )
+
+    assert (
+        correlation["password_spray_to_success"]["time_delta_seconds"]
+        == 12
+    )
+
+
+def test_correlates_same_account_from_multiple_ips():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.3",
+        ),
+        make_event(
+            "2026-09-16 10:00:07",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.4",
+        ),
+        make_event(
+            "2026-09-16 10:00:09",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.5",
+        ),
+    ]
+
+    results = correlate_multi_ip_authentication(logs)
+
+    assert len(results) == 1
+
+    result = results[0]
+
+    assert result["is_correlated"] is True
+    assert result["type"] == "multi_ip_authentication_failure"
+    assert result["user"] == "admin"
+
+    assert result["source_ips"] == [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+        "10.0.0.4",
+        "10.0.0.5",
+    ]
+
+    assert result["failure_count"] == 5
+    assert result["failure_start_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        1,
+    )
+    assert result["failure_end_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        9,
+    )
+    assert result["time_window_seconds"] == 8.0
+
+
+def test_pipeline_correlates_same_account_from_multiple_ips():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.3",
+        ),
+        make_event(
+            "2026-09-16 10:00:07",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.4",
+        ),
+        make_event(
+            "2026-09-16 10:00:09",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.5",
+        ),
+    ]
+
+    results = {
+        "10.0.0.1": {
+            "features": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        },
+        "10.0.0.2": {
+            "features": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        },
+        "10.0.0.3": {
+            "features": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        },
+        "10.0.0.4": {
+            "features": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        },
+        "10.0.0.5": {
+            "features": {},
+            "detections": {
+                "brute_force": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+                "password_spray": DetectionResult(
+                    is_detected=False,
+                    detection_type=None,
+                    evidence=[],
+                ),
+            },
+        },
+    }
+
+    result = correlate_attacks(
+        logs,
+        results,
+    )
+
+    multi_ip_results = result["global_correlation"][
+        "multi_ip_authentication"
+    ]
+
+    assert len(multi_ip_results) == 1
+
+    multi_ip_result = multi_ip_results[0]
+
+    assert multi_ip_result["is_correlated"] is True
+    assert multi_ip_result["type"] == (
+        "multi_ip_authentication_failure"
+    )
+    assert multi_ip_result["user"] == "admin"
+
+    assert multi_ip_result["source_ips"] == [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+        "10.0.0.4",
+        "10.0.0.5",
+    ]
+
+    assert multi_ip_result["failure_count"] == 5
+    assert multi_ip_result["time_window_seconds"] == 8.0
+
+
+def test_collects_multi_ip_authentication_for_multiple_users():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.3",
+        ),
+        make_event(
+            "2026-09-16 10:01:01",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.1",
+        ),
+        make_event(
+            "2026-09-16 10:01:03",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.2",
+        ),
+        make_event(
+            "2026-09-16 10:01:05",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.3",
+        ),
+    ]
+
+    results = correlate_multi_ip_authentication(logs)
+
+    assert [result["user"] for result in results] == [
+        "admin",
+        "alice",
+    ]
+
+    assert results[0]["source_ips"] == [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+    ]
+    assert results[1]["source_ips"] == [
+        "10.0.1.1",
+        "10.0.1.2",
+        "10.0.1.3",
+    ]
+
+
+def test_multi_ip_authentication_order_is_deterministic():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.3",
+        ),
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "alice",
+            src_ip="10.0.1.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.3",
+        ),
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+    ]
+
+    forward_results = correlate_multi_ip_authentication(logs)
+    reversed_results = correlate_multi_ip_authentication(
+        list(reversed(logs))
+    )
+
+    assert forward_results == reversed_results
+    assert [result["user"] for result in forward_results] == [
+        "admin",
+        "alice",
+    ]
+
+
+def test_multi_ip_authentication_returns_empty_collection():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+    ]
+
+    result = correlate_multi_ip_authentication(logs)
+
+    assert result == []
+
+
+def test_multi_ip_authentication_keeps_first_campaign_per_user():
+    logs = [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.0.3",
+        ),
+        make_event(
+            "2026-09-16 11:00:01",
+            "login_failed",
+            "admin",
+            src_ip="10.0.1.1",
+        ),
+        make_event(
+            "2026-09-16 11:00:03",
+            "login_failed",
+            "admin",
+            src_ip="10.0.1.2",
+        ),
+        make_event(
+            "2026-09-16 11:00:05",
+            "login_failed",
+            "admin",
+            src_ip="10.0.1.3",
+        ),
+    ]
+
+    results = correlate_multi_ip_authentication(logs)
+
+    assert len(results) == 1
+    assert results[0]["source_ips"] == [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+    ]
+    assert results[0]["failure_start_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        1,
+    )
+    assert results[0]["failure_end_timestamp"] == datetime(
+        2026,
+        9,
+        16,
+        10,
+        0,
+        5,
+    )
+    assert results[0]["time_window_seconds"] == 4.0
+
+
+def make_distributed_failure_logs(user="admin"):
+    return [
+        make_event(
+            "2026-09-16 10:00:01",
+            "login_failed",
+            user,
+            src_ip="10.0.0.1",
+        ),
+        make_event(
+            "2026-09-16 10:00:03",
+            "login_failed",
+            user,
+            src_ip="10.0.0.2",
+        ),
+        make_event(
+            "2026-09-16 10:00:05",
+            "login_failed",
+            user,
+            src_ip="10.0.0.3",
+        ),
+    ]
+
+
+def correlate_distributed_success(logs, success_window_seconds=60):
+    failures = correlate_multi_ip_authentication(logs)
+
+    return correlate_distributed_authentication_to_success(
+        logs,
+        failures,
+        success_window_seconds=success_window_seconds,
+    )
+
+
+def test_correlates_distributed_failures_to_same_user_success():
+    logs = make_distributed_failure_logs()
+    logs.append(
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        )
+    )
+
+    results = correlate_distributed_success(logs)
+
+    assert len(results) == 1
+    result = results[0]
+
+    assert result["is_correlated"] is True
+    assert result["type"] == (
+        "distributed_authentication_failures_to_successful_login"
+    )
+    assert result["user"] == "admin"
+    assert result["failure_source_ips"] == [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+    ]
+    assert result["failure_count"] == 3
+    assert result["failure_start_timestamp"] == datetime(
+        2026, 9, 16, 10, 0, 1
+    )
+    assert result["failure_end_timestamp"] == datetime(
+        2026, 9, 16, 10, 0, 5
+    )
+    assert result["failure_duration_seconds"] == 4.0
+    assert result["success_timestamp"] == datetime(
+        2026, 9, 16, 10, 0, 20
+    )
+    assert result["success_source_ip"] == "10.0.0.4"
+    assert result["success_from_failure_source"] is False
+    assert result["time_delta_seconds"] == 15.0
+    assert any(
+        "인과관계를 확인할 수 없음" in rationale
+        for rationale in result["rationale"]
+    )
+
+
+def test_distributed_success_uses_failure_correlations_as_source_of_truth():
+    failure_correlations = [
+        {
+            "user": "admin",
+            "source_ips": [
+                "10.0.0.1",
+                "10.0.0.2",
+                "10.0.0.3",
+            ],
+            "failure_count": 3,
+            "failure_start_timestamp": datetime(
+                2026, 9, 16, 10, 0, 1
+            ),
+            "failure_end_timestamp": datetime(
+                2026, 9, 16, 10, 0, 5
+            ),
+        }
+    ]
+    logs = [
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        )
+    ]
+
+    results = correlate_distributed_authentication_to_success(
+        logs,
+        failure_correlations,
+    )
+
+    assert len(results) == 1
+    assert results[0]["failure_count"] == 3
+    assert results[0]["time_delta_seconds"] == 15.0
+
+
+def test_distributed_success_requires_valid_same_user_subsequent_event():
+    failures = make_distributed_failure_logs()
+
+    invalid_success_sets = [
+        [],
+        [
+            make_event(
+                "2026-09-16 09:59:59",
+                "user_login",
+                "admin",
+            )
+        ],
+        [
+            make_event(
+                "2026-09-16 10:01:06",
+                "user_login",
+                "admin",
+            )
+        ],
+        [
+            make_event(
+                "2026-09-16 10:00:20",
+                "user_login",
+                "alice",
+            )
+        ],
+        [
+            make_event(
+                "2026-09-16 10:00:05",
+                "user_login",
+                "admin",
+            )
+        ],
+    ]
+
+    for success_logs in invalid_success_sets:
+        assert correlate_distributed_success(
+            failures + success_logs
+        ) == []
+
+
+def test_distributed_success_source_membership_is_context_only():
+    for success_ip, expected_membership in [
+        ("10.0.0.2", True),
+        ("10.0.0.4", False),
+    ]:
+        logs = make_distributed_failure_logs()
+        logs.append(
+            make_event(
+                "2026-09-16 10:00:20",
+                "user_login",
+                "admin",
+                src_ip=success_ip,
+            )
+        )
+
+        results = correlate_distributed_success(logs)
+
+        assert len(results) == 1
+        assert results[0]["success_source_ip"] == success_ip
+        assert (
+            results[0]["success_from_failure_source"]
+            is expected_membership
+        )
+
+
+def test_distributed_success_selects_nearest_event_deterministically():
+    logs = make_distributed_failure_logs() + [
+        make_event(
+            "2026-09-16 10:00:40",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.5",
+        ),
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        ),
+    ]
+
+    forward = correlate_distributed_success(logs)
+    reversed_result = correlate_distributed_success(
+        list(reversed(logs))
+    )
+
+    assert forward == reversed_result
+    assert forward[0]["success_source_ip"] == "10.0.0.4"
+    assert forward[0]["time_delta_seconds"] == 15.0
+
+
+def test_distributed_success_requires_qualifying_failure_campaign():
+    logs = make_distributed_failure_logs()[:2]
+    logs.append(
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+        )
+    )
+
+    assert correlate_multi_ip_authentication(logs) == []
+    assert correlate_distributed_success(logs) == []
+
+
+def test_distributed_success_preserves_multiple_users():
+    admin_logs = make_distributed_failure_logs("admin")
+    alice_logs = [
+        make_event(
+            datetime(2026, 9, 16, 10, 1, second),
+            "login_failed",
+            "alice",
+            src_ip=f"10.0.1.{index}",
+        )
+        for index, second in enumerate((1, 3, 5), start=1)
+    ]
+    logs = admin_logs + alice_logs + [
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        ),
+        make_event(
+            "2026-09-16 10:01:20",
+            "user_login",
+            "alice",
+            src_ip="10.0.1.4",
+        ),
+    ]
+
+    results = correlate_distributed_success(logs)
+
+    assert [result["user"] for result in results] == [
+        "admin",
+        "alice",
+    ]
+
+
+def test_distributed_success_handles_timezone_aware_timestamps():
+    utc = timezone.utc
+    kst = timezone(timedelta(hours=9))
+    logs = [
+        make_event(
+            datetime(2026, 9, 16, 1, 0, second, tzinfo=utc),
+            "login_failed",
+            "admin",
+            src_ip=f"10.0.0.{index}",
+        )
+        for index, second in enumerate((1, 3, 5), start=1)
+    ]
+    logs.append(
+        make_event(
+            datetime(2026, 9, 16, 10, 0, 20, tzinfo=kst),
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        )
+    )
+
+    result = correlate_distributed_success(logs)[0]
+
+    assert result["time_delta_seconds"] == 15.0
+
+
+def test_distributed_success_window_is_inclusive_and_uses_last_failure():
+    logs = make_distributed_failure_logs()
+    logs.append(
+        make_event(
+            "2026-09-16 10:01:05",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        )
+    )
+
+    result = correlate_distributed_success(logs)[0]
+
+    assert result["time_delta_seconds"] == 60.0
+    assert result["failure_duration_seconds"] == 4.0
+
+
+def test_pipeline_exposes_both_global_collections_and_isolates_risk():
+    logs = make_distributed_failure_logs()
+    logs.append(
+        make_event(
+            "2026-09-16 10:00:20",
+            "user_login",
+            "admin",
+            src_ip="10.0.0.4",
+        )
+    )
+
+    correlated = correlate_attacks(logs, detect_attacks(logs))
+
+    assert len(
+        correlated["global_correlation"][
+            "multi_ip_authentication"
+        ]
+    ) == 1
+    assert len(
+        correlated["global_correlation"][
+            "distributed_authentication_to_success"
+        ]
+    ) == 1
+
+    without_new_global = deepcopy(correlated)
+    without_new_global["global_correlation"][
+        "distributed_authentication_to_success"
+    ] = []
+
+    with_global_risk = assess_risk(deepcopy(correlated))
+    without_global_risk = assess_risk(without_new_global)
+
+    assert with_global_risk["results"] == (
+        without_global_risk["results"]
+    )

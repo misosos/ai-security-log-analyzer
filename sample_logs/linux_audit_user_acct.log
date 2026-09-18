@@ -1,0 +1,5 @@
+type=USER_ACCT msg=audit(1789693301.100:201): pid=4201 uid=0 auid=1100 ses=17 msg='op=PAM:accounting acct="training-admin" exe="/usr/sbin/sshd" hostname=training-client-a addr=198.51.100.20 terminal=ssh res=success'
+type=USER_ACCT msg=audit(1789693302.200:202): pid=4202 uid=0 auid=1101 ses=18 msg='op=PAM:accounting acct="training-user" exe="/usr/sbin/sshd" hostname=training-client-b addr=198.51.100.21 terminal=ssh res=failed'
+type=USER_AUTH msg=audit(1789693301.100:201): pid=4201 uid=0 auid=1100 ses=17 msg='op=PAM:authentication acct="training-admin" exe="/usr/sbin/sshd" hostname=training-client-a addr=198.51.100.20 terminal=ssh res=success'
+type=USER_ACCT msg=audit(1789693303.300:203): pid=4203 uid=0 auid=1102 ses=19 msg='op=PAM:accounting acct="training-reviewer" exe="/usr/sbin/sshd" hostname=training-client-c addr=198.51.100.22 terminal=ssh'
+type=EOE msg=audit(1789693302.200:202):

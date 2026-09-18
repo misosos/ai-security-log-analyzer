@@ -1,7 +1,10 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.models.schemas import NormalizedEvent
+from app.models.schemas import (
+    AuthenticationContext,
+    NormalizedEvent,
+)
 
 
 def parse_auth_log(log, timezone=None):
@@ -27,6 +30,21 @@ def parse_auth_log(log, timezone=None):
             key, value = part.split("=", 1)
             data[key] = value
 
+    authentication = None
+
+    if event == "login_failed":
+        authentication = AuthenticationContext(
+            outcome="failure",
+            method=None,
+            service=data.get("service"),
+        )
+    elif event == "user_login":
+        authentication = AuthenticationContext(
+            outcome="success",
+            method=None,
+            service=data.get("service"),
+        )
+
     return NormalizedEvent(
         timestamp=timestamp,
         event_type=event,
@@ -38,4 +56,5 @@ def parse_auth_log(log, timezone=None):
         protocol=data.get("protocol"),
         user_agent=data.get("user_agent"),
         raw=log,
+        authentication=authentication,
     )

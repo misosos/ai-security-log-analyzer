@@ -1,7 +1,24 @@
 from datetime import datetime
+import re
 from zoneinfo import ZoneInfo
 
-from app.models.schemas import NormalizedEvent
+from app.models.schemas import (
+    AuthenticationContext,
+    NormalizedEvent,
+)
+
+
+AUTHENTICATION_MESSAGE = re.compile(
+    r"(?P<outcome>Failed|Accepted) "
+    r"(?P<method>password|publickey) for "
+    r"(?:(?P<invalid_user>invalid user) )?"
+    r"(?P<user>\S+) from (?P<src_ip>\S+)"
+    r"(?:"
+    r" port (?P<source_port>\d+) ssh2"
+    r"(?:\s*:\s*.*)?"
+    r"|$"
+    r")"
+)
 
 
 def parse_ssh_auth_log(log, timezone=None):
@@ -20,24 +37,45 @@ def parse_ssh_auth_log(log, timezone=None):
     event_type = None
     user = None
     src_ip = None
+    authentication = None
 
-    if "Failed password for" in log:
-        event_type = "login_failed"
+    message = AUTHENTICATION_MESSAGE.search(log)
 
-        user_index = parts.index("for") + 1
-        user = parts[user_index]
+    if message is not None:
+        outcome = (
+            "success"
+            if message.group("outcome") == "Accepted"
+            else "failure"
+        )
+        event_type = (
+            "user_login"
+            if outcome == "success"
+            else "login_failed"
+        )
+        user = message.group("user")
+        src_ip = message.group("src_ip")
 
-        ip_index = parts.index("from") + 1
-        src_ip = parts[ip_index]
+        source_port_text = message.group("source_port")
+        source_port = (
+            int(source_port_text)
+            if source_port_text is not None
+            else None
+        )
 
-    elif "Accepted password for" in log:
-        event_type = "user_login"
+        invalid_user = None
 
-        user_index = parts.index("for") + 1
-        user = parts[user_index]
+        if source_port is not None:
+            invalid_user = (
+                message.group("invalid_user") is not None
+            )
 
-        ip_index = parts.index("from") + 1
-        src_ip = parts[ip_index]
+        authentication = AuthenticationContext(
+            outcome=outcome,
+            method=message.group("method"),
+            service="sshd",
+            source_port=source_port,
+            invalid_user=invalid_user,
+        )
 
     return NormalizedEvent(
         timestamp=timestamp,
@@ -50,4 +88,5 @@ def parse_ssh_auth_log(log, timezone=None):
         protocol="ssh",
         user_agent=None,
         raw=log,
+        authentication=authentication,
     )

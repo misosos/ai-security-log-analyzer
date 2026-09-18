@@ -1,0 +1,5 @@
+2026-09-14 11:00:01 auth01 sshd[4101]: Failed password for admin from 198.51.100.10 port 49152 ssh2
+2026-09-14 11:00:05 auth01 sshd[4102]: Accepted password for alice from 198.51.100.11 port 49153 ssh2
+2026-09-14 11:00:09 auth01 sshd[4103]: Failed publickey for deploy from 198.51.100.12 port 49154 ssh2: ED25519 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+2026-09-14 11:00:13 auth01 sshd[4104]: Accepted publickey for deploy from 198.51.100.12 port 49155 ssh2: ED25519 SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+2026-09-14 11:00:17 auth01 sshd[4105]: Failed password for invalid user ghost from 198.51.100.13 port 49156 ssh2

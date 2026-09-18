@@ -1,96 +1,270 @@
-def format_evidence(evidence):
-    evidence_messages = {
-        "multiple_login_failures": f"{evidence.value}회 로그인 실패",
-        "single_target_user": "단일 계정 대상",
-        "multiple_target_users": f"{evidence.value}개의 계정을 대상으로 시도",
-        "failures_within_short_window": f"{evidence.value}초 이내에 반복 발생",
-        "url_decoded_path": f"요청 경로: {evidence.value}",
-        "path_pattern": f"탐지 패턴: {evidence.value}",
-        "url_decoded_query": f"요청 파라미터: {evidence.value}",
-        "http_method": f"HTTP 메서드: {evidence.value}",
-        "http_status_code": f"HTTP 상태 코드: {evidence.value}",
-        "http_response_size": f"응답 크기: {evidence.value} bytes",
-    }
+def print_detection_result(detections):
 
-    return evidence_messages.get(
-        evidence.type,
-        f"{evidence.type}: {evidence.value}",
-    )
+    print("Detection:")
 
+    for detection_name, detection in detections.items():
 
-def print_analysis_result(result):
-    print("분석 결과:")
+        if not detection.is_detected:
+            continue
 
-    for ip, analysis in result.items():
-        print(f"\n===== {ip} =====")
+        print(
+            f"  - {detection.detection_type}"
+        )
 
-        print("Detection:")
+        print("    Evidence:")
 
-        detection_names = {
-            "brute_force": "Brute Force",
-            "password_spraying_like": "Password Spraying-like",
-            "path_traversal": "Path Traversal",
-        }
+        for evidence in detection.evidence:
 
-        for detection_name, detection in analysis["detections"].items():
-            if not detection.is_detected:
-                continue
-
-            display_name = detection_names.get(
-                detection.detection_type,
-                detection.detection_type,
+            print(
+                f"      - {evidence.value}"
             )
 
-            print(f"  - {display_name}")
 
-            print("    Evidence:")
-            for evidence in detection.evidence:
-                print(f"      - {format_evidence(evidence)}")
+def print_correlation_result(correlation):
 
-        print("Risk:")
-        print(f"  Risk        : {analysis['risk_level']}")
+    print("Correlation:")
 
-        print("Assessment:")
+    for correlation_name, result in correlation.items():
 
-        likelihood = analysis["risk_factors"]["likelihood"]
-        impact = analysis["risk_factors"]["impact"]
-        confidence = analysis["risk_factors"]["confidence"]
+        if not result.get("is_correlated", False):
+            continue
 
-        print(f"  Likelihood  : {likelihood['level']}")
-        for reason in likelihood["rationale"]:
-            print(f"    - {reason}")
+        print(
+            f"  - {result.get('type')}"
+        )
 
-        print(f"  Impact      : {impact['level']}")
-        for reason in impact["rationale"]:
-            print(f"    - {reason}")
+        if result.get("user") is not None:
 
-        print(f"  Confidence  : {confidence['level']}")
-        for reason in confidence["rationale"]:
-            print(f"    - {reason}")
-
-        print("Correlation:")
-
-        correlation_names = {
-            "failed_to_successful_login": "인증 실패 → 로그인 성공",
-            "successful_login_to_file_access": "로그인 성공 → 파일 접근",
-            "brute_force_to_successful_login": "Brute Force → 로그인 성공",
-            "password_spray_to_successful_login": (
-                "Password Spraying-like → 로그인 성공"
-            ),
-        }
-
-        for correlation_name, correlation in analysis["correlation"].items():
-            if not correlation["is_correlated"]:
-                continue
-
-            display_name = correlation_names.get(
-                correlation["type"],
-                correlation["type"],
+            print(
+                f"    User: {result['user']}"
             )
 
-            print(f"  - {display_name}")
-            print(f"    User: {correlation['user']}")
+        if result.get("time_delta_seconds") is not None:
+
             print(
                 f"    Time delta: "
-                f"{correlation['time_delta_seconds']} seconds"
+                f"{result['time_delta_seconds']} seconds"
             )
+
+        if result.get("source_ips"):
+
+            print(
+                f"    Source IPs: "
+                f"{', '.join(result['source_ips'])}"
+            )
+
+        if result.get("failure_count") is not None:
+
+            print(
+                f"    Failure count: "
+                f"{result['failure_count']}"
+            )
+
+        if result.get("time_window_seconds") is not None:
+
+            print(
+                f"    Time window: "
+                f"{result['time_window_seconds']} seconds"
+            )
+
+
+def print_risk_result(result):
+
+    print("Risk:")
+
+    print(
+        f"  Risk        : "
+        f"{result.get('risk_level', 'UNKNOWN')}"
+    )
+
+    risk_factors = result.get(
+        "risk_factors",
+        {},
+    )
+
+    likelihood = risk_factors.get(
+        "likelihood",
+        {},
+    )
+
+    impact = risk_factors.get(
+        "impact",
+        {},
+    )
+
+    confidence = risk_factors.get(
+        "confidence",
+        {},
+    )
+
+    print("Assessment:")
+
+    print(
+        f"  Likelihood  : "
+        f"{likelihood.get('level', 'UNKNOWN')}"
+    )
+
+    for rationale in likelihood.get(
+        "rationale",
+        [],
+    ):
+
+        print(
+            f"    - {rationale}"
+        )
+
+    print(
+        f"  Impact      : "
+        f"{impact.get('level', 'UNKNOWN')}"
+    )
+
+    for rationale in impact.get(
+        "rationale",
+        [],
+    ):
+
+        print(
+            f"    - {rationale}"
+        )
+
+    print(
+        f"  Confidence  : "
+        f"{confidence.get('level', 'UNKNOWN')}"
+    )
+
+    for rationale in confidence.get(
+        "rationale",
+        [],
+    ):
+
+        print(
+            f"    - {rationale}"
+        )
+
+
+def print_global_correlation(
+    global_correlation,
+):
+
+    multi_ip_results = global_correlation.get(
+        "multi_ip_authentication",
+        [],
+    )
+
+    distributed_success_results = global_correlation.get(
+        "distributed_authentication_to_success",
+        [],
+    )
+
+    if not multi_ip_results and not distributed_success_results:
+        return
+
+    print(
+        "\n===== Global Correlation ====="
+    )
+
+    for multi_ip_result in multi_ip_results:
+
+        print(
+            "  - Multi-IP Authentication Failure"
+        )
+
+        print(
+            f"    User: "
+            f"{multi_ip_result.get('user')}"
+        )
+
+        print(
+            f"    Source IPs: "
+            f"{', '.join(multi_ip_result.get('source_ips', []))}"
+        )
+
+        print(
+            f"    Failure count: "
+            f"{multi_ip_result.get('failure_count')}"
+        )
+
+        print(
+            f"    Time window: "
+            f"{multi_ip_result.get('time_window_seconds')} seconds"
+        )
+
+        for rationale in multi_ip_result.get(
+            "rationale",
+            [],
+        ):
+
+            print(
+                f"    - {rationale}"
+            )
+
+    for result in distributed_success_results:
+
+        print(
+            "  - Distributed Authentication Failures "
+            "→ Successful Login"
+        )
+
+        print(f"    User: {result.get('user')}")
+        print(
+            "    Failure source IPs: "
+            f"{', '.join(result.get('failure_source_ips', []))}"
+        )
+        print(
+            f"    Failure count: {result.get('failure_count')}"
+        )
+        print(
+            "    Failure time range: "
+            f"{result.get('failure_start_timestamp')} → "
+            f"{result.get('failure_end_timestamp')}"
+        )
+        print(
+            f"    Success timestamp: "
+            f"{result.get('success_timestamp')}"
+        )
+        print(
+            f"    Success source IP: "
+            f"{result.get('success_source_ip')}"
+        )
+        print(
+            "    Success from failure source: "
+            f"{result.get('success_from_failure_source')}"
+        )
+        print(
+            "    Last failure → success: "
+            f"{result.get('time_delta_seconds')} seconds"
+        )
+
+        for rationale in result.get("rationale", []):
+            print(f"    - {rationale}")
+
+
+def print_analysis_result(analysis):
+
+    results = analysis["results"]
+
+    for ip, result in results.items():
+
+        print(
+            f"\n===== {ip} ====="
+        )
+
+        print_detection_result(
+            result["detections"]
+        )
+
+        print_risk_result(result)
+
+        print_correlation_result(
+            result.get(
+                "correlation",
+                {},
+            )
+        )
+
+    print_global_correlation(
+        analysis.get(
+            "global_correlation",
+            {},
+        )
+    )

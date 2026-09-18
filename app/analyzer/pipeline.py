@@ -1,4 +1,5 @@
 from app.loader.file_loader import load_log_lines
+from app.loader.linux_audit_loader import load_linux_audit_events
 from app.parser.registry import get_parser, get_timezone
 from app.detector.brute_force import (
     summarize_ip_failures,
@@ -11,6 +12,8 @@ from app.correlation.attack_chain import (
     correlate_post_authentication_activity,
     correlate_brute_force_to_success,
     correlate_password_spray_to_success,
+    correlate_multi_ip_authentication,
+    correlate_distributed_authentication_to_success,
 )
 from app.analyzer.risk import (
     load_account_metadata,
@@ -21,8 +24,8 @@ from app.analyzer.risk import (
     evaluate_risk_level,
 )
 from app.models.schemas import DetectionResult
-
 from app.parser.time_utils import normalize_to_utc
+from app.parser.linux_audit import parse_linux_audit_events
 
 
 def load_normalized_logs(log_sources):
@@ -32,6 +35,19 @@ def load_normalized_logs(log_sources):
     for config in log_sources:
 
         source = config["source"]
+
+        if source == "linux_audit":
+            audit_events = load_linux_audit_events(
+                config["path"],
+                source_identity=source,
+            )
+
+            for audit_event in audit_events:
+                logs.extend(
+                    parse_linux_audit_events(audit_event)
+                )
+
+            continue
 
         parser = get_parser(source)
         timezone = get_timezone(source)
@@ -164,17 +180,11 @@ def detect_attacks(logs):
             continue
 
         path_result = detect_path_traversal(
-          
             log.http.path,
-
             log.http.query,
-
             log.http.method,
-
             log.http.status_code,
-
             log.http.response_size,
-
             log.timestamp,
         )
 
@@ -193,6 +203,19 @@ def correlate_attacks(logs, results):
 
     grouped_logs = group_logs_by_ip(logs)
 
+    # 전체 로그를 기준으로 수행하는 Correlation
+    multi_ip_results = correlate_multi_ip_authentication(
+        logs
+    )
+
+    distributed_success_results = (
+        correlate_distributed_authentication_to_success(
+            logs,
+            multi_ip_results,
+        )
+    )
+
+    # IP별 Correlation
     for ip, result in results.items():
 
         ip_logs = grouped_logs.get(ip, [])
@@ -230,10 +253,21 @@ def correlate_attacks(logs, results):
             "password_spray_to_success": password_spray_result,
         }
 
-    return results
+    # IP별 결과와 전체 로그 Correlation을 분리
+    return {
+        "results": results,
+        "global_correlation": {
+            "multi_ip_authentication": multi_ip_results,
+            "distributed_authentication_to_success": (
+                distributed_success_results
+            ),
+        },
+    }
 
 
-def assess_risk(results):
+def assess_risk(analysis):
+
+    results = analysis["results"]
 
     account_metadata = load_account_metadata()
 
@@ -243,16 +277,18 @@ def assess_risk(results):
 
         account_context = get_account_context(
             risk_context,
-            account_metadata
+            account_metadata,
         )
 
-        account_privilege_risk = evaluate_account_privilege_risk(
-            account_context
+        account_privilege_risk = (
+            evaluate_account_privilege_risk(
+                account_context
+            )
         )
 
         risk_factors = build_risk_factors(
             risk_context,
-            account_privilege_risk
+            account_privilege_risk,
         )
 
         risk_factors["account_context"] = account_context
@@ -263,4 +299,4 @@ def assess_risk(results):
 
         result["risk_level"] = risk_level
 
-    return results
+    return analysis

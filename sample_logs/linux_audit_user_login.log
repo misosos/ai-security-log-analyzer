@@ -1,0 +1,8 @@
+type=USER_LOGIN msg=audit(1789693401.100:301): pid=4301 uid=0 auid=1200 ses=27 msg='op=login acct="training-admin" exe="/usr/sbin/sshd" hostname=training-client-a addr=198.51.100.30 terminal=ssh res=success'
+type=USER_LOGIN msg=audit(1789693402.200:302): pid=4302 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="training-user" exe="/usr/sbin/sshd" hostname=training-client-b addr=198.51.100.31 terminal=ssh res=failed'
+type=USER_ACCT msg=audit(1789693401.100:301): pid=4301 uid=0 auid=1200 ses=27 msg='op=PAM:accounting acct="training-admin" exe="/usr/sbin/sshd" hostname=training-client-a addr=198.51.100.30 terminal=ssh res=success'
+type=USER_LOGIN msg=audit(1789693403.300:303): pid=4303 uid=0 auid=1202 ses=29 msg='op=login acct="training-reviewer" exe="/usr/sbin/sshd" hostname=training-client-c addr=198.51.100.32 terminal=ssh'
+type=USER_AUTH msg=audit(1789693401.100:301): pid=4301 uid=0 auid=1200 ses=27 msg='op=PAM:authentication acct="training-admin" exe="/usr/sbin/sshd" hostname=training-client-a addr=198.51.100.30 terminal=ssh res=success'
+type=USER_LOGIN msg=audit(1789693404.400:304): pid=4304 uid=0 auid=1203 ses=30 msg='op=login acct="training-a" exe="/usr/sbin/sshd" hostname=training-client-d addr=198.51.100.33 terminal=ssh res=success'
+type=EOE msg=audit(1789693402.200:302):
+type=USER_LOGIN msg=audit(1789693404.400:304): pid=4304 uid=0 auid=1203 ses=30 msg='op=login acct="training-b" exe="/usr/sbin/sshd" hostname=training-client-d addr=198.51.100.33 terminal=ssh res=failed'
