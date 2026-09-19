@@ -1,0 +1,7 @@
+node=fixture-exec-success type=PROCTITLE msg=audit(1790400000.001:801): proctitle=2F7573722F62696E2F6578616D706C65002D2D636865636B
+node=fixture-exec-success type=PATH msg=audit(1790400000.001:801): item=2 name="/lib64/ld-linux-x86-64.so.2" inode=1003 dev=fd:01 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+node=fixture-exec-success type=PATH msg=audit(1790400000.001:801): item=0 name="/usr/bin/example" inode=1001 dev=fd:01 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+node=fixture-exec-success type=CWD msg=audit(1790400000.001:801): cwd="/opt/fixture"
+node=fixture-exec-success type=PATH msg=audit(1790400000.001:801): item=1 name="/usr/libexec/example-runtime" inode=1002 dev=fd:01 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+node=fixture-exec-success type=EXECVE msg=audit(1790400000.001:801): argc=2 a0="/usr/bin/example" a1="--check"
+node=fixture-exec-success type=SYSCALL msg=audit(1790400000.001:801): arch=c000003e syscall=59 success=yes exit=0 a0=7ffd00001000 a1=7ffd00002000 a2=7ffd00003000 a3=8 items=3 ppid=4100 pid=4101 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=51 comm="example" exe="/usr/bin/example" key="fixture-exec"

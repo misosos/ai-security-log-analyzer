@@ -1,0 +1,2 @@
+node=fixture-exec-minimal type=EXECVE msg=audit(1790400004.005:805): argc=1 a0="/usr/bin/example"
+node=fixture-exec-minimal type=SYSCALL msg=audit(1790400004.005:805): arch=c000003e syscall=59 success=yes exit=0 a0=7ffd0000d000 a1=7ffd0000e000 a2=7ffd0000f000 a3=8 items=0 ppid=4500 pid=4501 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=55 comm="example" exe="/usr/bin/example" key="fixture-exec"

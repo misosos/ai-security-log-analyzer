@@ -1,0 +1,8 @@
+node=fixture-exec-duplicates type=EXECVE msg=audit(1790400009.010:810): argc=2 a0="/usr/bin/example" a1="first"
+node=fixture-exec-duplicates type=EXECVE msg=audit(1790400009.010:810): argc=3 a0="/usr/bin/example" a1="second" a1="conflicting"
+node=fixture-exec-duplicates type=PATH msg=audit(1790400009.010:810): item=0 name="/usr/bin/example" inode=1101 dev=fd:01 mode=0100755 ouid=0 ogid=0 nametype=NORMAL
+node=fixture-exec-duplicates type=PATH msg=audit(1790400009.010:810): item=0 name="/opt/fixture/conflict" inode=1102 dev=fd:01 mode=0100644 ouid=1000 ogid=1000 nametype=NORMAL
+node=fixture-exec-duplicates type=SYSCALL msg=audit(1790400009.010:810): arch=c000003e syscall=59 success=yes exit=0 items=2 pid=4801 ppid=4800 auid=1000 uid=1000 ses=60 exe="/usr/bin/example"
+node=fixture-exec-duplicates type=EXECVE msg=audit(1790400010.011:811): argc=2 a0="/usr/bin/example" a1_len=24 a1[0]=6C6F6E676172
+node=fixture-exec-duplicates type=EXECVE msg=audit(1790400010.011:811): a1[0]=636F6E666C69 a1[1]=67756D656E74
+node=fixture-exec-duplicates type=SYSCALL msg=audit(1790400010.011:811): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=4802 ppid=4800 auid=1000 uid=1000 ses=61 exe="/usr/bin/example"

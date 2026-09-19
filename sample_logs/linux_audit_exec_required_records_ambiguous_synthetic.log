@@ -1,0 +1,5 @@
+node=fixture-exec-required type=EXECVE msg=audit(1790400011.012:812): argc=1 a0="/usr/bin/example"
+node=fixture-exec-required type=SYSCALL msg=audit(1790400011.012:812): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=4901 ppid=4900 auid=1000 uid=1000 ses=62 exe="/usr/bin/example"
+node=fixture-exec-required type=SYSCALL msg=audit(1790400011.012:812): arch=c000003e syscall=59 success=no exit=-2 items=0 pid=4901 ppid=4900 auid=1000 uid=1000 ses=62 exe="/usr/bin/example"
+node=fixture-exec-required type=EXECVE msg=audit(1790400012.013:813): argc=1 a0="/usr/bin/example"
+node=fixture-exec-required type=SYSCALL msg=audit(1790400013.014:814): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=4902 ppid=4900 auid=1000 uid=1000 ses=63 exe="/usr/bin/example"

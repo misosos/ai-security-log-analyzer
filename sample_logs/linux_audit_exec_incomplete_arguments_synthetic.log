@@ -1,0 +1,4 @@
+node=fixture-exec-incomplete type=EXECVE msg=audit(1790400007.008:808): argc=3 a0="/usr/bin/example" a2="orphan-index"
+node=fixture-exec-incomplete type=SYSCALL msg=audit(1790400007.008:808): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=4701 ppid=4700 auid=1000 uid=1000 ses=58 exe="/usr/bin/example"
+node=fixture-exec-incomplete type=EXECVE msg=audit(1790400008.009:809): argc=2 a0="/usr/bin/example" a1_len=24 a1[0]=6C6F6E676172
+node=fixture-exec-incomplete type=SYSCALL msg=audit(1790400008.009:809): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=4702 ppid=4700 auid=1000 uid=1000 ses=59 exe="/usr/bin/example"
