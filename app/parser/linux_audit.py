@@ -6,7 +6,9 @@ import re
 from app.models.schemas import (
     AuthenticationContext,
     LinuxAuditContext,
+    LinuxAuditPathContext,
     NormalizedEvent,
+    ProcessExecutionContext,
 )
 
 
@@ -283,6 +285,305 @@ def _assemble_execve_arguments(records):
         argv=tuple(argv),
         argv_complete=argv_complete,
         incomplete_argument_indexes=tuple(sorted(incomplete)),
+    )
+
+
+AUDIT_FIELD = re.compile(
+    r'(?<!\S)'
+    r'(?P<name>[A-Za-z0-9_.\-\[\]]+)='
+    r'(?P<value>"[^"]*"|\S+)'
+)
+
+
+def _record_field_values(record, field_name):
+    return tuple(
+        _serialized_execve_value(match.group("value"))
+        for match in AUDIT_FIELD.finditer(record.raw)
+        if match.group("name") == field_name
+    )
+
+
+def _non_negative_decimal(value):
+    if value is None or re.fullmatch(r"\d+", value) is None:
+        return None
+    return int(value)
+
+
+def _signed_decimal(value):
+    if value is None or re.fullmatch(r"-?\d+", value) is None:
+        return None
+    return int(value)
+
+
+def _single_raw_text(record, field_name, required=False):
+    values = _record_field_values(record, field_name)
+    if not values:
+        return None, not required
+    if len(values) != 1 or not values[0].value:
+        return None, False
+    return values[0].value, True
+
+
+def _single_numeric_field(record, field_name, converter):
+    values = _record_field_values(record, field_name)
+    if not values:
+        return None, True
+    if len(values) != 1:
+        return None, False
+    parsed = converter(values[0].value)
+    return parsed, parsed is not None
+
+
+def _decode_audit_string(serialized):
+    if serialized.value.lower() in UNKNOWN_VALUES | {"(null)"}:
+        return None, True
+    decoded = _decode_execve_value(serialized)
+    return decoded, decoded is not None
+
+
+def _single_encoded_field(record, field_name):
+    values = _record_field_values(record, field_name)
+    if not values:
+        return None, True
+    if len(values) != 1:
+        return None, False
+    return _decode_audit_string(values[0])
+
+
+def _single_optional_text(record, field_name):
+    value, valid = _single_raw_text(record, field_name)
+    if not valid or value is None:
+        return None, valid
+    if value.lower() in UNKNOWN_VALUES | {"(null)"}:
+        return None, True
+    return value, True
+
+
+def _normalize_process_outcome(value):
+    if value == "yes":
+        return "success"
+    if value == "no":
+        return "failure"
+    return "unknown"
+
+
+def _normalize_cwd(records):
+    if not records:
+        return None
+    observed = []
+    for record in records:
+        value, valid = _single_encoded_field(record, "cwd")
+        if not valid:
+            return None
+        observed.append(value)
+    if len(set(observed)) != 1:
+        return None
+    return observed[0]
+
+
+def _normalize_path(record):
+    item, item_valid = _single_numeric_field(
+        record, "item", _non_negative_decimal
+    )
+    name, name_valid = _single_encoded_field(record, "name")
+    nametype, nametype_valid = _single_optional_text(
+        record, "nametype"
+    )
+    inode, inode_valid = _single_numeric_field(
+        record, "inode", _non_negative_decimal
+    )
+    device, device_valid = _single_optional_text(record, "dev")
+    mode, mode_valid = _single_optional_text(record, "mode")
+    owner_user_id, owner_user_id_valid = _single_numeric_field(
+        record, "ouid", _numeric_id
+    )
+    owner_group_id, owner_group_id_valid = _single_numeric_field(
+        record, "ogid", _numeric_id
+    )
+    return (
+        LinuxAuditPathContext(
+            item=item,
+            name=name,
+            nametype=nametype,
+            inode=inode,
+            device=device,
+            mode=mode,
+            owner_user_id=owner_user_id,
+            owner_group_id=owner_group_id,
+        ),
+        all((
+            item_valid,
+            name_valid,
+            nametype_valid,
+            inode_valid,
+            device_valid,
+            mode_valid,
+            owner_user_id_valid,
+            owner_group_id_valid,
+        )),
+    )
+
+
+def _normalize_paths(path_records, syscall_record):
+    normalized = []
+    structurally_valid = True
+    for record in path_records:
+        path, valid = _normalize_path(record)
+        normalized.append((path, record.raw))
+        structurally_valid = structurally_valid and valid
+    normalized.sort(key=lambda item: (
+        item[0].item is None,
+        item[0].item if item[0].item is not None else 0,
+        item[1],
+    ))
+    paths = tuple(path for path, _ in normalized)
+
+    items, items_valid = _single_numeric_field(
+        syscall_record, "items", _non_negative_decimal
+    )
+    path_items = [path.item for path in paths]
+    paths_complete = (
+        items_valid
+        and items is not None
+        and structurally_valid
+        and len(paths) == items
+        and path_items == list(range(items))
+    )
+    return paths, paths_complete
+
+
+def _decode_proctitle_arguments(serialized):
+    if serialized.quoted:
+        return None
+    raw_value = serialized.value
+    if (
+        not raw_value
+        or len(raw_value) % 2
+        or re.fullmatch(r"[0-9A-Fa-f]+", raw_value) is None
+    ):
+        return None
+    try:
+        components = bytes.fromhex(raw_value).split(b"\x00")
+        while components and components[-1] == b"":
+            components.pop()
+        return tuple(component.decode("utf-8") for component in components)
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+def _normalize_proctitle(records):
+    if not records:
+        return None, None
+    observed = []
+    for record in records:
+        values = _record_field_values(record, "proctitle")
+        if len(values) != 1:
+            return None, None
+        observed.append(values[0])
+    if len(set(observed)) != 1:
+        return None, None
+    serialized = observed[0]
+    return serialized.value, _decode_proctitle_arguments(serialized)
+
+
+def _build_process_execution_context(event):
+    syscall_records = tuple(
+        record for record in event.records
+        if record.record_type == "SYSCALL"
+    )
+    execve_records = tuple(
+        record for record in event.records
+        if record.record_type == "EXECVE"
+    )
+    if len(syscall_records) != 1 or not execve_records:
+        return None
+
+    syscall_record = syscall_records[0]
+    architecture_raw, architecture_valid = _single_raw_text(
+        syscall_record, "arch", required=True
+    )
+    syscall_raw, syscall_valid = _single_raw_text(
+        syscall_record, "syscall", required=True
+    )
+    process_id, process_id_valid = _single_numeric_field(
+        syscall_record, "pid", _non_negative_decimal
+    )
+    parent_process_id, parent_process_id_valid = _single_numeric_field(
+        syscall_record, "ppid", _non_negative_decimal
+    )
+    if not all((
+        architecture_valid,
+        syscall_valid,
+        process_id_valid,
+        parent_process_id_valid,
+        process_id is not None,
+        parent_process_id is not None,
+    )):
+        return None
+
+    arguments = _assemble_execve_arguments(execve_records)
+    if arguments.argument_count is None:
+        return None
+
+    success, _ = _single_raw_text(syscall_record, "success")
+    exit_code, _ = _single_numeric_field(
+        syscall_record, "exit", _signed_decimal
+    )
+    command_name, _ = _single_encoded_field(syscall_record, "comm")
+    executable, _ = _single_encoded_field(syscall_record, "exe")
+    terminal, _ = _single_optional_text(syscall_record, "tty")
+    audit_rule_key, _ = _single_encoded_field(syscall_record, "key")
+
+    cwd_records = tuple(
+        record for record in event.records if record.record_type == "CWD"
+    )
+    path_records = tuple(
+        record for record in event.records if record.record_type == "PATH"
+    )
+    proctitle_records = tuple(
+        record for record in event.records
+        if record.record_type == "PROCTITLE"
+    )
+    paths, paths_complete = _normalize_paths(
+        path_records, syscall_record
+    )
+    proctitle_raw, proctitle_arguments = _normalize_proctitle(
+        proctitle_records
+    )
+
+    return ProcessExecutionContext(
+        outcome=_normalize_process_outcome(success),
+        architecture_raw=architecture_raw,
+        syscall_raw=syscall_raw,
+        architecture_name=None,
+        syscall_name=None,
+        exit_code=exit_code,
+        process_id=process_id,
+        parent_process_id=parent_process_id,
+        real_user_id=_numeric_id(syscall_record.fields.get("uid")),
+        effective_user_id=_numeric_id(syscall_record.fields.get("euid")),
+        saved_user_id=_numeric_id(syscall_record.fields.get("suid")),
+        filesystem_user_id=_numeric_id(syscall_record.fields.get("fsuid")),
+        real_group_id=_numeric_id(syscall_record.fields.get("gid")),
+        effective_group_id=_numeric_id(syscall_record.fields.get("egid")),
+        saved_group_id=_numeric_id(syscall_record.fields.get("sgid")),
+        filesystem_group_id=_numeric_id(syscall_record.fields.get("fsgid")),
+        command_name=command_name,
+        executable=executable,
+        terminal=terminal,
+        audit_rule_key=audit_rule_key,
+        argument_count=arguments.argument_count,
+        argv=arguments.argv,
+        argv_complete=arguments.argv_complete,
+        incomplete_argument_indexes=(
+            arguments.incomplete_argument_indexes
+        ),
+        working_directory=_normalize_cwd(cwd_records),
+        paths=paths,
+        paths_complete=paths_complete,
+        proctitle_raw=proctitle_raw,
+        proctitle_arguments=proctitle_arguments,
+        raw_records=tuple(record.raw for record in event.records),
     )
 
 
