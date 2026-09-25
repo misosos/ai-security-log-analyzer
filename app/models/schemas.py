@@ -51,6 +51,61 @@ class LinuxAuditContext:
     node: str | None = None
 
 
+@dataclass(frozen=True)
+class LinuxAuditPathContext:
+    item: int | None
+    name: str | None
+    nametype: str | None
+    inode: int | None
+    device: str | None
+    mode: str | None
+    owner_user_id: int | None
+    owner_group_id: int | None
+
+
+@dataclass(frozen=True)
+class ProcessExecutionContext:
+    outcome: Literal["success", "failure", "unknown"]
+
+    architecture_raw: str
+    syscall_raw: str
+    architecture_name: str | None
+    syscall_name: str | None
+    exit_code: int | None
+
+    process_id: int
+    parent_process_id: int
+
+    real_user_id: int | None
+    effective_user_id: int | None
+    saved_user_id: int | None
+    filesystem_user_id: int | None
+
+    real_group_id: int | None
+    effective_group_id: int | None
+    saved_group_id: int | None
+    filesystem_group_id: int | None
+
+    command_name: str | None
+    executable: str | None
+    terminal: str | None
+    audit_rule_key: str | None
+
+    argument_count: int
+    argv: tuple[str | None, ...]
+    argv_complete: bool
+    incomplete_argument_indexes: tuple[int, ...]
+
+    working_directory: str | None
+    paths: tuple[LinuxAuditPathContext, ...]
+    paths_complete: bool
+
+    proctitle_raw: str | None
+    proctitle_arguments: tuple[str, ...] | None
+
+    raw_records: tuple[str, ...]
+
+
 @dataclass
 class NormalizedEvent:
     timestamp: datetime
@@ -66,6 +121,7 @@ class NormalizedEvent:
     http: HttpContext | None = None
     authentication: AuthenticationContext | None = None
     linux_audit: LinuxAuditContext | None = None
+    process_execution: ProcessExecutionContext | None = None
 
 
 @dataclass
