@@ -330,3 +330,84 @@ def test_report_renders_lifecycle_and_login_start_as_independent_groups(
     ) == 1
     assert "시작/종료 이벤트 간 관찰 간격: 120.0초" in output
     assert "로그인·세션 시작 이벤트 공동 관찰 →" not in output
+
+
+def process_execution_aggregate(observation_count=7):
+    return {
+        "observation_count": observation_count,
+        "outcome_counts": {
+            "success": 4,
+            "failure": 2,
+            "unknown": 1,
+        },
+        "argv_completeness_counts": {
+            "complete": 5,
+            "incomplete": 2,
+        },
+        "path_completeness_counts": {
+            "complete": 3,
+            "incomplete": 4,
+        },
+    }
+
+
+def test_report_prints_bounded_process_execution_aggregate(capsys):
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=(
+            process_execution_aggregate()
+        ),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "===== Process Execution Telemetry =====" in output
+    assert "Linux Audit 프로세스 실행 관찰 집계" in output
+    assert "관찰 수: 7" in output
+    assert "success: 4" in output
+    assert "failure: 2" in output
+    assert "unknown: 1" in output
+    assert output.count("complete: 5") == 1
+    assert output.count("incomplete: 2") == 1
+    assert output.count("complete: 3") == 1
+    assert output.count("incomplete: 4") == 1
+    assert "프로그램 목적 달성 또는 공격 성공을 의미하지 않습니다" in output
+    assert "정확성, 신뢰도 또는 안전성을 의미하지 않습니다" in output
+    assert "{'observation_count':" not in output
+    assert '\"observation_count\"' not in output
+
+
+def test_report_omits_empty_process_execution_aggregate(capsys):
+    print_analysis_result({"results": {}})
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=(
+            process_execution_aggregate(observation_count=0)
+        ),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "Process Execution Telemetry" not in output
+    assert "Linux Audit 프로세스 실행 관찰 집계" not in output
+    assert "실행 없음" not in output
+
+
+def test_process_execution_aggregate_output_shape_is_fixed(capsys):
+    first = process_execution_aggregate(observation_count=1)
+    second = process_execution_aggregate(observation_count=20)
+
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=first,
+    )
+    first_output = capsys.readouterr().out
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=second,
+    )
+    second_output = capsys.readouterr().out
+
+    assert first_output.replace("관찰 수: 1", "관찰 수: N") == (
+        second_output.replace("관찰 수: 20", "관찰 수: N")
+    )

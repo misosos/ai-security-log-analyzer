@@ -344,7 +344,67 @@ def print_global_correlation(
         )
 
 
-def print_analysis_result(analysis):
+def _print_process_execution_aggregate(aggregate):
+
+    if aggregate is None:
+        return
+
+    observation_count = aggregate.get(
+        "observation_count",
+        0,
+    )
+
+    if observation_count == 0:
+        return
+
+    outcome_counts = aggregate.get(
+        "outcome_counts",
+        {},
+    )
+    argv_counts = aggregate.get(
+        "argv_completeness_counts",
+        {},
+    )
+    path_counts = aggregate.get(
+        "path_completeness_counts",
+        {},
+    )
+
+    print(
+        "\n===== Process Execution Telemetry ====="
+    )
+    print(
+        "Linux Audit 프로세스 실행 관찰 집계"
+    )
+    print(f"  관찰 수: {observation_count}")
+    print("  SYSCALL outcome 관찰:")
+    print(f"    success: {outcome_counts.get('success', 0)}")
+    print(f"    failure: {outcome_counts.get('failure', 0)}")
+    print(f"    unknown: {outcome_counts.get('unknown', 0)}")
+    print("  argv evidence completeness:")
+    print(f"    complete: {argv_counts.get('complete', 0)}")
+    print(f"    incomplete: {argv_counts.get('incomplete', 0)}")
+    print("  PATH evidence completeness:")
+    print(f"    complete: {path_counts.get('complete', 0)}")
+    print(f"    incomplete: {path_counts.get('incomplete', 0)}")
+    print(
+        "  ※ Linux Audit 프로세스 실행 관찰의 집계입니다."
+    )
+    print(
+        "    success는 syscall 관찰 결과이며 프로그램 목적 달성 또는 "
+        "공격 성공을 의미하지 않습니다."
+    )
+    print(
+        "    completeness는 evidence 완전성일 뿐 정확성, 신뢰도 또는 "
+        "안전성을 의미하지 않습니다."
+    )
+
+
+def print_analysis_result(
+    analysis,
+    *,
+    process_execution_aggregate=None,
+):
 
     results = analysis["results"]
 
@@ -366,6 +426,10 @@ def print_analysis_result(analysis):
                 {},
             )
         )
+
+    _print_process_execution_aggregate(
+        process_execution_aggregate
+    )
 
     print_global_correlation(
         analysis.get(
