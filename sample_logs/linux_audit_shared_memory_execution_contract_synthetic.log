@@ -1,0 +1,37 @@
+node=shared-memory-contract type=EXECVE msg=audit(1791000000.001:2001): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000000.001:2001): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8001 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=501 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000001.002:2002): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8002 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=501 comm="audit-observation" exe="/run/shm/audit-observation" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000001.002:2002): argc=1 a0="/run/shm/audit-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000002.003:2003): argc=1 a0="/usr/bin/fixture-runner"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000002.003:2003): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8003 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=502 comm="fixture-runner" exe="/usr/bin/fixture-runner" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000003.004:2004): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000003.004:2004): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8004 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=503 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000004.005:2005): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000004.005:2005): arch=c000003e syscall=59 success=no exit=-13 items=0 ppid=8000 pid=8005 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=504 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000005.006:2006): argc=1 a0="/run/shm/audit-observation"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000005.006:2006): arch=c000003e syscall=59 success=unknown exit=0 items=0 ppid=8000 pid=8006 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=505 comm="audit-observation" exe="/run/shm/audit-observation" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000006.007:2007): argc=1 a0="/tmp/fixture-runner"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000006.007:2007): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8007 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=506 comm="fixture-runner" exe="/tmp/fixture-runner" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000007.008:2008): argc=1 a0="/dev/shm-backup/fixture-runner"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000007.008:2008): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8008 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=507 comm="fixture-runner" exe="/dev/shm-backup/fixture-runner" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000008.009:2009): argc=1 a0="/run/shm_backup/fixture-runner"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000008.009:2009): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8009 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=508 comm="fixture-runner" exe="/run/shm_backup/fixture-runner" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000009.010:2010): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000009.010:2010): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8010 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=509 comm="telemetry-probe" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000010.011:2011): argc=2 a0="/dev/shm/telemetry-probe"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000010.011:2011): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8011 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=510 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-contract type=EXECVE msg=audit(1791000011.012:2012): argc=1 a0="/run/shm/audit-observation"
+node=shared-memory-contract type=SYSCALL msg=audit(1791000011.012:2012): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8000 pid=8012 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=511 comm="audit-observation" exe="/run/shm/audit-observation" key="shared-memory-observation"
+node=shared-memory-contract type=CWD msg=audit(1791000012.013:2013): cwd="/opt/fixture-a"
+node=shared-memory-contract type=PATH msg=audit(1791000012.013:2013): item=0 name="/opt/fixture-a/audit-observation" inode=2201 dev=fd:01 mode=0100755 ouid=0 ogid=0 nametype=NORMAL
+node=shared-memory-contract type=PROCTITLE msg=audit(1791000012.013:2013): proctitle=2F72756E2F73686D2F61756469742D6F62736572766174696F6E
+node=shared-memory-contract type=EXECVE msg=audit(1791000012.013:2013): argc=1 a0="/run/shm/audit-observation"
+node=shared-memory-contract type=CWD msg=audit(1791000012.013:2013): cwd="/opt/fixture-b"
+node=shared-memory-contract type=PATH msg=audit(1791000012.013:2013): item=0 name="/opt/fixture-b/audit-observation" inode=2202 dev=fd:01 mode=0100755 ouid=0 ogid=0 nametype=NORMAL
+node=shared-memory-contract type=PROCTITLE msg=audit(1791000012.013:2013): proctitle=2F72756E2F73686D2F646966666572656E74
+node=shared-memory-contract type=SYSCALL msg=audit(1791000012.013:2013): arch=c000003e syscall=59 success=yes exit=0 items=2 ppid=8000 pid=8013 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=512 comm="audit-observation" exe="/run/shm/audit-observation" key="shared-memory-observation"
+node=SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE type=PATH msg=audit(1791000013.014:2014): item=0 name="/opt/SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE" inode=2301 dev=fd:01 mode=0100600 ouid=0 ogid=0 nametype=NORMAL
+node=SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE type=EXECVE msg=audit(1791000013.014:2014): argc=2 a0="/dev/shm/fixture-runner" a1="SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE"
+node=SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE type=CWD msg=audit(1791000013.014:2014): cwd="/work/SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE"
+node=SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE type=PROCTITLE msg=audit(1791000013.014:2014): proctitle=2F6465762F73686D2F666978747572652D72756E6E65720053594E5448455449435F50524F434553535F5345435245545F444F5F4E4F545F4558504F5345
+node=SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE type=SYSCALL msg=audit(1791000013.014:2014): arch=c000003e syscall=59 success=yes exit=0 items=1 ppid=8000 pid=8014 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=513 comm="SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE" exe="/dev/shm/fixture-runner" key="SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE"

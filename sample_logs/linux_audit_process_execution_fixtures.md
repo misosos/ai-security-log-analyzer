@@ -37,7 +37,31 @@ values, node labels, and keys are synthetic and contain no real credentials.
 | `linux_audit_exec_incomplete_arguments_synthetic.log` | synthetic ambiguity case | Kernel argument index and fragment field forms | Missing `a1` index in one event and missing `a1[1]` in another are intentional malformed cases |
 | `linux_audit_exec_duplicate_fields_synthetic.log` | synthetic ambiguity case | Kernel `EXECVE`/fragment and `PATH item` field forms | Conflicting `argc`, duplicate/conflicting argument or fragment fields, and duplicate/conflicting `PATH item` are intentional |
 | `linux_audit_exec_required_records_ambiguous_synthetic.log` | synthetic ambiguity case | `SYSCALL` and `EXECVE` record-family forms | Contains a two-`SYSCALL` group, an `EXECVE`-only group, and a `SYSCALL`-only group |
+| `linux_audit_shared_memory_execution_contract_synthetic.log` | synthetic | RHEL/Linux Audit compound execution record structure; shared-memory path candidate motivated by the official SigmaHQ, Elastic Security, and Splunk Security Content rules listed below | Neutral synthetic paths, identities, outcomes, missing fields, optional conflicts, and a conspicuous privacy canary cover detector-contract boundaries; no captured attack or filesystem state is represented |
+| `linux_audit_shared_memory_execution_scope_synthetic.log` | synthetic | Repository loader scope contract plus RHEL/Linux Audit compound execution record structure | Interleaved records, reused event ID across nodes, same/different sessions, and non-canonical record order are synthetic and establish grouping/determinism only |
 
 The fixtures preserve raw ambiguity only. They do not define future argument
 reconstruction, PATH ordering, execution candidate acceptance, or normalization
 behavior.
+
+## Shared-memory execution fixture sources
+
+Access date for the sources in this section: 2026-09-26.
+
+The shared-memory fixtures use Linux Audit raw record structure from the
+primary sources above. Their review-candidate motivation comes from these
+official rule repositories:
+
+- SigmaHQ, `Process Execution From Shared Memory Directory`:
+  <https://github.com/SigmaHQ/sigma/blob/master/rules/linux/process_creation/proc_creation_lnx_susp_exec_from_dev_shm.yml>
+- Elastic Security, `Binary Executed from Shared Memory Directory`:
+  <https://github.com/elastic/detection-rules/blob/main/rules/linux/execution_process_started_in_shared_memory_directory.toml>
+- Splunk Security Content, `Linux Binary Executed from Shared Memory Directory`:
+  <https://github.com/splunk/security_content/blob/develop/detections/endpoint/linux_binary_executed_from_shared_memory_directory.yml>
+
+Those rules motivate investigation of observed execution from shared-memory
+paths. They do not make these synthetic fixtures evidence of malware,
+fileless execution, privilege escalation, persistence, compromise, attacker
+intent, attack success, binary trust, filesystem mount type or permissions,
+or parent-child causation. Product-specific EDR fields are not added to the
+Linux Audit records.

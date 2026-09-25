@@ -1,0 +1,11 @@
+node=shared-memory-node-a type=EXECVE msg=audit(1791000020.001:2020): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-node-b type=SYSCALL msg=audit(1791000020.001:2020): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8100 pid=8102 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=521 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-node-a type=SYSCALL msg=audit(1791000021.002:2021): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8100 pid=8103 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=522 comm="audit-observation" exe="/run/shm/audit-observation" key="shared-memory-observation"
+node=shared-memory-node-a type=SYSCALL msg=audit(1791000020.001:2020): arch=c000003e syscall=59 success=yes exit=0 items=0 ppid=8100 pid=8101 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=521 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
+node=shared-memory-node-b type=EXECVE msg=audit(1791000020.001:2020): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-node-a type=EXECVE msg=audit(1791000021.002:2021): argc=1 a0="/run/shm/audit-observation"
+node=shared-memory-node-a type=PROCTITLE msg=audit(1791000022.003:2022): proctitle=2F6465762F73686D2F74656C656D657472792D70726F6265
+node=shared-memory-node-a type=PATH msg=audit(1791000022.003:2022): item=0 name="/dev/shm/telemetry-probe" inode=2401 dev=fd:01 mode=0100755 ouid=0 ogid=0 nametype=NORMAL
+node=shared-memory-node-a type=CWD msg=audit(1791000022.003:2022): cwd="/opt/fixture"
+node=shared-memory-node-a type=EXECVE msg=audit(1791000022.003:2022): argc=1 a0="/dev/shm/telemetry-probe"
+node=shared-memory-node-a type=SYSCALL msg=audit(1791000022.003:2022): arch=c000003e syscall=59 success=yes exit=0 items=1 ppid=8100 pid=8104 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=522 comm="telemetry-probe" exe="/dev/shm/telemetry-probe" key="shared-memory-observation"
