@@ -521,13 +521,17 @@ def test_invalid_path_item_sorts_after_valid_item_without_deduplication():
     assert context.paths_complete is False
 
 
-def test_builder_is_not_connected_to_production_parser_output():
+def test_builder_result_is_used_by_production_parser_output():
     event = fixture_event(
         "linux_audit_exec_success_rhel_source_derived.log"
     )
 
-    assert _build_process_execution_context(event) is not None
-    assert parse_linux_audit_events(event) == []
+    context = _build_process_execution_context(event)
+    parsed = parse_linux_audit_events(event)
+
+    assert context is not None
+    assert len(parsed) == 1
+    assert parsed[0].process_execution == context
 
 
 def test_raw_records_include_auxiliary_and_duplicates_without_mutation():

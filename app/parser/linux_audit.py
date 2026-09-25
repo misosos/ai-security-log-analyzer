@@ -667,6 +667,48 @@ def _normalize_semantic_record(record, event, record_types):
     )
 
 
+def _normalize_process_execution_event(
+    event,
+    record_types,
+    process_execution,
+):
+    syscall_record = next(
+        record
+        for record in event.records
+        if record.record_type == "SYSCALL"
+    )
+    fields = syscall_record.fields
+
+    return NormalizedEvent(
+        timestamp=event.timestamp,
+        event_type="process_execution_attempt",
+        source="linux_audit",
+        user=None,
+        src_ip=None,
+        dst_ip=None,
+        application=None,
+        protocol=None,
+        user_agent=None,
+        raw=syscall_record.raw,
+        http=None,
+        authentication=None,
+        linux_audit=LinuxAuditContext(
+            event_id=event.event_id,
+            record_types=record_types,
+            operation=None,
+            executable=process_execution.executable,
+            process_user_id=_numeric_id(fields.get("uid")),
+            audit_user_id=_numeric_id(fields.get("auid")),
+            audit_session_id=_numeric_id(fields.get("ses")),
+            terminal=process_execution.terminal,
+            hostname=_known_text(fields.get("hostname")),
+            source_instance=event.source_instance,
+            node=event.node,
+        ),
+        process_execution=process_execution,
+    )
+
+
 def parse_linux_audit_events(event):
     record_types = tuple(
         record.record_type
@@ -684,7 +726,7 @@ def parse_linux_audit_events(event):
         ),
     )
 
-    return [
+    normalized = [
         _normalize_semantic_record(
             record,
             event,
@@ -692,3 +734,13 @@ def parse_linux_audit_events(event):
         )
         for record in semantic_records
     ]
+
+    process_execution = _build_process_execution_context(event)
+    if process_execution is not None:
+        normalized.append(_normalize_process_execution_event(
+            event,
+            record_types,
+            process_execution,
+        ))
+
+    return normalized
