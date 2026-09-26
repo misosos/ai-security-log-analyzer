@@ -39,6 +39,8 @@ values, node labels, and keys are synthetic and contain no real credentials.
 | `linux_audit_exec_required_records_ambiguous_synthetic.log` | synthetic ambiguity case | `SYSCALL` and `EXECVE` record-family forms | Contains a two-`SYSCALL` group, an `EXECVE`-only group, and a `SYSCALL`-only group |
 | `linux_audit_shared_memory_execution_contract_synthetic.log` | synthetic | RHEL/Linux Audit compound execution record structure; shared-memory path candidate motivated by the official SigmaHQ, Elastic Security, and Splunk Security Content rules listed below | Neutral synthetic paths, identities, outcomes, missing fields, optional conflicts, and a conspicuous privacy canary cover detector-contract boundaries; no captured attack or filesystem state is represented |
 | `linux_audit_shared_memory_execution_scope_synthetic.log` | synthetic | Repository loader scope contract plus RHEL/Linux Audit compound execution record structure | Interleaved records, reused event ID across nodes, same/different sessions, and non-canonical record order are synthetic and establish grouping/determinism only |
+| `linux_audit_session_process_co_observation_contract_synthetic.log` | synthetic | RHEL/Linux Audit lifecycle and compound execution record structure | Complete, missing, duplicate, equal/reversed timestamp lifecycle cases, process outcomes, missing/unset identity, and a privacy canary are synthetic |
+| `linux_audit_session_process_co_observation_scope_synthetic.log` | synthetic | Repository loader scope contract plus Linux Audit lifecycle/process record structure | Interleaved records, node/session/AUID mismatches, same session ID reused across nodes, and non-canonical physical order establish scope boundaries only |
 
 The fixtures preserve raw ambiguity only. They do not define future argument
 reconstruction, PATH ordering, execution candidate acceptance, or normalization
@@ -65,3 +67,40 @@ fileless execution, privilege escalation, persistence, compromise, attacker
 intent, attack success, binary trust, filesystem mount type or permissions,
 or parent-child causation. Product-specific EDR fields are not added to the
 Linux Audit records.
+
+
+## Session-process co-observation fixture sources
+
+Access date for the sources in this section: 2026-09-26.
+
+`linux_audit_session_process_co_observation_contract_synthetic.log` and
+`linux_audit_session_process_co_observation_scope_synthetic.log` are synthetic
+fixtures. They verify only the raw observation contract and scope ambiguity for
+`USER_START`, `USER_END`, `SYSCALL`, and `EXECVE` records as preserved by
+the current loader and parser. Their neutral values include no real user,
+credential, operational host, user path, or executable attack payload.
+
+The record structures and field meanings were informed by these official
+sources:
+
+- Red Hat, *RHEL 8 Auditing the system*:
+  <https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/security_hardening/auditing-the-system_security-hardening>
+- Linux Audit Project, *field dictionary*:
+  <https://raw.githubusercontent.com/linux-audit/audit-documentation/main/specs/fields/field-dictionary.csv>
+- Linux Audit userspace, record type table:
+  <https://github.com/linux-audit/audit-userspace/blob/master/lib/msg_typetab.h>
+- Linux Audit userspace, `auditctl(8)`:
+  <https://github.com/linux-audit/audit-userspace/blob/master/docs/auditctl.8>
+- Linux kernel, Audit definitions:
+  <https://github.com/torvalds/linux/blob/master/include/uapi/linux/audit.h>
+- Linux kernel, Audit syscall implementation:
+  <https://github.com/torvalds/linux/blob/master/kernel/auditsc.c>
+- Linux-PAM, `pam_loginuid(8)`:
+  <https://man7.org/linux/man-pages/man8/pam_loginuid.8.html>
+
+These sources do not guarantee that the same audit session ID identifies the
+same human, that a process in the same session was caused by a login or session
+event, or that PID/session IDs are long-lived unique identities. A successful
+syscall does not establish program-goal or attack success. The fixtures do not
+establish malicious activity, compromise, privilege escalation, persistence,
+attack success, or causation.
