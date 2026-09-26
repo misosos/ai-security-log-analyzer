@@ -156,6 +156,8 @@ Public `analyze(log_sources=None)`는 계속 `results`와 `global_correlation`�
 
 현재 stable process identity가 없고 PID 및 session ID는 재사용될 수 있다. Raw evidence는 누락될 수 있으며 cross-run deduplication, 운영 false-positive rate 측정, protected detail view, real-time ingestion, API Linux Audit upload가 없다. Loader/grouping과 normalized logs list 때문에 큰 파일은 memory 사용량을 늘릴 수 있다.
 
+향후 Linux Audit upload의 별도 endpoint, bounded response와 운영 gate 설계는 [Linux Audit API Boundary Design](linux_audit_api_design.md)에 기록한다.
+
 ## 15. 공식 근거
 
 접근일: 2026-09-26
