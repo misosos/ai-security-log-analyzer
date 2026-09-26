@@ -16,6 +16,10 @@ from app.analyzer.process_execution import (
     aggregate_process_execution_observations,
 )
 from app.analyzer.report import print_analysis_result
+from app.correlation.session_process import (
+    collect_session_process_co_observations,
+    summarize_session_process_co_observations,
+)
 from app.detector.shared_memory_execution import (
     collect_shared_memory_execution_observations,
     summarize_shared_memory_execution_observations,
@@ -251,6 +255,24 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         raise SystemExit(1) from None
 
+    try:
+        session_process_relations = (
+            collect_session_process_co_observations(logs)
+        )
+        session_process_review_summary = (
+            summarize_session_process_co_observations(
+                session_process_relations,
+                process_observations,
+            )
+        )
+    except (TypeError, ValueError):
+        print(
+            "Session-process review summary could not be created: "
+            "internal contract validation failed.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
+
     print_arguments = {
         "process_execution_aggregate": (
             process_execution_aggregate
@@ -266,10 +288,23 @@ def main(argv: Sequence[str] | None = None) -> None:
             process_detection_summary
         )
 
-    print_analysis_result(
-        result,
-        **print_arguments,
-    )
+    if session_process_review_summary.session_co_observation_count > 0:
+        print_arguments["session_process_review_summary"] = (
+            session_process_review_summary
+        )
+
+    try:
+        print_analysis_result(
+            result,
+            **print_arguments,
+        )
+    except (TypeError, ValueError):
+        print(
+            "Session-process review summary could not be created: "
+            "internal contract validation failed.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

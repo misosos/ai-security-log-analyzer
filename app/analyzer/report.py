@@ -1,3 +1,4 @@
+from app.correlation.session_process import SessionProcessReviewSummary
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
@@ -449,12 +450,132 @@ def _print_process_execution_aggregate(
         )
 
 
+def _validated_session_process_review_counts(summary):
+    if summary is None:
+        return None
+    if type(summary) is not SessionProcessReviewSummary:
+        raise ValueError("invalid session-process review summary")
+
+    counts = (
+        summary.session_co_observation_count,
+        summary.process_observation_count,
+        summary.process_outcome_success_count,
+        summary.process_outcome_failure_count,
+        summary.process_outcome_unknown_count,
+        summary.shared_memory_privileged_execution_observation_count,
+        summary.sessions_with_shared_memory_privileged_execution_count,
+    )
+    if not all(type(count) is int and count >= 0 for count in counts):
+        raise ValueError("invalid session-process review summary count")
+
+    (
+        session_count,
+        process_count,
+        success_count,
+        failure_count,
+        unknown_count,
+        shared_memory_count,
+        sessions_with_shared_memory_count,
+    ) = counts
+    if process_count != success_count + failure_count + unknown_count:
+        raise ValueError("invalid session-process outcome counts")
+    if shared_memory_count > process_count:
+        raise ValueError("invalid session-process shared-memory count")
+    if sessions_with_shared_memory_count > session_count:
+        raise ValueError("invalid session-process session count")
+    if session_count == 0 and process_count > 0:
+        raise ValueError("process count requires a session observation")
+    if session_count > 0 and process_count == 0:
+        raise ValueError("session observation requires a process count")
+    if process_count == 0 and shared_memory_count > 0:
+        raise ValueError("shared-memory count requires a process count")
+    if shared_memory_count == 0 and sessions_with_shared_memory_count > 0:
+        raise ValueError("shared-memory session count requires an observation")
+
+    return counts
+
+
+def _print_session_process_review_summary(counts):
+    if counts is None or counts[0] == 0:
+        return
+
+    (
+        session_count,
+        process_count,
+        success_count,
+        failure_count,
+        unknown_count,
+        shared_memory_count,
+        sessions_with_shared_memory_count,
+    ) = counts
+
+    print("\n===== Session–Process Co-Observation =====")
+    print("Linux Audit 세션–프로세스 공동 관찰 요약")
+    print(f"  공동 관찰 세션 수: {session_count}")
+    print(f"  세션 구간 내 프로세스 관찰 수: {process_count}")
+    print("  SYSCALL outcome 관찰:")
+    print(f"    success: {success_count}")
+    print(f"    failure: {failure_count}")
+    print(f"    unknown: {unknown_count}")
+    print(
+        "  세션에 연결된 shared-memory privileged execution 관찰 수: "
+        f"{shared_memory_count}"
+    )
+    print(
+        "  해당 관찰이 포함된 세션 수: "
+        f"{sessions_with_shared_memory_count}"
+    )
+    print(
+        "  ※ 동일 Linux Audit scope의 session lifecycle과 process "
+        "event가 함께 관찰된 집계입니다."
+    )
+    print(
+        "    동일 사용자의 직접 실행이나 인과관계를 증명하지 않습니다."
+    )
+    print(
+        "    success는 syscall 관찰 결과이며 프로그램 목적 달성이나 "
+        "공격 성공을 의미하지 않습니다."
+    )
+    print(
+        "    shared-memory count는 malware, confirmed attack, "
+        "compromise 또는 incident 수가 아닙니다."
+    )
+
+
 def print_analysis_result(
     analysis,
     *,
     process_execution_aggregate=None,
     process_detection_summary=None,
+    session_process_review_summary=None,
 ):
+
+    session_process_counts = _validated_session_process_review_counts(
+        session_process_review_summary
+    )
+
+    if session_process_counts is not None:
+        session_shared_memory_count = session_process_counts[5]
+        if process_detection_summary is None:
+            if session_shared_memory_count > 0:
+                raise ValueError(
+                    "session-linked count requires overall review count"
+                )
+        else:
+            if type(process_detection_summary) is not (
+                SharedMemoryExecutionReviewSummary
+            ):
+                raise ValueError("invalid process detection summary")
+            overall_count = (
+                process_detection_summary
+                .shared_memory_privileged_execution_observation_count
+            )
+            if type(overall_count) is not int or overall_count < 0:
+                raise ValueError("invalid process detection summary count")
+            if session_shared_memory_count > overall_count:
+                raise ValueError(
+                    "session-linked count exceeds overall review count"
+                )
 
     results = analysis["results"]
 
@@ -481,6 +602,8 @@ def print_analysis_result(
         process_execution_aggregate,
         process_detection_summary,
     )
+
+    _print_session_process_review_summary(session_process_counts)
 
     print_global_correlation(
         analysis.get(

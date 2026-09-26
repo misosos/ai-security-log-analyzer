@@ -11,6 +11,7 @@ from app.analyzer.process_execution import (
 )
 from app.analyzer.report import print_analysis_result
 from app.api import build_analysis_response
+from app.correlation.session_process import SessionProcessReviewSummary
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
@@ -101,6 +102,16 @@ def test_main_loads_once_and_passes_separate_cli_outputs(monkeypatch):
     summary = SharedMemoryExecutionReviewSummary(
         shared_memory_privileged_execution_observation_count=1,
     )
+    session_relations = (object(),)
+    session_summary = SessionProcessReviewSummary(
+        session_co_observation_count=1,
+        process_observation_count=1,
+        process_outcome_success_count=1,
+        process_outcome_failure_count=0,
+        process_outcome_unknown_count=0,
+        shared_memory_privileged_execution_observation_count=1,
+        sessions_with_shared_memory_privileged_execution_count=1,
+    )
     calls = []
 
     def fake_load(sources):
@@ -123,17 +134,31 @@ def test_main_loads_once_and_passes_separate_cli_outputs(monkeypatch):
         calls.append(("summarize", received_observations))
         return summary
 
+    def fake_session_collect(received_logs):
+        calls.append(("session_collect", received_logs))
+        return session_relations
+
+    def fake_session_summarize(relations, received_observations):
+        calls.append((
+            "session_summarize",
+            relations,
+            received_observations,
+        ))
+        return session_summary
+
     def fake_print(
         received_analysis,
         *,
         process_execution_aggregate=None,
         process_detection_summary=None,
+        session_process_review_summary=None,
     ):
         calls.append((
             "print",
             received_analysis,
             process_execution_aggregate,
             process_detection_summary,
+            session_process_review_summary,
         ))
 
     monkeypatch.setattr(main_module, "load_normalized_logs", fake_load)
@@ -153,6 +178,16 @@ def test_main_loads_once_and_passes_separate_cli_outputs(monkeypatch):
         "summarize_shared_memory_execution_observations",
         fake_summarize,
     )
+    monkeypatch.setattr(
+        main_module,
+        "collect_session_process_co_observations",
+        fake_session_collect,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "summarize_session_process_co_observations",
+        fake_session_summarize,
+    )
     monkeypatch.setattr(main_module, "print_analysis_result", fake_print)
 
     main_module.main()
@@ -163,7 +198,9 @@ def test_main_loads_once_and_passes_separate_cli_outputs(monkeypatch):
         ("aggregate", logs),
         ("collect", logs),
         ("summarize", observations),
-        ("print", analysis, aggregate, summary),
+        ("session_collect", logs),
+        ("session_summarize", session_relations, observations),
+        ("print", analysis, aggregate, summary, session_summary),
     ]
 
 
