@@ -37,6 +37,11 @@ class SharedMemoryExecutionObservation:
     syscall_outcome: str
 
 
+@dataclass(frozen=True)
+class SharedMemoryExecutionReviewSummary:
+    shared_memory_privileged_execution_observation_count: int
+
+
 def _not_detected():
     return DetectionResult(
         is_detected=False,
@@ -242,3 +247,22 @@ def collect_shared_memory_execution_observations(
         ))
 
     return tuple(observations)
+
+
+def summarize_shared_memory_execution_observations(
+    observations: tuple[SharedMemoryExecutionObservation, ...],
+) -> SharedMemoryExecutionReviewSummary:
+    if type(observations) is not tuple:
+        raise TypeError("observations must be a tuple")
+
+    if any(
+        type(observation) is not SharedMemoryExecutionObservation
+        for observation in observations
+    ):
+        raise ValueError("observations contain an invalid item")
+
+    return SharedMemoryExecutionReviewSummary(
+        shared_memory_privileged_execution_observation_count=(
+            len(observations)
+        ),
+    )

@@ -1,8 +1,13 @@
 from datetime import datetime
 
+import pytest
+
 from app.analyzer.report import (
     print_analysis_result,
     print_global_correlation,
+)
+from app.detector.shared_memory_execution import (
+    SharedMemoryExecutionReviewSummary,
 )
 
 
@@ -411,3 +416,84 @@ def test_process_execution_aggregate_output_shape_is_fixed(capsys):
     assert first_output.replace("관찰 수: 1", "관찰 수: N") == (
         second_output.replace("관찰 수: 20", "관찰 수: N")
     )
+
+
+def review_summary(count):
+    return SharedMemoryExecutionReviewSummary(
+        shared_memory_privileged_execution_observation_count=count,
+    )
+
+
+def test_report_prints_only_bounded_review_count_and_disclaimer(capsys):
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=process_execution_aggregate(),
+        process_detection_summary=review_summary(6),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "shared-memory privileged execution" in output
+    assert "review" not in output
+    assert ": 6" in output
+    assert "unique process" in output
+    assert "malware" in output
+    assert "confirmed attack" in output
+    assert "compromise" in output
+    assert "/dev/shm/" not in output
+    assert "/run/shm/" not in output
+    assert "effective_user_id" not in output
+    assert "source_instance" not in output
+    assert "event_id" not in output
+    assert "raw_records" not in output
+    assert "malware count: 6" not in output
+    assert "confirmed attack count: 6" not in output
+
+
+def test_report_omits_zero_review_count_and_preserves_aggregate(capsys):
+    print_analysis_result(
+        {"results": {}},
+        process_execution_aggregate=process_execution_aggregate(),
+        process_detection_summary=review_summary(0),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "===== Process Execution Telemetry =====" in output
+    assert "shared-memory privileged execution" not in output
+    assert "unique process" not in output
+    assert "no attack" not in output
+    assert "safe" not in output
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        object(),
+        review_summary(False),
+        review_summary(-1),
+    ],
+)
+def test_report_rejects_invalid_review_summary_contract(summary):
+    with pytest.raises((TypeError, ValueError)):
+        print_analysis_result(
+            {"results": {}},
+            process_execution_aggregate=process_execution_aggregate(),
+            process_detection_summary=summary,
+        )
+
+
+@pytest.mark.parametrize(
+    "aggregate",
+    [
+        None,
+        process_execution_aggregate(observation_count=0),
+    ],
+)
+def test_report_rejects_positive_review_count_without_telemetry(aggregate):
+    with pytest.raises(ValueError):
+        print_analysis_result(
+            {"results": {}},
+            process_execution_aggregate=aggregate,
+            process_detection_summary=review_summary(1),
+        )

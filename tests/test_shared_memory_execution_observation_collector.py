@@ -16,7 +16,9 @@ from app.api import build_analysis_response
 from app.detector.shared_memory_execution import (
     DETECTION_TYPE,
     SharedMemoryExecutionObservation,
+    SharedMemoryExecutionReviewSummary,
     collect_shared_memory_execution_observations,
+    summarize_shared_memory_execution_observations,
     detect_shared_memory_privileged_execution,
 )
 from app.loader.linux_audit_loader import load_linux_audit_events
@@ -479,3 +481,96 @@ def test_private_canary_is_excluded_and_scope_canary_stays_internal(capsys):
     assert CANARY not in json.dumps(llm_output, sort_keys=True)
     assert set(analysis) == {"results", "global_correlation"}
     assert private_event == original
+
+
+def test_review_summary_is_a_frozen_fixed_scalar_projection():
+    first = collect_shared_memory_execution_observations([valid_event()])[0]
+    second = replace(first, event_id="second-event")
+    observations = (first, second, first)
+    original = deepcopy(observations)
+
+    summary = summarize_shared_memory_execution_observations(observations)
+
+    assert summary == SharedMemoryExecutionReviewSummary(
+        shared_memory_privileged_execution_observation_count=3,
+    )
+    assert tuple(field.name for field in fields(summary)) == (
+        "shared_memory_privileged_execution_observation_count",
+    )
+    assert type(
+        summary.shared_memory_privileged_execution_observation_count
+    ) is int
+    assert observations == original
+    with pytest.raises(FrozenInstanceError):
+        summary.shared_memory_privileged_execution_observation_count = 0
+
+
+def test_review_summary_empty_duplicate_and_order_contract():
+    observation = collect_shared_memory_execution_observations(
+        [valid_event()]
+    )[0]
+
+    assert (
+        summarize_shared_memory_execution_observations(())
+        .shared_memory_privileged_execution_observation_count
+        == 0
+    )
+    assert (
+        summarize_shared_memory_execution_observations(
+            (observation, observation)
+        ).shared_memory_privileged_execution_observation_count
+        == 2
+    )
+    assert summarize_shared_memory_execution_observations(
+        (observation, replace(observation, event_id="other"))
+    ) == summarize_shared_memory_execution_observations(
+        (replace(observation, event_id="other"), observation)
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        ([], TypeError),
+        (None, TypeError),
+        ((object(),), ValueError),
+        ((None,), ValueError),
+    ],
+)
+def test_review_summary_rejects_invalid_runtime_contract(
+    value,
+    error_type,
+):
+    with pytest.raises(error_type):
+        summarize_shared_memory_execution_observations(value)
+
+
+def test_review_summary_does_not_copy_private_or_scope_canary():
+    base = valid_event()
+    private_event = replace(
+        base,
+        process_execution=replace(
+            base.process_execution,
+            argv=(base.process_execution.executable, CANARY),
+            command_name=CANARY,
+            raw_records=(f"raw={CANARY}",),
+        ),
+    )
+    scope_event = replace(
+        base,
+        linux_audit=replace(
+            base.linux_audit,
+            source_instance=CANARY,
+            node=CANARY,
+            event_id="scope-event",
+        ),
+    )
+    observations = collect_shared_memory_execution_observations(
+        [private_event, scope_event]
+    )
+    summary = summarize_shared_memory_execution_observations(observations)
+
+    assert CANARY in repr(private_event.process_execution)
+    assert CANARY in repr(observations)
+    assert CANARY not in repr(summary)
+    assert summary.shared_memory_privileged_execution_observation_count == 2

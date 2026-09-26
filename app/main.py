@@ -16,6 +16,10 @@ from app.analyzer.process_execution import (
     aggregate_process_execution_observations,
 )
 from app.analyzer.report import print_analysis_result
+from app.detector.shared_memory_execution import (
+    collect_shared_memory_execution_observations,
+    summarize_shared_memory_execution_observations,
+)
 
 
 LOG_SOURCES = [
@@ -230,11 +234,41 @@ def main(argv: Sequence[str] | None = None) -> None:
         aggregate_process_execution_observations(logs)
     )
 
-    print_analysis_result(
-        result,
-        process_execution_aggregate=(
+    try:
+        process_observations = (
+            collect_shared_memory_execution_observations(logs)
+        )
+        process_detection_summary = (
+            summarize_shared_memory_execution_observations(
+                process_observations
+            )
+        )
+    except (TypeError, ValueError):
+        print(
+            "Process detection observation summary could not be "
+            "created: internal contract validation failed.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
+
+    print_arguments = {
+        "process_execution_aggregate": (
             process_execution_aggregate
         ),
+    }
+
+    if (
+        process_detection_summary
+        .shared_memory_privileged_execution_observation_count
+        > 0
+    ):
+        print_arguments["process_detection_summary"] = (
+            process_detection_summary
+        )
+
+    print_analysis_result(
+        result,
+        **print_arguments,
     )
 
 

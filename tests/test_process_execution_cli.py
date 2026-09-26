@@ -2,6 +2,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import json
 
+import pytest
+
 import app.main as main_module
 from app.analyzer.llm import serialize_value
 from app.analyzer.process_execution import (
@@ -9,6 +11,9 @@ from app.analyzer.process_execution import (
 )
 from app.analyzer.report import print_analysis_result
 from app.api import build_analysis_response
+from app.detector.shared_memory_execution import (
+    SharedMemoryExecutionReviewSummary,
+)
 from app.models.schemas import (
     LinuxAuditContext,
     LinuxAuditPathContext,
@@ -85,13 +90,17 @@ def canary_event():
     )
 
 
-def test_main_loads_once_and_passes_separate_cli_aggregate(monkeypatch):
+def test_main_loads_once_and_passes_separate_cli_outputs(monkeypatch):
     logs = [object()]
     analysis = {
         "results": {},
         "global_correlation": {},
     }
     aggregate = {"observation_count": 1}
+    observations = (object(),)
+    summary = SharedMemoryExecutionReviewSummary(
+        shared_memory_privileged_execution_observation_count=1,
+    )
     calls = []
 
     def fake_load(sources):
@@ -106,11 +115,25 @@ def test_main_loads_once_and_passes_separate_cli_aggregate(monkeypatch):
         calls.append(("aggregate", received_logs))
         return aggregate
 
-    def fake_print(received_analysis, *, process_execution_aggregate=None):
+    def fake_collect(received_logs):
+        calls.append(("collect", received_logs))
+        return observations
+
+    def fake_summarize(received_observations):
+        calls.append(("summarize", received_observations))
+        return summary
+
+    def fake_print(
+        received_analysis,
+        *,
+        process_execution_aggregate=None,
+        process_detection_summary=None,
+    ):
         calls.append((
             "print",
             received_analysis,
             process_execution_aggregate,
+            process_detection_summary,
         ))
 
     monkeypatch.setattr(main_module, "load_normalized_logs", fake_load)
@@ -120,6 +143,16 @@ def test_main_loads_once_and_passes_separate_cli_aggregate(monkeypatch):
         "aggregate_process_execution_observations",
         fake_aggregate,
     )
+    monkeypatch.setattr(
+        main_module,
+        "collect_shared_memory_execution_observations",
+        fake_collect,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "summarize_shared_memory_execution_observations",
+        fake_summarize,
+    )
     monkeypatch.setattr(main_module, "print_analysis_result", fake_print)
 
     main_module.main()
@@ -128,7 +161,9 @@ def test_main_loads_once_and_passes_separate_cli_aggregate(monkeypatch):
         ("load", main_module.LOG_SOURCES),
         ("analyze", logs),
         ("aggregate", logs),
-        ("print", analysis, aggregate),
+        ("collect", logs),
+        ("summarize", observations),
+        ("print", analysis, aggregate, summary),
     ]
 
 
@@ -190,3 +225,71 @@ def test_canary_stays_internal_across_cli_api_and_llm(capsys):
     assert "PROCTITLE" not in cli_output
     assert "raw_records" not in cli_output
     assert event == original
+
+
+@pytest.mark.parametrize("failure_stage", ["collector", "summary"])
+def test_main_bounds_internal_review_summary_failures(
+    failure_stage,
+    monkeypatch,
+    capsys,
+):
+    secret = "SYNTHETIC_PRIVATE_CONTRACT_DETAIL"
+    logs = [object()]
+    analysis = {
+        "results": {},
+        "global_correlation": {},
+    }
+
+    monkeypatch.setattr(
+        main_module,
+        "load_normalized_logs",
+        lambda sources: logs,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "_analyze_normalized_logs",
+        lambda received_logs: analysis,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "aggregate_process_execution_observations",
+        lambda received_logs: {"observation_count": 1},
+    )
+
+    if failure_stage == "collector":
+        def fail_collect(received_logs):
+            raise ValueError(secret)
+
+        monkeypatch.setattr(
+            main_module,
+            "collect_shared_memory_execution_observations",
+            fail_collect,
+        )
+    else:
+        monkeypatch.setattr(
+            main_module,
+            "collect_shared_memory_execution_observations",
+            lambda received_logs: (),
+        )
+
+        def fail_summary(observations):
+            raise TypeError(secret)
+
+        monkeypatch.setattr(
+            main_module,
+            "summarize_shared_memory_execution_observations",
+            fail_summary,
+        )
+
+    with pytest.raises(SystemExit) as raised:
+        main_module.main()
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 1
+    assert captured.out == ""
+    assert captured.err == (
+        "Process detection observation summary could not be created: "
+        "internal contract validation failed.\n"
+    )
+    assert secret not in captured.err
+    assert "Traceback" not in captured.err

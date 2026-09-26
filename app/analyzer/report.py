@@ -1,3 +1,8 @@
+from app.detector.shared_memory_execution import (
+    SharedMemoryExecutionReviewSummary,
+)
+
+
 def print_detection_result(detections):
 
     print("Detection:")
@@ -344,9 +349,32 @@ def print_global_correlation(
         )
 
 
-def _print_process_execution_aggregate(aggregate):
+def _print_process_execution_aggregate(
+    aggregate,
+    process_detection_summary=None,
+):
+
+    review_count = 0
+
+    if process_detection_summary is not None:
+        if type(process_detection_summary) is not (
+            SharedMemoryExecutionReviewSummary
+        ):
+            raise TypeError("invalid process detection summary")
+
+        review_count = (
+            process_detection_summary
+            .shared_memory_privileged_execution_observation_count
+        )
+
+        if type(review_count) is not int or review_count < 0:
+            raise ValueError("invalid process detection summary count")
 
     if aggregate is None:
+        if review_count > 0:
+            raise ValueError(
+                "process detection summary requires process telemetry"
+            )
         return
 
     observation_count = aggregate.get(
@@ -355,6 +383,10 @@ def _print_process_execution_aggregate(aggregate):
     )
 
     if observation_count == 0:
+        if review_count > 0:
+            raise ValueError(
+                "process detection summary requires process telemetry"
+            )
         return
 
     outcome_counts = aggregate.get(
@@ -399,11 +431,29 @@ def _print_process_execution_aggregate(aggregate):
         "안전성을 의미하지 않습니다."
     )
 
+    if review_count > 0:
+        print(
+            "  shared-memory privileged execution 검토 관찰 수: "
+            f"{review_count}"
+        )
+        print(
+            "  ※ 이 값은 shared-memory directory 하위 executable path와"
+        )
+        print(
+            "    effective root context의 successful syscall이 함께 "
+            "관찰된 검토 건수입니다."
+        )
+        print(
+            "    unique process, malware, confirmed attack 또는 "
+            "compromise 건수를 의미하지 않습니다."
+        )
+
 
 def print_analysis_result(
     analysis,
     *,
     process_execution_aggregate=None,
+    process_detection_summary=None,
 ):
 
     results = analysis["results"]
@@ -428,7 +478,8 @@ def print_analysis_result(
         )
 
     _print_process_execution_aggregate(
-        process_execution_aggregate
+        process_execution_aggregate,
+        process_detection_summary,
     )
 
     print_global_correlation(
