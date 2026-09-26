@@ -136,6 +136,10 @@ Shared-memory privileged execution review의 bounded detector 조건, CLI 입력
 count 의미는 [Shared-memory Privileged Execution Review](shared_memory_execution_review.md)에
 별도로 설명한다.
 
+Session lifecycle과 process observation의 bounded 공동 관찰 및 CLI count
+의미는 [Linux Audit Session–Process Co-Observation Review](linux_audit_session_process_review.md)에
+별도로 설명한다.
+
 ## 8. 외부 노출 정책
 
 | 경계 | Aggregate | Detailed evidence | 정책 |

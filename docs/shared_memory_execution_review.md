@@ -153,6 +153,10 @@ Container runtime, IPC framework, legitimate administration, test/build tooling
 Detailed observation과 sensitive process evidence는 internal only다. Generic
 serialization이나 heuristic redaction에 의존해 외부로 내보내지 않는다.
 
+전체 shared-memory review count와 eligible session relation에 연결된 count의
+차이는 [Linux Audit Session–Process Co-Observation Review](linux_audit_session_process_review.md)에
+별도로 설명한다.
+
 ## 11. Failure behavior
 
 CLI input validation 오류는 exit code `2`로 종료한다. Detector/collector 또는
