@@ -41,6 +41,7 @@ values, node labels, and keys are synthetic and contain no real credentials.
 | `linux_audit_shared_memory_execution_scope_synthetic.log` | synthetic | Repository loader scope contract plus RHEL/Linux Audit compound execution record structure | Interleaved records, reused event ID across nodes, same/different sessions, and non-canonical record order are synthetic and establish grouping/determinism only |
 | `linux_audit_session_process_co_observation_contract_synthetic.log` | synthetic | RHEL/Linux Audit lifecycle and compound execution record structure | Complete, missing, duplicate, equal/reversed timestamp lifecycle cases, process outcomes, missing/unset identity, and a privacy canary are synthetic |
 | `linux_audit_session_process_co_observation_scope_synthetic.log` | synthetic | Repository loader scope contract plus Linux Audit lifecycle/process record structure | Interleaved records, node/session/AUID mismatches, same session ID reused across nodes, and non-canonical physical order establish scope boundaries only |
+| `linux_audit_session_shared_memory_review_contract_synthetic.log` | synthetic | RHEL/Linux Audit lifecycle and compound execution record structure plus the shared-memory review motivation sources below | One bounded lifecycle contains a shared-memory privileged execution observation, an ordinary execution, and a failed shared-memory execution; a separate scope contains a shared-memory observation without an eligible lifecycle |
 
 The fixtures preserve raw ambiguity only. They do not define future argument
 reconstruction, PATH ordering, execution candidate acceptance, or normalization
@@ -104,3 +105,15 @@ event, or that PID/session IDs are long-lived unique identities. A successful
 syscall does not establish program-goal or attack success. The fixtures do not
 establish malicious activity, compromise, privilege escalation, persistence,
 attack success, or causation.
+
+`linux_audit_session_shared_memory_review_contract_synthetic.log` is also a
+fully synthetic fixture. It verifies that the existing bounded session/process
+scope and shared-memory execution observation contracts can be exercised
+together while keeping a shared-memory observation outside an eligible
+lifecycle distinct. Its shared-memory paths are motivated only by the official
+SigmaHQ, Elastic Security, and Splunk Security Content rules listed above. The
+fixture contains neutral values rather than real users, credentials,
+operational hosts, or attack payloads, and it does not establish malware,
+compromise, privilege escalation, persistence, attacker intent, attack
+success, filesystem mount type or permissions, or lifecycle-to-process
+causation.
