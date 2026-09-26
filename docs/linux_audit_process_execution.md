@@ -132,6 +132,10 @@ Section에는 `success`가 프로그램 목적 달성 또는 공격 성공을 �
 CLI는 개별 event, executable, `argv`, PID/UID, PATH/CWD, PROCTITLE,
 raw evidence, audit key, node 또는 source identity를 출력하지 않는다.
 
+Shared-memory privileged execution review의 bounded detector 조건, CLI 입력과
+count 의미는 [Shared-memory Privileged Execution Review](shared_memory_execution_review.md)에
+별도로 설명한다.
+
 ## 8. 외부 노출 정책
 
 | 경계 | Aggregate | Detailed evidence | 정책 |
@@ -140,7 +144,7 @@ raw evidence, audit key, node 또는 source identity를 출력하지 않는다.
 | API | 없음 | 없음 | 기존 `AnalysisResponse` 유지 |
 | LLM | 없음 | 없음 | per-IP 및 overall input에서 제외 |
 | Frontend | 없음 | 없음 | API에 없는 정보를 재구성하지 않음 |
-| Detection | 사용하지 않음 | 내부 event만 존재 | process detector 없음 |
+| Detection | CLI fixed review count만 | 내부 observation | IP results에는 포함하지 않음 |
 | Correlation | 사용하지 않음 | 내부 event만 존재 | process correlation 없음 |
 | Risk | 사용하지 않음 | 내부 event만 존재 | risk factor에 반영하지 않음 |
 
@@ -189,7 +193,8 @@ aggregate 불변조건, consumer 격리 및 민감 evidence 비노출을 검증�
 - Process tree 또는 parent-child causation을 구성하지 않는다.
 - PID reuse를 해결하거나 장기 process identity를 제공하지 않는다.
 - 개별 process 상세 presentation이 없다.
-- Process detection, correlation 또는 risk 반영이 없다.
+- Shared-memory detector는 CLI fixed review count에만 사용되며 기존 IP
+  detection results, correlation 또는 risk에는 반영되지 않는다.
 - ATT&CK mapping을 생성하지 않는다.
 - Authorization/RBAC와 상세 접근 audit 기능이 없다.
 - Internal evidence의 retention 정책을 구현하지 않았다.
@@ -198,7 +203,7 @@ aggregate 불변조건, consumer 격리 및 민감 evidence 비노출을 검증�
 
 향후 별도 연구와 승인을 거쳐 protected forensic detail access,
 authorization 및 access auditing, explicit data classification/redaction,
-근거 기반 process detection, process/session correlation을 검토할 수 있다.
+추가 process detection, process/session correlation을 검토할 수 있다.
 이 항목들은 현재 구현되거나 승인된 기능이 아니다.
 
 ## 문서 근거
