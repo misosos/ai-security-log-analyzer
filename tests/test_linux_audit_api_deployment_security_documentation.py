@@ -20,6 +20,8 @@ OFFICIAL_URLS = {
     "https://www.uvicorn.org/settings/",
     "https://fastapi.tiangolo.com/advanced/events/",
     "https://www.starlette.io/lifespan/",
+    "https://kubernetes.io/docs/tasks/configure-pod-container/"
+    "configure-liveness-readiness-probes/",
     "https://docs.python.org/3/library/os.html",
     "https://docs.python.org/3/library/stat.html",
     "https://docs.python.org/3/library/pathlib.html",
@@ -272,7 +274,9 @@ def test_liveness_readiness_startup_and_shutdown_are_distinct():
     for contract in (
         "only a lightweight liveness signal",
         "internal typed readiness accessor",
-        "no readiness HTTP route",
+        "production-only `GET /internal/readiness` probe",
+        "excluded from OpenAPI",
+        "Cache-Control: no-store",
         "security configuration was prepared successfully",
         "audit sink completed startup initialization",
         "does not upload a file",
@@ -302,7 +306,13 @@ def test_production_factory_lifespan_and_readiness_contract_are_implemented():
         "failed",
         "Separate app instances own separate readiness controllers and sinks",
         "never reads the bearer token or another value from an environment variable",
-        "not an argument-free Uvicorn import factory",
+        "app.deployment.asgi:create_linux_audit_api_app",
+        "Importing that module performs no environment read",
+        "CREDENTIALS_DIRECTORY",
+        "LINUX_AUDIT_API_PRINCIPAL_ID",
+        "LINUX_AUDIT_API_MAX_CONCURRENT_ANALYSES",
+        "linux-audit-api-operator-token",
+        "bearer token itself is never accepted from an environment variable",
         "ASGI lifespan startup",
         "changes readiness to `stopping` before awaiting the sink",
         "calls the owned journald sink's bounded `close()` exactly once",
@@ -310,6 +320,23 @@ def test_production_factory_lifespan_and_readiness_contract_are_implemented():
         "Request handlers never own or close the sink",
         "cancellation is not converted to success",
         "Production activation remains prohibited",
+    ):
+        assert contract.casefold() in text.casefold()
+
+
+def test_deployment_entrypoint_and_readiness_contract_are_documented():
+    text = document_text()
+
+    for contract in (
+        "uvicorn app.deployment.asgi:create_linux_audit_api_app --factory",
+        "reads exactly `CREDENTIALS_DIRECTORY`",
+        "fixed, non-overridable filename",
+        "canonical decimal strings `1`, `2`, `3` and `4`",
+        '`{"status":"ready"}` with HTTP 200',
+        '`{"status":"not_ready"}` with HTTP 503',
+        "does not prove TLS",
+        "future edge must restrict this unauthenticated path",
+        "no proxy or systemd unit configuration",
     ):
         assert contract.casefold() in text.casefold()
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.api import create_app
 from app.bootstrap.linux_audit_api import (
@@ -32,6 +33,7 @@ LinuxAuditApiReadinessPhase = Literal[
 ]
 
 _READINESS_STATE_ATTRIBUTE = "_linux_audit_api_readiness_controller"
+_INTERNAL_READINESS_PATH = "/internal/readiness"
 _ERRORS = {
     "INVALID_LINUX_AUDIT_API_PRODUCTION_CONFIG": (
         "Linux Audit API production configuration is invalid."
@@ -193,6 +195,48 @@ def _install_production_lifespan(
     application.router.lifespan_context = lifespan
 
 
+def _install_internal_readiness_route(application: FastAPI) -> None:
+    if type(application) is not FastAPI:
+        raise LinuxAuditApiProductionBootstrapError(
+            "LINUX_AUDIT_API_PRODUCTION_INITIALIZATION_FAILED"
+        )
+    if any(
+        getattr(route, "path", None) == _INTERNAL_READINESS_PATH
+        for route in application.routes
+    ):
+        raise LinuxAuditApiProductionBootstrapError(
+            "LINUX_AUDIT_API_PRODUCTION_INITIALIZATION_FAILED"
+        )
+
+    async def readiness_probe() -> JSONResponse:
+        try:
+            readiness = get_linux_audit_api_readiness(application)
+        except LinuxAuditApiProductionBootstrapError:
+            readiness = LinuxAuditApiReadiness(
+                phase="failed",
+                ready=False,
+            )
+        if readiness.ready:
+            status_code = 200
+            status = "ready"
+        else:
+            status_code = 503
+            status = "not_ready"
+        return JSONResponse(
+            status_code=status_code,
+            content={"status": status},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    application.add_api_route(
+        _INTERNAL_READINESS_PATH,
+        readiness_probe,
+        methods=["GET"],
+        include_in_schema=False,
+        name="linux_audit_api_internal_readiness",
+    )
+
+
 def create_linux_audit_api_production_app(
     config: LinuxAuditApiProductionConfig,
 ) -> FastAPI:
@@ -229,6 +273,7 @@ def create_linux_audit_api_production_app(
             linux_audit_api_audit_sink=sink,
         )
         _install_production_lifespan(application, sink)
+        _install_internal_readiness_route(application)
     except asyncio.CancelledError:
         _cleanup_partially_constructed_sink(sink)
         raise

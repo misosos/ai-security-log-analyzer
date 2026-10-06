@@ -4,7 +4,7 @@
 
 This document defines the production deployment contract for the default-disabled `POST /api/analyze-linux-audit` endpoint. It is a design and acceptance plan, not a deployed configuration. The boolean feature gate is not authentication, and neither the gate nor the application bearer check replaces the network, TLS, resource, secret, or audit controls in this document.
 
-Repository inspection on 2026-10-07 found no startup command in the empty `README.md`; no Dockerfile, Compose, Kubernetes, systemd, Nginx, Caddy, ingress, TLS, CORS, `TrustedHost`, proxy-header, rate-limit, readiness, or deployment workflow configuration; and no `.env.example`. `uvicorn` and `python-dotenv` are dependencies, but no production host, port, worker count, TLS termination, proxy trust, or secret-delivery policy is configured. The only health route is public `GET /api/health`, which returns `{"status": "ok"}` and does not establish readiness.
+Repository inspection on 2026-10-07 found no startup command in the empty `README.md`; no Dockerfile, Compose, Kubernetes, systemd, Nginx, Caddy, ingress, TLS, CORS, `TrustedHost`, proxy-header, rate-limit, or deployment workflow configuration; and no `.env.example`. `uvicorn` and `python-dotenv` are dependencies, but no production host, port, worker count, TLS termination, proxy trust, or secret-delivery policy is configured. The default application's only health route is public `GET /api/health`, which returns `{"status": "ok"}` and does not establish readiness. Phase 3Y-O adds a production-only internal readiness route, but not the edge restriction or service configuration required to deploy it.
 
 The current application contract is narrower and already implemented:
 
@@ -204,9 +204,19 @@ Production activation is prohibited until this policy is supplied. Audit records
 
 The existing `/api/health` is only a lightweight liveness signal: the process/event loop can answer a request. Its fixed body remains unchanged and contains no secret, principal, sink path, limit, worker count or configuration detail. Public exposure is unnecessary; Nginx should restrict health probing to the local deployment monitor.
 
-Phase 3Y-N implements the route-independent production composition in `app/deployment/linux_audit_api.py`. Its frozen `LinuxAuditApiProductionConfig` accepts only an explicit secret path, bounded principal ID and analysis-concurrency limit; its representation reveals none of those values. `create_linux_audit_api_production_app()` delegates secret validation to the existing secret-file bootstrap, constructs the native journald sink once, and passes both existing contracts to `create_app(enable_linux_audit_api=True, ...)`. It never reads the bearer token or another value from an environment variable. It is not an argument-free Uvicorn import factory; a later deployment entry point must derive the approved systemd credential path and pass explicit non-secret values.
+Phase 3Y-N implements the route-independent production composition in `app/deployment/linux_audit_api.py`. Its frozen `LinuxAuditApiProductionConfig` accepts only an explicit secret path, bounded principal ID and analysis-concurrency limit; its representation reveals none of those values. `create_linux_audit_api_production_app()` delegates secret validation to the existing secret-file bootstrap, constructs the native journald sink once, and passes both existing contracts to `create_app(enable_linux_audit_api=True, ...)`. It never reads the bearer token or another value from an environment variable.
 
-The production-created app has an internal typed readiness accessor, `get_linux_audit_api_readiness()`, and no readiness HTTP route or OpenAPI schema. Its immutable snapshot contains only `phase` and `ready`. The phases are `starting`, `ready`, `stopping`, `stopped` and `failed`; only `ready` has `ready=True`. Separate app instances own separate readiness controllers and sinks, and a completed lifespan cannot be entered again.
+Phase 3Y-O implements the zero-argument Uvicorn factory `app.deployment.asgi:create_linux_audit_api_app`. Importing that module performs no environment read, credential read, journald initialization or secured-app construction. Invocation reads exactly `CREDENTIALS_DIRECTORY`, `LINUX_AUDIT_API_PRINCIPAL_ID` and `LINUX_AUDIT_API_MAX_CONCURRENT_ANALYSES`; it does not enumerate or retain the remaining environment. The bearer token itself is never accepted from an environment variable. The credentials directory must be a non-empty absolute value with no surrounding whitespace, NUL, LF or CR. No tilde, shell, glob or path-list expansion occurs: such characters are treated literally after the absolute-path check. The factory appends the fixed, non-overridable filename `linux-audit-api-operator-token` without resolving it, then delegates file safety and token validation to the existing secret bootstrap. Concurrency accepts only the canonical decimal strings `1`, `2`, `3` and `4`; principal validation remains owned by the existing security contract.
+
+The supported import target is:
+
+```text
+uvicorn app.deployment.asgi:create_linux_audit_api_app --factory
+```
+
+The reference deployment must add the previously specified loopback bind, lifespan, proxy-trust and resource options. This command syntax documents the Python application target only; it is not a complete or approved production command.
+
+The production-created app has an internal typed readiness accessor, `get_linux_audit_api_readiness()`, and a production-only `GET /internal/readiness` probe. The route is absent from the default app and direct `create_app()` instances, excluded from OpenAPI, supports no mutation method, and returns only `{"status":"ready"}` with HTTP 200 or `{"status":"not_ready"}` with HTTP 503 plus `Cache-Control: no-store`. It exposes no secret, principal, path, sink, counter, timestamp, host or failure detail. Its immutable snapshot contains only `phase` and `ready`. The phases are `starting`, `ready`, `stopping`, `stopped` and `failed`; only `ready` has `ready=True`. Separate app instances own separate readiness controllers and sinks, and a completed lifespan cannot be entered again.
 
 Readiness becomes true immediately before the ASGI lifespan startup yields control, only after:
 
@@ -216,7 +226,7 @@ Readiness becomes true immediately before the ASGI lifespan startup yields contr
 - the audit sink completed startup initialization;
 - secret bootstrap and production app composition completed.
 
-Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence, remote forwarding, retention, TLS, Nginx or external reachability are healthy. The typed accessor is for later deployment-side probing; no public or internal HTTP endpoint is added in this phase.
+Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence, remote forwarding, retention, TLS, Nginx or external reachability are healthy. Starlette normally does not serve application requests until lifespan startup completes. The 503 representation therefore defines a bounded contract for direct lifecycle tests and deployment transitions; it does not prove that a particular proxy can observe every intermediate phase. A 200 establishes only the application-owned prerequisites above. It does not prove TLS, Nginx configuration, journal persistence/forwarding, retention approval, public reachability or whole-system health. The future edge must restrict this unauthenticated path to its internal listener.
 
 ## 12. Startup, rollout, and shutdown
 
@@ -225,7 +235,7 @@ Readiness does not upload a file, run analysis, reveal endpoint enablement detai
 1. Validate Nginx configuration, certificate chain/key match, exact hostname, TLS profile, body/header/time/rate/connection limits and loopback upstream.
 2. Construct `LinuxAuditApiProductionConfig` with an explicitly approved absolute credential path and call the implemented production factory. It loads the credential through the existing bootstrap without printing it, initializes the journald adapter and constructs the enabled app. Invalid configuration, credential, sink or app composition raises one bounded production-bootstrap error rather than returning the default app.
 3. Enter the app's ASGI lifespan. The app begins in `starting` and becomes `ready` only when lifespan startup completes. Importing `app.api` still constructs only the default-disabled app and performs no credential or journald initialization.
-4. Start one Uvicorn worker on loopback with lifespan enabled, an explicit proxy allowlist, concurrency ceiling, keep-alive and graceful-shutdown settings. Uvicorn's `--factory` expects an argument-free factory, so a later deployment-only import helper remains necessary; it must not put the bearer token in the environment.
+4. Invoke the implemented zero-argument Uvicorn factory with lifespan enabled, one worker on loopback, an explicit proxy allowlist, concurrency ceiling, keep-alive and graceful-shutdown settings. The factory reads only the three documented non-secret environment values; the bearer token remains a systemd credential file.
 5. Permit Nginx to route traffic only after the deployment probe observes the bounded ready state and all external controls pass.
 6. Run bounded HTTPS authentication, error, upload, audit and privacy acceptance. Roll back traffic if any gate fails.
 
@@ -273,7 +283,7 @@ The first three application-side units are implemented. Later deployment work sh
 
 1. Completed: explicit production factory composing the secret loader, native journald sink and secured `create_app(...)` without logging values.
 2. Completed: internal immutable readiness contract and app lifespan ownership of bounded sink close.
-3. Deployment-only argument-free import helper that derives one approved absolute systemd credential path without reading the bearer value from the environment.
+3. Completed: zero-argument Uvicorn factory with strict three-variable parsing, fixed systemd credential filename and production-only hidden readiness probe.
 4. Nginx reference template with placeholders for DNS name, certificate/key references, trusted loopback upstream and approved policy identifiers.
 5. systemd service/credential template with non-secret placeholders and one-worker/loopback defaults.
 6. Deployment environment template containing only safe non-secret values; no token placeholder that resembles a usable credential.
@@ -340,7 +350,7 @@ The integration suite requires an isolated local proxy/service environment and m
 
 ## 17. Non-goals and known limitations
 
-This phase creates an explicit argument-driven production application factory and internal readiness lifecycle, but no deployable import helper, proxy or systemd configuration, containers, certificates, environment secret loading, readiness route, rate-limit code or endpoint behavior. The factory, route-independent secret-file loader and journald sink primitive do not make the endpoint production-ready by themselves. Production activation remains prohibited until the edge, TLS, service-credential delivery, audit retention/integrity and deployment acceptance gates are complete.
+The repository now has an explicit argument-driven production application factory, internal readiness lifecycle, zero-argument Uvicorn import helper, strict non-secret environment parser and hidden readiness route. It still has no proxy or systemd unit configuration, containers, certificates, environment token loading, rate-limit deployment or completed edge acceptance. These primitives do not make the endpoint production-ready by themselves. Production activation remains prohibited until the edge, TLS, service-credential delivery, audit retention/integrity and deployment acceptance gates are complete.
 
 Nginx inactivity timeouts are not absolute request deadlines. A single proxy's shared rate zone is not distributed. The application limiter, sink and memory are process-local. The reference host shares fate between proxy and app. Journald acceptance is not proof of durable or remote storage. Static bearer authentication has no expiry, replay resistance or individual-human identity. Loopback plaintext is appropriate only for the stated single-host boundary. Numeric edge controls are V1 operational defaults requiring measurement, not standards or attack verdicts.
 
@@ -383,3 +393,5 @@ All sources below were actually reviewed on **2026-10-07**. General guidance inf
 | FastAPI | *Lifespan Events*, lifespan context manager | https://fastapi.tiangolo.com/advanced/events/ | Code before the lifespan yield runs before request service and code after it owns graceful cleanup | Cleanup after abrupt process/host termination or external readiness policy |
 | Starlette | *Lifespan*, startup, teardown, state and TestClient | https://www.starlette.io/lifespan/ | Incoming requests wait for lifespan startup; teardown follows closed connections/background tasks; `TestClient` context runs lifespan | Uvicorn socket admission policy, cleanup after `SIGKILL`, or durable sink persistence |
 | Uvicorn | *Settings*, application factory and lifespan options | https://www.uvicorn.org/settings/ | `--factory` treats the import target as a zero-argument application factory and lifespan can be explicitly enabled | How an argument-driven security config should be sourced or whether external controls are correct |
+| Python Software Foundation | *os — Miscellaneous operating system interfaces*, process environment | https://docs.python.org/3/library/os.html#os.environ | `os.environ` is a string mapping captured when `os` is imported and may be queried by exact key at factory invocation | Secret safety, source authenticity or validation of application-specific values |
+| Kubernetes | *Configure Liveness, Readiness and Startup Probes*, readiness behavior | https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/ | A failed readiness probe is a signal to stop directing service traffic to that instance | TLS/proxy correctness, broader system health or applicability outside a configured orchestrator/proxy |
