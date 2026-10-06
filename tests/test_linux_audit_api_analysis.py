@@ -592,9 +592,8 @@ def test_existing_api_routes_openapi_and_new_helper_isolation():
     assert set(app.openapi()["paths"]) == {"/api/health", "/api/analyze"}
     assert "/api/analyze-linux-audit" not in app.openapi()["paths"]
 
-    api_source = Path("app/api.py").read_text(encoding="utf-8")
-    assert "linux_audit_api" not in api_source
-    assert "analyze_staged_linux_audit_inputs" not in api_source
+    schemas = app.openapi().get("components", {}).get("schemas", {})
+    assert not any("LinuxAudit" in name for name in schemas)
     assert "linux_audit_api" not in Path("app/main.py").read_text(
         encoding="utf-8"
     )

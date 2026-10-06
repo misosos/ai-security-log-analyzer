@@ -29,6 +29,7 @@ from app.models.linux_audit_api import (
     LinuxAuditApiErrorDetail,
     LinuxAuditApiErrorResponse,
     LinuxAuditResponseProjectionError,
+    LinuxAuditUnexpectedServerError,
     OutcomeCountsResponse,
     ProcessTelemetryResponse,
     ProjectedLinuxAuditApiError,
@@ -107,6 +108,10 @@ ERROR_CONTRACTS = {
     "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR": (
         500,
         "Linux Audit response could not be created.",
+    ),
+    "INTERNAL_SERVER_ERROR": (
+        500,
+        "The request could not be completed.",
     ),
 }
 
@@ -504,6 +509,8 @@ def test_all_known_errors_project_to_fixed_status_and_envelope(code):
         error = LinuxAuditAnalysisValidationError(code)
     elif code == "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR":
         error = LinuxAuditResponseProjectionError()
+    elif code == "INTERNAL_SERVER_ERROR":
+        error = LinuxAuditUnexpectedServerError()
     else:
         error = LinuxAuditUploadValidationError(code)
 
@@ -758,8 +765,5 @@ def test_existing_openapi_health_api_cli_and_llm_boundaries(monkeypatch):
     assert health.status_code == 200
     assert health.json() == {"status": "ok"}
 
-    api_source = Path("app/api.py").read_text(encoding="utf-8")
     cli_source = Path("app/main.py").read_text(encoding="utf-8")
-    assert "models.linux_audit_api" not in api_source
-    assert "build_linux_audit_api_response" not in api_source
     assert "models.linux_audit_api" not in cli_source

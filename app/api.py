@@ -3,8 +3,26 @@ import tempfile
 import uuid
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
+from app.analyzer.linux_audit_api import (
+    LinuxAuditAnalysisValidationError,
+    analyze_staged_linux_audit_inputs,
+)
+from app.api_uploads import (
+    LinuxAuditUploadValidationError,
+    stage_linux_audit_uploads,
+)
 from app.main import analyze
+from app.models.linux_audit_api import (
+    LinuxAuditAnalysisResponse,
+    LinuxAuditApiErrorResponse,
+    LinuxAuditResponseProjectionError,
+    LinuxAuditUnexpectedServerError,
+    build_linux_audit_api_response,
+    project_linux_audit_api_error,
+)
 from app.models.schemas import (
     AnalysisResponse,
     AnalysisResultResponse,
@@ -16,13 +34,6 @@ from app.models.schemas import (
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".log", ".txt"}
-
-
-app = FastAPI(
-    title="AI Security Log Analyzer",
-    description="Security log analysis API",
-    version="0.1.0",
-)
 
 
 def save_upload_to_temp(file: UploadFile) -> str:
@@ -130,17 +141,12 @@ def build_analysis_response(
     )
 
 
-@app.get("/api/health")
 def health_check():
     return {
         "status": "ok"
     }
 
 
-@app.post(
-    "/api/analyze",
-    response_model=AnalysisResponse,
-)
 async def analyze_logs(
     application_file: UploadFile = File(...),
     ssh_file: UploadFile = File(...),
@@ -184,3 +190,76 @@ async def analyze_logs(
         for path in temp_paths:
             if os.path.exists(path):
                 os.remove(path)
+
+
+def _linux_audit_error_response(error: object) -> JSONResponse:
+    projected = project_linux_audit_api_error(error)
+    return JSONResponse(
+        status_code=projected.status_code,
+        content=projected.body.model_dump(mode="json"),
+    )
+
+
+async def analyze_linux_audit_logs(
+    linux_audit_files: list[UploadFile] | None = File(default=None),
+):
+    try:
+        uploads = tuple(linux_audit_files or ())
+        async with stage_linux_audit_uploads(uploads) as staged_inputs:
+            analysis = await run_in_threadpool(
+                analyze_staged_linux_audit_inputs,
+                staged_inputs,
+            )
+            return build_linux_audit_api_response(
+                analysis,
+                analysis_id=uuid.uuid4(),
+            )
+    except (
+        LinuxAuditUploadValidationError,
+        LinuxAuditAnalysisValidationError,
+        LinuxAuditResponseProjectionError,
+    ) as error:
+        return _linux_audit_error_response(error)
+    except Exception:
+        return _linux_audit_error_response(
+            LinuxAuditUnexpectedServerError()
+        )
+
+
+def create_app(*, enable_linux_audit_api: bool = False) -> FastAPI:
+    if type(enable_linux_audit_api) is not bool:
+        raise TypeError("enable_linux_audit_api must be a bool")
+
+    configured_app = FastAPI(
+        title="AI Security Log Analyzer",
+        description="Security log analysis API",
+        version="0.1.0",
+    )
+    configured_app.add_api_route(
+        "/api/health",
+        health_check,
+        methods=["GET"],
+    )
+    configured_app.add_api_route(
+        "/api/analyze",
+        analyze_logs,
+        methods=["POST"],
+        response_model=AnalysisResponse,
+    )
+
+    if enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/api/analyze-linux-audit",
+            analyze_linux_audit_logs,
+            methods=["POST"],
+            response_model=LinuxAuditAnalysisResponse,
+            responses={
+                status_code: {"model": LinuxAuditApiErrorResponse}
+                for status_code in (400, 409, 413, 415, 422, 500)
+            },
+        )
+
+    return configured_app
+
+
+app = create_app()

@@ -22,6 +22,9 @@ _PROJECTION_ERROR_STATUS = 500
 _PROJECTION_ERROR_MESSAGE = (
     "Linux Audit response could not be created."
 )
+_INTERNAL_SERVER_ERROR_CODE = "INTERNAL_SERVER_ERROR"
+_INTERNAL_SERVER_ERROR_STATUS = 500
+_INTERNAL_SERVER_ERROR_MESSAGE = "The request could not be completed."
 
 _ERROR_CONTRACTS = {
     "MISSING_LINUX_AUDIT_FILES": (
@@ -68,6 +71,10 @@ _ERROR_CONTRACTS = {
         _PROJECTION_ERROR_STATUS,
         _PROJECTION_ERROR_MESSAGE,
     ),
+    _INTERNAL_SERVER_ERROR_CODE: (
+        _INTERNAL_SERVER_ERROR_STATUS,
+        _INTERNAL_SERVER_ERROR_MESSAGE,
+    ),
 }
 
 _UPLOAD_ERROR_CODES = frozenset((
@@ -98,6 +105,7 @@ LinuxAuditApiErrorCode = Literal[
     "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
     "LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR",
     "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR",
+    "INTERNAL_SERVER_ERROR",
 ]
 
 
@@ -281,6 +289,15 @@ class LinuxAuditResponseProjectionError(ValueError):
         self.message = _PROJECTION_ERROR_MESSAGE
 
 
+class LinuxAuditUnexpectedServerError(RuntimeError):
+
+    def __init__(self):
+        super().__init__(_INTERNAL_SERVER_ERROR_MESSAGE)
+        self.code = _INTERNAL_SERVER_ERROR_CODE
+        self.status_code = _INTERNAL_SERVER_ERROR_STATUS
+        self.message = _INTERNAL_SERVER_ERROR_MESSAGE
+
+
 def _projection_error() -> LinuxAuditResponseProjectionError:
     return LinuxAuditResponseProjectionError()
 
@@ -450,6 +467,8 @@ def project_linux_audit_api_error(
         allowed_codes = _ANALYSIS_ERROR_CODES
     elif type(error) is LinuxAuditResponseProjectionError:
         allowed_codes = frozenset((_PROJECTION_ERROR_CODE,))
+    elif type(error) is LinuxAuditUnexpectedServerError:
+        allowed_codes = frozenset((_INTERNAL_SERVER_ERROR_CODE,))
     else:
         return _fixed_projection_error()
 

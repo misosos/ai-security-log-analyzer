@@ -162,7 +162,7 @@ def test_design_document_records_bounded_staging_implementation_boundary():
         "input-1.audit",
         "0600",
         "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
-        "production API, CLI 또는 LLM에서 import/call하지 않으며",
+        "module-level default app은 endpoint를 등록하지 않고",
     ):
         assert contract in text
 
@@ -179,7 +179,7 @@ def test_design_document_records_route_independent_orchestration_boundary():
         "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
         "LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR",
         "Strict Pydantic response/error projection",
-        "API, CLI, LLM 또는 Frontend에서 import/call하지 않는다",
+        "CLI와 API는 loader/parser",
     ):
         assert contract in text
 
@@ -200,6 +200,26 @@ def test_design_document_records_strict_response_projection_boundary():
         "Pydantic validation detail",
         "현재 OpenAPI",
         "default-disabled endpoint integration",
+    ):
+        assert contract in text
+
+
+def test_design_document_records_default_disabled_endpoint_boundary():
+    text = _document_text()
+
+    for contract in (
+        "create_app(*, enable_linux_audit_api: bool = False)",
+        "app = create_app()",
+        "POST /api/analyze-linux-audit",
+        "linux_audit_files",
+        "authentication 또는 authorization이 아니다",
+        "run_in_threadpool()",
+        "Orchestration 성공 후에만",
+        "FastAPI/Starlette request lifecycle",
+        "기본 app에서 POST와 GET은 `404`",
+        "기존 health/analyze route도 각각 한 번",
+        "production enablement를 승인하지 않는다",
+        "LLM, risk 또는 Frontend를 호출하지 않는다",
     ):
         assert contract in text
 
