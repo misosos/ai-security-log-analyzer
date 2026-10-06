@@ -231,6 +231,39 @@ def test_audit_sink_and_retention_policy_are_explicit_and_non_universal():
         assert contract.casefold() in text.casefold()
 
 
+def test_implemented_journald_sink_contract_is_bounded_and_route_independent():
+    text = document_text()
+
+    for contract in (
+        "app/security/linux_audit_api_journald.py",
+        "exact immutable `LinuxAuditApiAccessAuditEvent`",
+        "fixed journald allowlist",
+        "LINUX_AUDIT_EVENT_SCHEMA_VERSION",
+        "LINUX_AUDIT_DURATION_BUCKET",
+        "maximum UTF-8 length of 256 bytes",
+        "limited to 4096 bytes",
+        "V1 application operational bounds",
+        "fails with a fixed bounded initialization error",
+        "There is no logger, syslog, file, stdout/stderr, memory or network fallback",
+        "not yet wired into `create_app()`",
+        "there is no event queue and no automatic retry",
+        "cannot guarantee termination of an already-running blocking send",
+        "does not claim exactly-once delivery",
+        "`close()` is explicit, bounded and idempotent",
+        "does not claim to flush, fsync, persist, forward or delete",
+        "does not prove journald acceptance",
+        "forwarding is a separate host policy",
+    ):
+        assert contract.casefold() in text.casefold()
+
+    for url in (
+        "https://systemd.io/JOURNAL_NATIVE_PROTOCOL/",
+        "https://github.com/systemd/systemd/blob/main/man/systemd.journal-fields.xml",
+        "https://docs.python.org/3/library/asyncio-task.html",
+    ):
+        assert url in text
+
+
 def test_liveness_readiness_startup_and_shutdown_are_distinct():
     text = document_text()
 
