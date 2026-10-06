@@ -2,7 +2,7 @@
 
 ## 1. 목적과 상태
 
-이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C에서는 bounded staging helper를 구현했지만 어떤 production route에도 연결하지 않았다.
+이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C에서는 bounded staging helper를 구현했고 Phase 3Y-D에서는 route-independent analysis orchestration을 구현했지만, 둘 다 어떤 production route에도 연결하지 않았다.
 
 V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 인증과 resource control이 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
 
@@ -84,23 +84,28 @@ Uploaded path는 server가 즉시 안전하게 생성하므로 CLI의 user path 
 
 ## 6. Internal orchestration
 
-CLI `main()`을 호출하거나 stdout을 parsing하지 않는다. 다음 pure producer와 하나의 normalized logs list를 재사용한다.
+CLI `main()`을 호출하거나 stdout을 parsing하지 않는다. 구현된 route-independent orchestration은 다음 pure producer와 하나의 normalized logs list를 재사용한다.
 
 ```text
 bounded upload reader
 → request-scoped temp sources
-→ load_normalized_logs(sources)  # 1회
-→ _analyze_normalized_logs(logs) 또는 Linux Audit 전용 최소 orchestration 검토
+→ load_normalized_logs(sources)  # 정확히 1회
+→ 같은 normalized logs list object
 → aggregate_process_execution_observations(logs)
 → collect_shared_memory_execution_observations(logs)
 → summarize_shared_memory_execution_observations(shared_observations)
 → collect_session_process_co_observations(logs)
 → summarize_session_process_co_observations(relations, shared_observations)
-→ explicit LinuxAuditAnalysisResponse builder
+→ immutable scalar-only LinuxAuditApiAnalysis
+→ 후속 explicit Pydantic response builder
 → cleanup
 ```
 
-V1 public response에는 IP results와 existing `global_correlation`을 포함하지 않으므로 `_analyze_normalized_logs()` 실행도 response에 필요하지 않다. 구현 단계에서는 기존 analysis를 계산하지 않는 Linux Audit summary orchestration을 우선해 dead computation과 상세 correlation 생성을 피한다. CLI와 API는 loader/parser 및 pure aggregate/collector/summary를 공유하되 presentation builder는 분리한다.
+`app/analyzer/linux_audit_api.py`는 staged input을 explicit Linux Audit source config로 투영하고 `load_normalized_logs()`를 정확히 한 번 호출한다. 모든 aggregate/collector에는 같은 normalized logs list object를 전달하고, shared-memory observation tuple도 overall summary와 session-process summary에 동일 객체로 재사용한다. 기존 producer가 반환한 mutable aggregate와 immutable summary의 exact type, key, integer 및 cross-count invariant를 검증한 뒤 16개 non-negative integer만 `LinuxAuditApiAnalysis`에 명시적으로 복사한다. Event, context, observation, relation, path 또는 scope identity는 결과에 보관하지 않는다.
+
+Loader/parser 결과가 비어 있으면 이 orchestration이 `NO_ELIGIBLE_LINUX_AUDIT_EVENTS`(future HTTP 422)를 소유한다. Valid lifecycle-only event나 process observation이 없는 valid event set은 eligible input이며 fixed zero process shape를 반환할 수 있다. Producer shape 또는 count invariant가 깨지면 `LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR`(future HTTP 500)로 제한하고 내부 exception text를 복사하지 않는다. 개별 malformed line이 있어도 하나 이상의 normalized event가 있으면 기존 loader/parser 정책대로 처리한다. Process observation 부재는 execution 또는 attack 부재를 뜻하지 않는다.
+
+V1 public response에는 IP results와 existing `global_correlation`을 포함하지 않으므로 `_analyze_normalized_logs()`를 호출하지 않는다. CLI와 향후 API는 loader/parser 및 pure aggregate/collector/summary를 공유하되 orchestration과 presentation builder는 분리한다. 현재 orchestration은 HTTP response model이 아니며 API, CLI, LLM 또는 Frontend에서 import/call하지 않는다.
 
 필요한 최소 helper는 bounded upload copy/validation, request-scoped temporary lifecycle, Linux Audit summary orchestration, explicit response projection이다. Generic source registry, CLI reuse layer, serializer framework 또는 evidence DTO는 만들지 않는다.
 
@@ -204,10 +209,11 @@ FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server
 
 1. 완료: `/api/upload-test`를 public app에서 제거
 2. 완료: bounded upload/temp lifecycle 및 internal validation error model을 route와 격리해 구현·테스트
-3. Linux Audit summary orchestration과 explicit response models 구현
-4. Success/failure cleanup, canary, LLM/API/CLI isolation acceptance
-5. 운영 resource 측정 후 count/size/concurrency limit 조정
-6. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
+3. 완료: route-independent Linux Audit summary orchestration과 immutable scalar-only internal result 구현
+4. Strict Pydantic response/error projection과 default-disabled endpoint integration
+5. Success/failure cleanup, canary, LLM/API/CLI isolation acceptance
+6. 운영 resource 측정 후 count/size/concurrency limit 조정
+7. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
 
 V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detailed evidence download, asynchronous job queue, real-time ingestion, cross-request deduplication, risk/ATT&CK verdict, Gemini summary, 기존 `/api/analyze` migration과 Frontend integration이다.
 
@@ -247,4 +253,4 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 이 설계는 인증 system, rate limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
 
-다음 구현 우선순위는 (1) default-disabled endpoint와 production auth/resource gate, (2) loader/parser 이후 no-eligible-event orchestration, (3) strict response/error models, (4) endpoint-level canary와 concurrency acceptance다. Bounded staging helper는 아직 production API, CLI 또는 LLM에서 import/call하지 않으며, 이 helper 구현만으로 production enablement gate가 충족되지는 않는다.
+다음 구현 우선순위는 (1) Strict Pydantic response/error projection, (2) default-disabled endpoint와 production auth/resource gate, (3) endpoint-level canary와 concurrency acceptance다. Bounded staging helper는 아직 production API, CLI 또는 LLM에서 import/call하지 않으며, route-independent orchestration도 API, CLI, LLM 또는 Frontend에서 import/call하지 않는다. 이 내부 구현만으로 production enablement gate가 충족되지는 않는다.

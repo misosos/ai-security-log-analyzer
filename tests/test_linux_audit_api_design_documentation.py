@@ -167,6 +167,23 @@ def test_design_document_records_bounded_staging_implementation_boundary():
         assert contract in text
 
 
+def test_design_document_records_route_independent_orchestration_boundary():
+    text = _document_text()
+
+    for contract in (
+        "app/analyzer/linux_audit_api.py",
+        "load_normalized_logs()`를 정확히 한 번",
+        "같은 normalized logs list object",
+        "LinuxAuditApiAnalysis",
+        "16개 non-negative integer",
+        "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
+        "LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR",
+        "Strict Pydantic response/error projection",
+        "API, CLI, LLM 또는 Frontend에서 import/call하지 않는다",
+    ):
+        assert contract in text
+
+
 def test_document_has_no_fixture_evidence_and_related_document_links_to_it():
     text = _document_text()
 
