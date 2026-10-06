@@ -2,31 +2,32 @@
 
 ## 1. 목적과 상태
 
-이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다.
+이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다.
 
 V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 인증과 resource control이 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
 
 ## 2. 현재 API 조사 결과
 
-`app/api.py`가 `FastAPI` app을 만들며 현재 route는 다음 세 개다.
+`app/api.py`가 `FastAPI` app을 만들며 현재 route는 다음 두 개다.
 
 | Method | Route | 실제 동작 |
 |---|---|---|
 | GET | `/api/health` | `{"status": "ok"}` 반환 |
-| POST | `/api/upload-test` | 단일 upload를 임시 파일에 쓴 뒤 client filename, content type, temporary path를 응답하고 삭제 |
 | POST | `/api/analyze` | application/SSH/access 파일을 각각 요구하고 `analyze(log_sources)` 결과를 `AnalysisResponse`로 projection |
 
-`save_upload_to_temp()`는 client filename의 suffix가 `.log` 또는 `.txt`인지 확인하고 `UploadFile.file.read()`로 전체 content를 메모리에 읽는다. Empty file과 10 MiB 초과 파일을 HTTP `400`으로 거부한 뒤 `NamedTemporaryFile(delete=False)`에 기록한다. `/api/analyze`는 생성된 path만 list에 넣고 `finally`에서 성공·분석 실패 시 삭제한다. 저장 도중 실패한 파일, process 종료 또는 강제 취소까지 cleanup을 보장하는 별도 abstraction은 없다.
+과거 `/api/upload-test`는 단일 upload를 임시 파일에 쓴 뒤 client filename, 신뢰할 수 없는 content type 및 실제 temporary path를 응답했다. Consumer가 없어 Phase 3Y-B에서 handler를 완전히 제거했으며 POST와 GET은 `404`이고 OpenAPI `paths`에도 존재하지 않는다. 개발용 upload 진단은 public HTTP endpoint가 아니라 `TestClient`와 private test helper로 수행한다.
+
+`save_upload_to_temp()`는 `/api/analyze`가 계속 공유한다. 이 helper는 client filename의 suffix가 `.log` 또는 `.txt`인지 확인하고 `UploadFile.file.read()`로 전체 content를 메모리에 읽는다. Empty file과 10 MiB 초과 파일을 HTTP `400`으로 거부한 뒤 `NamedTemporaryFile(delete=False)`에 기록한다. `/api/analyze`는 생성된 path만 list에 넣고 `finally`에서 성공·분석 실패 시 삭제한다. 저장 도중 실패한 파일, process 종료 또는 강제 취소까지 cleanup을 보장하는 별도 abstraction은 없다.
 
 `/api/analyze`의 multipart field는 `application_file`, `ssh_file`, `access_file`이며 Linux Audit field는 없다. `AnalysisResponse`는 `analysis_id`, `status`, IP summary, IP result list, arbitrary `global_correlation` dict와 nullable `ai_summary`를 포함한다. Builder는 detection evidence를 명시적으로 복사하지만 `correlation`, `risk_factors`, `global_correlation`은 dict로 전달한다. 현재 endpoint는 LLM 함수를 호출하지 않고 `ai_summary=None`을 반환한다.
 
-Custom exception handler, 인증·인가, rate limit, request-wide size limit 또는 duplicate upload 판정은 없다. FastAPI의 기본 validation error 형식을 사용한다. `frontend/` 파일은 비어 있어 endpoint나 response에 대한 실행 가능한 Frontend 의존은 현재 없다. API test는 response builder contract만 검증하며 route/upload lifecycle의 `TestClient` 검증은 없다.
+Custom exception handler, 인증·인가, rate limit, request-wide size limit 또는 duplicate upload 판정은 없다. FastAPI의 기본 validation error 형식을 사용한다. `frontend/` 파일은 비어 있어 endpoint나 response에 대한 실행 가능한 Frontend 의존은 현재 없다. API tests는 response builder contract와 제거된 route, health/analyze 및 upload cleanup을 `TestClient`로 검증한다.
 
 ### 발견한 위험과 결함
 
-1. `/api/upload-test`는 인증 없이 client filename, spoofable content type 및 실제 temporary path를 응답한다. Production-like public route로 배포하면 path disclosure가 된다. 후속 구현 전에 제거하거나 명시적 test/development 환경에서만 등록해야 한다.
+1. Phase 3Y-B에서 `/api/upload-test`를 제거해 client filename, spoofable content type 및 실제 temporary path를 반환하던 public 공격 표면을 닫았다. Alias, feature flag 또는 대체 public test route는 두지 않는다.
 2. `UploadFile` 자체는 spooled file이지만 현재 helper가 전체를 다시 `read()`하므로 파일 content가 메모리에 복제된다. Loader도 grouped event와 normalized logs를 메모리에 유지한다.
-3. Client filename extension만 검사하고 content type은 반환할 뿐 검증하지 않는다. 둘 다 trust signal이 아니다.
+3. `/api/analyze`는 client filename extension만 검사하고 content type은 사용하지 않는다. 둘 다 신뢰 가능한 content 판별 신호가 아니다.
 4. `global_correlation`은 고정 response model이 아닌 arbitrary dict다. 현재 builder test에서도 `source_instance`, `node`, Audit session ID, event ID와 timestamp가 그대로 보존된다. Linux Audit 결과를 기존 `AnalysisResponse`에 넣으면 신규 count-only privacy 정책과 충돌한다.
 5. 예상하지 못한 exception을 bounded API error로 바꾸는 endpoint-specific 경계가 없고, 인증·request rate/concurrency 제한도 없다.
 
@@ -174,13 +175,13 @@ Server log allowlist는 request correlation ID, route, status, stable error code
 
 Count-only response도 resource consumption과 조직 활동량을 노출할 수 있으므로 무인증 public exposure를 승인하지 않는다. Detailed forensic evidence는 count-only 권한과 별개이며 RBAC, purpose limitation, access audit, export control, retention 및 deletion이 선행되기 전에는 endpoint 자체를 만들지 않는다. Raw upload는 response 후 보존하지 않는 것이 V1 기본 정책이다.
 
-`/api/upload-test`의 filename/content type/temp path 응답은 신규 endpoint 구현 전에 제거하거나 test/development-only registration으로 제한하는 것이 최우선 hardening 항목이다.
+`/api/upload-test`의 filename/content type/temp path 응답은 Phase 3Y-B에서 public app으로부터 제거되었다. 이 제거는 신규 endpoint의 feature gate, 인증·인가 또는 resource control을 대신하지 않는다.
 
 ## 11. 구현 테스트 계획
 
 FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server나 LLM provider를 호출하지 않는다.
 
-1. `/api/health`, `/api/analyze`와 `AnalysisResponse` 회귀, `/api/upload-test` hardening 상태 확인
+1. `/api/health`, `/api/analyze`와 `AnalysisResponse` 회귀, 제거된 `/api/upload-test`의 `404`와 OpenAPI 부재 확인
 2. Feature disabled 기본 상태와 explicit test enable
 3. 단일/repeatable `linux_audit_files`, 최대 count 및 input ordering
 4. Deterministic invocation-local source_instance와 request 간/concurrent request 격리
@@ -201,7 +202,7 @@ FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server
 
 ## 12. Rollout 단계와 non-goals
 
-1. `/api/upload-test` 제거 또는 dev-only 제한, endpoint feature flag와 auth/rate-limit gate 정의
+1. 완료: `/api/upload-test`를 public app에서 제거. 다음으로 endpoint feature flag와 auth/rate-limit gate 정의
 2. Bounded upload/temp lifecycle 및 error model을 독립 구현·테스트
 3. Linux Audit summary orchestration과 explicit response models 구현
 4. Success/failure cleanup, canary, LLM/API/CLI isolation acceptance
@@ -246,4 +247,4 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 이 설계는 인증 system, rate limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
 
-다음 구현 우선순위는 (1) `/api/upload-test` path disclosure 제거/dev-only 제한, (2) default-disabled endpoint와 production auth/resource gate, (3) bounded chunk copy 및 cleanup, (4) strict response/error models, (5) canary와 concurrency acceptance다. 이 gate가 충족되기 전 Linux Audit API를 production-public로 활성화하지 않는다.
+다음 구현 우선순위는 (1) default-disabled endpoint와 production auth/resource gate, (2) bounded chunk copy 및 cleanup, (3) strict response/error models, (4) canary와 concurrency acceptance다. `/api/upload-test` 제거만으로 이 gate가 충족되지는 않으며, 그 전에는 Linux Audit API를 production-public로 활성화하지 않는다.

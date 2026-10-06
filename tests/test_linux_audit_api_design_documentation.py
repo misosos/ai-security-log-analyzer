@@ -125,6 +125,8 @@ def test_design_document_keeps_llm_frontend_and_auth_boundaries_explicit():
     assert "Detailed forensic evidence" in text
     assert "RBAC" in text
     assert "`/api/upload-test`" in text
+    assert "public app과 OpenAPI schema에서 제거" in text
+    assert "private test helper" in text
     assert "temporary path" in text
 
 

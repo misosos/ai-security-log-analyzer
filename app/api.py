@@ -137,21 +137,6 @@ def health_check():
     }
 
 
-@app.post("/api/upload-test")
-async def upload_test(file: UploadFile = File(...)):
-    temp_path = save_upload_to_temp(file)
-
-    try:
-        return {
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "temp_path": temp_path,
-        }
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-
 @app.post(
     "/api/analyze",
     response_model=AnalysisResponse,
