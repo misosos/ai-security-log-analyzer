@@ -145,8 +145,26 @@ def test_design_document_includes_implementation_tests_and_primary_sources():
         assert planned_test.casefold() in text.casefold()
 
     assert REQUIRED_URLS <= set(text.split())
-    assert "접근일: 2026-09-26" in text
+    assert "접근일: 2026-10-06" in text
     assert "보장하지 않는다" in text
+
+
+def test_design_document_records_bounded_staging_implementation_boundary():
+    text = _document_text()
+
+    for contract in (
+        "app/api_uploads.py",
+        "64 KiB",
+        "incremental strict UTF-8",
+        "EMPTY_LINUX_AUDIT_FILE",
+        "UNSUPPORTED_LINUX_AUDIT_INPUT",
+        "request-local set",
+        "input-1.audit",
+        "0600",
+        "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
+        "production API, CLI 또는 LLM에서 import/call하지 않으며",
+    ):
+        assert contract in text
 
 
 def test_document_has_no_fixture_evidence_and_related_document_links_to_it():

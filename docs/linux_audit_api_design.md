@@ -2,7 +2,7 @@
 
 ## 1. 목적과 상태
 
-이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다.
+이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C에서는 bounded staging helper를 구현했지만 어떤 production route에도 연결하지 않았다.
 
 V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 인증과 resource control이 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
 
@@ -58,15 +58,15 @@ V1은 후보 B를 선택한다. Linux Audit만으로 기존 IP analysis를 반�
 
 `UploadFile.filename`, extension과 `content_type`은 신뢰하지 않고 response, source identity, temp path 또는 log metadata에 복사하지 않는다. V1은 filename extension allowlist를 security boundary로 사용하지 않는다. Known archive/compression input과 strict UTF-8 decode failure를 거부하고, parser가 해석할 수 있는 Audit structure를 실제 content contract로 사용한다.
 
-File은 fixed-size chunk로 읽어 per-file 및 aggregate byte count를 초과하는 즉시 중단한다. Empty byte stream은 거부한다. Whitespace-only 또는 non-empty all-malformed input은 normalized Linux Audit event가 없으므로 `NO_ELIGIBLE_LINUX_AUDIT_EVENTS`로 거부한다. 개별 malformed line은 기존 loader/parser처럼 skip하고 유효 group은 계속 처리한다.
+`app/api_uploads.py`의 staging helper는 64 KiB fixed-size chunk로 읽어 per-file 및 aggregate byte count를 초과하는 즉시 중단한다. 전체 content나 decode된 전체 문자열을 메모리에 조립하지 않고 generated request-local file에 기록하면서 SHA-256, byte count와 incremental strict UTF-8 상태만 유지한다. Empty와 whitespace-only input은 `EMPTY_LINUX_AUDIT_FILE`로 거부하고 NUL-containing input은 plain-text contract에 맞지 않아 `UNSUPPORTED_LINUX_AUDIT_INPUT`으로 거부한다. Non-empty all-malformed input은 staging을 통과하며 `NO_ELIGIBLE_LINUX_AUDIT_EVENTS` 판정은 후속 loader/parser orchestration 책임이다. 개별 malformed line은 기존 loader/parser처럼 skip하고 유효 group은 계속 처리한다.
 
 각 accepted input에는 순서대로 `api-linux-audit-1`, `api-linux-audit-2` 같은 invocation-local `source_instance`를 부여한다. 이는 host/node/cross-request identity가 아니며 response에 표시하지 않는다. Input order는 source isolation을 위한 결정론만 제공하고 arrival order 또는 causation이 아니다.
 
-Chunk copy 중 SHA-256과 byte count를 계산해 동일 request 안에서 같은 content digest와 size를 가진 input은 duplicate로 거부한다. Digest는 source/process identity가 아니며 response에 반환하지 않는다. Silent deduplication은 하지 않는다.
+Chunk copy 중 SHA-256과 byte count를 계산해 동일 request 안에서 같은 content digest와 size를 가진 input은 duplicate로 거부한다. Digest는 request-local set에만 존재하며 staged result, log 또는 response에 반환하지 않는다. Silent deduplication과 request 간 cache는 사용하지 않는다. ZIP, gzip, bzip2, xz의 일반적인 leading signature와 tar의 `ustar` marker를 bounded prefix로 거부하지만 완전한 file-type 또는 polyglot 탐지를 주장하지 않는다.
 
 ## 5. Temporary file과 cleanup lifecycle
 
-현재 loader가 filesystem path를 요구하므로 V1은 request별 `TemporaryDirectory` 또는 동등한 isolated lifecycle을 사용한다. Server가 생성한 basename만 사용하고 client filename을 path에 사용하지 않는다. File permission은 process 전용으로 제한하고 webroot 밖에 둔다.
+현재 loader가 filesystem path를 요구하므로 implemented staging helper는 request별 `TemporaryDirectory`를 사용한다. `input-1.audit`처럼 server가 생성한 basename만 사용하고 client filename, extension과 content type을 validation이나 path에 사용하지 않는다. File permission은 process 전용 `0600`으로 제한한다.
 
 ```text
 request accepted
@@ -78,7 +78,7 @@ request accepted
 → finally/context exit에서 모든 file과 directory cleanup
 ```
 
-Cleanup은 success, validation/parser/collector/summary/response failure와 request cancellation 경로에서 실행한다. Cleanup 실패는 response에 path를 노출하지 않고 protected server logging 대상으로 삼는다. Process kill, host crash 및 storage failure까지 in-process `finally`가 절대 보장하지는 않으므로 startup stale-artifact cleanup과 OS-level temporary storage policy가 운영 보완책이다.
+Helper가 소유한 directory cleanup은 정상 context 종료, staging validation failure, caller body의 parser/collector/summary 모의 failure와 request cancellation 경로에서 `finally`로 실행한다. Cleanup 오류를 성공으로 삼키지 않으며 path 없는 고정 내부 오류로 바꾼다. Process kill, host crash 및 storage failure까지 in-process `finally`가 절대 보장하지는 않으므로 startup stale-artifact cleanup과 OS-level temporary storage policy가 운영 보완책이다.
 
 Uploaded path는 server가 즉시 안전하게 생성하므로 CLI의 user path symlink/TOCTOU contract와 동일하지 않다. 그럼에도 file creation과 later loader open 사이의 filesystem 상태 변화 가능성을 완전히 제거한다고 주장하지 않는다.
 
@@ -157,7 +157,7 @@ Error response는 고정 shape `{"error": {"code": "...", "message": "..."}}`만
 | 파일 개수 초과 | 413 | `LINUX_AUDIT_FILE_COUNT_EXCEEDED` | `Linux Audit file count limit exceeded.` |
 | 파일별 크기 초과 | 413 | `LINUX_AUDIT_FILE_TOO_LARGE` | `A Linux Audit file exceeds the size limit.` |
 | content 합계 초과 | 413 | `LINUX_AUDIT_REQUEST_TOO_LARGE` | `Linux Audit upload size limit exceeded.` |
-| empty file | 400 | `EMPTY_LINUX_AUDIT_FILE` | `A Linux Audit file is empty.` |
+| empty/whitespace-only file | 400 | `EMPTY_LINUX_AUDIT_FILE` | `A Linux Audit file is empty or contains only whitespace.` |
 | strict UTF-8 decode 실패 | 400 | `INVALID_LINUX_AUDIT_ENCODING` | `Linux Audit input must be valid UTF-8.` |
 | archive/compression 등 unsupported | 415 | `UNSUPPORTED_LINUX_AUDIT_INPUT` | `Linux Audit input format is not supported.` |
 | duplicate content | 409 | `DUPLICATE_LINUX_AUDIT_FILE` | `Duplicate Linux Audit input is not allowed.` |
@@ -202,8 +202,8 @@ FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server
 
 ## 12. Rollout 단계와 non-goals
 
-1. 완료: `/api/upload-test`를 public app에서 제거. 다음으로 endpoint feature flag와 auth/rate-limit gate 정의
-2. Bounded upload/temp lifecycle 및 error model을 독립 구현·테스트
+1. 완료: `/api/upload-test`를 public app에서 제거
+2. 완료: bounded upload/temp lifecycle 및 internal validation error model을 route와 격리해 구현·테스트
 3. Linux Audit summary orchestration과 explicit response models 구현
 4. Success/failure cleanup, canary, LLM/API/CLI isolation acceptance
 5. 운영 resource 측정 후 count/size/concurrency limit 조정
@@ -213,7 +213,7 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 ## 13. 공식 근거
 
-접근일: 2026-09-26
+접근일: 2026-10-06
 
 - FastAPI, *Request Files*, `UploadFile`, multiple uploads, multipart sections.
   https://fastapi.tiangolo.com/tutorial/request-files/
@@ -247,4 +247,4 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 이 설계는 인증 system, rate limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
 
-다음 구현 우선순위는 (1) default-disabled endpoint와 production auth/resource gate, (2) bounded chunk copy 및 cleanup, (3) strict response/error models, (4) canary와 concurrency acceptance다. `/api/upload-test` 제거만으로 이 gate가 충족되지는 않으며, 그 전에는 Linux Audit API를 production-public로 활성화하지 않는다.
+다음 구현 우선순위는 (1) default-disabled endpoint와 production auth/resource gate, (2) loader/parser 이후 no-eligible-event orchestration, (3) strict response/error models, (4) endpoint-level canary와 concurrency acceptance다. Bounded staging helper는 아직 production API, CLI 또는 LLM에서 import/call하지 않으며, 이 helper 구현만으로 production enablement gate가 충족되지는 않는다.
