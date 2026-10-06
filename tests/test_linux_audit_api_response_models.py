@@ -38,6 +38,10 @@ from app.models.linux_audit_api import (
     build_linux_audit_api_response,
     project_linux_audit_api_error,
 )
+from app.security.linux_audit_api import (
+    LinuxAuditApiAuthenticationError,
+    LinuxAuditApiAuthorizationError,
+)
 
 
 FIXTURE_DIR = Path("sample_logs")
@@ -112,6 +116,14 @@ ERROR_CONTRACTS = {
     "INTERNAL_SERVER_ERROR": (
         500,
         "The request could not be completed.",
+    ),
+    "LINUX_AUDIT_AUTHENTICATION_REQUIRED": (
+        401,
+        "Authentication is required.",
+    ),
+    "LINUX_AUDIT_ACCESS_DENIED": (
+        403,
+        "Access is denied.",
     ),
 }
 
@@ -511,6 +523,10 @@ def test_all_known_errors_project_to_fixed_status_and_envelope(code):
         error = LinuxAuditResponseProjectionError()
     elif code == "INTERNAL_SERVER_ERROR":
         error = LinuxAuditUnexpectedServerError()
+    elif code == "LINUX_AUDIT_AUTHENTICATION_REQUIRED":
+        error = LinuxAuditApiAuthenticationError()
+    elif code == "LINUX_AUDIT_ACCESS_DENIED":
+        error = LinuxAuditApiAuthorizationError()
     else:
         error = LinuxAuditUploadValidationError(code)
 

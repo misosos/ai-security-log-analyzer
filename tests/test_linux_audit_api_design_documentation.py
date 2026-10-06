@@ -120,7 +120,8 @@ def test_design_document_keeps_llm_frontend_and_auth_boundaries_explicit():
     assert "Gemini 또는 다른 LLM provider를 호출하지 않는다" in text
     assert "aggregate count도" in text
     assert "Frontend files는 현재 비어" in text
-    assert "authentication, authorization" in text
+    assert "bearer authentication" in text
+    assert "linux-audit:analyze" in text
     assert "기본 비활성화" in text
     assert "Detailed forensic evidence" in text
     assert "RBAC" in text
@@ -162,7 +163,7 @@ def test_design_document_records_bounded_staging_implementation_boundary():
         "input-1.audit",
         "0600",
         "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
-        "module-level default app은 endpoint를 등록하지 않고",
+        "Module-level default app은 endpoint를 등록하지 않으며",
     ):
         assert contract in text
 
@@ -208,17 +209,20 @@ def test_design_document_records_default_disabled_endpoint_boundary():
     text = _document_text()
 
     for contract in (
-        "create_app(*, enable_linux_audit_api: bool = False)",
+        "enable_linux_audit_api: bool = False",
+        "linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None",
         "app = create_app()",
         "POST /api/analyze-linux-audit",
         "linux_audit_files",
-        "authentication 또는 authorization이 아니다",
+        "feature gate는 여전히 인증이 아니다",
+        "bearer authentication",
+        "linux-audit:analyze",
         "run_in_threadpool()",
         "Orchestration 성공 후에만",
         "FastAPI/Starlette request lifecycle",
         "기본 app에서 POST와 GET은 `404`",
         "기존 health/analyze route도 각각 한 번",
-        "production enablement를 승인하지 않는다",
+        "production enablement gate가 충족되지는 않는다",
         "LLM, risk 또는 Frontend를 호출하지 않는다",
     ):
         assert contract in text

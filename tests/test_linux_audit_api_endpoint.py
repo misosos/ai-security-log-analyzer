@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -8,6 +9,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 import app.analyzer.llm as llm_module
 import app.api as api_module
@@ -18,6 +20,7 @@ from app.analyzer.linux_audit_api import (
 from app.models.linux_audit_api import (
     LinuxAuditResponseProjectionError,
 )
+from app.security.linux_audit_api import LinuxAuditApiSecurityConfig
 
 
 ENDPOINT = "/api/analyze-linux-audit"
@@ -36,10 +39,26 @@ LINKED_FIXTURE = (
 )
 ANALYSIS_ID = UUID("12345678-1234-5678-9abc-def012345678")
 CANARY = "SYNTHETIC_PROCESS_SECRET_DO_NOT_EXPOSE"
+OPERATOR_TOKEN = base64.urlsafe_b64encode(bytes(range(32))).rstrip(
+    b"="
+).decode("ascii")
+AUTH_HEADERS = {"Authorization": f"Bearer {OPERATOR_TOKEN}"}
+SECURITY_CONFIG = LinuxAuditApiSecurityConfig(
+    operator_token=SecretStr(OPERATOR_TOKEN),
+    principal_id="test-operator",
+    max_concurrent_analyses=1,
+)
 
 
 def enabled_app():
-    return api_module.create_app(enable_linux_audit_api=True)
+    return api_module.create_app(
+        enable_linux_audit_api=True,
+        linux_audit_api_security=SECURITY_CONFIG,
+    )
+
+
+def enabled_client():
+    return TestClient(enabled_app(), headers=AUTH_HEADERS)
 
 
 def multipart_file(
@@ -169,7 +188,16 @@ def test_enabled_route_and_openapi_are_exact_and_app_instances_are_isolated():
         assert operation["responses"]["200"]["content"][
             "application/json"
         ]["schema"]["$ref"].endswith("/LinuxAuditAnalysisResponse")
-        for status_code in ("400", "409", "413", "415", "422", "500"):
+        for status_code in (
+            "400",
+            "401",
+            "403",
+            "409",
+            "413",
+            "415",
+            "422",
+            "500",
+        ):
             assert operation["responses"][status_code]["content"][
                 "application/json"
             ]["schema"]["$ref"].endswith(
@@ -183,6 +211,13 @@ def test_enabled_route_and_openapi_are_exact_and_app_instances_are_isolated():
         ]["properties"]
         assert set(request_properties) == {"linux_audit_files"}
         assert CANARY not in json.dumps(schema, sort_keys=True)
+        assert operation["security"] == [
+            {"LinuxAuditOperatorBearer": []}
+        ]
+        assert set(schema["components"]["securitySchemes"]) == {
+            "LinuxAuditOperatorBearer"
+        }
+        assert OPERATOR_TOKEN not in json.dumps(schema, sort_keys=True)
 
     assert first is not second
     assert first.router is not second.router
@@ -191,7 +226,7 @@ def test_enabled_route_and_openapi_are_exact_and_app_instances_are_isolated():
 
 
 def test_missing_or_zero_files_use_the_bounded_error_envelope():
-    client = TestClient(enabled_app())
+    client = enabled_client()
 
     for response in (
         client.post(ENDPOINT),
@@ -216,7 +251,7 @@ def test_missing_or_zero_files_use_the_bounded_error_envelope():
 
 
 def test_file_count_limit_maps_to_413_before_analysis():
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=[multipart_file(str(index).encode()) for index in range(5)],
     )
@@ -230,7 +265,7 @@ def test_file_count_limit_maps_to_413_before_analysis():
 
 
 def test_per_file_and_total_size_limits_map_to_413(monkeypatch):
-    client = TestClient(enabled_app())
+    client = enabled_client()
     monkeypatch.setattr(
         uploads_module,
         "LINUX_AUDIT_MAX_FILE_SIZE_BYTES",
@@ -339,7 +374,7 @@ def test_content_validation_errors_use_fixed_envelopes(
     code,
     message,
 ):
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=[multipart_file(
             content,
@@ -359,7 +394,7 @@ def test_content_validation_errors_use_fixed_envelopes(
 
 
 def test_duplicate_and_all_malformed_inputs_use_fixed_envelopes():
-    client = TestClient(enabled_app())
+    client = enabled_client()
     duplicate = b"same nonempty content"
     duplicate_response = client.post(
         ENDPOINT,
@@ -426,7 +461,7 @@ def test_analysis_and_projection_failures_use_existing_bounded_mapping(
         ),
         fail,
     )
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=fixture_files(LINKED_FIXTURE),
     )
@@ -449,7 +484,7 @@ def test_uuid_is_not_generated_before_staging_and_analysis_succeed(
         raise AssertionError("UUID must not be generated for failed analysis")
 
     monkeypatch.setattr(api_module.uuid, "uuid4", unexpected_uuid)
-    missing = TestClient(enabled_app()).post(ENDPOINT)
+    missing = enabled_client().post(ENDPOINT)
     assert missing.status_code == 422
 
     def fail_analysis(staged_inputs):
@@ -462,7 +497,7 @@ def test_uuid_is_not_generated_before_staging_and_analysis_succeed(
         "analyze_staged_linux_audit_inputs",
         fail_analysis,
     )
-    failed_analysis = TestClient(enabled_app()).post(
+    failed_analysis = enabled_client().post(
         ENDPOINT,
         files=fixture_files(LINKED_FIXTURE),
     )
@@ -483,7 +518,7 @@ def test_unexpected_internal_error_is_fixed_and_contains_no_private_text(
         "analyze_staged_linux_audit_inputs",
         fail,
     )
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=fixture_files(LINKED_FIXTURE),
     )
@@ -550,7 +585,7 @@ def test_success_calls_each_layer_once_in_threadpool_and_cleans_up(
     )
     monkeypatch.setattr(api_module, "run_in_threadpool", tracked_threadpool)
     monkeypatch.setattr(api_module.uuid, "uuid4", lambda: ANALYSIS_ID)
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=[multipart_file(
             LINKED_FIXTURE.read_bytes(),
@@ -618,7 +653,7 @@ def test_enabled_endpoint_fixture_acceptance(
     monkeypatch,
 ):
     monkeypatch.setattr(api_module.uuid, "uuid4", lambda: ANALYSIS_ID)
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=fixture_files(*paths),
     )
@@ -685,7 +720,7 @@ def test_cleanup_is_preserved_for_every_post_staging_failure(
         ),
         fail,
     )
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=fixture_files(LINKED_FIXTURE),
     )
@@ -697,7 +732,7 @@ def test_cleanup_is_preserved_for_every_post_staging_failure(
 
 def test_staging_failure_and_cancellation_cleanup(monkeypatch, tmp_path):
     directories = track_request_directories(monkeypatch, tmp_path)
-    invalid_response = TestClient(enabled_app()).post(
+    invalid_response = enabled_client().post(
         ENDPOINT,
         files=[multipart_file(b"\xff")],
     )
@@ -745,7 +780,7 @@ def test_concurrent_requests_have_isolated_staging_and_deterministic_counts(
     configured_app = enabled_app()
 
     def request(path):
-        return TestClient(configured_app).post(
+        return TestClient(configured_app, headers=AUTH_HEADERS).post(
             ENDPOINT,
             files=fixture_files(path),
         )
@@ -774,7 +809,7 @@ def test_success_privacy_canary_and_existing_llm_boundary(
     monkeypatch.setattr(llm_module.genai, "Client", fail_llm)
     monkeypatch.setattr(api_module, "analyze", fail_llm)
     monkeypatch.setattr(api_module.uuid, "uuid4", lambda: ANALYSIS_ID)
-    response = TestClient(enabled_app()).post(
+    response = enabled_client().post(
         ENDPOINT,
         files=[multipart_file(
             SHARED_FIXTURE.read_bytes(),

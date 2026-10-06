@@ -2,7 +2,7 @@ import os
 import tempfile
 import uuid
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -29,6 +29,16 @@ from app.models.schemas import (
     AnalysisSummary,
     DetectionResponse,
     EvidenceResponse,
+)
+from app.security.linux_audit_api import (
+    LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
+    LinuxAuditApiAuthenticationError,
+    LinuxAuditApiAuthorizationError,
+    LinuxAuditApiSecurityConfig,
+    LinuxAuditApiSecurityConfigurationError,
+    create_linux_audit_authentication_dependency,
+    create_linux_audit_authorization_dependency,
+    prepare_linux_audit_api_security,
 )
 
 
@@ -194,10 +204,26 @@ async def analyze_logs(
 
 def _linux_audit_error_response(error: object) -> JSONResponse:
     projected = project_linux_audit_api_error(error)
+    headers = None
+    if (
+        projected.status_code == 401
+        and projected.body.error.code
+        == LINUX_AUDIT_AUTHENTICATION_ERROR_CODE
+    ):
+        headers = {"WWW-Authenticate": "Bearer"}
     return JSONResponse(
         status_code=projected.status_code,
         content=projected.body.model_dump(mode="json"),
+        headers=headers,
     )
+
+
+async def _linux_audit_security_error_handler(
+    request: Request,
+    error: LinuxAuditApiAuthenticationError
+    | LinuxAuditApiAuthorizationError,
+) -> JSONResponse:
+    return _linux_audit_error_response(error)
 
 
 async def analyze_linux_audit_logs(
@@ -226,9 +252,34 @@ async def analyze_linux_audit_logs(
         )
 
 
-def create_app(*, enable_linux_audit_api: bool = False) -> FastAPI:
+def create_app(
+    *,
+    enable_linux_audit_api: bool = False,
+    linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
+) -> FastAPI:
     if type(enable_linux_audit_api) is not bool:
         raise TypeError("enable_linux_audit_api must be a bool")
+
+    prepared_security = None
+    authorization_dependency = None
+    if enable_linux_audit_api:
+        if linux_audit_api_security is None:
+            raise LinuxAuditApiSecurityConfigurationError()
+        prepared_security = prepare_linux_audit_api_security(
+            linux_audit_api_security
+        )
+        authentication_dependency = (
+            create_linux_audit_authentication_dependency(
+                prepared_security
+            )
+        )
+        authorization_dependency = (
+            create_linux_audit_authorization_dependency(
+                authentication_dependency
+            )
+        )
+    elif linux_audit_api_security is not None:
+        raise LinuxAuditApiSecurityConfigurationError()
 
     configured_app = FastAPI(
         title="AI Security Log Analyzer",
@@ -248,14 +299,32 @@ def create_app(*, enable_linux_audit_api: bool = False) -> FastAPI:
     )
 
     if enable_linux_audit_api:
+        configured_app.add_exception_handler(
+            LinuxAuditApiAuthenticationError,
+            _linux_audit_security_error_handler,
+        )
+        configured_app.add_exception_handler(
+            LinuxAuditApiAuthorizationError,
+            _linux_audit_security_error_handler,
+        )
         configured_app.add_api_route(
             "/api/analyze-linux-audit",
             analyze_linux_audit_logs,
             methods=["POST"],
             response_model=LinuxAuditAnalysisResponse,
+            dependencies=[Depends(authorization_dependency)],
             responses={
                 status_code: {"model": LinuxAuditApiErrorResponse}
-                for status_code in (400, 409, 413, 415, 422, 500)
+                for status_code in (
+                    400,
+                    401,
+                    403,
+                    409,
+                    413,
+                    415,
+                    422,
+                    500,
+                )
             },
         )
 

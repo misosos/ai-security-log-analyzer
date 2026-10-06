@@ -15,6 +15,16 @@ from app.analyzer.linux_audit_api import (
     LinuxAuditApiAnalysis,
 )
 from app.api_uploads import LinuxAuditUploadValidationError
+from app.security.linux_audit_api import (
+    LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
+    LINUX_AUDIT_AUTHENTICATION_ERROR_MESSAGE,
+    LINUX_AUDIT_AUTHENTICATION_ERROR_STATUS,
+    LINUX_AUDIT_AUTHORIZATION_ERROR_CODE,
+    LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE,
+    LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS,
+    LinuxAuditApiAuthenticationError,
+    LinuxAuditApiAuthorizationError,
+)
 
 
 _PROJECTION_ERROR_CODE = "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR"
@@ -75,6 +85,14 @@ _ERROR_CONTRACTS = {
         _INTERNAL_SERVER_ERROR_STATUS,
         _INTERNAL_SERVER_ERROR_MESSAGE,
     ),
+    LINUX_AUDIT_AUTHENTICATION_ERROR_CODE: (
+        LINUX_AUDIT_AUTHENTICATION_ERROR_STATUS,
+        LINUX_AUDIT_AUTHENTICATION_ERROR_MESSAGE,
+    ),
+    LINUX_AUDIT_AUTHORIZATION_ERROR_CODE: (
+        LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS,
+        LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE,
+    ),
 }
 
 _UPLOAD_ERROR_CODES = frozenset((
@@ -106,6 +124,8 @@ LinuxAuditApiErrorCode = Literal[
     "LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR",
     "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR",
     "INTERNAL_SERVER_ERROR",
+    "LINUX_AUDIT_AUTHENTICATION_REQUIRED",
+    "LINUX_AUDIT_ACCESS_DENIED",
 ]
 
 
@@ -469,6 +489,14 @@ def project_linux_audit_api_error(
         allowed_codes = frozenset((_PROJECTION_ERROR_CODE,))
     elif type(error) is LinuxAuditUnexpectedServerError:
         allowed_codes = frozenset((_INTERNAL_SERVER_ERROR_CODE,))
+    elif type(error) is LinuxAuditApiAuthenticationError:
+        allowed_codes = frozenset((
+            LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
+        ))
+    elif type(error) is LinuxAuditApiAuthorizationError:
+        allowed_codes = frozenset((
+            LINUX_AUDIT_AUTHORIZATION_ERROR_CODE,
+        ))
     else:
         return _fixed_projection_error()
 

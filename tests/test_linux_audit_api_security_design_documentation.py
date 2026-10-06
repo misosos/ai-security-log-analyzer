@@ -40,7 +40,8 @@ def test_security_design_exists_and_records_current_gap_and_v1_choice():
 
     assert text.startswith("# Linux Audit API Security Controls Design")
     for contract in (
-        "create_app(*, enable_linux_audit_api: bool = False)",
+        "enable_linux_audit_api: bool = False",
+        "linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None",
         "feature gate는 route registration control일 뿐 authentication",
         "Static operator bearer token",
         "External OAuth2/OIDC",
@@ -215,9 +216,10 @@ def test_document_contains_no_secret_fixture_canary_or_local_user_path():
     assert bearer_values == ["<operator-token>"]
 
 
-def test_existing_api_design_links_security_design_without_claiming_implementation():
+def test_existing_api_design_links_security_design_and_keeps_production_gate():
     text = API_DESIGN.read_text(encoding="utf-8")
 
     assert "[Linux Audit API Security Controls Design]" in text
     assert "(linux_audit_api_security_design.md)" in text
-    assert "control 구현이나 production enablement를 의미하지 않는다" in text
+    assert "linux-audit:analyze" in text
+    assert "production enablement gate가 충족되지는 않는다" in text

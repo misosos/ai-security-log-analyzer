@@ -2,20 +2,20 @@
 
 ## 1. 목적과 상태
 
-이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분한다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C의 bounded staging, Phase 3Y-D의 route-independent analysis orchestration, Phase 3Y-E의 strict response/error projection과 Phase 3Y-F의 default-disabled endpoint integration이 구현됐다.
+이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분한다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C의 bounded staging, Phase 3Y-D의 route-independent analysis orchestration, Phase 3Y-E의 strict response/error projection, Phase 3Y-F의 default-disabled endpoint integration과 Phase 3Y-H의 bearer authorization이 구현됐다.
 
-V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 인증과 resource control이 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
+V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 구현된 bearer authorization만으로 production-ready하지 않으며 resource control과 나머지 deployment gate가 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
 
 ## 2. 현재 API 조사 결과
 
-`app/api.py`의 `create_app(*, enable_linux_audit_api: bool = False)`가 `FastAPI` app을 만들고 module-level `app = create_app()`이 기존 `app.api:app` import를 보존한다. Exact bool만 허용하며 environment string, truthy value, mutable global toggle 또는 숨은 alias는 없다. 기본 app의 route는 다음 두 개다.
+`app/api.py`의 `create_app(*, enable_linux_audit_api: bool = False, linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None)`가 `FastAPI` app을 만들고 module-level `app = create_app()`이 기존 `app.api:app` import를 보존한다. Exact bool만 허용하며 environment string, truthy value, mutable global toggle 또는 숨은 alias는 없다. 기본 app의 route는 다음 두 개다.
 
 | Method | Route | 실제 동작 |
 |---|---|---|
 | GET | `/api/health` | `{"status": "ok"}` 반환 |
 | POST | `/api/analyze` | application/SSH/access 파일을 각각 요구하고 `analyze(log_sources)` 결과를 `AnalysisResponse`로 projection |
 
-Development/test가 명시적으로 `create_app(enable_linux_audit_api=True)`를 호출할 때만 repeatable multipart field `linux_audit_files`를 받는 `POST /api/analyze-linux-audit`가 한 번 등록된다. 기본 app에서 POST와 GET은 `404`이고 path와 Linux Audit schema는 OpenAPI에 없다. Enabled app에는 기존 health/analyze route도 각각 한 번 유지된다. 이 programmatic feature gate는 endpoint registration control일 뿐 authentication 또는 authorization이 아니다.
+Valid strict security config와 함께 `create_app(enable_linux_audit_api=True, linux_audit_api_security=config)`를 호출할 때만 repeatable multipart field `linux_audit_files`를 받는 authenticated `POST /api/analyze-linux-audit`가 한 번 등록된다. Missing config 또는 disabled/config contradiction은 app creation을 fail closed한다. 기본 app에서 POST와 GET은 `404`이고 path, bearer scheme과 Linux Audit schema는 OpenAPI에 없다. Enabled app에는 기존 health/analyze route도 각각 한 번 유지된다. Programmatic feature gate와 bearer authentication/`linux-audit:analyze` authorization은 서로 다른 control이다.
 
 과거 `/api/upload-test`는 단일 upload를 임시 파일에 쓴 뒤 client filename, 신뢰할 수 없는 content type 및 실제 temporary path를 응답했다. Consumer가 없어 Phase 3Y-B에서 handler를 완전히 제거했으며 POST와 GET은 `404`이고 OpenAPI `paths`에도 존재하지 않는다. 개발용 upload 진단은 public HTTP endpoint가 아니라 `TestClient`와 private test helper로 수행한다.
 
@@ -23,7 +23,7 @@ Development/test가 명시적으로 `create_app(enable_linux_audit_api=True)`를
 
 `/api/analyze`의 multipart field는 `application_file`, `ssh_file`, `access_file`이며 Linux Audit field는 없다. `AnalysisResponse`는 `analysis_id`, `status`, IP summary, IP result list, arbitrary `global_correlation` dict와 nullable `ai_summary`를 포함한다. Builder는 detection evidence를 명시적으로 복사하지만 `correlation`, `risk_factors`, `global_correlation`은 dict로 전달한다. 현재 endpoint는 LLM 함수를 호출하지 않고 `ai_summary=None`을 반환한다.
 
-Custom exception handler, 인증·인가, rate limit, request-wide size limit 또는 duplicate upload 판정은 없다. FastAPI의 기본 validation error 형식을 사용한다. `frontend/` 파일은 비어 있어 endpoint나 response에 대한 실행 가능한 Frontend 의존은 현재 없다. API tests는 response builder contract와 제거된 route, health/analyze 및 upload cleanup을 `TestClient`로 검증한다.
+기존 `/api/analyze`에는 custom exception handler나 인증·인가가 없고 FastAPI의 기본 validation error 형식을 사용한다. Enabled Linux Audit route만 exact security exception handler와 strict 401/403 envelope를 사용한다. Application concurrency/rate limit은 아직 없지만 Linux Audit staging에는 request content 합계와 duplicate upload 판정이 있다. `frontend/` 파일은 비어 있어 endpoint나 response에 대한 실행 가능한 Frontend 의존은 현재 없다.
 
 ### 발견한 위험과 결함
 
@@ -31,9 +31,9 @@ Custom exception handler, 인증·인가, rate limit, request-wide size limit �
 2. `UploadFile` 자체는 spooled file이지만 현재 helper가 전체를 다시 `read()`하므로 파일 content가 메모리에 복제된다. Loader도 grouped event와 normalized logs를 메모리에 유지한다.
 3. `/api/analyze`는 client filename extension만 검사하고 content type은 사용하지 않는다. 둘 다 신뢰 가능한 content 판별 신호가 아니다.
 4. `global_correlation`은 고정 response model이 아닌 arbitrary dict다. 현재 builder test에서도 `source_instance`, `node`, Audit session ID, event ID와 timestamp가 그대로 보존된다. Linux Audit 결과를 기존 `AnalysisResponse`에 넣으면 신규 count-only privacy 정책과 충돌한다.
-5. Enabled Linux Audit endpoint는 예상하지 못한 `Exception`을 fixed `INTERNAL_SERVER_ERROR`로 제한하지만 인증·request rate/concurrency 제한은 없다. 이 outer HTTP 경계는 `BaseException`이나 task cancellation을 성공 또는 error response로 바꾸지 않는다.
+5. Enabled Linux Audit endpoint는 bearer authentication과 authorization을 적용하고 예상하지 못한 `Exception`을 fixed `INTERNAL_SERVER_ERROR`로 제한하지만 request rate/concurrency 제한은 없다. 이 outer HTTP 경계는 `BaseException`이나 task cancellation을 성공 또는 error response로 바꾸지 않는다.
 
-Phase 3Y-F는 Linux Audit endpoint의 bounded HTTP error 경계까지만 구현했다. 인증과 resource control은 deployment enablement의 선행 gate로 남는다.
+Phase 3Y-H는 fail-closed security config, bearer authentication과 authorization을 구현했다. Resource control과 나머지 운영 control은 deployment enablement의 선행 gate로 남는다.
 
 ## 3. API 형태 비교와 결정
 
@@ -162,6 +162,8 @@ Error response는 고정 shape `{"error": {"code": "...", "message": "..."}}`만
 
 | 범주 | HTTP | code | bounded message |
 |---|---:|---|---|
+| missing/malformed/invalid bearer | 401 | `LINUX_AUDIT_AUTHENTICATION_REQUIRED` | `Authentication is required.` |
+| authenticated principal permission 부재 | 403 | `LINUX_AUDIT_ACCESS_DENIED` | `Access is denied.` |
 | multipart field 누락 | 422 | `MISSING_LINUX_AUDIT_FILES` | `At least one Linux Audit file is required.` |
 | 파일 개수 초과 | 413 | `LINUX_AUDIT_FILE_COUNT_EXCEEDED` | `Linux Audit file count limit exceeded.` |
 | 파일별 크기 초과 | 413 | `LINUX_AUDIT_FILE_TOO_LARGE` | `A Linux Audit file exceeds the size limit.` |
@@ -175,7 +177,7 @@ Error response는 고정 shape `{"error": {"code": "...", "message": "..."}}`만
 | response projection contract 실패 | 500 | `LINUX_AUDIT_RESPONSE_PROJECTION_ERROR` | `Linux Audit response could not be created.` |
 | 예상하지 못한 server failure | 500 | `INTERNAL_SERVER_ERROR` | `The request could not be completed.` |
 
-구현된 error projection은 `LinuxAuditUploadValidationError`, `LinuxAuditAnalysisValidationError`, `LinuxAuditResponseProjectionError` 및 fixed `LinuxAuditUnexpectedServerError`의 exact type과 고정 code/status/message 조합만 허용한다. 변조된 known error는 user-controlled text를 복사하지 않고 fixed projection error로 축소하며, enabled route의 outer `except Exception`은 unknown error text를 복사하지 않고 fixed unexpected-server error를 투영한다. HTTP status는 frozen internal carrier에 두며 JSON body에는 포함하지 않는다.
+구현된 error projection은 upload/analysis/response/unexpected error와 dedicated authentication/authorization error의 exact type 및 고정 code/status/message 조합만 허용한다. 변조된 known error는 user-controlled text를 복사하지 않고 fixed projection error로 축소하며, enabled route의 outer `except Exception`은 unknown error text를 복사하지 않고 fixed unexpected-server error를 투영한다. HTTP status는 frozen internal carrier에 두며 JSON body에는 포함하지 않고 fixed 401에만 `WWW-Authenticate: Bearer`를 둔다.
 
 Expected input/contract 오류를 `200` empty result나 safe zero로 바꾸지 않는다. Endpoint-specific handler는 optional multipart container를 empty tuple staging contract로 넘겨 missing-field error를 안정화하고 나머지 기존 route error contract는 바꾸지 않는다.
 
@@ -183,9 +185,9 @@ Server log allowlist는 request correlation ID, route, status, stable error code
 
 ## 10. 인증·인가와 운영 경계
 
-현재 API에는 authentication, authorization, CSRF policy, rate limit 또는 access audit가 없다. 따라서 module-level default app은 endpoint를 등록하지 않고 test/development code에서만 `create_app(enable_linux_audit_api=True)`로 명시적으로 enable한다. 이 feature gate는 인증이 아니며 production enablement를 승인하지 않는다. Production enablement gate는 적어도 authenticated operator identity, endpoint authorization, request rate/concurrency limit, TLS termination, upload access audit, temporary storage monitoring과 retention/deletion policy다.
+Phase 3Y-H는 enabled Linux Audit route에 explicit static operator bearer authentication과 단일 `linux-audit:analyze` authorization을 구현했다. Module-level default app은 endpoint를 등록하지 않으며 feature gate는 여전히 인증이 아니다. `max_concurrent_analyses`는 1–4 exact integer로 검증하지만 아직 enforce하지 않는다. Production enablement는 request concurrency/rate control, TLS termination, upload access audit, temporary storage monitoring과 retention/deletion policy가 구현될 때까지 금지한다.
 
-Phase 3Y-G의 선택지 비교, V1 bearer model, fail-closed startup, authorization, concurrency/rate, access-audit 및 TLS/proxy contract는 [Linux Audit API Security Controls Design](linux_audit_api_security_design.md)에 정의한다. 이 링크는 control 구현이나 production enablement를 의미하지 않는다.
+Phase 3Y-G의 선택지 비교와 Phase 3Y-H의 V1 bearer implementation status, fail-closed startup, authorization, concurrency/rate, access-audit 및 TLS/proxy contract는 [Linux Audit API Security Controls Design](linux_audit_api_security_design.md)에 정의한다. 구현된 bearer control은 production enablement 승인을 의미하지 않는다.
 
 Count-only response도 resource consumption과 조직 활동량을 노출할 수 있으므로 무인증 public exposure를 승인하지 않는다. Detailed forensic evidence는 count-only 권한과 별개이며 RBAC, purpose limitation, access audit, export control, retention 및 deletion이 선행되기 전에는 endpoint 자체를 만들지 않는다. Raw upload는 response 후 보존하지 않는 것이 V1 기본 정책이다.
 
@@ -222,8 +224,10 @@ FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server
 4. 완료: Strict Pydantic response/error projection, invariant validation 및 known-error mapping
 5. 완료: Default-disabled endpoint integration, threadpool boundary와 success/failure cleanup acceptance
 6. 완료: Endpoint canary, LLM/API/CLI isolation 및 concurrent request acceptance
-7. 운영 resource 측정 후 count/size/concurrency limit 조정
-8. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
+7. 완료: Fail-closed security config, bearer authentication, `linux-audit:analyze` authorization 및 strict 401/403
+8. Per-app concurrency limiter와 429 capacity contract
+9. Structured access audit와 deployment TLS/edge limits
+10. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
 
 V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detailed evidence download, asynchronous job queue, real-time ingestion, cross-request deduplication, risk/ATT&CK verdict, Gemini summary, 기존 `/api/analyze` migration과 Frontend integration이다.
 
@@ -261,6 +265,6 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 ## 14. 알려진 한계와 다음 구현 우선순위
 
-이 설계는 인증 system, rate limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
+이 설계는 bounded V1 authentication/authorization을 구현했지만 rate/concurrency limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Static bearer는 replay나 phishing을 방지하지 않고 shared token은 개별 인간 identity를 증명하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
 
-다음 구현 우선순위는 (1) production authentication/authorization 및 resource gate, (2) TLS/access audit/retention·deletion 운영 경계, (3) 별도 승인 이후 deployment enablement 검토다. Module-level default app은 Linux Audit endpoint를 등록하지 않으며, 명시적으로 enabled된 route도 LLM, CLI, risk 또는 Frontend에 연결되지 않는다. 이 programmatic feature gate만으로 production enablement gate가 충족되지는 않는다.
+다음 구현 우선순위는 (1) per-app concurrency limiter와 429 contract, (2) TLS/access audit/retention·deletion 운영 경계, (3) 별도 승인 이후 deployment enablement 검토다. Module-level default app은 Linux Audit endpoint를 등록하지 않으며, authenticated enabled route도 LLM, CLI, risk 또는 Frontend에 연결되지 않는다. Bearer authorization과 programmatic feature gate만으로 production enablement gate가 충족되지는 않는다.
