@@ -18,6 +18,9 @@ OFFICIAL_URLS = {
     "https://fastapi.tiangolo.com/deployment/server-workers/",
     "https://fastapi.tiangolo.com/deployment/docker/",
     "https://www.uvicorn.org/settings/",
+    "https://docs.python.org/3/library/os.html",
+    "https://docs.python.org/3/library/stat.html",
+    "https://docs.python.org/3/library/pathlib.html",
     "https://nginx.org/en/docs/http/configuring_https_servers.html",
     "https://nginx.org/en/docs/http/ngx_http_core_module.html",
     "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
@@ -173,6 +176,31 @@ def test_secret_delivery_rotation_and_revocation_are_fail_closed():
         assert contract.casefold() in text.casefold()
 
 
+def test_secret_bootstrap_implementation_and_residual_limits_are_recorded():
+    text = document_text()
+
+    for contract in (
+        "load_linux_audit_api_security_config()",
+        "app/bootstrap/linux_audit_api.py",
+        "caller-supplied absolute `pathlib.Path`",
+        "never reads an environment variable",
+        "exact permission mode of `0400` or `0600`",
+        "rejects relative paths, symlinks, directories, FIFOs, sockets",
+        "`O_RDONLY` plus `O_CLOEXEC` and `O_NOFOLLOW` when the host exposes",
+        "Pre-open and open device/inode identities must match",
+        "do not eliminate TOCTOU",
+        "128-byte file ceiling",
+        "application operational bound",
+        "strict ASCII",
+        "exactly one final LF",
+        "fixed machine codes and messages",
+        "cannot be securely zeroized",
+        "No route or `create_app()` integration",
+        "deployment entry point remains responsible",
+    ):
+        assert contract.casefold() in text.casefold()
+
+
 def test_audit_sink_and_retention_policy_are_explicit_and_non_universal():
     text = document_text()
 
@@ -285,6 +313,7 @@ def test_official_sources_record_exact_urls_facts_limits_and_access_date():
     assert text.count("| OWASP") >= 6
     assert text.count("| NIST |") >= 2
     assert text.count("| systemd |") >= 3
+    assert text.count("| Python Software Foundation |") >= 3
 
 
 def test_documents_link_the_deployment_contract_without_claiming_implementation():

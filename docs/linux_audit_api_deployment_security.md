@@ -130,9 +130,21 @@ Every worker writes through its own sink adapter to a multi-process-safe sink. P
 
 The V1 reference uses a systemd service credential. Deployment bootstrap reads the credential from `$CREDENTIALS_DIRECTORY`, constructs `SecretStr` and the explicit `LinuxAuditApiSecurityConfig`, initializes the audit sink, and calls `create_app(...)`. The token itself is never an environment value or command-line argument. A portable deployment may use a read-only mounted file under an equivalent service-specific credential directory.
 
-The credential source is administrator-owned with mode `0400`; its parent directory is not traversable by unrelated users. The systemd runtime credential is accessible only to the service identity and is removed with the service lifecycle according to the service-manager contract. The bootstrap reads at most 44 bytes, accepts exactly 43 ASCII Base64URL characters plus at most one terminal LF, removes only that LF, and rejects CRLF, other whitespace, extra lines, padding, Unicode, non-canonical encoding or a decoded length other than 32 bytes. Missing/invalid credentials fail before traffic is accepted.
+The credential source is administrator-owned with mode `0400`; its parent directory is not traversable by unrelated users. The systemd runtime credential is accessible only to the service identity and is removed with the service lifecycle according to the service-manager contract. Valid credential content is at most 44 bytes: exactly 43 ASCII Base64URL characters plus at most one terminal LF. The loader removes only that LF and rejects CRLF, other whitespace, extra lines, padding, Unicode, non-canonical encoding or a decoded length other than 32 bytes. Missing/invalid credentials fail before traffic is accepted.
 
 No credential is committed to Git, `.env`, proxy configuration, documentation, health/readiness output, process arguments, shell tracing, crash reports, logs or audit fields. A path to a service-managed credential may be non-secret, but the bootstrap must not print file content or validation input.
+
+### Implemented route-independent bootstrap primitive
+
+Phase 3Y-L implements `load_linux_audit_api_security_config()` in `app/bootstrap/linux_audit_api.py`. Its frozen input contains only an explicitly caller-supplied absolute `pathlib.Path`, principal ID and analysis-concurrency limit; its representation hides all three values. It never reads an environment variable, scans a credential directory or enables/registers an API route. A later deployment entry point remains responsible for deriving an absolute systemd credential path and passing the resulting existing `LinuxAuditApiSecurityConfig` to `create_app(...)`.
+
+The loader accepts only a regular file with an exact permission mode of `0400` or `0600`. It rejects relative paths, symlinks, directories, FIFOs, sockets, devices, executable bits and every group/other permission bit without changing ownership or mode. It deliberately does not impose a portable owner-identity check; correct file ownership and parent-directory traversal permissions remain deployment preflight responsibilities.
+
+The implementation performs `lstat`, opens read-only with `O_RDONLY` plus `O_CLOEXEC` and `O_NOFOLLOW` when the host exposes those flags, then checks the open descriptor with `fstat`. Pre-open and open device/inode identities must match and both views must be private regular files. If an optional flag is unavailable, the lstat/fstat checks remain active but are not claimed to provide an equivalent kernel guarantee. These checks reduce symlink and replacement races; they do not eliminate TOCTOU, ancestor-directory replacement or concurrent in-place content modification.
+
+The named 128-byte file ceiling is an application operational bound, not a Linux Audit or systemd standard. The bounded loop buffers at most 129 bytes so growth is detected without an unbounded read. Content uses strict ASCII, accepts the canonical 43-character token with no newline or exactly one final LF, and rejects CRLF, multiple/embedded newlines, NUL, spaces, tabs, empty input and oversized content. The decoded token is wrapped in `SecretStr` and passed through the existing `LinuxAuditApiSecurityConfig` preparation validator; the bootstrap does not define a second bearer policy.
+
+Filesystem, encoding, format and bootstrap failures use fixed machine codes and messages without path, basename, errno, metadata, principal, token, digest or validation detail. The file descriptor is closed after every opened-file outcome, and the supplied file is never deleted, renamed, chmodded or rewritten. A mutable read buffer is cleared as a best effort, but Python immutable `bytes` and `str`, `SecretStr`, allocator copies and crash/process memory cannot be securely zeroized by this component. No route or `create_app()` integration is included in this phase.
 
 ### Generation and lifecycle procedure
 
@@ -249,7 +261,7 @@ Every item is mandatory. A missing or failed item prohibits endpoint enablement.
 
 No listed file is created in this phase. A later implementation should add small, reviewable units in this order:
 
-1. Deployment bootstrap module that reads the service credential, constructs `SecretStr`/security config and never logs values.
+1. Deployment entry point that derives the approved absolute systemd credential path, invokes the implemented route-independent loader and passes its security config to `create_app(...)` without logging values.
 2. Native structured journald sink adapter with bounded serialization, initialization and emit timeout.
 3. Internal readiness contract and app lifespan hooks for sink initialization/close.
 4. Nginx reference template with placeholders for DNS name, certificate/key references, trusted loopback upstream and approved policy identifiers.
@@ -318,7 +330,7 @@ The integration suite requires an isolated local proxy/service environment and m
 
 ## 17. Non-goals and known limitations
 
-This phase does not create deployment/bootstrap code, proxy or systemd configuration, containers, certificates, secret loaders, audit sinks, readiness routes, rate-limit code or runtime behavior. It does not make the endpoint production-ready by documentation alone.
+This phase does not create a deployment entry point, proxy or systemd configuration, containers, certificates, environment secret loading, audit sinks, readiness routes, rate-limit code or endpoint behavior. The route-independent secret-file loader does not make the endpoint production-ready by itself.
 
 Nginx inactivity timeouts are not absolute request deadlines. A single proxy's shared rate zone is not distributed. The application limiter, sink and memory are process-local. The reference host shares fate between proxy and app. Journald acceptance is not proof of durable or remote storage. Static bearer authentication has no expiry, replay resistance or individual-human identity. Loopback plaintext is appropriate only for the stated single-host boundary. Numeric edge controls are V1 operational defaults requiring measurement, not standards or attack verdicts.
 
@@ -334,6 +346,9 @@ All sources below were actually reviewed on **2026-10-07**. General guidance inf
 | FastAPI | *Server Workers*, multiple workers | https://fastapi.tiangolo.com/deployment/server-workers/ | Multiple Uvicorn workers run parallel app processes | Shared limiter, sink or memory across workers |
 | FastAPI | *FastAPI in Containers*, one process per container guidance | https://fastapi.tiangolo.com/deployment/docker/ | Orchestrated replicas generally favor one process per container | That this repository should adopt containers now |
 | Uvicorn | *Settings*, HTTP, resource limits and timeouts | https://www.uvicorn.org/settings/ | Explicit bind, proxy allowlist, concurrency, keep-alive and graceful-shutdown settings are available | Edge body/rate policy or distributed capacity |
+| Python Software Foundation | *os — Miscellaneous operating system interfaces*, `open`, `lstat`, `fstat`, descriptor flags | https://docs.python.org/3/library/os.html | `os.open` provides low-level read-only descriptors; descriptors are non-inheritable; `lstat` does not follow the final symlink; `fstat` inspects the opened object; optional flags depend on the host C library | Complete path-race prevention, ancestor safety, ownership policy or secret-memory erasure |
+| Python Software Foundation | *stat — Interpreting stat results*, file-type and permission helpers | https://docs.python.org/3/library/stat.html | `S_ISREG` distinguishes regular files and `S_IMODE` exposes permission/special bits for a portable mode policy | The correct deployment owner or parent-directory access policy |
+| Python Software Foundation | *pathlib — Object-oriented filesystem paths*, pure path properties | https://docs.python.org/3/library/pathlib.html | `Path.is_absolute()` validates the explicit path form without resolving a symlink into an acceptable target | Filesystem identity stability or safe secret discovery |
 | Nginx | *Configuring HTTPS servers* | https://nginx.org/en/docs/http/configuring_https_servers.html | TLS 1.2/1.3 configuration and restricted private-key access belong to the TLS server | Certificate automation or a secure reviewed cipher policy forever |
 | Nginx | *ngx_http_core_module*, client body/header and timeout directives | https://nginx.org/en/docs/http/ngx_http_core_module.html | `client_max_body_size` produces 413; header buffers and client timeouts are configurable | That 24 MiB and chosen timeouts fit real traffic |
 | Nginx | *ngx_http_proxy_module*, proxy buffering and read timeout | https://nginx.org/en/docs/http/ngx_http_proxy_module.html | Buffered bodies can be read before upstream; `proxy_read_timeout` is between reads, not a total deadline | An absolute request deadline |
