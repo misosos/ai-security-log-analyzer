@@ -32,6 +32,9 @@ from app.models.schemas import (
 )
 from app.security.linux_audit_api import (
     LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
+    LinuxAuditAnalysisBusyError,
+    LinuxAuditAnalysisLimiter,
+    LinuxAuditAnalysisLimiterContractError,
     LinuxAuditApiAuthenticationError,
     LinuxAuditApiAuthorizationError,
     LinuxAuditApiSecurityConfig,
@@ -226,30 +229,52 @@ async def _linux_audit_security_error_handler(
     return _linux_audit_error_response(error)
 
 
-async def analyze_linux_audit_logs(
-    linux_audit_files: list[UploadFile] | None = File(default=None),
+def _create_linux_audit_analysis_endpoint(
+    limiter: LinuxAuditAnalysisLimiter,
 ):
-    try:
-        uploads = tuple(linux_audit_files or ())
-        async with stage_linux_audit_uploads(uploads) as staged_inputs:
-            analysis = await run_in_threadpool(
-                analyze_staged_linux_audit_inputs,
-                staged_inputs,
+    if type(limiter) is not LinuxAuditAnalysisLimiter:
+        raise LinuxAuditApiSecurityConfigurationError()
+
+    async def analyze_linux_audit_logs(
+        linux_audit_files: list[UploadFile] | None = File(default=None),
+    ):
+        try:
+            async with limiter.acquire():
+                try:
+                    uploads = tuple(linux_audit_files or ())
+                    async with stage_linux_audit_uploads(
+                        uploads
+                    ) as staged_inputs:
+                        analysis = await run_in_threadpool(
+                            analyze_staged_linux_audit_inputs,
+                            staged_inputs,
+                        )
+                        return build_linux_audit_api_response(
+                            analysis,
+                            analysis_id=uuid.uuid4(),
+                        )
+                except (
+                    LinuxAuditUploadValidationError,
+                    LinuxAuditAnalysisValidationError,
+                    LinuxAuditResponseProjectionError,
+                ) as error:
+                    return _linux_audit_error_response(error)
+                except Exception:
+                    return _linux_audit_error_response(
+                        LinuxAuditUnexpectedServerError()
+                    )
+        except LinuxAuditAnalysisBusyError as error:
+            return _linux_audit_error_response(error)
+        except LinuxAuditAnalysisLimiterContractError:
+            return _linux_audit_error_response(
+                LinuxAuditUnexpectedServerError()
             )
-            return build_linux_audit_api_response(
-                analysis,
-                analysis_id=uuid.uuid4(),
+        except Exception:
+            return _linux_audit_error_response(
+                LinuxAuditUnexpectedServerError()
             )
-    except (
-        LinuxAuditUploadValidationError,
-        LinuxAuditAnalysisValidationError,
-        LinuxAuditResponseProjectionError,
-    ) as error:
-        return _linux_audit_error_response(error)
-    except Exception:
-        return _linux_audit_error_response(
-            LinuxAuditUnexpectedServerError()
-        )
+
+    return analyze_linux_audit_logs
 
 
 def create_app(
@@ -262,6 +287,7 @@ def create_app(
 
     prepared_security = None
     authorization_dependency = None
+    analysis_limiter = None
     if enable_linux_audit_api:
         if linux_audit_api_security is None:
             raise LinuxAuditApiSecurityConfigurationError()
@@ -277,6 +303,9 @@ def create_app(
             create_linux_audit_authorization_dependency(
                 authentication_dependency
             )
+        )
+        analysis_limiter = LinuxAuditAnalysisLimiter(
+            prepared_security.max_concurrent_analyses
         )
     elif linux_audit_api_security is not None:
         raise LinuxAuditApiSecurityConfigurationError()
@@ -309,7 +338,7 @@ def create_app(
         )
         configured_app.add_api_route(
             "/api/analyze-linux-audit",
-            analyze_linux_audit_logs,
+            _create_linux_audit_analysis_endpoint(analysis_limiter),
             methods=["POST"],
             response_model=LinuxAuditAnalysisResponse,
             dependencies=[Depends(authorization_dependency)],
@@ -323,6 +352,7 @@ def create_app(
                     413,
                     415,
                     422,
+                    429,
                     500,
                 )
             },

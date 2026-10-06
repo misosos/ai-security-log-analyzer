@@ -121,6 +121,27 @@ def test_resource_body_tls_and_proxy_boundaries_are_not_overclaimed():
         assert contract.casefold() in text.casefold()
 
 
+def test_process_local_concurrency_control_is_recorded_as_implemented():
+    text = document_text()
+
+    for contract in (
+        "Phase 3Y-I",
+        "LinuxAuditAnalysisLimiter",
+        "app instance마다 독립적으로",
+        "staging 전에 capacity를 acquire",
+        "queue에 넣거나",
+        "LINUX_AUDIT_ANALYSIS_BUSY",
+        "Linux Audit analysis capacity is unavailable.",
+        "Private single-use async lease",
+        "Public release/reset 또는 mutable counter는 없다",
+        "acquisition 후 cancellation",
+        "distributed global limit이 아니다",
+        "multipart body를 만든 후 `solve_dependencies()`",
+        "`LINUX_AUDIT_RATE_LIMITED`는 구현하지 않았다",
+    ):
+        assert contract.casefold() in text.casefold()
+
+
 def test_access_audit_has_fixed_allowlist_and_sensitive_denylist():
     text = document_text()
 

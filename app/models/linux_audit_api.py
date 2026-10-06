@@ -22,6 +22,10 @@ from app.security.linux_audit_api import (
     LINUX_AUDIT_AUTHORIZATION_ERROR_CODE,
     LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE,
     LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS,
+    LINUX_AUDIT_BUSY_ERROR_CODE,
+    LINUX_AUDIT_BUSY_ERROR_MESSAGE,
+    LINUX_AUDIT_BUSY_ERROR_STATUS,
+    LinuxAuditAnalysisBusyError,
     LinuxAuditApiAuthenticationError,
     LinuxAuditApiAuthorizationError,
 )
@@ -93,6 +97,10 @@ _ERROR_CONTRACTS = {
         LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS,
         LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE,
     ),
+    LINUX_AUDIT_BUSY_ERROR_CODE: (
+        LINUX_AUDIT_BUSY_ERROR_STATUS,
+        LINUX_AUDIT_BUSY_ERROR_MESSAGE,
+    ),
 }
 
 _UPLOAD_ERROR_CODES = frozenset((
@@ -126,6 +134,7 @@ LinuxAuditApiErrorCode = Literal[
     "INTERNAL_SERVER_ERROR",
     "LINUX_AUDIT_AUTHENTICATION_REQUIRED",
     "LINUX_AUDIT_ACCESS_DENIED",
+    "LINUX_AUDIT_ANALYSIS_BUSY",
 ]
 
 
@@ -497,6 +506,8 @@ def project_linux_audit_api_error(
         allowed_codes = frozenset((
             LINUX_AUDIT_AUTHORIZATION_ERROR_CODE,
         ))
+    elif type(error) is LinuxAuditAnalysisBusyError:
+        allowed_codes = frozenset((LINUX_AUDIT_BUSY_ERROR_CODE,))
     else:
         return _fixed_projection_error()
 

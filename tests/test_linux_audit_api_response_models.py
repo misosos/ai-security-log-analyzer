@@ -39,6 +39,7 @@ from app.models.linux_audit_api import (
     project_linux_audit_api_error,
 )
 from app.security.linux_audit_api import (
+    LinuxAuditAnalysisBusyError,
     LinuxAuditApiAuthenticationError,
     LinuxAuditApiAuthorizationError,
 )
@@ -124,6 +125,10 @@ ERROR_CONTRACTS = {
     "LINUX_AUDIT_ACCESS_DENIED": (
         403,
         "Access is denied.",
+    ),
+    "LINUX_AUDIT_ANALYSIS_BUSY": (
+        429,
+        "Linux Audit analysis capacity is unavailable.",
     ),
 }
 
@@ -527,6 +532,8 @@ def test_all_known_errors_project_to_fixed_status_and_envelope(code):
         error = LinuxAuditApiAuthenticationError()
     elif code == "LINUX_AUDIT_ACCESS_DENIED":
         error = LinuxAuditApiAuthorizationError()
+    elif code == "LINUX_AUDIT_ANALYSIS_BUSY":
+        error = LinuxAuditAnalysisBusyError()
     else:
         error = LinuxAuditUploadValidationError(code)
 

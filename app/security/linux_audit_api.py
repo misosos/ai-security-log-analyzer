@@ -22,9 +22,17 @@ LINUX_AUDIT_AUTHENTICATION_ERROR_MESSAGE = (
 LINUX_AUDIT_AUTHORIZATION_ERROR_CODE = "LINUX_AUDIT_ACCESS_DENIED"
 LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS = 403
 LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE = "Access is denied."
+LINUX_AUDIT_BUSY_ERROR_CODE = "LINUX_AUDIT_ANALYSIS_BUSY"
+LINUX_AUDIT_BUSY_ERROR_STATUS = 429
+LINUX_AUDIT_BUSY_ERROR_MESSAGE = (
+    "Linux Audit analysis capacity is unavailable."
+)
 
 _CONFIGURATION_ERROR_MESSAGE = (
     "Linux Audit API security configuration is invalid."
+)
+_LIMITER_CONTRACT_ERROR_MESSAGE = (
+    "Linux Audit analysis capacity state is invalid."
 )
 _TOKEN_LENGTH = 43
 _TOKEN_BYTES = 32
@@ -81,6 +89,86 @@ class LinuxAuditApiAuthorizationError(ValueError):
         self.code = LINUX_AUDIT_AUTHORIZATION_ERROR_CODE
         self.status_code = LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS
         self.message = LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE
+
+
+class LinuxAuditAnalysisBusyError(RuntimeError):
+
+    def __init__(self):
+        super().__init__(LINUX_AUDIT_BUSY_ERROR_MESSAGE)
+        self.code = LINUX_AUDIT_BUSY_ERROR_CODE
+        self.status_code = LINUX_AUDIT_BUSY_ERROR_STATUS
+        self.message = LINUX_AUDIT_BUSY_ERROR_MESSAGE
+
+
+class LinuxAuditAnalysisLimiterContractError(RuntimeError):
+
+    def __init__(self):
+        super().__init__(_LIMITER_CONTRACT_ERROR_MESSAGE)
+
+
+class _LinuxAuditAnalysisLease:
+    __slots__ = ("_entered", "_finished", "_limiter")
+
+    def __init__(self, limiter: "LinuxAuditAnalysisLimiter"):
+        self._limiter = limiter
+        self._entered = False
+        self._finished = False
+
+    async def __aenter__(self):
+        if self._entered or self._finished:
+            raise LinuxAuditAnalysisLimiterContractError()
+        self._limiter._acquire()
+        self._entered = True
+        return None
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        if not self._entered or self._finished:
+            raise LinuxAuditAnalysisLimiterContractError()
+        self._finished = True
+        try:
+            self._limiter._release()
+        except LinuxAuditAnalysisLimiterContractError as release_error:
+            if exc_value is None:
+                raise
+            exc_value.add_note(str(release_error))
+        return False
+
+
+class LinuxAuditAnalysisLimiter:
+    __slots__ = ("__capacity", "__in_use")
+
+    def __init__(self, capacity: int):
+        if type(capacity) is not int or not 1 <= capacity <= 4:
+            raise _configuration_error()
+        self.__capacity = capacity
+        self.__in_use = 0
+
+    def __repr__(self):
+        return "LinuxAuditAnalysisLimiter()"
+
+    def acquire(self):
+        return _LinuxAuditAnalysisLease(self)
+
+    def _acquire(self):
+        self._validate_state()
+        if self.__in_use == self.__capacity:
+            raise LinuxAuditAnalysisBusyError()
+        self.__in_use += 1
+
+    def _release(self):
+        self._validate_state()
+        if self.__in_use == 0:
+            raise LinuxAuditAnalysisLimiterContractError()
+        self.__in_use -= 1
+
+    def _validate_state(self):
+        if (
+            type(self.__capacity) is not int
+            or type(self.__in_use) is not int
+            or not 1 <= self.__capacity <= 4
+            or not 0 <= self.__in_use <= self.__capacity
+        ):
+            raise LinuxAuditAnalysisLimiterContractError()
 
 
 def _configuration_error() -> LinuxAuditApiSecurityConfigurationError:

@@ -181,7 +181,7 @@ def test_principal_allowlist_rejects_invalid_values(principal_id):
 
 
 @pytest.mark.parametrize("limit", (1, 4))
-def test_concurrency_boundary_is_validated_but_not_enforced(limit):
+def test_concurrency_boundary_is_validated_for_limiter_enforcement(limit):
     prepared = prepare_linux_audit_api_security(
         valid_config(max_concurrent_analyses=limit)
     )

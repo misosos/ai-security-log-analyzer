@@ -46,7 +46,7 @@ AUTH_HEADERS = {"Authorization": f"Bearer {OPERATOR_TOKEN}"}
 SECURITY_CONFIG = LinuxAuditApiSecurityConfig(
     operator_token=SecretStr(OPERATOR_TOKEN),
     principal_id="test-operator",
-    max_concurrent_analyses=1,
+    max_concurrent_analyses=4,
 )
 
 
@@ -196,6 +196,7 @@ def test_enabled_route_and_openapi_are_exact_and_app_instances_are_isolated():
             "413",
             "415",
             "422",
+            "429",
             "500",
         ):
             assert operation["responses"][status_code]["content"][
@@ -759,9 +760,12 @@ def test_staging_failure_and_cancellation_cleanup(monkeypatch, tmp_path):
             file=LINKED_FIXTURE.open("rb"),
             filename="input.audit",
         )
+        endpoint = api_module._create_linux_audit_analysis_endpoint(
+            api_module.LinuxAuditAnalysisLimiter(1)
+        )
         try:
             with pytest.raises(asyncio.CancelledError):
-                await api_module.analyze_linux_audit_logs([upload])
+                await endpoint([upload])
         finally:
             await upload.close()
 
