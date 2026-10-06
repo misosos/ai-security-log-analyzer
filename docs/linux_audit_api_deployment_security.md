@@ -172,7 +172,7 @@ The route-independent adapter is implemented in `app/security/linux_audit_api_jo
 
 Every journal value is a validated scalar with no NUL, newline or control character and a maximum UTF-8 length of 256 bytes; the complete native-protocol datagram is limited to 4096 bytes. These are V1 application operational bounds, not journald or Linux Audit standards. Bearer material, request headers, filenames, content type, paths, raw/normalized evidence, process/session identity, exceptions, tracebacks, response bodies and limiter state remain excluded. The fixed `MESSAGE`, notice `PRIORITY=5`, identifier and schema version carry no uploaded evidence.
 
-Sink initialization verifies the native local journald Unix datagram transport by opening it explicitly, and the production factory fails with a fixed bounded initialization error if it is unavailable. There is no logger, syslog, file, stdout/stderr, memory or network fallback. Tests inject a private deterministic transport boundary, but no default sink or singleton is constructed at import time. This adapter is not yet wired into `create_app()` or a deployment entry point; enabled app construction continues to require an explicitly supplied sink. Runtime failure will therefore preserve the existing `500 LINUX_AUDIT_ACCESS_AUDIT_FAILED` boundary once the deployment entry point supplies this sink.
+Sink initialization verifies the native local journald Unix datagram transport by opening it explicitly, and the production factory fails with a fixed bounded initialization error if it is unavailable. There is no logger, syslog, file, stdout/stderr, memory or network fallback. Tests inject a private deterministic transport boundary, but no default sink or singleton is constructed at import time. The explicit production factory now supplies this adapter to `create_app()` and owns it through lifespan; the default app never constructs it, and an argument-free deployment entry point is not yet implemented. Runtime failure preserves the existing `500 LINUX_AUDIT_ACCESS_AUDIT_FAILED` boundary.
 
 Submission is direct and bounded: at most eight operations may be in flight, there is no event queue and no automatic retry. A synchronous send is offloaded with `asyncio.to_thread()` and awaited with a three-second application timeout. Cancelling or timing out the awaiting coroutine cannot guarantee termination of an already-running blocking send; the sink enters a failed state, the detached operation is bounded by the transport timeout, and cancellation still propagates. A send that completed near cancellation may therefore have reached journald even though the caller did not observe completion, and retrying externally can create duplicates. The sink does not claim exactly-once delivery.
 
@@ -204,39 +204,43 @@ Production activation is prohibited until this policy is supplied. Audit records
 
 The existing `/api/health` is only a lightweight liveness signal: the process/event loop can answer a request. Its fixed body remains unchanged and contains no secret, principal, sink path, limit, worker count or configuration detail. Public exposure is unnecessary; Nginx should restrict health probing to the local deployment monitor.
 
-V1 needs a separate internal readiness contract in a later implementation. The reference is an internal-only readiness endpoint or equivalent service-manager probe that returns only a fixed ready/not-ready status and verifies:
+Phase 3Y-N implements the route-independent production composition in `app/deployment/linux_audit_api.py`. Its frozen `LinuxAuditApiProductionConfig` accepts only an explicit secret path, bounded principal ID and analysis-concurrency limit; its representation reveals none of those values. `create_linux_audit_api_production_app()` delegates secret validation to the existing secret-file bootstrap, constructs the native journald sink once, and passes both existing contracts to `create_app(enable_linux_audit_api=True, ...)`. It never reads the bearer token or another value from an environment variable. It is not an argument-free Uvicorn import factory; a later deployment entry point must derive the approved systemd credential path and pass explicit non-secret values.
+
+The production-created app has an internal typed readiness accessor, `get_linux_audit_api_readiness()`, and no readiness HTTP route or OpenAPI schema. Its immutable snapshot contains only `phase` and `ready`. The phases are `starting`, `ready`, `stopping`, `stopped` and `failed`; only `ready` has `ready=True`. Separate app instances own separate readiness controllers and sinks, and a completed lifespan cannot be entered again.
+
+Readiness becomes true immediately before the ASGI lifespan startup yields control, only after:
 
 - security configuration was prepared successfully;
 - enabled/disabled route registration matches deployment intent;
 - the per-app limiter exists with validated configuration;
 - the audit sink completed startup initialization;
-- secret/bootstrap and deployment preflight completed.
+- secret bootstrap and production app composition completed.
 
-Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence and a remote collector are healthy unless the sink contract can actually verify them. It is reachable only over loopback or a restricted management path and is not proxied on the public API host. This phase does not add the endpoint.
+Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence, remote forwarding, retention, TLS, Nginx or external reachability are healthy. The typed accessor is for later deployment-side probing; no public or internal HTTP endpoint is added in this phase.
 
 ## 12. Startup, rollout, and shutdown
 
 ### Startup and rollout
 
 1. Validate Nginx configuration, certificate chain/key match, exact hostname, TLS profile, body/header/time/rate/connection limits and loopback upstream.
-2. Load the service credential through deployment bootstrap without printing it; validate its exact canonical contract.
-3. Initialize the journald adapter and required host logging policy.
-4. Construct the enabled app with exact security config and sink. Any config, sink or contradictory feature-state error terminates startup before listening.
-5. Start one Uvicorn worker on loopback with explicit proxy allowlist, concurrency ceiling, keep-alive and graceful-shutdown settings.
-6. Complete internal readiness checks, then permit Nginx to route traffic.
-7. Run bounded HTTPS authentication, error, upload, audit and privacy acceptance. Roll back traffic if any gate fails.
+2. Construct `LinuxAuditApiProductionConfig` with an explicitly approved absolute credential path and call the implemented production factory. It loads the credential through the existing bootstrap without printing it, initializes the journald adapter and constructs the enabled app. Invalid configuration, credential, sink or app composition raises one bounded production-bootstrap error rather than returning the default app.
+3. Enter the app's ASGI lifespan. The app begins in `starting` and becomes `ready` only when lifespan startup completes. Importing `app.api` still constructs only the default-disabled app and performs no credential or journald initialization.
+4. Start one Uvicorn worker on loopback with lifespan enabled, an explicit proxy allowlist, concurrency ceiling, keep-alive and graceful-shutdown settings. Uvicorn's `--factory` expects an argument-free factory, so a later deployment-only import helper remains necessary; it must not put the bearer token in the environment.
+5. Permit Nginx to route traffic only after the deployment probe observes the bounded ready state and all external controls pass.
+6. Run bounded HTTPS authentication, error, upload, audit and privacy acceptance. Roll back traffic if any gate fails.
 
 There is no development bypass, generated fallback token, unauthenticated degraded mode or sink-optional production mode.
 
 ### Shutdown
 
 - Nginx stops admitting new endpoint requests before Uvicorn shutdown.
-- Uvicorn receives graceful termination and uses an initial 60-second operational drain budget, subject to load-test adjustment.
+- Uvicorn receives graceful termination and uses an initial 60-second operational drain budget, subject to load-test adjustment. Starlette runs lifespan teardown after connections and in-process background tasks complete during graceful operation.
 - Active requests either finish or are cancelled at the bounded deadline. Cancellation continues to release limiter capacity and staging resources and attempts the existing bounded cancellation audit event.
-- A future sink adapter flush/close operation has a separate bounded five-second budget and must not print event or secret data on failure.
+- Lifespan shutdown changes readiness to `stopping` before awaiting the sink. It calls the owned journald sink's bounded `close()` exactly once, transitions to `stopped` on success, and to `failed` on sink failure or cancellation. Close failure is re-raised as a fixed production shutdown error; cancellation is not converted to success.
+- If app construction fails after sink creation, the factory attempts the sink's pre-lifespan cleanup without starting an event loop. Request handlers never own or close the sink.
 - The service verifies that no owned staging directory is retained and removes the service-manager credential through normal service teardown.
 
-An abrupt kill, kernel panic, power loss or host crash can interrupt cleanup, audit delivery and graceful drain. Temporary-directory hygiene and journal recovery must be checked on restart; the application cannot guarantee cleanup or terminal audit persistence after process death.
+Python module import, synchronous application construction, ASGI lifespan startup, readiness transition, request acceptance and graceful lifespan teardown are distinct boundaries. FastAPI/Starlette do not start serving requests until successful lifespan startup, but socket binding and process-manager behavior remain server responsibilities. An abrupt `SIGKILL`, interpreter crash, kernel panic, power loss or host failure can prevent lifespan cleanup, audit delivery and graceful drain. Temporary-directory hygiene and journal recovery must be checked on restart; the application cannot guarantee cleanup or terminal audit persistence after process death.
 
 ## 13. Production activation checklist
 
@@ -265,11 +269,11 @@ Every item is mandatory. A missing or failed item prohibits endpoint enablement.
 
 ## 14. Later reference implementation plan
 
-No listed file is created in this phase. A later implementation should add small, reviewable units in this order:
+The first three application-side units are implemented. Later deployment work should continue in small, reviewable units:
 
-1. Deployment entry point that derives the approved absolute systemd credential path, invokes the implemented route-independent loader and passes its security config to `create_app(...)` without logging values.
-2. Deployment composition that constructs the implemented native structured journald sink and supplies it explicitly to `create_app(...)`.
-3. Internal readiness contract and app lifespan hooks for journald sink initialization/close.
+1. Completed: explicit production factory composing the secret loader, native journald sink and secured `create_app(...)` without logging values.
+2. Completed: internal immutable readiness contract and app lifespan ownership of bounded sink close.
+3. Deployment-only argument-free import helper that derives one approved absolute systemd credential path without reading the bearer value from the environment.
 4. Nginx reference template with placeholders for DNS name, certificate/key references, trusted loopback upstream and approved policy identifiers.
 5. systemd service/credential template with non-secret placeholders and one-worker/loopback defaults.
 6. Deployment environment template containing only safe non-secret values; no token placeholder that resembles a usable credential.
@@ -336,7 +340,7 @@ The integration suite requires an isolated local proxy/service environment and m
 
 ## 17. Non-goals and known limitations
 
-This phase does not create a deployment entry point, proxy or systemd configuration, containers, certificates, environment secret loading, readiness routes, rate-limit code or endpoint behavior. The route-independent secret-file loader and journald sink primitive do not make the endpoint production-ready by themselves.
+This phase creates an explicit argument-driven production application factory and internal readiness lifecycle, but no deployable import helper, proxy or systemd configuration, containers, certificates, environment secret loading, readiness route, rate-limit code or endpoint behavior. The factory, route-independent secret-file loader and journald sink primitive do not make the endpoint production-ready by themselves. Production activation remains prohibited until the edge, TLS, service-credential delivery, audit retention/integrity and deployment acceptance gates are complete.
 
 Nginx inactivity timeouts are not absolute request deadlines. A single proxy's shared rate zone is not distributed. The application limiter, sink and memory are process-local. The reference host shares fate between proxy and app. Journald acceptance is not proof of durable or remote storage. Static bearer authentication has no expiry, replay resistance or individual-human identity. Loopback plaintext is appropriate only for the stated single-host boundary. Numeric edge controls are V1 operational defaults requiring measurement, not standards or attack verdicts.
 
@@ -376,3 +380,6 @@ All sources below were actually reviewed on **2026-10-07**. General guidance inf
 | systemd | *Journal Native Protocol*, serialization and local socket transport | https://systemd.io/JOURNAL_NATIVE_PROTOCOL/ | Native entries use bounded field/value records over the local journal socket; client fields beginning with `_` are ignored as trusted fields | Durable acceptance, forwarding, retention or exactly-once delivery |
 | systemd | *systemd.journal-fields*, user journal fields | https://github.com/systemd/systemd/blob/main/man/systemd.journal-fields.xml | `MESSAGE`, `PRIORITY` and `SYSLOG_IDENTIFIER` have defined meanings, while user fields are not automatically validated by journald | Safety of application-provided field values or host storage policy |
 | Python Software Foundation | *Coroutines and Tasks*, `asyncio.to_thread`, cancellation and `wait_for` | https://docs.python.org/3/library/asyncio-task.html | Blocking I/O can be offloaded without blocking the event loop and cancellation propagates to the awaiting task | Termination of a blocking function already running in a worker thread or prevention of duplicate delivery |
+| FastAPI | *Lifespan Events*, lifespan context manager | https://fastapi.tiangolo.com/advanced/events/ | Code before the lifespan yield runs before request service and code after it owns graceful cleanup | Cleanup after abrupt process/host termination or external readiness policy |
+| Starlette | *Lifespan*, startup, teardown, state and TestClient | https://www.starlette.io/lifespan/ | Incoming requests wait for lifespan startup; teardown follows closed connections/background tasks; `TestClient` context runs lifespan | Uvicorn socket admission policy, cleanup after `SIGKILL`, or durable sink persistence |
+| Uvicorn | *Settings*, application factory and lifespan options | https://www.uvicorn.org/settings/ | `--factory` treats the import target as a zero-argument application factory and lifespan can be explicitly enabled | How an argument-driven security config should be sourced or whether external controls are correct |

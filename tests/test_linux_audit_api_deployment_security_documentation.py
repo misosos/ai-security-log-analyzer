@@ -18,6 +18,8 @@ OFFICIAL_URLS = {
     "https://fastapi.tiangolo.com/deployment/server-workers/",
     "https://fastapi.tiangolo.com/deployment/docker/",
     "https://www.uvicorn.org/settings/",
+    "https://fastapi.tiangolo.com/advanced/events/",
+    "https://www.starlette.io/lifespan/",
     "https://docs.python.org/3/library/os.html",
     "https://docs.python.org/3/library/stat.html",
     "https://docs.python.org/3/library/pathlib.html",
@@ -245,7 +247,7 @@ def test_implemented_journald_sink_contract_is_bounded_and_route_independent():
         "V1 application operational bounds",
         "fails with a fixed bounded initialization error",
         "There is no logger, syslog, file, stdout/stderr, memory or network fallback",
-        "not yet wired into `create_app()`",
+        "production factory now supplies this adapter to `create_app()`",
         "there is no event queue and no automatic retry",
         "cannot guarantee termination of an already-running blocking send",
         "does not claim exactly-once delivery",
@@ -269,17 +271,45 @@ def test_liveness_readiness_startup_and_shutdown_are_distinct():
 
     for contract in (
         "only a lightweight liveness signal",
-        "separate internal readiness contract",
+        "internal typed readiness accessor",
+        "no readiness HTTP route",
         "security configuration was prepared successfully",
         "audit sink completed startup initialization",
         "does not upload a file",
-        "Any config, sink or contradictory feature-state error terminates startup",
+        "raises one bounded production-bootstrap error",
         "There is no development bypass",
         "60-second operational drain budget",
-        "five-second budget",
+        "waits up to five seconds",
         "Cancellation continues to release limiter capacity",
-        "abrupt kill",
+        "SIGKILL",
         "cannot guarantee cleanup or terminal audit persistence",
+    ):
+        assert contract.casefold() in text.casefold()
+
+
+def test_production_factory_lifespan_and_readiness_contract_are_implemented():
+    text = document_text()
+
+    for contract in (
+        "app/deployment/linux_audit_api.py",
+        "LinuxAuditApiProductionConfig",
+        "create_linux_audit_api_production_app()",
+        "get_linux_audit_api_readiness()",
+        "starting",
+        "ready",
+        "stopping",
+        "stopped",
+        "failed",
+        "Separate app instances own separate readiness controllers and sinks",
+        "never reads the bearer token or another value from an environment variable",
+        "not an argument-free Uvicorn import factory",
+        "ASGI lifespan startup",
+        "changes readiness to `stopping` before awaiting the sink",
+        "calls the owned journald sink's bounded `close()` exactly once",
+        "If app construction fails after sink creation",
+        "Request handlers never own or close the sink",
+        "cancellation is not converted to success",
+        "Production activation remains prohibited",
     ):
         assert contract.casefold() in text.casefold()
 

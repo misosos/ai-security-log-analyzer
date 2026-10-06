@@ -383,6 +383,26 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
             with self.__state_lock:
                 self.__state = "closed"
 
+    def _close_before_lifespan(self) -> None:
+        with self.__state_lock:
+            if self.__state != "open" or self.__in_flight != 0:
+                raise _sink_error(
+                    "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
+                )
+            self.__state = "closing"
+        try:
+            result = self.__transport.close()
+            if result is not None:
+                raise _JournaldTransportError()
+        except _JournaldTransportError:
+            with self.__state_lock:
+                self.__state = "failed"
+            raise _sink_error(
+                "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
+            ) from None
+        with self.__state_lock:
+            self.__state = "closed"
+
 
 def create_linux_audit_api_journald_sink() -> LinuxAuditApiJournaldSink:
     try:
