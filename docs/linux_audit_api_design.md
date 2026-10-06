@@ -190,6 +190,8 @@ Phase 3Y-H는 enabled Linux Audit route에 explicit static operator bearer authe
 
 Phase 3Y-G의 선택지 비교와 Phase 3Y-H의 V1 bearer implementation status, fail-closed startup, authorization, concurrency/rate, access-audit 및 TLS/proxy contract는 [Linux Audit API Security Controls Design](linux_audit_api_security_design.md)에 정의한다. 구현된 bearer control은 production enablement 승인을 의미하지 않는다.
 
+Production reference topology와 operational activation gate는 [Linux Audit API Production Deployment Security Contract](linux_audit_api_deployment_security.md)에 별도로 정의한다. 이 design phase에서는 proxy, bootstrap, secret loader, audit sink 또는 readiness 구현을 추가하지 않는다.
+
 Count-only response도 resource consumption과 조직 활동량을 노출할 수 있으므로 무인증 public exposure를 승인하지 않는다. Detailed forensic evidence는 count-only 권한과 별개이며 RBAC, purpose limitation, access audit, export control, retention 및 deletion이 선행되기 전에는 endpoint 자체를 만들지 않는다. Raw upload는 response 후 보존하지 않는 것이 V1 기본 정책이다.
 
 `/api/upload-test`의 filename/content type/temp path 응답은 Phase 3Y-B에서 public app으로부터 제거되었다. 이 제거는 신규 endpoint의 feature gate, 인증·인가 또는 resource control을 대신하지 않는다.

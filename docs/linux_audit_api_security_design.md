@@ -4,6 +4,8 @@
 
 이 문서는 default-disabled `POST /api/analyze-linux-audit`의 production enablement에 선행할 authentication, authorization, resource control, access audit 및 deployment trust boundary를 정의한다. Phase 3Y-H에서 strict immutable security configuration, fail-closed app construction, bearer authentication과 단일 V1 authorization permission을 구현했고, Phase 3Y-I에서 per-app non-blocking concurrency limiter와 fixed 429 projection을 구현했다. Phase 3Y-J에서 privacy-bounded structured access audit와 fail-closed sink policy를 구현했다. Request-rate control과 production enablement는 아직 구현하지 않았다.
 
+구체적인 production network, TLS, proxy, secret, audit storage, readiness, rollout 및 acceptance contract는 [Linux Audit API Production Deployment Security Contract](linux_audit_api_deployment_security.md)에 정의한다. 해당 문서는 design-only이며 endpoint activation을 승인하지 않는다.
+
 현재 `app/api.py`의 factory signature는 다음과 같다.
 
 ```python
