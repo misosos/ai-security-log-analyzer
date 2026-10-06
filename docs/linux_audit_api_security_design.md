@@ -2,7 +2,7 @@
 
 ## 1. 목적과 현재 보안 공백
 
-이 문서는 default-disabled `POST /api/analyze-linux-audit`의 production enablement에 선행할 authentication, authorization, resource control, access audit 및 deployment trust boundary를 정의한다. Phase 3Y-H에서 strict immutable security configuration, fail-closed app construction, bearer authentication과 단일 V1 authorization permission을 구현했고, Phase 3Y-I에서 per-app non-blocking concurrency limiter와 fixed 429 projection을 구현했다. Request-rate control, structured access audit와 production enablement는 아직 구현하지 않았다.
+이 문서는 default-disabled `POST /api/analyze-linux-audit`의 production enablement에 선행할 authentication, authorization, resource control, access audit 및 deployment trust boundary를 정의한다. Phase 3Y-H에서 strict immutable security configuration, fail-closed app construction, bearer authentication과 단일 V1 authorization permission을 구현했고, Phase 3Y-I에서 per-app non-blocking concurrency limiter와 fixed 429 projection을 구현했다. Phase 3Y-J에서 privacy-bounded structured access audit와 fail-closed sink policy를 구현했다. Request-rate control과 production enablement는 아직 구현하지 않았다.
 
 현재 `app/api.py`의 factory signature는 다음과 같다.
 
@@ -11,11 +11,12 @@ def create_app(
     *,
     enable_linux_audit_api: bool = False,
     linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
+    linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None,
 ) -> FastAPI:
     ...
 ```
 
-Module-level `app = create_app()`에는 `/api/health`와 `/api/analyze`만 등록된다. Exact bool `True`와 valid `LinuxAuditApiSecurityConfig`를 함께 전달한 별도 app instance에만 `/api/analyze-linux-audit`가 한 번 등록된다. 이 feature gate는 route registration control일 뿐 authentication 또는 authorization이 아니며, enabled route는 별도 bearer authentication과 `linux-audit:analyze` authorization dependency를 모두 통과해야 한다. Enabled app은 독립 limiter 하나를 소유한다. CORS·TrustedHost·TLS middleware, trusted-proxy configuration, request-rate limiter 또는 structured security access-audit emitter는 아직 없다.
+Module-level `app = create_app()`에는 `/api/health`와 `/api/analyze`만 등록된다. Exact bool `True`, valid `LinuxAuditApiSecurityConfig`와 explicit `LinuxAuditApiAccessAuditSink`를 함께 전달한 별도 app instance에만 `/api/analyze-linux-audit`가 한 번 등록된다. Enabled app에서 sink가 없거나 disabled app에 sink/config가 전달되면 route registration 전에 fail closed한다. 이 feature gate는 route registration control일 뿐 authentication 또는 authorization이 아니며, enabled route는 별도 bearer authentication과 `linux-audit:analyze` authorization dependency를 모두 통과해야 한다. Enabled app은 독립 limiter와 sink를 각각 하나 소유한다. CORS·TrustedHost·TLS middleware, trusted-proxy configuration 또는 request-rate limiter는 아직 없다.
 
 Repository의 `app/security/linux_audit_api.py`가 Linux Audit endpoint 전용 typed config와 prepared security state를 제공한다. Environment loader 또는 general settings framework는 없으며 caller가 factory에 config를 명시적으로 주입한다. 별도의 `python-dotenv` 사용과 `GEMINI_API_KEY` 조회가 있지만 Linux Audit credential과 연결되지 않는다. `.env`와 `.env.*`는 Git에서 제외되지만 이것만으로 secret manager, rotation, access control 또는 production secret delivery가 보장되지는 않는다. README는 비어 있고 Docker, Compose, process-manager 또는 reverse-proxy deployment configuration도 없다. `uvicorn`은 dependency일 뿐 repository가 production command, worker count, TLS termination 또는 proxy trust를 고정하지 않는다.
 
@@ -31,6 +32,7 @@ FastAPI multipart parsing
 → run_in_threadpool(analyze_staged_linux_audit_inputs)
 → orchestration 성공 후 UUID4 생성
 → build_linux_audit_api_response()
+→ immutable terminal access-audit event 생성 및 `await sink.emit(event)`
 → staging context cleanup
 → capacity release
 → FastAPI response serialization
@@ -38,7 +40,7 @@ FastAPI multipart parsing
 
 Capacity가 없으면 staging 이전에 fixed 429를 만들고 이 분석 flow에 진입하지 않는다. FastAPI multipart parsing 자체는 dependency와 handler 이전에 발생할 수 있어 limiter가 pre-body protection을 제공한다고 주장하지 않는다.
 
-`create_app()`가 route registration의 유일한 composition point이며 prepared security state, `HTTPBearer`/authorization dependency와 `LinuxAuditAnalysisLimiter`를 app instance마다 독립적으로 만든다. Handler response에는 principal을 전달하지 않고 route dependency가 permission을 enforce한 뒤 endpoint closure가 staging 전에 capacity를 acquire한다. Future audit emitter도 이 composition point에 둘 수 있지만 generic dependency container나 application-wide framework로 확대하지 않는다.
+`create_app()`가 route registration의 유일한 composition point이며 prepared security state, `HTTPBearer`/authorization dependency, `LinuxAuditAnalysisLimiter`와 caller-supplied audit sink를 app instance마다 독립적으로 묶는다. Handler response에는 principal을 전달하지 않고 route dependency가 permission을 enforce한 뒤 endpoint closure가 staging 전에 capacity를 acquire한다. Audit integration은 Linux Audit endpoint에만 한정하며 generic dependency container나 application-wide logging framework로 확대하지 않는다.
 
 Known staging, analysis 및 projection error는 fixed envelope로 투영되고, outer `except Exception`은 `INTERNAL_SERVER_ERROR`로 제한한다. `BaseException`과 cancellation은 성공이나 bounded error로 바꾸지 않는다. Staging context는 success, validation failure, analysis/projection failure, unexpected exception 및 cancellation에서 owned temporary directory를 정리한다. Request `UploadFile`은 FastAPI/Starlette request lifecycle이 닫는다.
 
@@ -210,9 +212,9 @@ ASGI middleware는 dependency보다 앞에서 header를 검사할 수 있지만 
 
 Production은 upstream gateway에서 credential-aware rejection이 가능하면 사용하고, credential validity를 edge에서 공유하지 않더라도 적어도 strict total-body/header/rate/connection limits를 authentication 전에 적용해야 한다. Application은 endpoint authorization을 다시 수행한다. FastAPI dependency만으로 unauthenticated resource-exhaustion 방어가 완성된다고 주장하지 않는다.
 
-## 12. Access-audit design
+## 12. Implemented access-audit boundary
 
-Security audit는 general Uvicorn access log와 별도 allowlist record다. Exactly one terminal event per endpoint request를 목표로 하며 category는 다음 중 하나다.
+Security audit는 general Uvicorn access log와 별도인 immutable allowlist record다. Application security flow에 도달한 request마다 request-local recorder가 exactly one terminal emission attempt를 강제하며 category는 다음 중 하나다.
 
 - `authentication_failed`
 - `authorization_failed`
@@ -224,13 +226,13 @@ Security audit는 general Uvicorn access log와 별도 allowlist record다. Exac
 
 Allowed fields:
 
-- Schema/event version
-- Logging infrastructure가 생성한 UTC timestamp
-- Bounded request ID; successful request에는 response analysis UUID를 별도 field로 추가 가능
+- Application이 생성한 independent UUID4 `audit_event_id`
+- Inject/patch 가능한 UTC clock이 생성한 timezone-aware timestamp
+- Successful completion에만 response `analysis_id`
 - Constant endpoint identifier와 HTTP method
 - Authenticated request에만 bounded `principal_id`
 - 위 fixed result category와 HTTP status
-- Accepted file count
+- Authentication/authorization 뒤 safely known인 exact non-negative file count
 - Exact content bytes 대신 fixed total-size bucket
 - Fixed duration bucket
 
@@ -243,9 +245,11 @@ Forbidden fields:
 - Exception string, traceback, object repr, full request/response headers
 - Client IP until trusted-proxy semantics and privacy purpose are approved
 
-Authentication dependency and handler record outcome in request-local bounded state; one outer endpoint audit finalizer emits the terminal event to prevent duplicate logs. Auth failure omits principal. Authorization failure may include validated principal. Cancellation is re-raised after recording `cancelled`; it is not mapped to success. Analysis UUID is not generated early merely for failed authentication, authorization or capacity requests, so a separate request ID is used.
+Recorder에는 raw request, `UploadFile`, exception, token 또는 analysis object를 저장하지 않는다. Auth failure는 principal/file count를 생략하고 authorization failure는 validated principal만 보관한다. Capacity rejection은 parsed file count까지만 포함하고 size는 `unknown`이다. Staging이 정상 완료된 뒤에만 staged `size_bytes` 합계를 `under_1_mib`, `1_to_10_mib`, `over_10_mib` 중 하나로 축약한다. Monotonic elapsed time은 `under_1s`, `1_to_5s`, `over_5s`로 축약한다. 경계에서 정확히 1초는 `1_to_5s`, 정확히 5초는 `over_5s`이며, size/duration bucket은 operational category일 뿐 security threshold, risk, confidence 또는 verdict가 아니다. Cancellation audit에는 public HTTP response가 없으므로 internal audit-only status `499`를 사용하고 cancellation을 그대로 재전파한다.
 
-Audit emitter initialization is part of enabled-app fail-closed startup validation. Runtime sink failure must not expose content, retry without bounds or overwrite an already determined response with secret-bearing detail. It emits a bounded local health signal through a protected fallback, marks the instance unhealthy for operator action, and leaves retention/delivery guarantees to deployment. Retention duration, immutable storage, access approval, monitoring and deletion are deployment policy and must exist before production enablement. Audit logging must not become a second forensic-evidence store.
+Non-cancellation path는 final category/status와 bounded response를 먼저 결정하고 immutable event를 만든 뒤 `await sink.emit(event)`가 완료되어야 response를 반환한다. Sink emission이 실패하면 원래 success/4xx/500 response를 반환하지 않고 fixed `500 LINUX_AUDIT_ACCESS_AUDIT_FAILED`로 대체하며 exception text를 복사하거나 두 번째 audit를 시도하지 않는다. Cancellation은 event emission을 한 번 시도하되 sink failure가 cancellation을 대체하지 않으며 fixed note만 cancellation에 추가한다. 모든 경우 staging cleanup과 limiter release가 유지된다.
+
+Audit sink 준비는 enabled-app route registration 이전 fail-closed validation이다. Default logger, stdout/stderr, production in-memory list, file sink 또는 network sink는 제공하지 않으며 caller가 async `LinuxAuditApiAccessAuditSink`를 명시적으로 주입한다. `emit()` 완료는 persistence, integrity 또는 remote delivery를 보장하지 않는다. Retention 기간, sink access control, integrity protection, monitoring, remote shipping 및 deletion은 deployment policy이며 production enablement 전에 정해야 한다. Audit logging은 두 번째 forensic-evidence store가 되어서는 안 된다.
 
 ## 13. TLS and proxy trust
 
@@ -290,7 +294,7 @@ Static bearer authentication does not prevent replay, establish phishing resista
 
 ## 16. Implementation sequence
 
-Phase 3Y-H까지의 implementation status와 다음 순서는 다음과 같다.
+Phase 3Y-J까지의 implementation status와 다음 순서는 다음과 같다.
 
 1. 완료: focused `app/security/linux_audit_api.py`의 frozen config, startup-only configuration error, digest preparation과 immutable principal
 2. 완료: `create_app()` explicit config와 route registration 전 fail-closed combination validation
@@ -298,7 +302,7 @@ Phase 3Y-H까지의 implementation status와 다음 순서는 다음과 같다.
 4. 완료: immutable principal에 대한 pure `linux-audit:analyze` authorization check
 5. 완료: app-owned non-blocking concurrency limiter와 cancellation-safe release
 6. 완료: strict 401/403/429 projection과 bounded `WWW-Authenticate`
-7. Add a small request-local audit outcome carrier and one allowlist structured emitter; do not add a generic logging framework.
+7. 완료: Small request-local audit recorder, immutable allowlist event, explicit async sink와 fail-closed runtime projection
 8. 완료: authentication → authorization → capacity → existing staging/orchestration/projection integration
 9. Document required gateway TLS, total-body/header/rate/connection limits and trusted-proxy configuration in a deployment-specific artifact.
 10. 완료: privacy, multipart ordering, deterministic concurrency와 failure acceptance tests

@@ -1,10 +1,17 @@
+import asyncio
 import base64
 import hashlib
+import inspect
+import math
 import re
 import secrets
+import time
+from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Annotated
+from datetime import datetime, timezone
+from typing import Annotated, Literal
+from uuid import UUID, uuid4 as _audit_uuid4
 
 from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -27,12 +34,25 @@ LINUX_AUDIT_BUSY_ERROR_STATUS = 429
 LINUX_AUDIT_BUSY_ERROR_MESSAGE = (
     "Linux Audit analysis capacity is unavailable."
 )
+LINUX_AUDIT_AUDIT_FAILED_ERROR_CODE = (
+    "LINUX_AUDIT_ACCESS_AUDIT_FAILED"
+)
+LINUX_AUDIT_AUDIT_FAILED_ERROR_STATUS = 500
+LINUX_AUDIT_AUDIT_FAILED_ERROR_MESSAGE = (
+    "Linux Audit access audit could not be completed."
+)
 
 _CONFIGURATION_ERROR_MESSAGE = (
     "Linux Audit API security configuration is invalid."
 )
 _LIMITER_CONTRACT_ERROR_MESSAGE = (
     "Linux Audit analysis capacity state is invalid."
+)
+_AUDIT_CONTRACT_ERROR_MESSAGE = (
+    "Linux Audit access audit contract is invalid."
+)
+_AUDIT_EMISSION_FAILURE_NOTE = (
+    "Linux Audit access audit emission failed."
 )
 _TOKEN_LENGTH = 43
 _TOKEN_BYTES = 32
@@ -44,6 +64,55 @@ _AUTHORIZATION_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 _V1_PERMISSIONS = frozenset((LINUX_AUDIT_ANALYZE_PERMISSION,))
+_AUDIT_ENDPOINT = "/api/analyze-linux-audit"
+_AUDIT_METHOD = "POST"
+_AUDIT_CATEGORIES = frozenset((
+    "authentication_failed",
+    "authorization_failed",
+    "capacity_rejected",
+    "validation_failed",
+    "analysis_completed",
+    "internal_failed",
+    "cancelled",
+))
+_UPLOAD_SIZE_BUCKETS = frozenset((
+    "unknown",
+    "under_1_mib",
+    "1_to_10_mib",
+    "over_10_mib",
+))
+_DURATION_BUCKETS = frozenset((
+    "unknown",
+    "under_1s",
+    "1_to_5s",
+    "over_5s",
+))
+_VALIDATION_HTTP_STATUSES = frozenset((400, 409, 413, 415, 422))
+_ONE_MIB = 1024 * 1024
+_TEN_MIB = 10 * 1024 * 1024
+_AUDIT_RECORDER_STATE_KEY = "linux_audit_api_access_audit_recorder"
+
+AuditResultCategory = Literal[
+    "authentication_failed",
+    "authorization_failed",
+    "capacity_rejected",
+    "validation_failed",
+    "analysis_completed",
+    "internal_failed",
+    "cancelled",
+]
+UploadSizeBucket = Literal[
+    "unknown",
+    "under_1_mib",
+    "1_to_10_mib",
+    "over_10_mib",
+]
+DurationBucket = Literal[
+    "unknown",
+    "under_1s",
+    "1_to_5s",
+    "over_5s",
+]
 
 
 @dataclass(frozen=True)
@@ -65,6 +134,125 @@ class PreparedLinuxAuditApiSecurity:
 class AuthenticatedLinuxAuditPrincipal:
     principal_id: str
     permissions: frozenset[str]
+
+
+@dataclass(frozen=True, repr=False)
+class LinuxAuditApiAccessAuditEvent:
+    audit_event_id: UUID
+    analysis_id: UUID | None
+    timestamp: datetime
+    principal_id: str | None
+    endpoint: Literal["/api/analyze-linux-audit"]
+    method: Literal["POST"]
+    result_category: AuditResultCategory
+    http_status: int
+    file_count: int | None
+    upload_size_bucket: UploadSizeBucket
+    duration_bucket: DurationBucket
+
+    def __post_init__(self):
+        if (
+            type(self.audit_event_id) is not UUID
+            or (
+                self.analysis_id is not None
+                and type(self.analysis_id) is not UUID
+            )
+            or type(self.timestamp) is not datetime
+            or self.timestamp.tzinfo is not timezone.utc
+            or (
+                self.principal_id is not None
+                and (
+                    type(self.principal_id) is not str
+                    or _PRINCIPAL_PATTERN.fullmatch(
+                        self.principal_id
+                    ) is None
+                )
+            )
+            or type(self.endpoint) is not str
+            or self.endpoint != _AUDIT_ENDPOINT
+            or type(self.method) is not str
+            or self.method != _AUDIT_METHOD
+            or type(self.result_category) is not str
+            or self.result_category not in _AUDIT_CATEGORIES
+            or type(self.http_status) is not int
+            or (
+                self.file_count is not None
+                and (
+                    type(self.file_count) is not int
+                    or self.file_count < 0
+                )
+            )
+            or type(self.upload_size_bucket) is not str
+            or self.upload_size_bucket not in _UPLOAD_SIZE_BUCKETS
+            or type(self.duration_bucket) is not str
+            or self.duration_bucket not in _DURATION_BUCKETS
+        ):
+            raise LinuxAuditApiAccessAuditContractError()
+        self._validate_category_contract()
+
+    def _validate_category_contract(self):
+        category = self.result_category
+        if category == "authentication_failed":
+            valid = (
+                self.http_status == 401
+                and self.principal_id is None
+                and self.file_count is None
+                and self.analysis_id is None
+                and self.upload_size_bucket == "unknown"
+            )
+        elif category == "authorization_failed":
+            valid = (
+                self.http_status == 403
+                and self.principal_id is not None
+                and self.file_count is None
+                and self.analysis_id is None
+                and self.upload_size_bucket == "unknown"
+            )
+        elif category == "capacity_rejected":
+            valid = (
+                self.http_status == 429
+                and self.principal_id is not None
+                and self.file_count is not None
+                and self.analysis_id is None
+                and self.upload_size_bucket == "unknown"
+            )
+        elif category == "validation_failed":
+            valid = (
+                self.http_status in _VALIDATION_HTTP_STATUSES
+                and self.principal_id is not None
+                and self.file_count is not None
+                and self.analysis_id is None
+            )
+        elif category == "analysis_completed":
+            valid = (
+                self.http_status == 200
+                and self.principal_id is not None
+                and self.file_count is not None
+                and self.analysis_id is not None
+                and self.upload_size_bucket != "unknown"
+            )
+        elif category == "internal_failed":
+            valid = (
+                self.http_status == 500
+                and self.principal_id is not None
+                and self.file_count is not None
+                and self.analysis_id is None
+            )
+        else:
+            valid = self.http_status == 499 and self.analysis_id is None
+
+        if not valid:
+            raise LinuxAuditApiAccessAuditContractError()
+
+    def __repr__(self):
+        return "LinuxAuditApiAccessAuditEvent()"
+
+
+class LinuxAuditApiAccessAuditSink(ABC):
+
+    @abstractmethod
+    async def emit(self, event: LinuxAuditApiAccessAuditEvent) -> None:
+        raise NotImplementedError
 
 
 class LinuxAuditApiSecurityConfigurationError(ValueError):
@@ -89,6 +277,21 @@ class LinuxAuditApiAuthorizationError(ValueError):
         self.code = LINUX_AUDIT_AUTHORIZATION_ERROR_CODE
         self.status_code = LINUX_AUDIT_AUTHORIZATION_ERROR_STATUS
         self.message = LINUX_AUDIT_AUTHORIZATION_ERROR_MESSAGE
+
+
+class LinuxAuditApiAccessAuditContractError(RuntimeError):
+
+    def __init__(self):
+        super().__init__(_AUDIT_CONTRACT_ERROR_MESSAGE)
+
+
+class LinuxAuditApiAccessAuditFailedError(RuntimeError):
+
+    def __init__(self):
+        super().__init__(LINUX_AUDIT_AUDIT_FAILED_ERROR_MESSAGE)
+        self.code = LINUX_AUDIT_AUDIT_FAILED_ERROR_CODE
+        self.status_code = LINUX_AUDIT_AUDIT_FAILED_ERROR_STATUS
+        self.message = LINUX_AUDIT_AUDIT_FAILED_ERROR_MESSAGE
 
 
 class LinuxAuditAnalysisBusyError(RuntimeError):
@@ -169,6 +372,207 @@ class LinuxAuditAnalysisLimiter:
             or not 0 <= self.__in_use <= self.__capacity
         ):
             raise LinuxAuditAnalysisLimiterContractError()
+
+
+def _upload_size_bucket(size_bytes: object) -> UploadSizeBucket:
+    if type(size_bytes) is not int or size_bytes < 0:
+        raise LinuxAuditApiAccessAuditContractError()
+    if size_bytes < _ONE_MIB:
+        return "under_1_mib"
+    if size_bytes <= _TEN_MIB:
+        return "1_to_10_mib"
+    return "over_10_mib"
+
+
+def _duration_bucket(elapsed_seconds: object) -> DurationBucket:
+    if (
+        type(elapsed_seconds) not in (int, float)
+        or not math.isfinite(elapsed_seconds)
+        or elapsed_seconds < 0
+    ):
+        raise LinuxAuditApiAccessAuditContractError()
+    if elapsed_seconds < 1:
+        return "under_1s"
+    if elapsed_seconds < 5:
+        return "1_to_5s"
+    return "over_5s"
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class LinuxAuditApiAccessAuditRecorder:
+    __slots__ = (
+        "__audit_event_id",
+        "__file_count",
+        "__monotonic",
+        "__principal_id",
+        "__sink",
+        "__started_at",
+        "__terminal_attempted",
+        "__upload_size_bucket",
+        "__utc_now",
+    )
+
+    def __init__(
+        self,
+        sink: LinuxAuditApiAccessAuditSink,
+        *,
+        audit_event_id: UUID,
+        started_at: float,
+        utc_now: Callable[[], datetime],
+        monotonic: Callable[[], float],
+    ):
+        if (
+            not isinstance(sink, LinuxAuditApiAccessAuditSink)
+            or type(audit_event_id) is not UUID
+            or type(started_at) not in (int, float)
+            or not math.isfinite(started_at)
+            or not callable(utc_now)
+            or not callable(monotonic)
+        ):
+            raise LinuxAuditApiAccessAuditContractError()
+        self.__sink = sink
+        self.__audit_event_id = audit_event_id
+        self.__started_at = float(started_at)
+        self.__utc_now = utc_now
+        self.__monotonic = monotonic
+        self.__principal_id = None
+        self.__file_count = None
+        self.__upload_size_bucket = "unknown"
+        self.__terminal_attempted = False
+
+    def __repr__(self):
+        return "LinuxAuditApiAccessAuditRecorder()"
+
+    @property
+    def terminal_attempted(self) -> bool:
+        return self.__terminal_attempted
+
+    def set_principal_id(self, principal_id: str) -> None:
+        if (
+            self.__terminal_attempted
+            or type(principal_id) is not str
+            or _PRINCIPAL_PATTERN.fullmatch(principal_id) is None
+            or self.__principal_id is not None
+        ):
+            raise LinuxAuditApiAccessAuditContractError()
+        self.__principal_id = principal_id
+
+    def set_file_count(self, file_count: int) -> None:
+        if (
+            self.__terminal_attempted
+            or type(file_count) is not int
+            or file_count < 0
+            or self.__file_count is not None
+        ):
+            raise LinuxAuditApiAccessAuditContractError()
+        self.__file_count = file_count
+
+    def set_upload_size_bytes(self, size_bytes: int) -> None:
+        if (
+            self.__terminal_attempted
+            or self.__upload_size_bucket != "unknown"
+        ):
+            raise LinuxAuditApiAccessAuditContractError()
+        self.__upload_size_bucket = _upload_size_bucket(size_bytes)
+
+    async def emit(
+        self,
+        *,
+        result_category: AuditResultCategory,
+        http_status: int,
+        analysis_id: UUID | None = None,
+    ) -> None:
+        if self.__terminal_attempted:
+            raise LinuxAuditApiAccessAuditContractError()
+        self.__terminal_attempted = True
+
+        timestamp = self.__utc_now()
+        ended_at = self.__monotonic()
+        if type(ended_at) not in (int, float):
+            raise LinuxAuditApiAccessAuditContractError()
+        event = LinuxAuditApiAccessAuditEvent(
+            audit_event_id=self.__audit_event_id,
+            analysis_id=analysis_id,
+            timestamp=timestamp,
+            principal_id=self.__principal_id,
+            endpoint=_AUDIT_ENDPOINT,
+            method=_AUDIT_METHOD,
+            result_category=result_category,
+            http_status=http_status,
+            file_count=self.__file_count,
+            upload_size_bucket=self.__upload_size_bucket,
+            duration_bucket=_duration_bucket(
+                ended_at - self.__started_at
+            ),
+        )
+        result = await self.__sink.emit(event)
+        if result is not None:
+            raise LinuxAuditApiAccessAuditContractError()
+
+
+AuditRecorderFactory = Callable[[], LinuxAuditApiAccessAuditRecorder]
+
+
+def prepare_linux_audit_api_access_audit_sink(
+    sink: LinuxAuditApiAccessAuditSink,
+) -> LinuxAuditApiAccessAuditSink:
+    if (
+        not isinstance(sink, LinuxAuditApiAccessAuditSink)
+        or not inspect.iscoroutinefunction(type(sink).emit)
+    ):
+        raise _configuration_error()
+    return sink
+
+
+def create_linux_audit_access_audit_recorder_factory(
+    sink: LinuxAuditApiAccessAuditSink,
+) -> AuditRecorderFactory:
+    prepared_sink = prepare_linux_audit_api_access_audit_sink(sink)
+
+    def create_recorder() -> LinuxAuditApiAccessAuditRecorder:
+        return LinuxAuditApiAccessAuditRecorder(
+            prepared_sink,
+            audit_event_id=_audit_uuid4(),
+            started_at=time.monotonic(),
+            utc_now=_utc_now,
+            monotonic=time.monotonic,
+        )
+
+    return create_recorder
+
+
+def get_linux_audit_access_audit_recorder(
+    request: Request,
+) -> LinuxAuditApiAccessAuditRecorder:
+    recorder = getattr(
+        request.state,
+        _AUDIT_RECORDER_STATE_KEY,
+        None,
+    )
+    if type(recorder) is not LinuxAuditApiAccessAuditRecorder:
+        raise LinuxAuditApiAccessAuditContractError()
+    return recorder
+
+
+async def emit_linux_audit_cancellation_preserving(
+    recorder: LinuxAuditApiAccessAuditRecorder,
+    cancellation: asyncio.CancelledError,
+) -> None:
+    if type(recorder) is not LinuxAuditApiAccessAuditRecorder:
+        cancellation.add_note(_AUDIT_EMISSION_FAILURE_NOTE)
+        return
+    if recorder.terminal_attempted:
+        return
+    try:
+        await recorder.emit(
+            result_category="cancelled",
+            http_status=499,
+        )
+    except Exception:
+        cancellation.add_note(_AUDIT_EMISSION_FAILURE_NOTE)
 
 
 def _configuration_error() -> LinuxAuditApiSecurityConfigurationError:
@@ -280,8 +684,12 @@ AuthorizationDependency = Callable[
 
 def create_linux_audit_authentication_dependency(
     prepared: PreparedLinuxAuditApiSecurity,
+    recorder_factory: AuditRecorderFactory,
 ) -> AuthenticationDependency:
-    if type(prepared) is not PreparedLinuxAuditApiSecurity:
+    if (
+        type(prepared) is not PreparedLinuxAuditApiSecurity
+        or not callable(recorder_factory)
+    ):
         raise _configuration_error()
 
     bearer = HTTPBearer(
@@ -297,28 +705,62 @@ def create_linux_audit_authentication_dependency(
             Security(bearer),
         ],
     ) -> AuthenticatedLinuxAuditPrincipal:
-        authorization_values = request.headers.getlist("authorization")
-        if len(authorization_values) != 1:
-            raise _authentication_error()
-
-        authorization_value = authorization_values[0]
         try:
-            encoded_header = authorization_value.encode("ascii")
-        except UnicodeEncodeError:
-            raise _authentication_error() from None
+            recorder = recorder_factory()
+            if type(recorder) is not LinuxAuditApiAccessAuditRecorder:
+                raise LinuxAuditApiAccessAuditContractError()
+            setattr(request.state, _AUDIT_RECORDER_STATE_KEY, recorder)
+        except Exception:
+            raise LinuxAuditApiAccessAuditFailedError() from None
 
-        if (
-            len(encoded_header) > _MAX_AUTHORIZATION_HEADER_BYTES
-            or _AUTHORIZATION_PATTERN.fullmatch(authorization_value) is None
-            or credentials is None
-            or credentials.scheme.casefold() != "bearer"
-        ):
-            raise _authentication_error()
+        try:
+            authorization_values = request.headers.getlist(
+                "authorization"
+            )
+            if len(authorization_values) != 1:
+                raise _authentication_error()
 
-        return authenticate_linux_audit_token(
-            prepared,
-            credentials.credentials,
-        )
+            authorization_value = authorization_values[0]
+            try:
+                encoded_header = authorization_value.encode("ascii")
+            except UnicodeEncodeError:
+                raise _authentication_error() from None
+
+            if (
+                len(encoded_header) > _MAX_AUTHORIZATION_HEADER_BYTES
+                or _AUTHORIZATION_PATTERN.fullmatch(
+                    authorization_value
+                ) is None
+                or credentials is None
+                or credentials.scheme.casefold() != "bearer"
+            ):
+                raise _authentication_error()
+
+            principal = authenticate_linux_audit_token(
+                prepared,
+                credentials.credentials,
+            )
+            recorder.set_principal_id(principal.principal_id)
+            return principal
+        except LinuxAuditApiAuthenticationError:
+            try:
+                await recorder.emit(
+                    result_category="authentication_failed",
+                    http_status=401,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                raise LinuxAuditApiAccessAuditFailedError() from None
+            raise
+        except asyncio.CancelledError as cancellation:
+            await emit_linux_audit_cancellation_preserving(
+                recorder,
+                cancellation,
+            )
+            raise
+        except LinuxAuditApiAccessAuditContractError:
+            raise LinuxAuditApiAccessAuditFailedError() from None
 
     return authenticate
 
@@ -330,11 +772,31 @@ def create_linux_audit_authorization_dependency(
         raise _configuration_error()
 
     async def authorize(
+        request: Request,
         principal: Annotated[
             AuthenticatedLinuxAuditPrincipal,
             Depends(authentication_dependency),
         ],
     ) -> AuthenticatedLinuxAuditPrincipal:
-        return authorize_linux_audit_analysis(principal)
+        recorder = get_linux_audit_access_audit_recorder(request)
+        try:
+            return authorize_linux_audit_analysis(principal)
+        except LinuxAuditApiAuthorizationError:
+            try:
+                await recorder.emit(
+                    result_category="authorization_failed",
+                    http_status=403,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                raise LinuxAuditApiAccessAuditFailedError() from None
+            raise
+        except asyncio.CancelledError as cancellation:
+            await emit_linux_audit_cancellation_preserving(
+                recorder,
+                cancellation,
+            )
+            raise
 
     return authorize

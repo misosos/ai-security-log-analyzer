@@ -42,6 +42,7 @@ def test_security_design_exists_and_records_current_gap_and_v1_choice():
     for contract in (
         "enable_linux_audit_api: bool = False",
         "linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None",
+        "linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None",
         "feature gate는 route registration control일 뿐 authentication",
         "Static operator bearer token",
         "External OAuth2/OIDC",
@@ -163,7 +164,7 @@ def test_access_audit_has_fixed_allowlist_and_sensitive_denylist():
         "## 13.", 1
     )[0]
     for allowed in (
-        "request ID",
+        "audit_event_id",
         "principal_id",
         "result category",
         "HTTP status",
@@ -183,6 +184,32 @@ def test_access_audit_has_fixed_allowlist_and_sensitive_denylist():
         "full request/response headers",
     ):
         assert forbidden.casefold() in forbidden_section.casefold()
+
+
+def test_access_audit_implementation_is_fail_closed_and_privacy_bounded():
+    text = document_text()
+
+    for contract in (
+        "Phase 3Y-J",
+        "exactly one terminal emission attempt",
+        "LINUX_AUDIT_ACCESS_AUDIT_FAILED",
+        "await sink.emit(event)",
+        "Default logger",
+        "file sink",
+        "network sink",
+        "under_1_mib",
+        "1_to_10_mib",
+        "over_10_mib",
+        "under_1s",
+        "1_to_5s",
+        "over_5s",
+        "operational category",
+        "Cancellation",
+        "retention",
+        "integrity protection",
+        "remote shipping",
+    ):
+        assert contract.casefold() in text.casefold()
 
 
 def test_privacy_threat_model_and_plans_are_complete():

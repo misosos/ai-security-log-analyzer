@@ -24,6 +24,7 @@ from app.security.linux_audit_api import (
     LinuxAuditAnalysisBusyError,
     LinuxAuditAnalysisLimiter,
     LinuxAuditAnalysisLimiterContractError,
+    LinuxAuditApiAccessAuditSink,
     LinuxAuditApiAuthorizationError,
     LinuxAuditApiSecurityConfig,
     LinuxAuditApiSecurityConfigurationError,
@@ -48,6 +49,14 @@ PRIVACY_CANARY = "SYNTHETIC_CAPACITY_SECRET_DO_NOT_EXPOSE"
 PRINCIPAL_CANARY = "SYNTHETIC_CAPACITY_OPERATOR"
 
 
+class RecordingAuditSink(LinuxAuditApiAccessAuditSink):
+    def __init__(self):
+        self.events = []
+
+    async def emit(self, event):
+        self.events.append(event)
+
+
 def security_config(capacity, *, principal_id="operator-1"):
     return LinuxAuditApiSecurityConfig(
         operator_token=SecretStr(OPERATOR_TOKEN),
@@ -63,6 +72,7 @@ def secured_app(capacity=1, *, principal_id="operator-1"):
             capacity,
             principal_id=principal_id,
         ),
+        linux_audit_api_audit_sink=RecordingAuditSink(),
     )
 
 

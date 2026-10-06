@@ -123,7 +123,10 @@ def test_design_document_keeps_llm_frontend_and_auth_boundaries_explicit():
     assert "bearer authentication" in text
     assert "linux-audit:analyze" in text
     assert "LINUX_AUDIT_ANALYSIS_BUSY" in text
+    assert "LINUX_AUDIT_ACCESS_AUDIT_FAILED" in text
     assert "process-local concurrency limit" in text
+    assert "explicit audit sink" in text
+    assert "fail closed" in text
     assert "기본 비활성화" in text
     assert "Detailed forensic evidence" in text
     assert "RBAC" in text
@@ -165,7 +168,7 @@ def test_design_document_records_bounded_staging_implementation_boundary():
         "input-1.audit",
         "0600",
         "NO_ELIGIBLE_LINUX_AUDIT_EVENTS",
-        "Module-level default app은 endpoint나 limiter를 만들지 않으며",
+        "Module-level default app은 endpoint, limiter 또는 sink를 만들지 않으며",
     ):
         assert contract in text
 

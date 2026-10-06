@@ -9,6 +9,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 from pydantic import SecretStr
 
 import app.analyzer.llm as llm_module
@@ -20,7 +21,11 @@ from app.analyzer.linux_audit_api import (
 from app.models.linux_audit_api import (
     LinuxAuditResponseProjectionError,
 )
-from app.security.linux_audit_api import LinuxAuditApiSecurityConfig
+from app.security.linux_audit_api import (
+    LinuxAuditApiAccessAuditSink,
+    LinuxAuditApiSecurityConfig,
+    create_linux_audit_access_audit_recorder_factory,
+)
 
 
 ENDPOINT = "/api/analyze-linux-audit"
@@ -50,10 +55,19 @@ SECURITY_CONFIG = LinuxAuditApiSecurityConfig(
 )
 
 
+class RecordingAuditSink(LinuxAuditApiAccessAuditSink):
+    def __init__(self):
+        self.events = []
+
+    async def emit(self, event):
+        self.events.append(event)
+
+
 def enabled_app():
     return api_module.create_app(
         enable_linux_audit_api=True,
         linux_audit_api_security=SECURITY_CONFIG,
+        linux_audit_api_audit_sink=RecordingAuditSink(),
     )
 
 
@@ -763,9 +777,23 @@ def test_staging_failure_and_cancellation_cleanup(monkeypatch, tmp_path):
         endpoint = api_module._create_linux_audit_analysis_endpoint(
             api_module.LinuxAuditAnalysisLimiter(1)
         )
+        request = Request({
+            "type": "http",
+            "method": "POST",
+            "path": ENDPOINT,
+            "headers": [],
+        })
+        request.state.linux_audit_api_access_audit_recorder = (
+            create_linux_audit_access_audit_recorder_factory(
+                RecordingAuditSink()
+            )()
+        )
+        request.state.linux_audit_api_access_audit_recorder.set_principal_id(
+            "test-operator"
+        )
         try:
             with pytest.raises(asyncio.CancelledError):
-                await endpoint([upload])
+                await endpoint(request, [upload])
         finally:
             await upload.close()
 

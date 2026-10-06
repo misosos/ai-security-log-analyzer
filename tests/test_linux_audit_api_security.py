@@ -14,6 +14,7 @@ from app.security.linux_audit_api import (
     LINUX_AUDIT_ANALYZE_PERMISSION,
     AuthenticatedLinuxAuditPrincipal,
     LinuxAuditApiAuthenticationError,
+    LinuxAuditApiAccessAuditSink,
     LinuxAuditApiAuthorizationError,
     LinuxAuditApiSecurityConfig,
     LinuxAuditApiSecurityConfigurationError,
@@ -40,6 +41,14 @@ OTHER_TOKEN = base64.urlsafe_b64encode(OTHER_TOKEN_BYTES).rstrip(
 AUTH_HEADERS = {"Authorization": f"Bearer {OPERATOR_TOKEN}"}
 
 
+class RecordingAuditSink(LinuxAuditApiAccessAuditSink):
+    def __init__(self):
+        self.events = []
+
+    async def emit(self, event):
+        self.events.append(event)
+
+
 def valid_config(**changes):
     values = {
         "operator_token": SecretStr(OPERATOR_TOKEN),
@@ -54,6 +63,7 @@ def secured_app():
     return api_module.create_app(
         enable_linux_audit_api=True,
         linux_audit_api_security=valid_config(),
+        linux_audit_api_audit_sink=RecordingAuditSink(),
     )
 
 

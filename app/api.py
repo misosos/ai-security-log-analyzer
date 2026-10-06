@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import uuid
@@ -35,12 +36,19 @@ from app.security.linux_audit_api import (
     LinuxAuditAnalysisBusyError,
     LinuxAuditAnalysisLimiter,
     LinuxAuditAnalysisLimiterContractError,
+    LinuxAuditApiAccessAuditContractError,
+    LinuxAuditApiAccessAuditFailedError,
+    LinuxAuditApiAccessAuditRecorder,
+    LinuxAuditApiAccessAuditSink,
     LinuxAuditApiAuthenticationError,
     LinuxAuditApiAuthorizationError,
     LinuxAuditApiSecurityConfig,
     LinuxAuditApiSecurityConfigurationError,
     create_linux_audit_authentication_dependency,
     create_linux_audit_authorization_dependency,
+    create_linux_audit_access_audit_recorder_factory,
+    emit_linux_audit_cancellation_preserving,
+    get_linux_audit_access_audit_recorder,
     prepare_linux_audit_api_security,
 )
 
@@ -224,9 +232,37 @@ def _linux_audit_error_response(error: object) -> JSONResponse:
 async def _linux_audit_security_error_handler(
     request: Request,
     error: LinuxAuditApiAuthenticationError
-    | LinuxAuditApiAuthorizationError,
+    | LinuxAuditApiAuthorizationError
+    | LinuxAuditApiAccessAuditFailedError,
 ) -> JSONResponse:
     return _linux_audit_error_response(error)
+
+
+async def _emit_linux_audit_terminal_event(
+    recorder: LinuxAuditApiAccessAuditRecorder,
+    response: object,
+    *,
+    result_category: str,
+    http_status: int,
+    analysis_id=None,
+):
+    if recorder.terminal_attempted:
+        return _linux_audit_error_response(
+            LinuxAuditApiAccessAuditFailedError()
+        )
+    try:
+        await recorder.emit(
+            result_category=result_category,
+            http_status=http_status,
+            analysis_id=analysis_id,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return _linux_audit_error_response(
+            LinuxAuditApiAccessAuditFailedError()
+        )
+    return response
 
 
 def _create_linux_audit_analysis_endpoint(
@@ -236,42 +272,112 @@ def _create_linux_audit_analysis_endpoint(
         raise LinuxAuditApiSecurityConfigurationError()
 
     async def analyze_linux_audit_logs(
+        request: Request,
         linux_audit_files: list[UploadFile] | None = File(default=None),
     ):
         try:
+            recorder = get_linux_audit_access_audit_recorder(request)
+            uploads = tuple(linux_audit_files or ())
+            recorder.set_file_count(len(uploads))
+        except LinuxAuditApiAccessAuditContractError:
+            return _linux_audit_error_response(
+                LinuxAuditApiAccessAuditFailedError()
+            )
+
+        try:
             async with limiter.acquire():
                 try:
-                    uploads = tuple(linux_audit_files or ())
                     async with stage_linux_audit_uploads(
                         uploads
                     ) as staged_inputs:
+                        recorder.set_upload_size_bytes(sum(
+                            staged.size_bytes
+                            for staged in staged_inputs
+                        ))
                         analysis = await run_in_threadpool(
                             analyze_staged_linux_audit_inputs,
                             staged_inputs,
                         )
-                        return build_linux_audit_api_response(
+                        analysis_id = uuid.uuid4()
+                        response = build_linux_audit_api_response(
                             analysis,
-                            analysis_id=uuid.uuid4(),
+                            analysis_id=analysis_id,
+                        )
+                        return await _emit_linux_audit_terminal_event(
+                            recorder,
+                            response,
+                            result_category="analysis_completed",
+                            http_status=200,
+                            analysis_id=analysis_id,
                         )
                 except (
                     LinuxAuditUploadValidationError,
                     LinuxAuditAnalysisValidationError,
                     LinuxAuditResponseProjectionError,
                 ) as error:
-                    return _linux_audit_error_response(error)
+                    response = _linux_audit_error_response(error)
+                    result_category = (
+                        "validation_failed"
+                        if response.status_code < 500
+                        else "internal_failed"
+                    )
+                    return await _emit_linux_audit_terminal_event(
+                        recorder,
+                        response,
+                        result_category=result_category,
+                        http_status=response.status_code,
+                    )
+                except asyncio.CancelledError as cancellation:
+                    await emit_linux_audit_cancellation_preserving(
+                        recorder,
+                        cancellation,
+                    )
+                    raise
                 except Exception:
-                    return _linux_audit_error_response(
+                    response = _linux_audit_error_response(
                         LinuxAuditUnexpectedServerError()
                     )
+                    return await _emit_linux_audit_terminal_event(
+                        recorder,
+                        response,
+                        result_category="internal_failed",
+                        http_status=500,
+                    )
         except LinuxAuditAnalysisBusyError as error:
-            return _linux_audit_error_response(error)
+            response = _linux_audit_error_response(error)
+            return await _emit_linux_audit_terminal_event(
+                recorder,
+                response,
+                result_category="capacity_rejected",
+                http_status=429,
+            )
+        except asyncio.CancelledError as cancellation:
+            await emit_linux_audit_cancellation_preserving(
+                recorder,
+                cancellation,
+            )
+            raise
         except LinuxAuditAnalysisLimiterContractError:
-            return _linux_audit_error_response(
+            response = _linux_audit_error_response(
                 LinuxAuditUnexpectedServerError()
             )
+            return await _emit_linux_audit_terminal_event(
+                recorder,
+                response,
+                result_category="internal_failed",
+                http_status=500,
+            )
         except Exception:
-            return _linux_audit_error_response(
+            response = _linux_audit_error_response(
                 LinuxAuditUnexpectedServerError()
+            )
+            if recorder.terminal_attempted:
+                return response
+            return await _emit_linux_audit_terminal_event(
+                recorder,
+                response,
+                result_category="internal_failed",
+                http_status=500,
             )
 
     return analyze_linux_audit_logs
@@ -281,6 +387,7 @@ def create_app(
     *,
     enable_linux_audit_api: bool = False,
     linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
+    linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None,
 ) -> FastAPI:
     if type(enable_linux_audit_api) is not bool:
         raise TypeError("enable_linux_audit_api must be a bool")
@@ -289,14 +396,20 @@ def create_app(
     authorization_dependency = None
     analysis_limiter = None
     if enable_linux_audit_api:
-        if linux_audit_api_security is None:
+        if (
+            linux_audit_api_security is None
+            or linux_audit_api_audit_sink is None
+        ):
             raise LinuxAuditApiSecurityConfigurationError()
         prepared_security = prepare_linux_audit_api_security(
             linux_audit_api_security
         )
         authentication_dependency = (
             create_linux_audit_authentication_dependency(
-                prepared_security
+                prepared_security,
+                create_linux_audit_access_audit_recorder_factory(
+                    linux_audit_api_audit_sink
+                ),
             )
         )
         authorization_dependency = (
@@ -307,7 +420,10 @@ def create_app(
         analysis_limiter = LinuxAuditAnalysisLimiter(
             prepared_security.max_concurrent_analyses
         )
-    elif linux_audit_api_security is not None:
+    elif (
+        linux_audit_api_security is not None
+        or linux_audit_api_audit_sink is not None
+    ):
         raise LinuxAuditApiSecurityConfigurationError()
 
     configured_app = FastAPI(
@@ -334,6 +450,10 @@ def create_app(
         )
         configured_app.add_exception_handler(
             LinuxAuditApiAuthorizationError,
+            _linux_audit_security_error_handler,
+        )
+        configured_app.add_exception_handler(
+            LinuxAuditApiAccessAuditFailedError,
             _linux_audit_security_error_handler,
         )
         configured_app.add_api_route(
