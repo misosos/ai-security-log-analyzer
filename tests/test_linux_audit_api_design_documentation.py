@@ -67,7 +67,7 @@ def test_design_document_defines_fixed_response_and_privacy_denylist():
         '"shared_memory_review"',
         '"session_process_review"',
         '"session_co_observation_count"',
-        '"sessions_with_shared_memory_privileged_execution_count"',
+        '"sessions_with_shared_memory_observation_count"',
     ):
         assert response_field in text
 
@@ -180,6 +180,26 @@ def test_design_document_records_route_independent_orchestration_boundary():
         "LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR",
         "Strict Pydantic response/error projection",
         "API, CLI, LLM 또는 Frontend에서 import/call하지 않는다",
+    ):
+        assert contract in text
+
+
+def test_design_document_records_strict_response_projection_boundary():
+    text = _document_text()
+
+    for contract in (
+        "app/models/linux_audit_api.py",
+        "Pydantic v2",
+        'extra="forbid"',
+        "exact non-negative integer",
+        'Literal["completed"]',
+        "actual `UUID`",
+        'model_dump(mode="json")',
+        "LINUX_AUDIT_RESPONSE_PROJECTION_ERROR",
+        "known-error mapping",
+        "Pydantic validation detail",
+        "현재 OpenAPI",
+        "default-disabled endpoint integration",
     ):
         assert contract in text
 

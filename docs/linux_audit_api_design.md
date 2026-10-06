@@ -2,7 +2,7 @@
 
 ## 1. 목적과 상태
 
-이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C에서는 bounded staging helper를 구현했고 Phase 3Y-D에서는 route-independent analysis orchestration을 구현했지만, 둘 다 어떤 production route에도 연결하지 않았다.
+이 문서는 Linux Audit 파일을 API로 받아 기존 pure parser, aggregate, collector와 immutable summary를 재사용할 때의 V1 입력·응답·privacy 경계를 정의한다. 현재 구현을 설명하는 부분과 후속 구현 제안을 구분하며, 이 문서 작성 시점에는 Linux Audit API endpoint가 없다. Phase 3Y-B에서 무인증 `/api/upload-test`는 public app과 OpenAPI schema에서 제거되었다. Phase 3Y-C의 bounded staging, Phase 3Y-D의 route-independent analysis orchestration 및 Phase 3Y-E의 strict response/error projection은 구현됐지만 어떤 production route에도 연결하지 않았다.
 
 V1 권고는 기본 비활성화된 전용 `POST /api/analyze-linux-audit`이다. 기존 `POST /api/analyze`, `AnalysisResponse`, `analyze(log_sources=None)`, CLI 및 Frontend contract는 변경하지 않는다. 인증과 resource control이 준비되지 않은 deployment에서는 endpoint를 활성화하지 않는다.
 
@@ -111,11 +111,11 @@ V1 public response에는 IP results와 existing `global_correlation`을 포함�
 
 ## 7. Response allowlist
 
-신규 endpoint는 기존 `AnalysisResponse`가 아닌 별도 strict Pydantic response model을 사용한다. Zero도 omission하지 않고 같은 fixed shape에서 exact non-negative integer `0`으로 반환한다. Zero는 activity 또는 attack 부재를 의미하지 않는다는 schema description을 둔다.
+`app/models/linux_audit_api.py`에는 기존 `AnalysisResponse`와 분리된 Pydantic v2 response/error model 및 projection builder가 구현되어 있다. 모든 model은 frozen, `extra="forbid"`, strict이며 count는 bool, string, float coercion 없이 exact non-negative integer만 허용한다. Zero도 omission하지 않고 같은 fixed shape에서 `0`으로 반환하며, zero는 activity 또는 attack 부재를 의미하지 않는다.
 
 ```json
 {
-  "analysis_id": "server-generated UUID",
+  "analysis_id": "12345678-1234-5678-9abc-def012345678",
   "status": "completed",
   "process_telemetry": {
     "observation_count": 0,
@@ -124,21 +124,21 @@ V1 public response에는 IP results와 existing `global_correlation`을 포함�
     "path_completeness_counts": {"complete": 0, "incomplete": 0}
   },
   "shared_memory_review": {
-    "shared_memory_privileged_execution_observation_count": 0
+    "observation_count": 0
   },
   "session_process_review": {
     "session_co_observation_count": 0,
     "process_observation_count": 0,
-    "process_outcome_success_count": 0,
-    "process_outcome_failure_count": 0,
-    "process_outcome_unknown_count": 0,
-    "shared_memory_privileged_execution_observation_count": 0,
-    "sessions_with_shared_memory_privileged_execution_count": 0
+    "outcome_counts": {"success": 0, "failure": 0, "unknown": 0},
+    "shared_memory_observation_count": 0,
+    "sessions_with_shared_memory_observation_count": 0
   }
 }
 ```
 
-Builder는 위 scalar와 fixed nested keys를 직접 복사하고 exact integer, non-negative 및 기존 outcome/count invariant를 검증한다. `asdict()`, `vars()`, arbitrary dict passthrough, generic dataclass/Pydantic serialization로 internal object를 투영하지 않는다.
+`analysis_id`는 builder caller가 actual `UUID`로 명시하며 builder가 생성하거나 현재 시간·randomness를 읽지 않는다. Status는 `Literal["completed"]`다. Builder는 `LinuxAuditApiAnalysis` exact type만 받고 위 scalar와 fixed nested keys를 하나씩 직접 복사한다. Process outcome/argv/path 합, overall shared-memory 상한, session outcome 합과 overall/session/linked cross-count invariant를 독립적으로 재검증한다. Invalid bool·음수·불변식은 clamp나 zero 치환 없이 `LINUX_AUDIT_RESPONSE_PROJECTION_ERROR`로 제한한다.
+
+`asdict()`, `vars()`, `__dict__`, arbitrary dict passthrough, generic `model_validate()`, generic dataclass/Pydantic serialization 또는 recursive serialization로 internal object를 투영하지 않는다. Pydantic validation detail의 location, input value와 내부 message도 public error body로 복사하지 않는다. `model_dump(mode="json")`과 `model_dump_json()`은 canonical UUID를 포함한 동일 fixed shape를 안정적으로 직렬화한다. 이 model을 `app/api.py`가 import하지 않으므로 현재 OpenAPI, `/api/health`와 `/api/analyze` schema는 변하지 않는다.
 
 기본 응답에는 `NormalizedEvent`, process/session/shared-memory object, detection evidence, argv, PROCTITLE, raw records, executable, PATH/CWD, PID/PPID, UID/GID/AUID/session ID, source_instance, node, event ID, timestamp, uploaded filename/path, temporary path, exception text, `results` 또는 `global_correlation`을 포함하지 않는다.
 
@@ -168,7 +168,10 @@ Error response는 고정 shape `{"error": {"code": "...", "message": "..."}}`만
 | duplicate content | 409 | `DUPLICATE_LINUX_AUDIT_FILE` | `Duplicate Linux Audit input is not allowed.` |
 | all-malformed/no normalized event | 422 | `NO_ELIGIBLE_LINUX_AUDIT_EVENTS` | `No eligible Linux Audit events were found.` |
 | collector/summary/response contract 실패 | 500 | `LINUX_AUDIT_ANALYSIS_CONTRACT_ERROR` | `Linux Audit analysis could not be completed.` |
+| response projection contract 실패 | 500 | `LINUX_AUDIT_RESPONSE_PROJECTION_ERROR` | `Linux Audit response could not be created.` |
 | 예상하지 못한 server failure | 500 | `INTERNAL_SERVER_ERROR` | `The request could not be completed.` |
+
+구현된 error projection은 `LinuxAuditUploadValidationError`, `LinuxAuditAnalysisValidationError` 및 `LinuxAuditResponseProjectionError`의 exact type과 고정 code/status/message 조합만 허용한다. 변조되거나 unknown/generic exception이면 user-controlled text를 복사하지 않고 fixed projection error로 축소한다. HTTP status는 frozen internal carrier에 두며 JSON body에는 포함하지 않는다. 아직 `HTTPException`으로 변환하거나 route에 연결하지 않았다.
 
 Expected input/contract 오류를 `200` empty result나 safe zero로 바꾸지 않는다. Endpoint-specific handler는 FastAPI 기본 validation을 missing-field code로 안정화하고 나머지 기존 route error contract를 바꾸지 않아야 한다.
 
@@ -210,10 +213,11 @@ FastAPI `TestClient`와 monkeypatch를 우선 사용하고 실제 network server
 1. 완료: `/api/upload-test`를 public app에서 제거
 2. 완료: bounded upload/temp lifecycle 및 internal validation error model을 route와 격리해 구현·테스트
 3. 완료: route-independent Linux Audit summary orchestration과 immutable scalar-only internal result 구현
-4. Strict Pydantic response/error projection과 default-disabled endpoint integration
-5. Success/failure cleanup, canary, LLM/API/CLI isolation acceptance
-6. 운영 resource 측정 후 count/size/concurrency limit 조정
-7. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
+4. 완료: Strict Pydantic response/error projection, invariant validation 및 known-error mapping
+5. Default-disabled endpoint integration과 success/failure cleanup acceptance
+6. Endpoint canary, LLM/API/CLI isolation 및 concurrency acceptance
+7. 운영 resource 측정 후 count/size/concurrency limit 조정
+8. 별도 승인 후에만 Frontend 또는 LLM consumer 검토
 
 V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detailed evidence download, asynchronous job queue, real-time ingestion, cross-request deduplication, risk/ATT&CK verdict, Gemini summary, 기존 `/api/analyze` migration과 Frontend integration이다.
 
@@ -253,4 +257,4 @@ V1 non-goals는 archive/gzip/URL/directory ingestion, raw log retention, detaile
 
 이 설계는 인증 system, rate limiter, proxy limit, crash-safe cleanup, malware scanning, storage encryption 또는 access audit을 구현하지 않는다. Upload content는 untrusted이고 parsing success가 completeness/authenticity를 보장하지 않는다. Fixed count도 unique process, 동일 인간, attack, incident 또는 compromise를 뜻하지 않는다.
 
-다음 구현 우선순위는 (1) Strict Pydantic response/error projection, (2) default-disabled endpoint와 production auth/resource gate, (3) endpoint-level canary와 concurrency acceptance다. Bounded staging helper는 아직 production API, CLI 또는 LLM에서 import/call하지 않으며, route-independent orchestration도 API, CLI, LLM 또는 Frontend에서 import/call하지 않는다. 이 내부 구현만으로 production enablement gate가 충족되지는 않는다.
+다음 구현 우선순위는 (1) default-disabled endpoint integration, (2) production auth/resource gate, (3) endpoint-level canary와 concurrency acceptance다. Bounded staging helper는 아직 production API, CLI 또는 LLM에서 import/call하지 않으며, route-independent orchestration과 strict projection도 API, CLI, LLM 또는 Frontend에서 import/call하지 않는다. 이 내부 구현만으로 production enablement gate가 충족되지는 않는다.
