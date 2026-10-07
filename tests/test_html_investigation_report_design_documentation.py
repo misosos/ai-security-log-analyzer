@@ -15,9 +15,9 @@ def normalized_document_text():
 def test_design_defines_phase_and_architecture_boundaries():
     text = document_text()
 
-    assert "This phase produces design documentation" in text
-    assert "documentation contract tests" in text
-    assert "only. It does not add an HTML renderer" in text
+    assert "The initial phase produced design documentation" in text
+    assert "documentation and documentation contract\ntests" in text
+    assert "It does not add an HTML\nrenderer" in text
     assert "explicit immutable report projection" in text
     assert "pure standalone HTML rendering" in text
     assert "must not invoke the CLI" in text
@@ -156,12 +156,6 @@ def test_design_defines_fixed_bounded_next_step_mappings():
         "`brute_force_to_successful_login`": (
             "`review_brute_force_login_transition`"
         ),
-        "`password_spray_to_successful_login`": (
-            "`review_spraying_like_login_transition`"
-        ),
-        "`successful_login_to_file_access`": (
-            "`review_post_login_file_access`"
-        ),
     }
     for observation_type, next_step_id in mappings.items():
         assert f"| {observation_type} | {next_step_id} |" in text
@@ -174,6 +168,7 @@ def test_design_defines_fixed_bounded_next_step_mappings():
     assert "automatic block of an account/IP" in text
     assert "Every step is limited to evidence review and verification" in text
     assert "privacy-canary exclusion from next-step text" in text
+    assert "correlation is not causation" in text
 
 
 def test_design_requires_standalone_rendering_security():

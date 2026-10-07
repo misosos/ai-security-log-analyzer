@@ -13,9 +13,11 @@ detection is not confirmed compromise, a correlation is not causation, an
 HTTP 200 response is not proof of file disclosure, and a successful login is
 not proof of account compromise.
 
-This phase produces design documentation and documentation contract tests
-only. It does not add an HTML renderer, template, frontend, route, endpoint,
-JavaScript, CSS bundle, dependency, or CLI option.
+The initial phase produced design documentation and documentation contract
+tests. The approved projection phase adds only the immutable projection types,
+strict builder, and focused tests described below. It does not add an HTML
+renderer, template, frontend, route, endpoint, JavaScript, CSS bundle,
+dependency, file writer, or CLI option.
 
 ## 2. Current architecture findings
 
@@ -124,36 +126,35 @@ table, or short evidence lists and does not add a new metric.
 
 ## 5. Immutable report projection
 
-The future projection is a route-independent contract. The names below are
-conceptual schema names, not implementation added by this phase:
+The implemented projection is a route-independent contract:
 
 ```text
-InvestigationReportProjection (immutable)
+InvestigationReportProjection (frozen)
 ├── schema_version: fixed literal
 ├── classification: fixed "Sensitive — Security Investigation Data"
 ├── summary: ReportSummaryProjection
-├── subjects: tuple[SubjectInvestigationProjection, ...]
+├── subjects: tuple[InvestigationSubjectRow, ...]
 └── linux_audit: LinuxAuditAggregateProjection | None
 
-SubjectInvestigationProjection (immutable)
-├── subject_ip: canonical IP string
+InvestigationSubjectRow (frozen)
 ├── review_order: positive integer
-├── risk_level: HIGH | MEDIUM | LOW
-├── likelihood: AssessmentDimensionProjection
-├── impact: AssessmentDimensionProjection
-├── confidence: AssessmentDimensionProjection
-├── detections: tuple[SupportedDetectionProjection, ...]
-├── correlations: tuple[SupportedCorrelationProjection, ...]
+├── subject_ip: canonical IP string
+├── primary_detection_display_name: fixed label | None
+├── notable_correlation_display_name: fixed label | None
+├── review_reason: bounded fixed-format summary
+├── detections: tuple[DetectionDisplayItem, ...]
+├── correlations: tuple[CorrelationDisplayItem, ...]
+├── risk_assessment: RiskAssessmentProjection
 ├── unsupported_detection_observed: bool
-├── limitations: tuple[approved static limitation identifiers, ...]
-└── next_steps: tuple[approved static next-step identifiers, ...]
+├── unsupported_correlation_observed: bool
+├── limitations: tuple[InterpretationLimitationItem, ...]
+└── next_steps: tuple[FixedNextStepItem, ...]
 
-SupportedCorrelationProjection (immutable)
+CorrelationDisplayItem (frozen)
+├── correlation_type: supported fixed identifier
 ├── display_name: supported fixed label
 ├── account_alias: "Account " + positive integer
-├── time_delta_seconds: finite non-negative number | None
-├── limitation_id: approved static identifier
-└── next_step_id: approved static identifier
+└── time_delta_seconds: finite non-negative number
 ```
 
 Every projection object must be immutable. The builder must explicitly read,
@@ -174,18 +175,22 @@ LLM input, and CLI strings. The following are prohibited at this boundary:
 - parsing CLI stdout;
 - using `repr()` or exception text as report content.
 
-Malformed required input fails projection with one fixed, bounded operator
-message outside the HTML. It must not fall back to dumping the rejected value
-or producing a partially populated report.
+`build_investigation_report_projection()` accepts the completed analysis and
+the optional existing process aggregate, shared-memory review summary, and
+session-process review summary as explicit arguments. It performs no loading,
+parsing, analysis, I/O, environment access, clock access, randomness, API/LLM
+call, or CLI invocation. Malformed required input fails projection with one
+fixed, bounded operator message outside the HTML. It must not fall back to
+dumping the rejected value or producing a partially populated report.
 
 ### 5.1 Assessment rationale
 
 `AssessmentDimensionProjection` contains only an existing level and approved
-existing rationale entries. A future builder must maintain a closed catalog
-of current deterministic rationale text and bounded numeric templates. It may
-copy a rationale only after its exact/static form or typed interpolation
-contract is validated. Unknown rationale is a projection contract failure;
-arbitrary rationale strings are not passed through.
+existing rationale entries. The builder maintains a closed catalog of current
+deterministic rationale text and bounded numeric templates. It copies a
+rationale only after its exact/static form or typed interpolation contract is
+validated. Unknown rationale is a projection contract failure; arbitrary
+rationale strings are not passed through.
 
 The report must not recalculate risk, likelihood, impact, or confidence and
 must not introduce a threshold, score, ATT&CK mapping, incident label, or
@@ -272,6 +277,15 @@ incidents, compromised systems, successful attacks, or unique processes.
 `session_process_co_observation_count` is not proof of physical session
 identity, direct user execution, or causation.
 
+When at least one Linux Audit summary is supplied,
+`LinuxAuditAggregateProjection` copies only these optional strict integer
+counts: process observation; process success/failure/unknown; argv and path
+complete/incomplete; shared-memory review observation; session-process
+co-observation and process observation; session-process
+success/failure/unknown; session-linked shared-memory observation; and
+sessions containing a shared-memory observation. It retains no Linux Audit
+event, context, process, path, identifier, or source object.
+
 Raw `global_correlation` is excluded from V1. It contains cross-IP/account
 relationships and Linux Audit scope details that require their own future
 privacy projection. Therefore the V1 correlation count is explicitly a
@@ -324,8 +338,6 @@ Internal identifiers remain unchanged. Display-name mappings are explicit:
 | `path_traversal` | `Path Traversal` |
 | `failed_to_successful_login` | `Failed Login → Successful Login` |
 | `brute_force_to_successful_login` | `Brute Force → Successful Login` |
-| `password_spray_to_successful_login` | `Password Spraying-like → Successful Login` |
-| `successful_login_to_file_access` | `Successful Login → File Access` |
 
 No label is guessed for an unknown identifier. A positive unsupported
 detection produces only the bounded notice `Unsupported detection type was
@@ -372,8 +384,8 @@ not establish reuse of the same password.
 | `response_status` | `http_status_code` | non-negative strict integer or absent | Response status |
 | `response_size_bytes` | `http_response_size` | non-negative strict integer or absent | Response size |
 
-The detector's ordered optional evidence contract from
-`path_traversal_detector` must validate before copying these named fields.
+The detector's optional evidence type set from `path_traversal_detector` must
+validate before copying these named fields; list position is not used.
 `url_decoded_query`, when present internally, is validated as a string but is
 never copied into the report projection. The query's omission must not be
 represented as missing detector evidence. Seconds display with `seconds` and
@@ -413,7 +425,8 @@ Each subject detail keeps four concepts visually and structurally separate:
   detection or automatic response.
 
 Next steps use this closed allowlist. The projection stores the fixed
-`next_step_id`; the renderer supplies exactly the corresponding fixed text.
+`next_step_id` and its exact corresponding fixed text; a renderer must not
+rewrite either value.
 
 | Supported type | `next_step_id` | Fixed analyst-facing text |
 |---|---|---|
@@ -422,10 +435,13 @@ Next steps use this closed allowlist. The projection stores the fixed
 | `path_traversal` | `review_traversal_response_context` | Review application, reverse-proxy, and file-access telemetry for the observed request and verify what response content or file access, if any, was recorded. |
 | `failed_to_successful_login` | `review_login_transition` | Review identity-provider, MFA, device, and session records for the correlated login and verify whether the login was expected. |
 | `brute_force_to_successful_login` | `review_brute_force_login_transition` | Review authentication, MFA, device, and session records around the Brute Force observation and correlated login. |
-| `password_spray_to_successful_login` | `review_spraying_like_login_transition` | Review authentication, MFA, device, and session records around the Password Spraying-like observation and correlated login. |
-| `successful_login_to_file_access` | `review_post_login_file_access` | Review session and file-access telemetry and verify whether the observed post-login access was expected. |
 
-Next steps are ordered by the table above and de-duplicated by
+The implemented limitation catalog is likewise fixed and type-driven. It
+contains only bounded statements that detection is not compromise,
+Password Spraying-like does not establish credential reuse, traversal status
+does not establish file disclosure, correlation is not causation, and a
+successful login does not establish account compromise. Next steps are
+ordered by the table above and de-duplicated by
 `next_step_id`; input/detection order cannot affect them. An unsupported type
 gets no next step and only the bounded omission notice from section 8. No LLM
 generates or rewrites these values, and no log text, rationale, exception, or
@@ -600,26 +616,31 @@ the deterministic table order.
 
 ## 14. Future implementation boundary and sequence
 
-After explicit design approval, the smallest implementation phase is:
+The approved delivery sequence is:
 
-1. Add frozen, route-independent projection types and a strict builder that
-   copies only the scalar allowlist in this document.
-2. Add projection unit tests, privacy canaries, ordering/count invariants,
-   non-mutation tests, and API/LLM isolation tests.
-3. Add a pure renderer from the immutable projection to deterministic UTF-8
-   standalone HTML, with escaping, CSP, and no-network tests.
-4. Add private temporary-file creation, restrictive permissions, failure
-   cleanup, and atomic-finalization tests.
-5. Only after projection and renderer tests pass, consider an explicit CLI
-   option such as `--html-report PATH` that calls the existing analysis once
-   and passes objects directly to the projection builder.
+1. **Implemented in the projection phase:** frozen, route-independent
+   projection types and a strict builder that copies only the scalar allowlist
+   in this document.
+2. **Implemented in the projection phase:** projection unit tests, privacy
+   canaries, ordering/count invariants, non-mutation tests, and API/LLM
+   isolation tests.
+3. **Not implemented:** add a pure renderer from the immutable projection to
+   deterministic UTF-8 standalone HTML, with escaping, CSP, and no-network
+   tests.
+4. **Not implemented:** add private temporary-file creation, restrictive
+   permissions, failure cleanup, and atomic-finalization tests.
+5. **Not implemented:** only after projection and renderer tests pass,
+   consider an explicit CLI option such as `--html-report PATH` that calls the
+   existing analysis once and passes objects directly to the projection
+   builder.
 
 V1 does not add a web dashboard, active server, API route, existing-response
 field, LLM integration, JavaScript, or frontend framework.
 
-## 15. Future test plan
+## 15. Test plan
 
-Future implementation tests must cover:
+Projection tests cover the projection-specific items below; later renderer
+and file-output phases must cover their remaining HTML and filesystem items:
 
 - exact projection fields and rejection of extra/internal fields;
 - deterministic subject, detection, and correlation ordering and tie breaks;
