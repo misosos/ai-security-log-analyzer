@@ -1,0 +1,684 @@
+# Local HTML Investigation Report Design
+
+## 1. Decision and product boundary
+
+This document defines a future, privacy-bounded investigation report for a
+security analyst, SOC analyst, detection engineer, or small-team
+security/infrastructure operator performing initial batch triage.
+
+The report is a local or controlled-environment batch investigation artifact.
+It is not a SIEM, EDR, real-time monitor, incident verdict engine, automatic
+response system, web dashboard, or replacement for source-log review. A
+detection is not confirmed compromise, a correlation is not causation, an
+HTTP 200 response is not proof of file disclosure, and a successful login is
+not proof of account compromise.
+
+This phase produces design documentation and documentation contract tests
+only. It does not add an HTML renderer, template, frontend, route, endpoint,
+JavaScript, CSS bundle, dependency, or CLI option.
+
+## 2. Current architecture findings
+
+The existing runtime path is:
+
+```text
+input files
+→ source-specific loaders and parsers
+→ NormalizedEvent objects
+→ per-IP DetectionResult objects
+→ per-IP and global correlation
+→ per-IP risk assessment
+→ CLI, API, or LLM consumer
+```
+
+The public analysis result has two scopes:
+
+```text
+analysis
+├── results: {<ip>: per-IP analysis}
+└── global_correlation: whole-input relationships
+```
+
+Each per-IP result contains features, detections, per-IP correlation,
+`risk_factors`, and `risk_level`. `DetectionResult` contains
+`is_detected`, `detection_type`, and a list of `Evidence`; each `Evidence`
+contains `type`, scalar `value`, `source`, and optional timestamp metadata.
+The risk contract keeps likelihood, impact, and confidence separate and
+preserves their existing rationale.
+
+The current CLI reads these objects directly. Its supported authentication
+and path-traversal evidence is now rendered through explicit type, source,
+cardinality, and value checks. The proposed HTML report may use the same
+underlying evidence contract as a reference, but must not invoke the CLI,
+capture stdout, or parse CLI text.
+
+The existing general API has its own Pydantic response boundary. It explicitly
+copies detection evidence but currently exposes correlation, risk factors,
+and global correlation through broad dictionaries. The separate Linux Audit
+API demonstrates a stricter boundary: frozen response models expose validated
+counts while excluding normalized events and process details. Neither API
+schema is the HTML report schema.
+
+The LLM adapter serializes per-IP detections, risk factors, and correlation.
+Linux Audit process aggregates and review summaries are intentionally kept
+outside that input. The HTML report must not reuse the LLM serializer, call an
+LLM, or transmit report data to any provider.
+
+Linux Audit normalized objects can contain argv, PROCTITLE, raw records,
+executables, paths, process and identity IDs, source scope, and event IDs. The
+CLI and dedicated Linux Audit API already reduce these to separately supplied
+aggregate/review counts for public presentation. V1 HTML may consume only
+equivalent validated count summaries, never the underlying objects.
+
+## 3. Operator workflow and V1 scope
+
+The intended workflow is:
+
+```text
+log files
+→ existing loaders/parsers
+→ existing deterministic analysis
+→ explicit immutable report projection
+→ pure standalone HTML rendering
+→ standalone local HTML file
+→ analyst review
+```
+
+V1 is one UTF-8 HTML file that opens directly in a browser without an active
+web server. It has no CDN, external font, external script, external image,
+analytics, network request, JavaScript framework, or other remote resource.
+It contains no JavaScript. Static presentation rules may be placed in one
+fixed inline style block authorized by its CSP hash; there is no CSS bundle.
+
+For the same validated projection and renderer version, output bytes must be
+deterministic. V1 must not read the clock, generate a random identifier, or
+derive metadata from source filenames. If report metadata is approved later,
+it must be an explicit, validated projection input and its effect on
+determinism must be documented. The report remains separate from both API and
+LLM contracts.
+
+## 4. Information architecture
+
+The report is deliberately compact and text-first:
+
+1. **Report scope and limitations** — classification, input scope, supported
+   observations, and statements about what the report cannot establish.
+2. **Summary cards** — exact counts defined in section 5.
+3. **Investigation review table** — one row per analyzed subject.
+4. **Per-IP investigation details** — one section per subject in the same
+   order as the table.
+5. **Detection evidence** — typed, directly observed, allowlisted values.
+6. **Correlations** — supported existing event relationships only.
+7. **Risk assessment reasons** — existing risk, likelihood, impact, and
+   confidence values and approved existing rationale.
+8. **Interpretation limits** — bounded statements tied to displayed
+   observation types.
+9. **Suggested next investigation steps** — static, bounded analyst actions,
+   not automated conclusions or response actions.
+10. **Optional Linux Audit aggregate** — count-only and present only when a
+    separately validated aggregate was supplied.
+
+Decorative charts are out of scope. A future implementation may add a visual
+only when it communicates a relationship more clearly than the summary cards,
+table, or short evidence lists and does not add a new metric.
+
+## 5. Immutable report projection
+
+The future projection is a route-independent contract. The names below are
+conceptual schema names, not implementation added by this phase:
+
+```text
+InvestigationReportProjection (immutable)
+├── schema_version: fixed literal
+├── classification: fixed "Sensitive — Security Investigation Data"
+├── summary: ReportSummaryProjection
+├── subjects: tuple[SubjectInvestigationProjection, ...]
+└── linux_audit: LinuxAuditAggregateProjection | None
+
+SubjectInvestigationProjection (immutable)
+├── subject_ip: canonical IP string
+├── review_order: positive integer
+├── risk_level: HIGH | MEDIUM | LOW
+├── likelihood: AssessmentDimensionProjection
+├── impact: AssessmentDimensionProjection
+├── confidence: AssessmentDimensionProjection
+├── detections: tuple[SupportedDetectionProjection, ...]
+├── correlations: tuple[SupportedCorrelationProjection, ...]
+├── unsupported_detection_observed: bool
+├── limitations: tuple[approved static limitation identifiers, ...]
+└── next_steps: tuple[approved static next-step identifiers, ...]
+
+SupportedCorrelationProjection (immutable)
+├── display_name: supported fixed label
+├── account_alias: "Account " + positive integer
+├── time_delta_seconds: finite non-negative number | None
+├── limitation_id: approved static identifier
+└── next_step_id: approved static identifier
+```
+
+Every projection object must be immutable. The builder must explicitly read,
+validate, and copy each allowlisted scalar. It must not retain references to
+input lists, dictionaries, dataclasses, Pydantic objects, or normalized
+events. Building or rendering a report must not reorder or mutate the analysis
+result, `DetectionResult`, `Evidence`, correlation objects, or Linux Audit
+summaries.
+
+The projection is separate from `NormalizedEvent`, `DetectionResult`, raw
+correlation dictionaries, Linux Audit context/process objects, API schemas,
+LLM input, and CLI strings. The following are prohibited at this boundary:
+
+- `asdict()`, `vars()`, `__dict__`, or generic recursive serialization;
+- arbitrary dictionary or list passthrough;
+- embedding a complete internal object;
+- copying unknown fields for forward compatibility;
+- parsing CLI stdout;
+- using `repr()` or exception text as report content.
+
+Malformed required input fails projection with one fixed, bounded operator
+message outside the HTML. It must not fall back to dumping the rejected value
+or producing a partially populated report.
+
+### 5.1 Assessment rationale
+
+`AssessmentDimensionProjection` contains only an existing level and approved
+existing rationale entries. A future builder must maintain a closed catalog
+of current deterministic rationale text and bounded numeric templates. It may
+copy a rationale only after its exact/static form or typed interpolation
+contract is validated. Unknown rationale is a projection contract failure;
+arbitrary rationale strings are not passed through.
+
+The report must not recalculate risk, likelihood, impact, or confidence and
+must not introduce a threshold, score, ATT&CK mapping, incident label, or
+success verdict.
+
+### 5.2 Report-local account aliases
+
+The projection builder assigns aliases across the whole report before it
+builds subject projections. It first validates every account value required by
+a supported positive correlation, collects the distinct exact source strings,
+sorts them by their strict UTF-8 byte sequences, and enumerates that canonical
+set from one:
+
+```text
+first canonical account  → Account 1
+second canonical account → Account 2
+…
+```
+
+This ordering does not depend on dictionary iteration, subject order, or raw
+event arrival order. Exact duplicate source strings receive the same alias
+everywhere in one report; distinct valid source strings receive distinct
+aliases. No Unicode normalization, case folding, hashing, truncation, or
+source-derived prefix/suffix is used. Consequently an alias contains no
+original-name fragment, length, hash, or other reversible/stable derivative.
+The same validated projection input therefore produces the same alias
+assignment.
+
+A valid account is an exact `str`, contains at least one non-whitespace
+character, contains only valid Unicode scalar values, encodes with strict
+UTF-8, and contains no control character. A missing or malformed account in a
+supported positive correlation aborts projection with the fixed bounded
+contract-failure message; it is never converted with `str()` or placed in an
+error. Unsupported detection/correlation objects are not inspected for an
+account value.
+
+The allocator must verify that the number of aliases equals the number of
+distinct valid accounts and that every source account resolves to exactly one
+alias. An alias overwrite, duplicate alias, cardinality mismatch, or other
+collision is a projection contract failure with the same bounded error. For
+valid Unicode strings, strict UTF-8 is injective, so such a collision indicates
+an implementation/contract defect rather than a case to resolve by guessing.
+
+Only alias strings enter the immutable projection. The temporary source-name
+to alias mapping must not be retained by the projection or renderer. Aliases
+are report-local correlation references—not real identities and not stable
+cross-report identifiers. Adding or removing an account may renumber aliases
+in a later report.
+
+## 6. Summary contract
+
+`ReportSummaryProjection` has these exact fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `analyzed_subject_count` | non-negative strict integer | Number of canonical per-IP entries projected from `analysis["results"]`. |
+| `high_risk_subject_count` | non-negative strict integer | Subjects whose existing `risk_level` is `HIGH`. |
+| `medium_risk_subject_count` | non-negative strict integer | Subjects whose existing `risk_level` is `MEDIUM`. |
+| `low_risk_subject_count` | non-negative strict integer | Subjects whose existing `risk_level` is `LOW`. |
+| `supported_detection_observation_count` | non-negative strict integer | Positive, validated supported detection results across all subjects; each supported `DetectionResult` counts once. |
+| `supported_correlation_observation_count` | non-negative strict integer | Positive, validated supported per-IP correlation records across all subjects; each record counts once. |
+| `linux_audit_process_observation_count` | non-negative strict integer or absent | Process execution observation count from a separately supplied validated aggregate. |
+| `shared_memory_review_observation_count` | non-negative strict integer or absent | Count from a separately supplied `SharedMemoryExecutionReviewSummary`. |
+| `session_process_co_observation_count` | non-negative strict integer or absent | Count of qualifying session-process co-observation relations from a separately supplied `SessionProcessReviewSummary`. |
+
+Strict integer excludes booleans. Required invariants are:
+
+- `HIGH + MEDIUM + LOW == analyzed_subject_count`;
+- summary detection and correlation counts equal the sums of the per-subject
+  projected collections;
+- each optional Linux Audit value is absent unless its corresponding process
+  aggregate, shared-memory review summary, or session-process review summary
+  was separately supplied; absence is not silently represented as zero;
+- supplied Linux Audit counts are non-negative and retain existing aggregate
+  invariants: process outcomes and both completeness partitions sum to the
+  process count; session-process outcomes sum to their process count; and
+  linked/containing counts stay within their existing process and session
+  bounds. Cross-summary bounds, such as shared-memory review observations not
+  exceeding process observations, apply whenever both corresponding summaries
+  are supplied.
+
+These are observation counts. They are not counts of unique attackers,
+incidents, compromised systems, successful attacks, or unique processes.
+`session_process_co_observation_count` is not proof of physical session
+identity, direct user execution, or causation.
+
+Raw `global_correlation` is excluded from V1. It contains cross-IP/account
+relationships and Linux Audit scope details that require their own future
+privacy projection. Therefore the V1 correlation count is explicitly a
+supported **per-IP** count and global observations are neither mixed into a
+subject nor used to alter risk.
+
+## 7. Investigation review table
+
+The exact columns are:
+
+| Column | Contract |
+|---|---|
+| Review order | One-based integer assigned after deterministic sorting. |
+| Subject/IP | Canonical IP string. |
+| Risk | Existing `HIGH`, `MEDIUM`, or `LOW` value, unchanged. |
+| Primary detection | Lexicographically first supported detection display name, or `None observed`. |
+| Notable correlation | Lexicographically first supported correlation display name, or `None observed`. |
+| Confidence | Existing confidence level, unchanged. |
+| Review reason | One bounded summary assembled from the existing risk, presence of supported observations, and confidence; it is not a verdict. |
+
+The builder must not modify `risk_level`. Rows and detail sections use this
+deterministic ascending sort key:
+
+1. risk rank: `HIGH`, `MEDIUM`, `LOW`;
+2. subjects with a supported positive correlation before subjects without;
+3. confidence rank: `HIGH`, `MEDIUM`, `LOW`;
+4. primary detection display name, case-insensitive lexical order, with no
+   observation after a named detection;
+5. canonical IP numeric order: address family, then packed address bytes.
+
+After sorting, rows are enumerated `1..N`; that integer is `review_order` and
+is displayed as “Review order.” It is only an operator-navigation aid. It is
+not a new risk, severity, priority score, confidence value, security
+conclusion, or verdict, and it must not be used by detection, correlation, or
+risk logic.
+
+Primary/notable selection is lexical presentation tie-breaking, not a claim
+that one observation is more severe. The table reason is concise; its exact
+sentence is not repeated in the detail assessment, limitation, or next-step
+sections.
+
+## 8. Detection and correlation display contracts
+
+Internal identifiers remain unchanged. Display-name mappings are explicit:
+
+| Internal identifier | Analyst-facing label |
+|---|---|
+| `brute_force` | `Brute Force` |
+| `password_spraying_like` | `Password Spraying-like` |
+| `path_traversal` | `Path Traversal` |
+| `failed_to_successful_login` | `Failed Login → Successful Login` |
+| `brute_force_to_successful_login` | `Brute Force → Successful Login` |
+| `password_spray_to_successful_login` | `Password Spraying-like → Successful Login` |
+| `successful_login_to_file_access` | `Successful Login → File Access` |
+
+No label is guessed for an unknown identifier. A positive unsupported
+detection produces only the bounded notice `Unsupported detection type was
+omitted from this report.` It contributes neither evidence nor the supported
+detection count. Unsupported correlations are omitted and represented by an
+equivalent bounded notice; their raw identifier or values are not rendered.
+
+### 8.1 Typed detection evidence
+
+Evidence is matched by `Evidence.type`, never list position. Each positive
+result must also have its exact expected detector source, cardinality,
+distinct types, and value types validated before projection.
+
+`BruteForceEvidenceProjection`:
+
+| Field | Source evidence type | Type / constraint | Display label |
+|---|---|---|---|
+| `failed_attempt_count` | `multiple_login_failures` | non-negative strict integer | Failed attempts |
+| `target_account_count` | `single_target_user` | non-negative strict integer | Target accounts |
+| `time_window_seconds` | `failures_within_short_window` | finite non-negative integer or float | Time window |
+
+The result must contain exactly these three evidence types from
+`brute_force_detector`.
+
+`PasswordSprayingLikeEvidenceProjection`:
+
+| Field | Source evidence type | Type / constraint | Display label |
+|---|---|---|---|
+| `failed_attempt_count` | `multiple_login_failures` | non-negative strict integer | Failed attempts |
+| `target_account_count` | `multiple_target_users` | non-negative strict integer | Target accounts |
+| `time_window_seconds` | `failures_within_short_window` | finite non-negative integer or float | Time window |
+
+The result must contain exactly these three evidence types from
+`password_spray_detector`. The label must retain “-like”; this telemetry does
+not establish reuse of the same password.
+
+`PathTraversalEvidenceProjection`:
+
+| Field | Source evidence type | Type / constraint | Display label |
+|---|---|---|---|
+| `request_path` | `url_decoded_path` | string | Request path |
+| `matched_pattern` | `path_pattern` | string | Matched pattern |
+| `http_method` | `http_method` | string or absent | HTTP method |
+| `response_status` | `http_status_code` | non-negative strict integer or absent | Response status |
+| `response_size_bytes` | `http_response_size` | non-negative strict integer or absent | Response size |
+
+The detector's ordered optional evidence contract from
+`path_traversal_detector` must validate before copying these named fields.
+`url_decoded_query`, when present internally, is validated as a string but is
+never copied into the report projection. The query's omission must not be
+represented as missing detector evidence. Seconds display with `seconds` and
+response size displays with `bytes`; numeric values are not rounded or
+reinterpreted.
+
+### 8.2 Typed per-IP correlation fields
+
+A supported correlation projection contains only:
+
+- the mapped display label;
+- the deterministic report-local account alias allocated under section 5.2;
+- finite non-negative `time_delta_seconds` when supplied by the existing
+  correlation;
+- static interpretation limitation and next-step identifiers.
+
+Original account names, event timestamps, correlation rationale strings,
+source-IP collections, and other raw dictionary fields are not copied. Only
+`is_correlated is True` records with a supported exact type and expected typed
+fields qualify. Correlation remains an observed temporal/logical relationship,
+not causation or proof of compromise.
+
+## 9. Evidence, assessment, limitation, and next step
+
+Each subject detail keeps four concepts visually and structurally separate:
+
+- **Evidence** is a typed value directly observed in supported detector or
+  correlation output: counts, durations, path, matched pattern, HTTP method,
+  response status, and response size.
+- **Assessment** is the existing risk, likelihood, impact, confidence, and
+  their validated existing rationale. The report does not recompute it.
+- **Limitation** is approved static text describing what the available logs do
+  not establish. For example, HTTP status does not establish file disclosure,
+  a successful login does not establish account compromise, and a
+  Password Spraying-like observation does not establish credential reuse.
+- **Next step** is a bounded suggestion for analyst follow-up, not a new
+  detection or automatic response.
+
+Next steps use this closed allowlist. The projection stores the fixed
+`next_step_id`; the renderer supplies exactly the corresponding fixed text.
+
+| Supported type | `next_step_id` | Fixed analyst-facing text |
+|---|---|---|
+| `brute_force` | `review_authentication_failures` | Review authentication failure records for the observed time window and verify whether the activity matches an approved source or process. |
+| `password_spraying_like` | `review_cross_account_authentication` | Review identity-provider authentication records for the affected account aliases and verify expected administrative or automated activity. |
+| `path_traversal` | `review_traversal_response_context` | Review application, reverse-proxy, and file-access telemetry for the observed request and verify what response content or file access, if any, was recorded. |
+| `failed_to_successful_login` | `review_login_transition` | Review identity-provider, MFA, device, and session records for the correlated login and verify whether the login was expected. |
+| `brute_force_to_successful_login` | `review_brute_force_login_transition` | Review authentication, MFA, device, and session records around the Brute Force observation and correlated login. |
+| `password_spray_to_successful_login` | `review_spraying_like_login_transition` | Review authentication, MFA, device, and session records around the Password Spraying-like observation and correlated login. |
+| `successful_login_to_file_access` | `review_post_login_file_access` | Review session and file-access telemetry and verify whether the observed post-login access was expected. |
+
+Next steps are ordered by the table above and de-duplicated by
+`next_step_id`; input/detection order cannot affect them. An unsupported type
+gets no next step and only the bounded omission notice from section 8. No LLM
+generates or rewrites these values, and no log text, rationale, exception, or
+internal object text is copied into them. The allowlist contains no command,
+system mutation, automatic block of an account/IP, claim of compromise,
+malicious intent, or attack success. Every step is limited to evidence review
+and verification by an analyst.
+
+Evidence values appear once in the evidence section. Existing assessment
+rationale appears once in assessment. A limitation and a next step each appear
+once per applicable concept; the same sentence is not copied into several
+sections.
+
+## 10. Privacy policy
+
+Every V1 report is classified `Sensitive — Security Investigation Data`.
+Excluding raw logs does not make it non-sensitive: IP addresses can identify
+systems or people, and correlations can disclose behavior and relationships.
+
+### 10.1 Allowlist
+
+- The current subject IP is displayed because it is the report's analysis
+  subject.
+- Account references may be shown only through the deterministic report-local
+  aliases in section 5.2. The original value and source-to-alias mapping are
+  not retained in the projection. Aliases use sequential labels only; hashes
+  and source-derived fragments are prohibited.
+- HTTP method, status, and response size are allowed.
+- The decoded request path and matched traversal pattern are allowed.
+- Typed authentication failure/target counts and time windows are allowed.
+- Existing risk, likelihood, impact, and confidence values and approved
+  rationale contracts are allowed.
+- Separately supplied, validated Linux Audit aggregate counts are allowed.
+
+### 10.2 Exclusions
+
+The following must not enter the projection or rendered HTML:
+
+- full HTTP query strings;
+- raw log lines;
+- credentials, passwords, tokens, cookies, authorization headers, session
+  identifiers, keys, or connection strings;
+- Linux Audit argv, PROCTITLE, raw records, executable, PATH, CWD, PID/PPID,
+  UID/GID/AUID/session ID, node, source instance, and event ID;
+- normalized Linux Audit events or process/shared-memory observation objects;
+- temporary paths, upload filenames, file digests, exception strings,
+  `repr()` output, and tracebacks;
+- original account names in HTML text, metadata, comments, element IDs, CSS
+  classes, data attributes, filenames, exceptions, and renderer errors;
+- arbitrary global-correlation content;
+- LLM input/output or any LLM transmission.
+
+The HTML must make no external network request. Privacy tests must seed private
+canaries into every excluded source location and confirm absence from the
+projection, HTML, API output, and LLM input. The report feature must not alter
+the existing API or LLM behavior to achieve this separation.
+
+### 10.3 Storage, sharing, and deletion
+
+Generate the report only in an operator-selected, access-controlled local
+directory. Use restrictive directory access and create the final file with
+owner-only permissions where the platform supports them. Do not place it in a
+web root, broadly synchronized folder, public issue, chat, or source-control
+tree. Share only with authorized recipients through an organization-approved
+protected channel, and remind recipients that copied files retain the same
+classification.
+
+Retention and deletion follow the organization's legal, regulatory,
+contractual, evidence-preservation, and incident-response requirements. This
+design intentionally defines no universal retention duration. When authorized
+retention ends, remove the report and managed copies/backups using the
+organization's approved deletion process. Consider browser download/history,
+recent-file lists, backups, and synchronized copies when handling the file.
+
+## 11. Rendering security contract
+
+The future renderer accepts only a validated `InvestigationReportProjection`.
+All report-derived text is untrusted and must be escaped for its exact HTML
+text context before insertion. No report data may be inserted as HTML, URL,
+CSS, JavaScript, tag name, attribute name, event handler, or unquoted
+attribute. There is no unsafe HTML passthrough and no inline event handler.
+
+Use `<!doctype html>`, `<html lang="en">`, and an early
+`<meta charset="utf-8">`. Add a meta-delivered CSP before the static style
+block. The required policy shape is:
+
+```text
+default-src 'none';
+base-uri 'none';
+form-action 'none';
+object-src 'none';
+script-src 'none';
+script-src-attr 'none';
+style-src 'sha256-{BASE64_SHA256_OF_EXACT_STATIC_STYLE_BLOCK}';
+style-src-attr 'none';
+img-src 'none';
+font-src 'none';
+connect-src 'none';
+media-src 'none';
+frame-src 'none';
+worker-src 'none';
+manifest-src 'none'
+```
+
+The placeholder is replaced with the reproducible SHA-256 hash of the exact,
+constant inline style block. Dynamic data never enters CSS. Do not add
+`report-uri`/`report-to`, because CSP reporting would make a network request.
+Do not claim `frame-ancestors` or `sandbox` protection from the meta policy;
+browsers do not support those directives in `<meta>`. The file has no forms,
+links requiring network access, scripts, media, frames, manifests, or images.
+Add `<meta name="referrer" content="no-referrer">` as defense in depth.
+
+Sensitive values must not appear in HTML comments, metadata, titles derived
+from input, element IDs, CSS classes, `data-*` attributes, filenames, or source
+maps. Fixed structural IDs/classes may be used only when they contain no input
+or sensitive value. CSP and escaping reduce rendering risk; neither makes the
+report non-sensitive.
+
+Rendering failure must produce a fixed bounded error, never internal exception
+text, rejected fields, or object dumps. Create output with restrictive file
+permissions where supported. A future implementation must write to a private
+temporary sibling, close/flush it, remove it on every failure, and consider
+atomic replacement for finalization. It must never leave a partial final file.
+
+## 12. Empty, unsupported, and malformed states
+
+The exact bounded presentation semantics are:
+
+| State | Presentation |
+|---|---|
+| No supported detections | `No supported detection observations were produced from the analyzed input.` followed once by `This does not establish the absence of malicious activity.` |
+| No supported per-IP correlations | `No supported per-IP correlation observations were produced from the analyzed input.` followed by the same bounded absence limitation only if it has not already appeared in the subject section. |
+| No Linux Audit input/aggregate | Omit Linux Audit cards and section; state `Linux Audit aggregate was not provided for this report.` in report scope. |
+| Supplied Linux Audit aggregate with zero observations | Show explicit zero counts and `No Linux Audit process observations were produced from the supplied aggregate.` |
+| Unsupported detection/correlation | Show only the bounded omission notice defined in section 8; do not show the unknown identifier or evidence. |
+| Malformed internal input or projection | Abort report creation, remove partial output, and return a fixed projection/rendering failure message outside the HTML. |
+
+Empty-state language must not characterize the system as benign or issue an
+incident/compromise verdict. Absence of a supported observation is limited to
+the analyzed input and current deterministic rules.
+
+## 13. Compact wireframe
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ Local Security Investigation Report       SENSITIVE                 │
+│ Scope • limitations • Linux Audit aggregate supplied/not supplied   │
+├─────────────────────────────────────────────────────────────────────┤
+│ Subjects │ HIGH │ MEDIUM │ LOW │ Detections │ Correlations          │
+│ [optional: process obs │ shared-memory obs │ session-process obs]   │
+├─────────────────────────────────────────────────────────────────────┤
+│ INVESTIGATION REVIEW                                                │
+│ Order │ Subject/IP │ Risk │ Primary detection │ Correlation │ Conf. │
+│ 1     │ 192.0.2.10 │ HIGH │ Brute Force       │ Brute…Login │ HIGH  │
+├─────────────────────────────────────────────────────────────────────┤
+│ SUBJECT: 192.0.2.10                                                 │
+│ Evidence          │ Assessment                                      │
+│ Failed attempts 5 │ Risk HIGH • Likelihood HIGH • Impact …          │
+│ Targets 1         │ Existing validated reasons                      │
+│ Window 16 seconds │                                                  │
+│ Correlation: Brute Force → Successful Login • Account 1             │
+│ Limitations: relationship is not causation or proof of compromise   │
+│ Next steps: review approved identity-provider/MFA/device telemetry  │
+├─────────────────────────────────────────────────────────────────────┤
+│ OPTIONAL LINUX AUDIT AGGREGATE — counts and limitations only        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Details may use native `<details>`/`<summary>` for low-density expansion
+without JavaScript. All subject details remain present in the file and follow
+the deterministic table order.
+
+## 14. Future implementation boundary and sequence
+
+After explicit design approval, the smallest implementation phase is:
+
+1. Add frozen, route-independent projection types and a strict builder that
+   copies only the scalar allowlist in this document.
+2. Add projection unit tests, privacy canaries, ordering/count invariants,
+   non-mutation tests, and API/LLM isolation tests.
+3. Add a pure renderer from the immutable projection to deterministic UTF-8
+   standalone HTML, with escaping, CSP, and no-network tests.
+4. Add private temporary-file creation, restrictive permissions, failure
+   cleanup, and atomic-finalization tests.
+5. Only after projection and renderer tests pass, consider an explicit CLI
+   option such as `--html-report PATH` that calls the existing analysis once
+   and passes objects directly to the projection builder.
+
+V1 does not add a web dashboard, active server, API route, existing-response
+field, LLM integration, JavaScript, or frontend framework.
+
+## 15. Future test plan
+
+Future implementation tests must cover:
+
+- exact projection fields and rejection of extra/internal fields;
+- deterministic subject, detection, and correlation ordering and tie breaks;
+- risk-count partition and detail-to-summary count invariants;
+- every supported detection/correlation display mapping;
+- evidence matched by type rather than position;
+- strict cardinality, source, value-type, finite-number, and bool rejection;
+- same-account alias consistency and different-account alias separation;
+- alias assignment independent of subject, dictionary, and event input order;
+- malformed-account and alias-collision bounded failure behavior;
+- no account hashes/fragments and no original-name privacy canary in HTML,
+  metadata, comments, IDs, classes, data attributes, filenames, or errors;
+- exact fixed next-step mappings for every supported detection/correlation,
+  stable de-duplication/order, unsupported-type omission, and privacy-canary
+  exclusion from next-step text;
+- full query, raw log, credential/token/cookie/header, Linux Audit private
+  field, path/filename/digest, exception, traceback, and private-canary
+  exclusion;
+- HTML text/attribute escaping using adversarial Unicode and markup payloads;
+- exact CSP shape, valid static-style hash, no remote resource, no JavaScript,
+  no event handler, and no report/CSP network endpoint;
+- no changes to existing API schemas/output or LLM input/output;
+- no input object/list/dictionary mutation;
+- byte-for-byte deterministic rendering for the same projection;
+- restrictive file permissions where supported;
+- removal of temporary/partial output after projection, rendering, write,
+  flush, and finalization failure;
+- every empty, zero, unsupported, and malformed state in section 12;
+- the complete existing regression suite.
+
+Documentation contract tests should protect these decisions by section and
+key invariant. They should not require every prose sentence or freeze harmless
+wording.
+
+## 16. Research basis
+
+Sources were accessed on **2026-10-07**. External sources inform rendering and
+handling safeguards only; they do not define this project's detection,
+correlation, risk, evidence, count, sorting, or display-name semantics.
+
+| Organization / source | Publication or update | Guidance used | Effect on this design |
+|---|---|---|---|
+| OWASP, [Cross Site Scripting Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html) | Living official cheat sheet; page does not state a publication date | Untrusted values require context-appropriate output encoding; variables should not be placed in script, comment, style, tag-name, or other dangerous contexts. | All projected text is HTML-escaped into text nodes only; data is prohibited from comments, CSS, scripts, URLs, tag names, and attribute names. |
+| OWASP, [Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) | Living official cheat sheet; page does not state a publication date | Tokens, passwords, secrets, some personal data, paths, and internal addresses require exclusion or special handling; logs need restricted access, output encoding/sanitization, protected storage, and policy-driven disposal. | The report uses a scalar allowlist, report-local account aliases, explicit exclusions, owner-restricted storage guidance, controlled sharing, and organization-specific retention/deletion. |
+| MDN, [`default-src`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/default-src), [`style-src`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/style-src), [`script-src`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/script-src), and [`<meta http-equiv>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/http-equiv) | `default-src` last modified 2025-07-04; other pages are living MDN references | `default-src 'none'` blocks resource loading by default; scripts can be disabled; an exact inline style block can be hash-authorized; a standalone file can carry CSP in a meta element. | V1 has a deny-by-default meta CSP, no scripts/network resources, and one deterministic hash-authorized static style block. Unsupported meta directives are not claimed. |
+| NIST, [SP 800-92, Guide to Computer Security Log Management](https://csrc.nist.gov/pubs/sp/800/92/final) | Published 2006-09; final history 2006-09-13 | Organizations need sound, maintained log-management practices; guidance covers infrastructure and robust processes rather than prescribing one universal implementation. | Storage, access, sharing, retention, and deletion are explicitly governed by the operator's organizational requirements; this project does not invent a universal retention period. |
+
+## 17. Design limitations
+
+V1 intentionally omits raw global correlations, raw evidence queries, account
+identifiers, Linux Audit details, and timelines. This reduces investigative
+context and means the analyst must return to protected source systems for
+deeper review. Report-local aliases do not anonymize the report because
+subject IPs, counts, risk, and relationships remain sensitive. Static next
+steps cannot
+replace local operating procedures or evidence preservation requirements.
+
+The report does not improve telemetry coverage and cannot establish facts the
+current logs do not contain. Normal administration, shared addresses, proxies,
+NAT, scanners, shared accounts, and health checks may resemble observed
+patterns; missing or manipulated logs may hide activity. No threshold or time
+window changes are proposed in this design.
