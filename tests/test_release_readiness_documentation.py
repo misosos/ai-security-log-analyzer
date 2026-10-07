@@ -152,8 +152,8 @@ def test_release_entry_metadata_and_test_total_are_current():
     metadata = tomllib.loads(_read(ROOT / "pyproject.toml"))["project"]
     assert metadata["description"] != "Add your description here"
     assert metadata["requires-python"] == ">=3.12"
-    assert "1,140 passing tests" in _read(README)
-    assert "1,140 tests pass" in _read(RELEASE)
+    assert "1,150 passing tests" in _read(README)
+    assert "1,150 tests pass" in _read(RELEASE)
     launcher = _read(ROOT / "main.py")
     assert "from app.main import main" in launcher
     assert "Hello from" not in launcher

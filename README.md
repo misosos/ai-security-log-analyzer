@@ -124,7 +124,7 @@ Never upload real sensitive logs to an untrusted deployment. Never commit creden
 
 ## Testing
 
-The final repository audit completed **1,140 passing tests** in the locked environment. Important suites cover loaders/parsers, detections, correlations, risk, CLI/reporting, API/OpenAPI, Linux Audit staging and cleanup, orchestration, strict projection, bearer authorization, concurrency, access auditing, secret bootstrap, journald projection, application lifespan/readiness, and deployment-reference contracts.
+The final repository audit and CI contract completed **1,150 passing tests** in the locked environment. Important suites cover loaders/parsers, detections, correlations, risk, CLI/reporting, API/OpenAPI, Linux Audit staging and cleanup, orchestration, strict projection, bearer authorization, concurrency, access auditing, secret bootstrap, journald projection, application lifespan/readiness, deployment-reference contracts, and the CI workflow itself.
 
 ```bash
 uv run pytest
@@ -132,6 +132,12 @@ uv run pytest -q tests/test_release_readiness_documentation.py
 ```
 
 Tests use synthetic fixtures. They do not validate a real host's TLS certificates, firewall, systemd credential delivery, journald persistence/forwarding, Nginx runtime behavior, retention policy, or workload capacity.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. A single Ubuntu 24.04 job uses immutable action SHAs, read-only repository permission, Python 3.12.7, and uv 0.11.26 with caching disabled. It checks the lock, performs a locked development sync, compiles `app`, `tests`, and `main.py`, runs the complete regression, and fails if tests modify tracked files.
+
+CI does not receive application secrets, enable production routes, start services, publish artifacts, or approve a Linux production host. The first remote Actions run must pass before this commit is remotely verified.
 
 ## Deployment status
 

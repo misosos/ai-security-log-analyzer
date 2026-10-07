@@ -33,7 +33,7 @@ Status meanings:
 | Privacy | Count-only dedicated response, bounded errors/audit, no Linux Audit LLM input | Canary, repr, OpenAPI, CLI/API and cleanup tests | Repository verified | Control access to CLI output, application logs, journal, crash reports, backups, and uploaded source files. |
 | Temporary cleanup | Context-managed upload staging and lifespan ownership | Success/failure/cancellation cleanup tests | Repository verified | Inspect behavior under SIGKILL, power loss, filesystem exhaustion, and host crash. |
 | LLM isolation | Optional Gemini explanation functions are not wired to CLI/APIs | Provider-not-called and Linux Audit input-isolation tests | Repository verified | If invoked separately, approve provider/data policy and configure credentials outside Git. |
-| Regression suite | Security semantics, consumers, deployment contracts | 1,140 tests pass after final changes | Repository verified | Re-run on the release runner and supported host before promotion. |
+| Regression suite | Security semantics, consumers, deployment and CI contracts | 1,150 tests pass after CI changes | Repository verified | Require the first remote GitHub Actions run to pass, then re-run on the supported host before promotion. |
 | Frontend / streaming / detailed evidence | No implemented frontend, streaming ingestion, or protected detail API | Empty placeholders are not imported; route inventory | Intentionally unsupported | Design separately before claiming or exposing these capabilities. |
 | Real Linux production host | Not represented by the macOS repository test environment | Static references and deterministic fakes only | Host acceptance required | Complete every item in the deployment acceptance checklist. |
 
@@ -56,6 +56,14 @@ The direct `pandas` dependency has no current import in `app/` or `tests/`. It p
 Tracked empty placeholders remain at `frontend/`, `docs/architecture.md`, `docs/evaluation.md`, and `app/detector/suspicious_file.py`. They are neither imported nor advertised as implemented. Ignored local bytecode and Finder metadata are not tracked release artifacts.
 
 No new detection, correlation, threshold, time window, risk semantic, ATT&CK mapping, response evidence, or LLM data flow was introduced by this audit.
+
+## Repository CI boundary
+
+`.github/workflows/ci.yml` now enforces the locked repository contract for pull requests, pushes to `main`, and manual runs. It has `contents: read` permission only, uses one bounded Ubuntu 24.04 job, pins Python 3.12.7 and uv 0.11.26, disables dependency caching, compiles the project and tests, runs the complete suite, and verifies that tracked files did not change. The first remote run must still succeed before the release candidate is remotely verified.
+
+The workflow does not receive application secrets, enable the production endpoint, start listeners or host services, publish artifacts, or deploy. GitHub Actions does not validate the target host's TLS, Nginx, journald persistence, firewall, credential delivery, retention, deletion, or workload capacity, and therefore cannot approve production activation.
+
+The CI design was checked against the [GitHub Actions workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax), [GitHub secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use), [GitHub concurrency guidance](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency), [actions/checkout v7.0.1 release](https://github.com/actions/checkout/releases/tag/v7.0.1), [setup-uv v10.2.0 release](https://github.com/astral-sh/setup-uv/releases/tag/v10.2.0), and [Astral's GitHub Actions integration guide](https://docs.astral.sh/uv/guides/integration/github/), accessed 2026-10-07. Full action SHAs were verified directly against the official repository tags.
 
 ## External activation gate
 

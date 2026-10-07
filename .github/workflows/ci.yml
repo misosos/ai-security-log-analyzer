@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Locked Python 3.12 regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned uv and Python
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.26"
+          python-version: "3.12.7"
+          enable-cache: false
+
+      - name: Verify dependency lock
+        run: uv lock --check
+
+      - name: Install locked development environment
+        run: uv sync --dev --locked
+
+      - name: Compile Python sources and tests
+        run: uv run python -m compileall -q app tests main.py
+
+      - name: Run complete regression
+        run: uv run pytest -q
+
+      - name: Verify tests did not modify tracked files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
