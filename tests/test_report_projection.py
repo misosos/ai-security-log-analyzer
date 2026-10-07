@@ -542,6 +542,78 @@ def test_fixed_limitations_and_next_steps_are_stable_and_deduplicated():
     assert PRIVATE not in repr(subject.next_steps)
 
 
+def test_fixed_limitation_and_next_step_allowlists_use_approved_korean_text():
+    projection = build_investigation_report_projection(analysis({
+        "192.0.2.1": subject_result(
+            brute=brute_force_detection(),
+            authentication=supported_correlation(
+                "failed_to_successful_login", "account"
+            ),
+            brute_to_success=supported_correlation(
+                "brute_force_to_successful_login", "account"
+            ),
+        ),
+        "192.0.2.2": subject_result(
+            spray=password_spraying_detection(),
+        ),
+        "192.0.2.3": subject_result(
+            path=path_traversal_detection(),
+        ),
+    }))
+    limitation_texts = {
+        item.limitation_id: item.text
+        for subject in projection.subjects
+        for item in subject.limitations
+    }
+    next_step_texts = {
+        item.next_step_id: item.text
+        for subject in projection.subjects
+        for item in subject.next_steps
+    }
+
+    assert limitation_texts == {
+        "detection_not_compromise": "탐지는 침해 확인을 의미하지 않습니다.",
+        "spraying_like_not_credential_reuse": (
+            "Password Spraying-like 관찰만으로 동일한 인증정보가 "
+            "재사용되었다고 판단할 수 없습니다."
+        ),
+        "path_traversal_not_file_disclosure": (
+            "HTTP 응답과 경로 탐색 패턴만으로 파일 접근 또는 데이터 "
+            "노출이 이루어졌다고 판단할 수 없습니다."
+        ),
+        "correlation_not_causation": (
+            "상관관계는 인과관계나 침해의 증거를 의미하지 않습니다."
+        ),
+        "successful_login_not_account_compromise": (
+            "로그인 성공만으로 계정 침해가 발생했다고 판단할 수 없습니다."
+        ),
+    }
+    assert next_step_texts == {
+        "review_authentication_failures": (
+            "관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 "
+            "승인된 출발지 또는 프로세스와 일치하는지 확인하십시오."
+        ),
+        "review_cross_account_authentication": (
+            "관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 관리자 "
+            "또는 자동화 활동인지 확인하십시오."
+        ),
+        "review_traversal_response_context": (
+            "관찰된 요청에 대한 애플리케이션, 리버스 프록시 및 파일 "
+            "접근 텔레메트리를 검토하고, 응답 내용이나 파일 접근이 "
+            "기록되었는지 확인하십시오."
+        ),
+        "review_login_transition": (
+            "상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을 "
+            "검토하고, 예상된 로그인인지 확인하십시오."
+        ),
+        "review_brute_force_login_transition": (
+            "Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 "
+            "및 세션 기록을 검토하십시오."
+        ),
+    }
+    assert PRIVATE not in repr(projection)
+
+
 def test_unsupported_types_are_omitted_without_invented_guidance():
     result = subject_result()
     result["detections"]["brute_force"] = DetectionResult(

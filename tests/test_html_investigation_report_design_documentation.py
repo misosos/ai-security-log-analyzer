@@ -17,8 +17,9 @@ def test_design_defines_phase_and_architecture_boundaries():
 
     assert "The initial phase produced design documentation" in text
     assert "documentation and documentation contract\ntests" in text
-    assert "The approved renderer phase adds only the pure standalone" in text
-    assert "file\nwriter, or CLI option" in text
+    assert "The delivery\nphase adds only a secure local file writer" in text
+    assert "`--html-report\nPATH` CLI option" in text
+    assert "does not add a template, frontend, route, endpoint" in text
     assert "explicit immutable report projection" in text
     assert "pure standalone HTML rendering" in text
     assert "must not invoke the CLI" in text
@@ -162,7 +163,9 @@ def test_design_defines_fixed_bounded_next_step_mappings():
         assert f"| {observation_type} | {next_step_id} |" in text
 
     assert "Next steps use this closed allowlist" in text
-    assert "de-duplicated by `next_step_id`" in text
+    assert "explicit report-only purpose precedence" in text
+    assert "selects at most one step per purpose and at most three" in text
+    assert "`review_login_transition` takes precedence" in text
     assert "An unsupported type gets no next step" in text
     assert "No LLM generates or rewrites these values" in text
     assert "no log text, rationale, exception, or internal object text" in text
@@ -170,10 +173,26 @@ def test_design_defines_fixed_bounded_next_step_mappings():
     assert "Every step is limited to evidence review and verification" in text
     assert "privacy-canary exclusion from next-step text" in text
     assert "correlation is not causation" in text
+    for approved_text in (
+        "관찰된 시간대의 인증 실패 기록을 검토하고",
+        "관련 계정 별칭의 IdP 인증 기록을 검토하고",
+        "관찰된 요청에 대한 애플리케이션, 리버스 프록시",
+        "상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을",
+        "Password Spraying-like 관찰만으로",
+        "HTTP 응답과 경로 탐색 패턴만으로",
+    ):
+        assert approved_text in text
+    assert "All fixed operator UI, fixed next-step guidance" in text
+    assert "explicit fixed-ID/allowlist contract" in text
+    assert "automatic translation of arbitrary data" in text
+    assert "no LLM is used" in text
+    assert "Privacy selection and redaction remain the projection boundary" in text
 
 
 def test_design_requires_standalone_rendering_security():
     text = document_text()
+
+    assert '`<html lang="ko">`' in text
 
     for directive in [
         "default-src 'none'",
@@ -183,7 +202,7 @@ def test_design_requires_standalone_rendering_security():
         "script-src-attr 'none'",
         (
             "style-src "
-            "'sha256-HrSeyxAgCRxOqI488GcfpWXohRBDF7JsJjos2KT0Jqk='"
+            "'sha256-dugVI89wFmxndpbiVjFenLmRw4HSK3Dw6k21+aq5/dY='"
         ),
         "style-src-attr 'none'",
         "img-src 'none'",
@@ -196,7 +215,9 @@ def test_design_requires_standalone_rendering_security():
     assert "no inline event handler" in text
     assert "Do\nnot add `report-uri`/`report-to`" in text
     assert "neither makes the\nreport non-sensitive" in text
-    assert "remove it on every failure" in text
+    assert "bounded cleanup of only the known temporary\nfile" in text
+    assert "without replacing an\nexisting entry" in text
+    assert "does\nnot eliminate every time-of-check/time-of-use race" in text
     assert "render_investigation_report_html()" in text
     assert "InvestigationReportRendererError" in text
     assert "includes one final newline" in text
@@ -207,12 +228,9 @@ def test_design_requires_standalone_rendering_security():
 def test_design_covers_empty_states_future_sequence_and_official_research():
     text = document_text()
 
-    assert (
-        "No supported detection observations were produced from the "
-        "analyzed input."
-    ) in text
-    assert "This does not establish the absence of malicious activity." in text
-    assert "Linux Audit aggregate was not provided for this report." in text
+    assert "지원되는 탐지 관찰 없음" in text
+    assert "이는 악의적 활동의 부재를 입증하지 않습니다." in text
+    assert "이 보고서에는 Linux Audit 집계가 제공되지 않았습니다." in text
     assert "Unsupported detection type was\nomitted from this report." in text
     assert "`--html-report PATH`" in text
     assert "V1 does not add a web dashboard" in text

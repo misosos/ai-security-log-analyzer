@@ -15,7 +15,20 @@ from app.analyzer.pipeline import (
 from app.analyzer.process_execution import (
     aggregate_process_execution_observations,
 )
+from app.analyzer.html_report import (
+    InvestigationReportRendererError,
+    render_investigation_report_html,
+)
+from app.analyzer.html_report_file import (
+    InvestigationReportFileError,
+    validate_html_report_target,
+    write_investigation_report_html,
+)
 from app.analyzer.report import print_analysis_result
+from app.analyzer.report_projection import (
+    InvestigationReportProjectionError,
+    build_investigation_report_projection,
+)
 from app.correlation.session_process import (
     collect_session_process_co_observations,
     summarize_session_process_co_observations,
@@ -62,6 +75,14 @@ def _build_argument_parser():
         help=(
             "Linux Audit log file; repeat this option to add "
             "multiple files"
+        ),
+    )
+    parser.add_argument(
+        "--html-report",
+        metavar="PATH",
+        help=(
+            "write a sensitive standalone investigation report to a new "
+            "lowercase .html file"
         ),
     )
     return parser
@@ -195,6 +216,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         [] if argv is None else list(argv)
     )
 
+    html_report_target = None
+    if args.html_report is not None:
+        try:
+            html_report_target = validate_html_report_target(
+                args.html_report
+            )
+        except InvestigationReportFileError:
+            parser.error("HTML report destination is invalid.")
+
     try:
         linux_audit_configs = _linux_audit_source_configs(
             args.linux_audit
@@ -293,6 +323,41 @@ def main(argv: Sequence[str] | None = None) -> None:
             session_process_review_summary
         )
 
+    if html_report_target is not None:
+        projection_arguments = {}
+        if linux_audit_configs:
+            projection_arguments = {
+                "process_execution_aggregate": (
+                    process_execution_aggregate
+                ),
+                "process_detection_summary": (
+                    process_detection_summary
+                ),
+                "session_process_review_summary": (
+                    session_process_review_summary
+                ),
+            }
+        try:
+            projection = build_investigation_report_projection(
+                result,
+                **projection_arguments,
+            )
+            html = render_investigation_report_html(projection)
+            write_investigation_report_html(
+                html,
+                html_report_target,
+            )
+        except (
+            InvestigationReportProjectionError,
+            InvestigationReportRendererError,
+            InvestigationReportFileError,
+        ):
+            print(
+                "HTML investigation report could not be created.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from None
+
     try:
         print_analysis_result(
             result,
@@ -305,6 +370,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             file=sys.stderr,
         )
         raise SystemExit(1) from None
+
+    if html_report_target is not None:
+        print("HTML investigation report created.")
 
 
 if __name__ == "__main__":

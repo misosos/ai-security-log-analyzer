@@ -49,7 +49,7 @@ EXPECTED_CSP = (
     "object-src 'none'; "
     "script-src 'none'; "
     "script-src-attr 'none'; "
-    "style-src 'sha256-HrSeyxAgCRxOqI488GcfpWXohRBDF7JsJjos2KT0Jqk='; "
+    "style-src 'sha256-dugVI89wFmxndpbiVjFenLmRw4HSK3Dw6k21+aq5/dY='; "
     "style-src-attr 'none'; "
     "img-src 'none'; "
     "font-src 'none'; "
@@ -160,13 +160,45 @@ def populated_projection():
         "Account 1",
         3,
     )
-    limitation = InterpretationLimitationItem(
+    generic_limitation = InterpretationLimitationItem(
         "correlation_not_causation",
-        "A correlation is not causation or proof of compromise.",
+        "상관관계는 인과관계나 침해의 증거를 의미하지 않습니다.",
     )
-    next_step = FixedNextStepItem(
+    specific_limitation = InterpretationLimitationItem(
+        "path_traversal_not_file_disclosure",
+        (
+            "HTTP 응답과 경로 탐색 패턴만으로 파일 접근 또는 데이터 "
+            "노출이 이루어졌다고 판단할 수 없습니다."
+        ),
+    )
+    authentication_step = FixedNextStepItem(
+        "review_authentication_failures",
+        (
+            "관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 "
+            "승인된 출발지 또는 프로세스와 일치하는지 확인하십시오."
+        ),
+    )
+    login_step = FixedNextStepItem(
         "review_login_transition",
-        "Review identity-provider records and verify the correlated login.",
+        (
+            "상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을 "
+            "검토하고, 예상된 로그인인지 확인하십시오."
+        ),
+    )
+    overlapping_login_step = FixedNextStepItem(
+        "review_brute_force_login_transition",
+        (
+            "Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 "
+            "및 세션 기록을 검토하십시오."
+        ),
+    )
+    traversal_step = FixedNextStepItem(
+        "review_traversal_response_context",
+        (
+            "관찰된 요청에 대한 애플리케이션, 리버스 프록시 및 파일 "
+            "접근 텔레메트리를 검토하고, 응답 내용이나 파일 접근이 "
+            "기록되었는지 확인하십시오."
+        ),
     )
     high = subject(
         1,
@@ -175,8 +207,13 @@ def populated_projection():
         "HIGH",
         detections=(brute, traversal),
         correlations=(correlation, brute_correlation),
-        limitations=(limitation,),
-        next_steps=(next_step,),
+        limitations=(generic_limitation, specific_limitation),
+        next_steps=(
+            overlapping_login_step,
+            traversal_step,
+            authentication_step,
+            login_step,
+        ),
     )
     medium = subject(
         2,
@@ -184,6 +221,20 @@ def populated_projection():
         "MEDIUM",
         "MEDIUM",
         detections=(spray,),
+        limitations=(InterpretationLimitationItem(
+            "spraying_like_not_credential_reuse",
+            (
+                "Password Spraying-like 관찰만으로 동일한 인증정보가 "
+                "재사용되었다고 판단할 수 없습니다."
+            ),
+        ),),
+        next_steps=(FixedNextStepItem(
+            "review_cross_account_authentication",
+            (
+                "관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 "
+                "관리자 또는 자동화 활동인지 확인하십시오."
+            ),
+        ),),
     )
     low = subject(3, "192.0.2.30", "LOW", "LOW")
     return InvestigationReportProjection(
@@ -253,13 +304,27 @@ def test_complete_html5_document_metadata_fixed_title_and_utf8():
     html = render_investigation_report_html(populated_projection())
     parser = inspect(html)
 
-    assert html.startswith("<!doctype html>\n<html lang=\"en\">\n")
+    assert html.startswith("<!doctype html>\n<html lang=\"ko\">\n")
     assert html.endswith("</body>\n</html>\n")
     assert '<meta charset="utf-8">' in html
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
     assert '<meta name="referrer" content="no-referrer">' in html
-    assert "<title>Security Log Investigation Report</title>" in html
-    assert "Security Log Investigation Report" in "".join(parser.text)
+    assert "<title>보안 로그 조사 보고서</title>" in html
+    assert "보안 로그 조사 보고서" in "".join(parser.text)
+    assert "민감 정보 — 보안 조사 자료" in html
+    assert "Sensitive — Security Investigation Data" not in html
+    for fixed_heading in (
+        "보고서 범위와 해석 한계",
+        "요약",
+        "조사 검토",
+        "분석 대상별 조사 세부정보",
+        "탐지 근거",
+        "상관관계",
+        "평가",
+        "해석 시 유의사항",
+        "다음 조사 단계",
+    ):
+        assert fixed_heading in html
 
 
 def test_exact_csp_and_static_css_hash_match_the_style_text():
@@ -306,20 +371,29 @@ def test_summary_review_table_and_projection_row_order_are_preserved():
     html = render_investigation_report_html(populated_projection())
 
     for label, value in (
-        ("Analyzed subjects", 3),
-        ("HIGH risk", 1),
-        ("MEDIUM risk", 1),
-        ("LOW risk", 1),
-        ("Supported detections", 3),
-        ("Supported correlations", 2),
+        ("분석 대상 수", 3),
+        ("HIGH 위험도", 1),
+        ("MEDIUM 위험도", 1),
+        ("LOW 위험도", 1),
+        ("지원 탐지 관찰 수", 3),
+        ("지원 상관관계 관찰 수", 2),
     ):
         assert f"<dt>{label}</dt>\n<dd>{value}</dd>" in html
-    for heading in (
-        "Review order", "Subject", "Risk", "Primary detection",
-        "Notable correlation", "Confidence", "Review reason",
-    ):
+    headings = (
+        "조사 순서",
+        "분석 대상 IP",
+        "위험도",
+        "주요 탐지",
+        "주요 상관관계",
+        "신뢰도",
+    )
+    for heading in headings:
         assert f'<th scope="col">{heading}</th>' in html
-    assert "<caption>Subjects in projected review order</caption>" in html
+    table_head = re.search(r"<thead>(.*?)</thead>", html, re.DOTALL).group(1)
+    assert table_head.count('<th scope="col">') == 6
+    assert "Review reason" not in html
+    assert "review reason &amp; verification" not in html
+    assert "<caption>정해진 조사 순서의 분석 대상</caption>" in html
     assert html.index("192.0.2.30") < html.index("192.0.2.10")
     assert html.index("192.0.2.10") < html.index("192.0.2.20")
 
@@ -336,9 +410,9 @@ def test_risk_has_text_indicators_and_subject_visibility_contract():
         for subject_ip in ("192.0.2.10", "192.0.2.20", "192.0.2.30")
     }
 
-    assert '<span class="risk risk-high">Risk: HIGH</span>' in html
-    assert '<span class="risk risk-medium">Risk: MEDIUM</span>' in html
-    assert '<span class="risk risk-low">Risk: LOW</span>' in html
+    assert '<span class="risk risk-high">위험도: HIGH</span>' in html
+    assert '<span class="risk risk-medium">위험도: MEDIUM</span>' in html
+    assert '<span class="risk risk-low">위험도: LOW</span>' in html
     assert by_subject["192.0.2.10"].startswith(
         '<details class="subject-card" open>'
     )
@@ -358,17 +432,17 @@ def test_exact_detection_evidence_labels_units_and_no_positional_fields():
     ):
         assert f"<h5>{display_name}</h5>" in html
     for expected in (
-        "<dt>Failed attempts</dt>\n<dd>5</dd>",
-        "<dt>Target accounts</dt>\n<dd>1</dd>",
-        "<dt>Time window</dt>\n<dd>16.0 seconds</dd>",
-        "<dt>Failed attempts</dt>\n<dd>4</dd>",
-        "<dt>Target accounts</dt>\n<dd>4</dd>",
-        "<dt>Time window</dt>\n<dd>6 seconds</dd>",
-        "<dt>Request path</dt>\n<dd><code>/download</code></dd>",
-        "<dt>Matched pattern</dt>\n<dd><code>../</code></dd>",
-        "<dt>HTTP method</dt>\n<dd>GET</dd>",
-        "<dt>Response status</dt>\n<dd>200</dd>",
-        "<dt>Response size</dt>\n<dd>2048 bytes</dd>",
+        "<dt>실패 횟수</dt>\n<dd>5</dd>",
+        "<dt>대상 계정 수</dt>\n<dd>1</dd>",
+        "<dt>시간 범위</dt>\n<dd>16.0초</dd>",
+        "<dt>실패 횟수</dt>\n<dd>4</dd>",
+        "<dt>대상 계정 수</dt>\n<dd>4</dd>",
+        "<dt>시간 범위</dt>\n<dd>6초</dd>",
+        "<dt>요청 경로</dt>\n<dd><code>/download</code></dd>",
+        "<dt>일치 패턴</dt>\n<dd><code>../</code></dd>",
+        "<dt>HTTP 메서드</dt>\n<dd>GET</dd>",
+        "<dt>응답 상태</dt>\n<dd>200</dd>",
+        "<dt>응답 크기</dt>\n<dd>2048바이트</dd>",
     ):
         assert expected in html
     for internal_name in (
@@ -385,8 +459,8 @@ def test_supported_correlations_render_display_alias_and_seconds_only():
 
     assert "<h5>Failed Login → Successful Login</h5>" in html
     assert "<h5>Brute Force → Successful Login</h5>" in html
-    assert "<dt>Account alias</dt>\n<dd>Account 1</dd>" in html
-    assert "<dt>Time delta</dt>\n<dd>2.5 seconds</dd>" in html
+    assert "<dt>계정 별칭</dt>\n<dd>Account 1</dd>" in html
+    assert "<dt>시간 차이</dt>\n<dd>2.5 초</dd>" in html
     assert "failed_to_successful_login" not in html
     assert "brute_force_to_successful_login" not in html
     assert ORIGINAL_ACCOUNT not in html
@@ -394,34 +468,208 @@ def test_supported_correlations_render_display_alias_and_seconds_only():
 
 def test_assessment_limitations_and_next_steps_remain_separate():
     html = render_investigation_report_html(populated_projection())
+    high_block = next(
+        block
+        for block in re.findall(
+            r'<details class="subject-card"(?: open)?>.*?</details>',
+            html,
+            re.DOTALL,
+        )
+        if "192.0.2.10" in block
+    )
+    medium_block = next(
+        block
+        for block in re.findall(
+            r'<details class="subject-card"(?: open)?>.*?</details>',
+            html,
+            re.DOTALL,
+        )
+        if "192.0.2.20" in block
+    )
 
-    assert "<h4>Assessment</h4>" in html
-    assert "<h4>Detection evidence</h4>" in html
-    assert "<h4>Interpretation limitations</h4>" in html
-    assert "<h4>Suggested next investigation steps</h4>" in html
-    assert html.count("A correlation is not causation or proof of compromise.") == 1
-    assert html.count(
-        "Review identity-provider records and verify the correlated login."
+    assert "<h4>평가</h4>" in html
+    assert "<h4>탐지 근거</h4>" in html
+    assert "<h4>해석 시 유의사항</h4>" in html
+    assert "<h4>다음 조사 단계</h4>" in html
+    assert html.count("탐지는 침해 확인을 의미하지 않습니다.") == 1
+    assert html.count("상관관계는 인과관계를 의미하지 않습니다.") == 1
+    assert html.count("로그인 성공 기록은 공격 성공을 입증하지 않습니다.") == 1
+    assert "탐지는 침해 확인을 의미하지 않습니다." not in high_block
+    assert "상관관계는 인과관계를 의미하지 않습니다." not in high_block
+    assert "로그인 성공 기록은 공격 성공을 입증하지 않습니다." not in high_block
+    assert "A correlation is not causation or proof of compromise." not in html
+    assert high_block.count(
+        "HTTP 응답과 경로 탐색 패턴만으로 파일 접근 또는 데이터 노출이 "
+        "이루어졌다고 판단할 수 없습니다."
     ) == 1
+    assert medium_block.count(
+        "Password Spraying-like 관찰만으로 동일한 인증정보가 "
+        "재사용되었다고 판단할 수 없습니다."
+    ) == 1
+    for rationale in (
+        "Likelihood rationale &amp; review",
+        "Impact rationale &lt;bounded&gt;",
+        "Confidence rationale &gt; observed",
+    ):
+        assert rationale in html
+
+
+def test_next_steps_use_explicit_precedence_deduplicate_and_cap_at_three():
+    html = render_investigation_report_html(populated_projection())
+    high_block = next(
+        block
+        for block in re.findall(
+            r'<details class="subject-card"(?: open)?>.*?</details>',
+            html,
+            re.DOTALL,
+        )
+        if "192.0.2.10" in block
+    )
+    expected_authentication = (
+        "관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 승인된 "
+        "출발지 또는 프로세스와 일치하는지 확인하십시오."
+    )
+    expected_login = (
+        "상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을 검토하고, "
+        "예상된 로그인인지 확인하십시오."
+    )
+    overlapping = (
+        "Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 및 "
+        "세션 기록을 검토하십시오."
+    )
+    expected_traversal = (
+        "관찰된 요청에 대한 애플리케이션, 리버스 프록시 및 파일 접근 "
+        "텔레메트리를 검토하고, 응답 내용이나 파일 접근이 기록되었는지 "
+        "확인하십시오."
+    )
+
+    assert expected_authentication in high_block
+    assert expected_login in high_block
+    assert expected_traversal in high_block
+    assert overlapping not in high_block
+    next_step_section = re.search(
+        r"<h4>다음 조사 단계</h4>\n<ul>(.*?)</ul>",
+        high_block,
+        re.DOTALL,
+    ).group(1)
+    assert next_step_section.count("<li>") == 3
+    assert high_block.index(expected_authentication) < high_block.index(
+        expected_login
+    )
+    assert high_block.index(expected_login) < high_block.index(
+        expected_traversal
+    )
+
+    medium_block = next(
+        block
+        for block in re.findall(
+            r'<details class="subject-card"(?: open)?>.*?</details>',
+            html,
+            re.DOTALL,
+        )
+        if "192.0.2.20" in block
+    )
+    assert (
+        "관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 관리자 또는 "
+        "자동화 활동인지 확인하십시오."
+    ) in medium_block
+
+
+def test_next_step_output_is_independent_of_projected_item_order():
+    projection = populated_projection()
+    high = projection.subjects[1]
+    permuted_high = replace(high, next_steps=tuple(reversed(high.next_steps)))
+    permuted = replace(
+        projection,
+        subjects=(projection.subjects[0], permuted_high, projection.subjects[2]),
+    )
+
+    assert render_investigation_report_html(permuted) == (
+        render_investigation_report_html(projection)
+    )
+
+
+def test_approved_korean_guidance_replaces_exact_legacy_english_sentences():
+    projection = populated_projection()
+    html = render_investigation_report_html(projection)
+    legacy_english = (
+        "Review authentication failure records for the observed time window "
+        "and verify whether the activity matches an approved source or process.",
+        "Review identity-provider, MFA, device, and session records for the "
+        "correlated login and verify whether the login was expected.",
+        "Review identity-provider authentication records for the affected "
+        "account aliases and verify expected administrative or automated activity.",
+        "Review application, reverse-proxy, and file-access telemetry for the "
+        "observed request and verify what response content or file access, if "
+        "any, was recorded.",
+        "Review authentication, MFA, device, and session records around the "
+        "Brute Force observation and correlated login.",
+        "A Password Spraying-like observation does not establish reuse of the "
+        "same credential.",
+        "An HTTP response and traversal pattern do not establish file access "
+        "or data disclosure.",
+    )
+
+    for sentence in legacy_english:
+        assert sentence not in html
+    for retained_term in (
+        "Brute Force",
+        "Password Spraying-like",
+        "Path Traversal",
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "IdP",
+        "MFA",
+    ):
+        assert retained_term in html
+    for internal_id in (
+        "review_authentication_failures",
+        "review_cross_account_authentication",
+        "review_traversal_response_context",
+        "review_login_transition",
+        "review_brute_force_login_transition",
+        "spraying_like_not_credential_reuse",
+        "path_traversal_not_file_disclosure",
+    ):
+        assert internal_id not in html
+
+    high = projection.subjects[1]
+    composite_only = replace(
+        high,
+        next_steps=(high.next_steps[0],),
+    )
+    composite_projection = replace(
+        projection,
+        subjects=(
+            projection.subjects[0],
+            composite_only,
+            projection.subjects[2],
+        ),
+    )
+    composite_html = render_investigation_report_html(composite_projection)
+    assert (
+        "Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 및 "
+        "세션 기록을 검토하십시오."
+    ) in composite_html
 
 
 def test_empty_states_are_bounded_and_linux_audit_absence_is_explicit():
     html = render_investigation_report_html(empty_projection())
 
-    assert (
-        "No supported detection observations were produced from the analyzed "
-        "input."
-    ) in html
-    assert (
-        "No supported per-IP correlation observations were produced from the "
-        "analyzed input."
-    ) in html
-    assert html.count("This does not establish the absence of malicious activity.") == 1
-    assert "Linux Audit aggregate was not provided for this report." in html
-    assert "<h2>Linux Audit aggregate</h2>" not in html
-    lower = html.casefold()
-    for prohibited_claim in ("system is safe", "clean system", "no attack", "no compromise"):
-        assert prohibited_claim not in lower
+    assert "지원되는 탐지 관찰 없음" in html
+    assert "지원되는 상관관계 없음" in html
+    assert html.count("이는 악의적 활동의 부재를 입증하지 않습니다.") == 1
+    assert "이 보고서에는 Linux Audit 집계가 제공되지 않았습니다." in html
+    assert "<h2>Linux Audit 집계</h2>" not in html
+    for prohibited_claim in (
+        "안전",
+        "정상",
+        "공격 없음",
+        "침해 없음",
+        "깨끗함",
+    ):
+        assert prohibited_claim not in html
 
 
 def test_unsupported_observation_notices_are_fixed_and_bounded():
@@ -438,8 +686,8 @@ def test_unsupported_observation_notices_are_fixed_and_bounded():
 
     html = render_investigation_report_html(projection)
 
-    assert "Unsupported detection type was omitted from this report." in html
-    assert "Unsupported correlation type was omitted from this report." in html
+    assert "지원되지 않는 탐지 유형은 이 보고서에서 제외되었습니다." in html
+    assert "지원되지 않는 상관관계 유형은 이 보고서에서 제외되었습니다." in html
 
 
 def test_html_escapes_all_projected_text_and_keeps_it_out_of_attributes():
@@ -451,7 +699,10 @@ def test_html_escapes_all_projected_text_and_keeps_it_out_of_attributes():
         path,
         evidence=replace(path.evidence, request_path=adversarial),
     )
-    hostile_limitation = InterpretationLimitationItem("fixed-id", adversarial)
+    hostile_limitation = InterpretationLimitationItem(
+        "path_traversal_not_file_disclosure",
+        adversarial,
+    )
     high = replace(
         high,
         review_reason=adversarial,
@@ -504,13 +755,12 @@ def test_linux_audit_aggregate_is_count_only_and_zero_state_is_explicit():
     )
     html = render_investigation_report_html(empty_projection(linux_audit=linux))
 
-    assert "<h2>Linux Audit aggregate</h2>" in html
-    assert "<dt>Process observations</dt>\n<dd>0</dd>" in html
-    assert "<dt>Shared-memory review observations</dt>\n<dd>0</dd>" in html
-    assert "<dt>Session-process co-observations</dt>\n<dd>0</dd>" in html
+    assert "<h2>Linux Audit 집계</h2>" in html
+    assert "<dt>프로세스 관찰 수</dt>\n<dd>0</dd>" in html
+    assert "<dt>공유 메모리 검토 관찰 수</dt>\n<dd>0</dd>" in html
+    assert "<dt>세션-프로세스 공동 관찰 수</dt>\n<dd>0</dd>" in html
     assert (
-        "No Linux Audit process observations were produced from the supplied "
-        "aggregate."
+        "제공된 집계에서 Linux Audit 프로세스 관찰이 생성되지 않았습니다."
     ) in html
     assert LINUX_DETAIL not in html
 

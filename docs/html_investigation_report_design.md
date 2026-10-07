@@ -14,11 +14,11 @@ HTTP 200 response is not proof of file disclosure, and a successful login is
 not proof of account compromise.
 
 The initial phase produced design documentation and documentation contract
-tests. The approved projection phase added the immutable projection types and
-strict builder. The approved renderer phase adds only the pure standalone
-renderer and focused tests described below. It does not add a template,
-frontend, route, endpoint, JavaScript, external CSS bundle, dependency, file
-writer, or CLI option.
+tests. The approved projection and renderer phases added the immutable
+projection types, strict builder, and pure standalone renderer. The delivery
+phase adds only a secure local file writer and the explicit `--html-report
+PATH` CLI option. It does not add a template, frontend, route, endpoint,
+JavaScript, external CSS bundle, dependency, or browser auto-open behavior.
 
 ## 2. Current architecture findings
 
@@ -299,13 +299,12 @@ The exact columns are:
 
 | Column | Contract |
 |---|---|
-| Review order | One-based integer assigned after deterministic sorting. |
-| Subject/IP | Canonical IP string. |
-| Risk | Existing `HIGH`, `MEDIUM`, or `LOW` value, unchanged. |
-| Primary detection | Lexicographically first supported detection display name, or `None observed`. |
-| Notable correlation | Lexicographically first supported correlation display name, or `None observed`. |
-| Confidence | Existing confidence level, unchanged. |
-| Review reason | One bounded summary assembled from the existing risk, presence of supported observations, and confidence; it is not a verdict. |
+| 조사 순서 | One-based integer assigned after deterministic sorting. |
+| 분석 대상 IP | Canonical IP string. |
+| 위험도 | Existing `HIGH`, `MEDIUM`, or `LOW` value, unchanged. |
+| 주요 탐지 | Lexicographically first supported detection display name, or `관찰 없음`. |
+| 주요 상관관계 | Lexicographically first supported correlation display name, or `관찰 없음`. |
+| 신뢰도 | Existing confidence level, unchanged. |
 
 The builder must not modify `risk_level`. Rows and detail sections use this
 deterministic ascending sort key:
@@ -318,15 +317,15 @@ deterministic ascending sort key:
 5. canonical IP numeric order: address family, then packed address bytes.
 
 After sorting, rows are enumerated `1..N`; that integer is `review_order` and
-is displayed as “Review order.” It is only an operator-navigation aid. It is
+is displayed as `조사 순서`. It is only an operator-navigation aid. It is
 not a new risk, severity, priority score, confidence value, security
 conclusion, or verdict, and it must not be used by detection, correlation, or
 risk logic.
 
 Primary/notable selection is lexical presentation tie-breaking, not a claim
-that one observation is more severe. The table reason is concise; its exact
-sentence is not repeated in the detail assessment, limitation, or next-step
-sections.
+that one observation is more severe. The projection retains `review_reason`
+for its existing contract, but the HTML table does not render it because the
+six retained columns already provide the useful navigation context.
 
 ## 8. Detection and correlation display contracts
 
@@ -431,25 +430,56 @@ rewrite either value.
 
 | Supported type | `next_step_id` | Fixed analyst-facing text |
 |---|---|---|
-| `brute_force` | `review_authentication_failures` | Review authentication failure records for the observed time window and verify whether the activity matches an approved source or process. |
-| `password_spraying_like` | `review_cross_account_authentication` | Review identity-provider authentication records for the affected account aliases and verify expected administrative or automated activity. |
-| `path_traversal` | `review_traversal_response_context` | Review application, reverse-proxy, and file-access telemetry for the observed request and verify what response content or file access, if any, was recorded. |
-| `failed_to_successful_login` | `review_login_transition` | Review identity-provider, MFA, device, and session records for the correlated login and verify whether the login was expected. |
-| `brute_force_to_successful_login` | `review_brute_force_login_transition` | Review authentication, MFA, device, and session records around the Brute Force observation and correlated login. |
+| `brute_force` | `review_authentication_failures` | 관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 승인된 출발지 또는 프로세스와 일치하는지 확인하십시오. |
+| `password_spraying_like` | `review_cross_account_authentication` | 관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 관리자 또는 자동화 활동인지 확인하십시오. |
+| `path_traversal` | `review_traversal_response_context` | 관찰된 요청에 대한 애플리케이션, 리버스 프록시 및 파일 접근 텔레메트리를 검토하고, 응답 내용이나 파일 접근이 기록되었는지 확인하십시오. |
+| `failed_to_successful_login` | `review_login_transition` | 상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을 검토하고, 예상된 로그인인지 확인하십시오. |
+| `brute_force_to_successful_login` | `review_brute_force_login_transition` | Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 및 세션 기록을 검토하십시오. |
 
 The implemented limitation catalog is likewise fixed and type-driven. It
 contains only bounded statements that detection is not compromise,
 Password Spraying-like does not establish credential reuse, traversal status
 does not establish file disclosure, correlation is not causation, and a
-successful login does not establish account compromise. Next steps are
-ordered by the table above and de-duplicated by
-`next_step_id`; input/detection order cannot affect them. An unsupported type
-gets no next step and only the bounded omission notice from section 8. No LLM
+successful login does not establish account compromise. The renderer places
+the three general limitations—detection is not compromise, correlation is not
+causation, and successful login is not attack success—once in the report-level
+scope section. Subject sections omit those generic IDs and render only the
+Password Spraying-like or Path Traversal-specific limitation IDs.
+The two subject-specific fixed mappings are:
+
+- `spraying_like_not_credential_reuse` → `Password Spraying-like 관찰만으로
+  동일한 인증정보가 재사용되었다고 판단할 수 없습니다.`
+- `path_traversal_not_file_disclosure` → `HTTP 응답과 경로 탐색 패턴만으로
+  파일 접근 또는 데이터 노출이 이루어졌다고 판단할 수 없습니다.`
+
+Next steps use explicit report-only purpose precedence:
+authentication-failure verification, cross-account authentication review,
+correlated-login verification, then traversal-response review. Within the
+correlated-login purpose, `review_login_transition` takes precedence over the
+semantically overlapping `review_brute_force_login_transition`. The renderer
+selects at most one step per purpose and at most three steps per subject while
+retaining each selected projection item's fixed ID/text pair unchanged. Thus a
+Brute Force plus successful-login subject shows the authentication failure
+source/time-window step and the correlated login MFA/device/session step,
+without also showing the overlapping composite step. Input order cannot affect
+the displayed order. An unsupported type gets no next step and only the
+bounded omission notice from section 8. No LLM
 generates or rewrites these values, and no log text, rationale, exception, or
 internal object text is copied into them. The allowlist contains no command,
 system mutation, automatic block of an account/IP, claim of compromise,
 malicious intent, or attack success. Every step is limited to evidence review
 and verification by an analyst.
+
+All fixed operator UI, fixed next-step guidance, and type-specific limitation
+text are Korean. Established security display names and grades—including
+Brute Force, Password Spraying-like, Path Traversal, `HIGH`, `MEDIUM`, `LOW`,
+IdP, and MFA—remain unchanged where they are clearer. Translation is an
+explicit fixed-ID/allowlist contract in the projection; neither the projection
+nor renderer performs fuzzy matching or automatic translation of arbitrary
+data, and no LLM is used. The renderer only applies deterministic selection,
+de-duplication, and HTML escaping to projected display text. Privacy selection
+and redaction remain the projection boundary's responsibility, not the
+renderer’s.
 
 Evidence values appear once in the evidence section. Existing assessment
 rationale appears once in assessment. A limitation and a next step each appear
@@ -531,7 +561,7 @@ text context before insertion. No report data may be inserted as HTML, URL,
 CSS, JavaScript, tag name, attribute name, event handler, or unquoted
 attribute. There is no unsafe HTML passthrough and no inline event handler.
 
-Use `<!doctype html>`, `<html lang="en">`, and an early
+Use `<!doctype html>`, `<html lang="ko">`, and an early
 `<meta charset="utf-8">`. Add a meta-delivered CSP before the static style
 block. The required policy shape is:
 
@@ -542,7 +572,7 @@ form-action 'none';
 object-src 'none';
 script-src 'none';
 script-src-attr 'none';
-style-src 'sha256-HrSeyxAgCRxOqI488GcfpWXohRBDF7JsJjos2KT0Jqk=';
+style-src 'sha256-dugVI89wFmxndpbiVjFenLmRw4HSK3Dw6k21+aq5/dY=';
 style-src-attr 'none';
 img-src 'none';
 font-src 'none';
@@ -573,11 +603,35 @@ report non-sensitive.
 
 Rendering failure raises `InvestigationReportRendererError` with one fixed
 bounded message, never internal exception text, rejected fields, or object
-dumps. The renderer does not write a file. A future file-output implementation
-must create output with restrictive permissions where supported, write to a
-private temporary sibling, close/flush it, remove it on every failure, and
-consider atomic replacement for finalization. It must never leave a partial
-final file.
+dumps. The renderer does not write a file.
+
+`app.analyzer.html_report_file` implements the separate filesystem boundary.
+`validate_html_report_target()` accepts an exact CLI string without expanding
+environment variables or `~`. V1 accepts relative and absolute paths, rejects
+empty values, `..` components, `~`-prefixed components, and every suffix other
+than exact lowercase `.html`. Every explicitly supplied parent component must
+already be a real directory and not a symlink. The destination must not exist,
+including as a broken symlink, directory, FIFO, socket, or device; missing
+parents are not created.
+
+`write_investigation_report_html()` accepts only an exact `str` and a frozen
+`ValidatedHtmlReportTarget`. It encodes strict UTF-8, creates one private
+temporary sibling, applies mode `0600` where supported, writes without newline
+conversion, flushes and file-`fsync`s, then uses a same-directory hard link to
+publish the complete inode under the requested name without replacing an
+existing entry. The temporary name is removed after publication. A write or
+publication failure raises `InvestigationReportFileError` with one fixed
+path-free message and performs bounded cleanup of only the known temporary
+file and, when applicable, the just-published same inode. It never logs HTML,
+paths, or internal exception text and never retries creation.
+
+This is the strongest no-overwrite publication contract implemented with the
+portable Python standard-library operations available to this project; a
+filesystem that does not support the required hard link fails closed. It does
+not eliminate every time-of-check/time-of-use race: an ancestor or parent can
+be replaced after validation on a concurrently modified filesystem, and the
+directory entry itself is not directory-`fsync`ed. Operators must select an
+access-controlled directory that untrusted users cannot rename or modify.
 
 ## 12. Empty, unsupported, and malformed states
 
@@ -585,10 +639,10 @@ The exact bounded presentation semantics are:
 
 | State | Presentation |
 |---|---|
-| No supported detections | `No supported detection observations were produced from the analyzed input.` followed once by `This does not establish the absence of malicious activity.` |
-| No supported per-IP correlations | `No supported per-IP correlation observations were produced from the analyzed input.` followed by the same bounded absence limitation only if it has not already appeared in the subject section. |
-| No Linux Audit input/aggregate | Omit Linux Audit cards and section; state `Linux Audit aggregate was not provided for this report.` in report scope. |
-| Supplied Linux Audit aggregate with zero observations | Show explicit zero counts and `No Linux Audit process observations were produced from the supplied aggregate.` |
+| No supported detections | `지원되는 탐지 관찰 없음` followed once by `이는 악의적 활동의 부재를 입증하지 않습니다.` |
+| No supported per-IP correlations | `지원되는 상관관계 없음` followed by the same bounded absence limitation only if it has not already appeared in the report-level section. |
+| No Linux Audit input/aggregate | Omit Linux Audit cards and section; state `이 보고서에는 Linux Audit 집계가 제공되지 않았습니다.` in report scope. |
+| Supplied Linux Audit aggregate with zero observations | Show explicit zero counts and `제공된 집계에서 Linux Audit 프로세스 관찰이 생성되지 않았습니다.` |
 | Unsupported detection/correlation | Show only the bounded omission notice defined in section 8; do not show the unknown identifier or evidence. |
 | Malformed internal input or projection | Abort report creation, remove partial output, and return a fixed projection/rendering failure message outside the HTML. |
 
@@ -627,7 +681,7 @@ Details may use native `<details>`/`<summary>` for low-density expansion
 without JavaScript. All subject details remain present in the file and follow
 the deterministic table order.
 
-## 14. Future implementation boundary and sequence
+## 14. Implementation boundary and sequence
 
 The approved delivery sequence is:
 
@@ -640,20 +694,41 @@ The approved delivery sequence is:
 3. **Implemented in the renderer phase:** a pure renderer from the immutable
    projection to deterministic UTF-8 standalone HTML, with escaping, CSP, and
    no-network tests.
-4. **Not implemented:** add private temporary-file creation, restrictive
-   permissions, failure cleanup, and atomic-finalization tests.
-5. **Not implemented:** only after projection and renderer tests pass,
-   consider an explicit CLI option such as `--html-report PATH` that calls the
-   existing analysis once and passes objects directly to the projection
-   builder.
+4. **Implemented in the delivery phase:** strict output validation, private
+   temporary-file creation, restrictive permissions, bounded failure cleanup,
+   and no-overwrite hard-link publication.
+5. **Implemented in the delivery phase:** `--html-report PATH` reuses the
+   existing normalized logs, analysis, and optional Linux Audit count-only
+   summaries. It builds the projection once, renders once, writes once, then
+   prints the unchanged text report followed by the fixed confirmation
+   `HTML investigation report created.`
+
+The file is finalized before any text report is printed. Projection,
+rendering, or file-creation failure therefore exits non-zero with the fixed
+message `HTML investigation report could not be created.` and prints no
+partial text report. The CLI never prints HTML or the destination path, never
+opens a browser, and does not call the LLM. Omission of `--html-report`
+preserves the existing CLI flow and output.
+
+Usage is explicit:
+
+```bash
+uv run python -m app.main --html-report investigation.html
+```
+
+Automated tests parse the resulting standalone document and verify its CSP,
+structure, content boundaries, and absence of remote resources. No compatible
+browser automation tool was available in the verified development environment,
+so actual browser/CSP-console and narrow-viewport acceptance was not performed
+or claimed.
 
 V1 does not add a web dashboard, active server, API route, existing-response
 field, LLM integration, JavaScript, or frontend framework.
 
 ## 15. Test plan
 
-Projection and renderer tests cover their applicable items below; the later
-file-output phase must cover the remaining filesystem items:
+Projection, renderer, filesystem, and CLI tests cover the applicable items
+below:
 
 - exact projection fields and rejection of extra/internal fields;
 - deterministic subject, detection, and correlation ordering and tie breaks;

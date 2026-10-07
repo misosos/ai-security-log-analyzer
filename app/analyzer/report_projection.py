@@ -86,33 +86,33 @@ _RATIONALE_PATTERNS = tuple(
 _LIMITATION_CATALOG = (
     (
         "detection_not_compromise",
-        "A detection is not confirmation of compromise.",
+        "탐지는 침해 확인을 의미하지 않습니다.",
         frozenset(_DETECTION_DISPLAY_NAMES),
     ),
     (
         "spraying_like_not_credential_reuse",
         (
-            "A Password Spraying-like observation does not establish "
-            "reuse of the same credential."
+            "Password Spraying-like 관찰만으로 동일한 인증정보가 "
+            "재사용되었다고 판단할 수 없습니다."
         ),
         frozenset({"password_spraying_like"}),
     ),
     (
         "path_traversal_not_file_disclosure",
         (
-            "An HTTP response and traversal pattern do not establish "
-            "file access or data disclosure."
+            "HTTP 응답과 경로 탐색 패턴만으로 파일 접근 또는 데이터 "
+            "노출이 이루어졌다고 판단할 수 없습니다."
         ),
         frozenset({"path_traversal"}),
     ),
     (
         "correlation_not_causation",
-        "A correlation is not causation or proof of compromise.",
+        "상관관계는 인과관계나 침해의 증거를 의미하지 않습니다.",
         frozenset(_CORRELATION_DISPLAY_NAMES),
     ),
     (
         "successful_login_not_account_compromise",
-        "A successful login does not establish account compromise.",
+        "로그인 성공만으로 계정 침해가 발생했다고 판단할 수 없습니다.",
         frozenset(_CORRELATION_DISPLAY_NAMES),
     ),
 )
@@ -121,43 +121,41 @@ _NEXT_STEP_CATALOG = (
         "brute_force",
         "review_authentication_failures",
         (
-            "Review authentication failure records for the observed time "
-            "window and verify whether the activity matches an approved "
-            "source or process."
+            "관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 "
+            "승인된 출발지 또는 프로세스와 일치하는지 확인하십시오."
         ),
     ),
     (
         "password_spraying_like",
         "review_cross_account_authentication",
         (
-            "Review identity-provider authentication records for the "
-            "affected account aliases and verify expected administrative "
-            "or automated activity."
+            "관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 관리자 "
+            "또는 자동화 활동인지 확인하십시오."
         ),
     ),
     (
         "path_traversal",
         "review_traversal_response_context",
         (
-            "Review application, reverse-proxy, and file-access telemetry "
-            "for the observed request and verify what response content or "
-            "file access, if any, was recorded."
+            "관찰된 요청에 대한 애플리케이션, 리버스 프록시 및 파일 "
+            "접근 텔레메트리를 검토하고, 응답 내용이나 파일 접근이 "
+            "기록되었는지 확인하십시오."
         ),
     ),
     (
         "failed_to_successful_login",
         "review_login_transition",
         (
-            "Review identity-provider, MFA, device, and session records for "
-            "the correlated login and verify whether the login was expected."
+            "상관된 로그인에 대한 IdP, MFA, 장치 및 세션 기록을 "
+            "검토하고, 예상된 로그인인지 확인하십시오."
         ),
     ),
     (
         "brute_force_to_successful_login",
         "review_brute_force_login_transition",
         (
-            "Review authentication, MFA, device, and session records around "
-            "the Brute Force observation and correlated login."
+            "Brute Force 관찰과 상관된 로그인 전후의 인증, MFA, 장치 "
+            "및 세션 기록을 검토하십시오."
         ),
     ),
 )

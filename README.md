@@ -76,6 +76,33 @@ uv run python -m app.main \
 
 Each supplied Linux Audit path must name a distinct, non-empty regular file. Read and validation failures return a non-zero CLI error that identifies the input position without echoing its path. Process execution, shared-memory, and session/process review output is aggregate-only: it does not print argv, executable paths, CWD, `PROCTITLE`, raw process records, PID, UID, or GID. The broader CLI report can print synthetic authentication/session correlation fields such as account, Audit session ID, and timestamps; do not treat the CLI as an identity-free interface.
 
+Create a sensitive standalone local HTML investigation report only when
+explicitly requested:
+
+```bash
+uv run python -m app.main --html-report investigation.html
+```
+
+The option requires a new file with an exact lowercase `.html` suffix in an
+existing real directory. It does not expand environment variables or `~`,
+create parents, overwrite a destination, follow a supplied symlink parent, or
+open a browser. The CLI completes projection, rendering, and secure file
+creation before printing its unchanged text report, then prints only the fixed
+confirmation `HTML investigation report created.` It never prints the HTML or
+destination path and does not call the LLM or make an external network request.
+
+The writer uses UTF-8, a private temporary sibling, mode `0600` where
+supported, file flush/`fsync`, and no-overwrite hard-link publication. A
+filesystem without hard-link support fails closed. This does not eliminate all
+filesystem races: use an access-controlled directory whose ancestors cannot be
+changed by untrusted users. Treat the report as sensitive even though it uses
+report-local account aliases and excludes raw queries and private Linux Audit
+details. Store and share it only through approved protected locations and
+channels, and delete it and managed copies under applicable organizational
+retention and evidence-preservation requirements; this project does not set a
+universal retention period. Browser automation was unavailable for the latest
+local verification, so browser/CSP-console acceptance is not claimed.
+
 ## Default development API
 
 Start the default development application with:
