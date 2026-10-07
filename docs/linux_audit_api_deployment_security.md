@@ -4,7 +4,7 @@
 
 This document defines the production deployment contract for the default-disabled `POST /api/analyze-linux-audit` endpoint. It is a design and acceptance plan, not a deployed configuration. The boolean feature gate is not authentication, and neither the gate nor the application bearer check replaces the network, TLS, resource, secret, or audit controls in this document.
 
-Repository inspection on 2026-10-07 found no startup command in the empty `README.md`; no Dockerfile, Compose, Kubernetes, systemd, Nginx, Caddy, ingress, TLS, CORS, `TrustedHost`, proxy-header, rate-limit, or deployment workflow configuration; and no `.env.example`. `uvicorn` and `python-dotenv` are dependencies, but no production host, port, worker count, TLS termination, proxy trust, or secret-delivery policy is configured. The default application's only health route is public `GET /api/health`, which returns `{"status": "ok"}` and does not establish readiness. Phase 3Y-O adds a production-only internal readiness route, but not the edge restriction or service configuration required to deploy it.
+Repository inspection on 2026-10-07 found no startup command in the empty `README.md`; no Dockerfile, Compose, Kubernetes, Caddy, ingress, CORS, `TrustedHost`, deployment workflow or `.env.example`. Phase 3Y-P now adds static reference systemd and Nginx files under `deploy/`; they are not installed host configuration and contain no credential or certificate. The default application's only health route is public `GET /api/health`, which returns `{"status": "ok"}` and does not establish readiness. The production-created app has a separate internal readiness route, but a real operator must install, validate and restrict every host boundary described below.
 
 The current application contract is narrower and already implemented:
 
@@ -226,7 +226,7 @@ Readiness becomes true immediately before the ASGI lifespan startup yields contr
 - the audit sink completed startup initialization;
 - secret bootstrap and production app composition completed.
 
-Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence, remote forwarding, retention, TLS, Nginx or external reachability are healthy. Starlette normally does not serve application requests until lifespan startup completes. The 503 representation therefore defines a bounded contract for direct lifecycle tests and deployment transitions; it does not prove that a particular proxy can observe every intermediate phase. A 200 establishes only the application-owned prerequisites above. It does not prove TLS, Nginx configuration, journal persistence/forwarding, retention approval, public reachability or whole-system health. The future edge must restrict this unauthenticated path to its internal listener.
+Readiness does not upload a file, run analysis, reveal endpoint enablement details publicly, disclose principal/secret/sink path, or claim that journald persistence, remote forwarding, retention, TLS, Nginx or external reachability are healthy. Starlette normally does not serve application requests until lifespan startup completes. The 503 representation therefore defines a bounded contract for direct lifecycle tests and deployment transitions; it does not prove that a particular proxy can observe every intermediate phase. A 200 establishes only the application-owned prerequisites above. It does not prove TLS, Nginx configuration, journal persistence/forwarding, retention approval, public reachability or whole-system health. The reference public Nginx virtual host rejects this unauthenticated path locally; a host-local monitor may query it only through the loopback Uvicorn listener.
 
 ## 12. Startup, rollout, and shutdown
 
@@ -276,25 +276,42 @@ Every item is mandatory. A missing or failed item prohibits endpoint enablement.
 - [ ] Backup/restore and audit-log integrity responsibilities have named owners.
 - [ ] Capacity, certificate, audit drop/storage and service-failure monitoring/alert ownership is assigned.
 - [ ] Incident-response contact and escalation path are assigned.
+- [ ] Dedicated service account and `/opt/ai-security-log-analyzer` ownership are reviewed; the Python/uv environment is installed without writable production source.
+- [ ] Administrator-created credential source has approved owner and `0400` mode; no token appears in argv, environment values, repository or shell history.
+- [ ] Certificate issuance, private-key permissions, renewal and expiry monitoring are accepted.
+- [ ] `nginx -t` and `systemd-analyze verify` pass on the target Linux host before installation or reload.
+- [ ] Socket inspection proves only Nginx is public and Uvicorn is bound to `127.0.0.1:8000`.
+- [ ] External requests to `/api/analyze`, `/api/health`, `/internal/readiness`, docs and OpenAPI receive the proxy's fixed local rejection.
+- [ ] A non-production TLS acceptance run verifies 401, 403, edge/application 413, edge/application 429, audit failure and successful fixture analysis.
+- [ ] Journal field allowlisting and absence of bearer, filename, raw evidence and process detail are inspected on the target host.
+- [ ] Graceful restart/shutdown, credential rotation, rollback and restart-loop alerting are rehearsed.
+- [ ] Retention, integrity, access, backup, deletion and incident-hold policy is approved and tested.
+- [ ] Peak memory, CPU, temporary storage and latency are measured before any worker, replica or capacity increase.
 
-## 14. Later reference implementation plan
+## 14. Implemented reference artifacts and operator installation boundary
 
-The first three application-side units are implemented. Later deployment work should continue in small, reviewable units:
+The repository now contains two non-executable reference artifacts:
 
-1. Completed: explicit production factory composing the secret loader, native journald sink and secured `create_app(...)` without logging values.
-2. Completed: internal immutable readiness contract and app lifespan ownership of bounded sink close.
-3. Completed: zero-argument Uvicorn factory with strict three-variable parsing, fixed systemd credential filename and production-only hidden readiness probe.
-4. Nginx reference template with placeholders for DNS name, certificate/key references, trusted loopback upstream and approved policy identifiers.
-5. systemd service/credential template with non-secret placeholders and one-worker/loopback defaults.
-6. Deployment environment template containing only safe non-secret values; no token placeholder that resembles a usable credential.
-7. Operator runbook for certificate, secret rotation/revocation, audit retention/deletion and incident response.
-8. Ordinary pytest contract tests plus a separate local Nginx/systemd acceptance harness.
+- `deploy/systemd/ai-security-log-analyzer.service` targets systemd 252 or newer and launches `/opt/ai-security-log-analyzer/.venv/bin/uvicorn app.deployment.asgi:create_linux_audit_api_app --factory` as the dedicated `ai-security-log-analyzer` user/group. It binds `127.0.0.1:8000`, uses one worker, trusts proxy headers only from `127.0.0.1`, sets analysis concurrency to 1, and receives the exact `linux-audit-api-operator-token` through `LoadCredential=`. systemd, not the unit, supplies `CREDENTIALS_DIRECTORY`.
+- `deploy/nginx/ai-security-log-analyzer.conf` is an `http`-context include targeting Nginx 1.24 or newer with the SSL, proxy, request-rate and connection-limit modules. Its reserved `linux-audit-api.example.invalid` name and certificate paths are placeholders. It exposes only exact `POST /api/analyze-linux-audit`, sends that route to `127.0.0.1:8000`, and returns bounded local errors for every other path or method.
 
-Safely committable defaults are the 24 MiB edge body ceiling, documented timeout/rate/connection starting points, one worker, app analysis capacity 1, fixed public error bodies and placeholder names. DNS names, network ranges, certificate/key locations, credential sources, principal ID, retention duration, alert destinations and incident contacts remain deployment-specific placeholders requiring approval.
+Before installation, an operator must deliberately create the service identity, deploy read-only application/virtual-environment content under `/opt/ai-security-log-analyzer`, create the protected credential source at `/etc/ai-security-log-analyzer/linux-audit-api-operator-token`, and substitute an approved DNS name and certificate/key paths. The credential is exactly the existing canonical 43-character unpadded Base64URL representation of 32 CSPRNG bytes, stored as mode `0400`; it must not be shown in an example, argument, environment assignment, log or shell trace. V1 rotation replaces that protected source and uses a controlled restart because there is one token and no grace window.
+
+The unit's sandbox is deliberately compatible with Python reads, private temporary staging, loopback TCP, the systemd credential mount and the Unix journald socket. `PrivateNetwork=` is excluded because it would isolate the loopback namespace from host Nginx. `RestrictAddressFamilies=AF_UNIX AF_INET` retains only journald/local IPC and IPv4 loopback needs. `ProtectSystem=strict`, `ProtectHome=yes` and `PrivateTmp=yes` leave application source read-only while retaining the service-private temporary area. Exact `MemoryMax=`, `TasksMax=` and `LimitNOFILE=` values are deferred until workload measurement; inventing them could turn valid bounded analyses into abrupt kills that skip cleanup or audit persistence. These controls do not replace source permissions, TLS, authentication or edge limits.
+
+Nginx buffers the request before proxying (`proxy_request_buffering on`) so the 24 MiB envelope can be enforced before normal upstream processing; this may use Nginx temporary storage and requires bounded disk/permission monitoring. `client_body_timeout` and proxy timeouts are inactivity timers, not an absolute request deadline. The endpoint-global `6r/m`, burst 2 `nodelay` zone rejects excess without a request queue; its state is local to one Nginx instance. `limit_conn` counts only requests after a complete header is read. Access logs use method and `$uri`, not query string, headers or body; `Authorization` is forwarded only to the app and is absent from the format.
+
+The public proxy overwrites Host and approved forwarding headers, clears `Forwarded`/`X-Real-IP`, and never uses client IP as authentication, authorization or audit principal. The default app paths `/api/analyze` and `/api/health`, the internal readiness path, docs and OpenAPI all hit the fixed catch-all response instead of an upstream. A host-local readiness check may query `http://127.0.0.1:8000/internal/readiness` without a bearer token; it does not test Nginx, public TLS, DNS, journald durability, forwarding, retention or firewall state.
+
+Static pytest contracts verify the two files against application constants. On the target host, operators must additionally run `systemd-analyze verify deploy/systemd/ai-security-log-analyzer.service` before copying/starting the unit and validate the installed Nginx configuration with `nginx -t` before reload. They must then inspect listeners, routes, certificate behavior, credentials, journal output and load behavior. Repository text tests cannot substitute for those host checks.
+
+Rollback removes public traffic first, stops the app gracefully, restores the previously approved configuration and credential only under the owned rollback procedure, re-runs syntax and acceptance checks, and then restores traffic. A suspected credential compromise forbids rolling back to that credential. Failed rollout artifacts, old secrets and copied journal exports follow the approved deletion/incident-hold policy.
+
+Remaining deployment work is operator installation, host acceptance, an approved retention/integrity policy, certificate operation, firewall verification, monitoring/alert ownership and measured capacity review. Safely committed defaults are the 24 MiB edge body ceiling, timeout/rate/connection starting points, one worker, app analysis capacity 1, fixed public error bodies and reserved placeholder names. They are V1 operational defaults, not universal Nginx, systemd, Linux Audit, OWASP or NIST values and not guaranteed safe capacity.
 
 ## 15. Deployment acceptance-test plan
 
-### Ordinary pytest tests
+### Ordinary pytest and static configuration tests
 
 - Default `app.api:app` remains disabled and default OpenAPI is unchanged.
 - Enabled bootstrap without credential, malformed credential, config or sink fails before serving.
@@ -306,6 +323,9 @@ Safely committable defaults are the 24 MiB edge body ceiling, documented timeout
 - Graceful cancellation preserves staging cleanup, limiter release and one cancellation-audit attempt.
 - Privacy boundary and LLM non-invocation remain unchanged.
 - Existing `/api/health`, `/api/analyze`, CLI, parser, analysis and OpenAPI tests pass.
+- Reference files use the exact factory target, environment names, credential destination, API/readiness paths and application size limits.
+- The unit has a dedicated identity, loopback single-worker execution, exact local proxy trust, bounded restart/shutdown and the reviewed hardening allowlist.
+- The Nginx include has TLS-only listeners, route allowlisting, fixed edge errors, 24 MiB/body-header-time bounds, 6/minute burst-2 rate rejection, four-connection cap and privacy-bounded access format.
 
 ### Local proxy/service integration tests
 
@@ -350,7 +370,7 @@ The integration suite requires an isolated local proxy/service environment and m
 
 ## 17. Non-goals and known limitations
 
-The repository now has an explicit argument-driven production application factory, internal readiness lifecycle, zero-argument Uvicorn import helper, strict non-secret environment parser and hidden readiness route. It still has no proxy or systemd unit configuration, containers, certificates, environment token loading, rate-limit deployment or completed edge acceptance. These primitives do not make the endpoint production-ready by themselves. Production activation remains prohibited until the edge, TLS, service-credential delivery, audit retention/integrity and deployment acceptance gates are complete.
+The repository now has an explicit production factory, hidden readiness route, zero-argument Uvicorn helper, and static reference systemd/Nginx files. The files are not installed, do not include certificates or credentials, and do not prove real service-manager, credential, journal, TLS, firewall, DNS, rate, connection or graceful-shutdown behavior. There is still no container configuration or completed host acceptance. Production activation remains prohibited until an operator reviews, substitutes, installs and passes every required deployment gate.
 
 Nginx inactivity timeouts are not absolute request deadlines. A single proxy's shared rate zone is not distributed. The application limiter, sink and memory are process-local. The reference host shares fate between proxy and app. Journald acceptance is not proof of durable or remote storage. Static bearer authentication has no expiry, replay resistance or individual-human identity. Loopback plaintext is appropriate only for the stated single-host boundary. Numeric edge controls are V1 operational defaults requiring measurement, not standards or attack verdicts.
 
@@ -370,6 +390,7 @@ All sources below were actually reviewed on **2026-10-07**. General guidance inf
 | Python Software Foundation | *stat — Interpreting stat results*, file-type and permission helpers | https://docs.python.org/3/library/stat.html | `S_ISREG` distinguishes regular files and `S_IMODE` exposes permission/special bits for a portable mode policy | The correct deployment owner or parent-directory access policy |
 | Python Software Foundation | *pathlib — Object-oriented filesystem paths*, pure path properties | https://docs.python.org/3/library/pathlib.html | `Path.is_absolute()` validates the explicit path form without resolving a symlink into an acceptable target | Filesystem identity stability or safe secret discovery |
 | Nginx | *Configuring HTTPS servers* | https://nginx.org/en/docs/http/configuring_https_servers.html | TLS 1.2/1.3 configuration and restricted private-key access belong to the TLS server | Certificate automation or a secure reviewed cipher policy forever |
+| Nginx | *ngx_http_ssl_module*, HTTPS listener, certificate and protocol directives | https://nginx.org/en/docs/http/ngx_http_ssl_module.html | `listen ... ssl`, certificate/key files and explicit TLS 1.2/1.3 policy are supported by the reference target; TLS 1.3 requires a compatible OpenSSL build | Certificate validity, renewal, private-key permissions or live protocol acceptance |
 | Nginx | *ngx_http_core_module*, client body/header and timeout directives | https://nginx.org/en/docs/http/ngx_http_core_module.html | `client_max_body_size` produces 413; header buffers and client timeouts are configurable | That 24 MiB and chosen timeouts fit real traffic |
 | Nginx | *ngx_http_proxy_module*, proxy buffering and read timeout | https://nginx.org/en/docs/http/ngx_http_proxy_module.html | Buffered bodies can be read before upstream; `proxy_read_timeout` is between reads, not a total deadline | An absolute request deadline |
 | Nginx | *ngx_http_limit_req_module*, leaky bucket, burst and status | https://nginx.org/en/docs/http/ngx_http_limit_req_module.html | Shared zones enforce a defined request rate; `nodelay` avoids delay and rejection status is configurable | Distributed limits across proxy instances or authenticated identity |
@@ -385,6 +406,8 @@ All sources below were actually reviewed on **2026-10-07**. General guidance inf
 | NIST | *SP 800-92 Guide to Computer Security Log Management*, infrastructure and processes | https://csrc.nist.gov/pubs/sp/800/92/final | Log infrastructure, operational processes, protection and organizational policy are separate responsibilities | Step-by-step FastAPI/journald configuration or current retention law |
 | NIST | *Key Management Guidelines*, lifecycle and organizational planning | https://csrc.nist.gov/Projects/Key-Management/Key-Management-Guidelines | Generation, distribution, replacement, compromise response and destruction require owned procedures | That a bearer token is a cryptographic key or that 43 characters is a NIST requirement |
 | systemd | *Credentials* | https://systemd.io/CREDENTIALS/ | Service credentials are delivered as service-scoped files through `$CREDENTIALS_DIRECTORY` | Application parsing, source-file policy or zero residual copies |
+| systemd | *systemd.exec*, execution, sandbox and credential directives | https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html | `LoadCredential=`, dedicated user/group, private temporary directories, read-only system views, privilege/capability and address-family restrictions can bound a service execution context | Compatibility with every distribution, host filesystem, Python extension or local security policy without host verification |
+| systemd | *systemd.service*, process type, restart and timeout directives | https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html | `Type=exec`, restart delay and bounded start/stop behavior make launch and graceful-shutdown ownership explicit | Cleanup after forced kill, crash or host failure, or absence of restart loops without monitoring |
 | systemd | *journald.conf*, storage, bounds, rate limit, retention and sealing | https://www.freedesktop.org/software/systemd/man/journald.conf.html | Persistent/volatile storage, size bounds, retention, rate limiting and sealing require explicit configuration | That `emit()` is durable, remotely received or never dropped |
 | systemd | *journalctl*, access and sealing-key operations | https://www.freedesktop.org/software/systemd/man/journalctl.html | Journal readers are privilege-controlled and sealing verification keys must be handled separately | Organizational access approval, remote integrity or deletion verification |
 | systemd | *Journal Native Protocol*, serialization and local socket transport | https://systemd.io/JOURNAL_NATIVE_PROTOCOL/ | Native entries use bounded field/value records over the local journal socket; client fields beginning with `_` are ignored as trusted fields | Durable acceptance, forwarding, retention or exactly-once delivery |

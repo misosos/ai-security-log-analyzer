@@ -1,0 +1,45 @@
+[Unit]
+Description=AI Security Log Analyzer secured Linux Audit API
+Documentation=https://example.invalid/ai-security-log-analyzer/deployment
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=ai-security-log-analyzer
+Group=ai-security-log-analyzer
+WorkingDirectory=/opt/ai-security-log-analyzer
+Environment=LINUX_AUDIT_API_PRINCIPAL_ID=reference-operator
+Environment=LINUX_AUDIT_API_MAX_CONCURRENT_ANALYSES=1
+LoadCredential=linux-audit-api-operator-token:/etc/ai-security-log-analyzer/linux-audit-api-operator-token
+ExecStart=/opt/ai-security-log-analyzer/.venv/bin/uvicorn app.deployment.asgi:create_linux_audit_api_app --factory --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --lifespan on --limit-concurrency 16 --timeout-keep-alive 15 --timeout-graceful-shutdown 60 --no-access-log
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=75s
+KillSignal=SIGTERM
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-security-log-analyzer
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

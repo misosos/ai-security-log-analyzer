@@ -26,6 +26,7 @@ OFFICIAL_URLS = {
     "https://docs.python.org/3/library/stat.html",
     "https://docs.python.org/3/library/pathlib.html",
     "https://nginx.org/en/docs/http/configuring_https_servers.html",
+    "https://nginx.org/en/docs/http/ngx_http_ssl_module.html",
     "https://nginx.org/en/docs/http/ngx_http_core_module.html",
     "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
     "https://nginx.org/en/docs/http/ngx_http_limit_req_module.html",
@@ -48,6 +49,8 @@ OFFICIAL_URLS = {
     "https://csrc.nist.gov/Projects/Key-Management/"
     "Key-Management-Guidelines",
     "https://systemd.io/CREDENTIALS/",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html",
     "https://www.freedesktop.org/software/systemd/man/"
     "journald.conf.html",
     "https://www.freedesktop.org/software/systemd/man/"
@@ -77,7 +80,9 @@ def test_document_records_current_gap_default_disabled_and_gate_boundary():
         "feature gate is not authentication",
         "README.md",
         "no Dockerfile",
-        "no `.env.example`",
+        "deployment workflow or `.env.example`",
+        "static reference systemd and Nginx files",
+        "not installed host configuration",
         "Production activation remains prohibited",
         "design and acceptance plan",
     ):
@@ -335,8 +340,8 @@ def test_deployment_entrypoint_and_readiness_contract_are_documented():
         '`{"status":"ready"}` with HTTP 200',
         '`{"status":"not_ready"}` with HTTP 503',
         "does not prove TLS",
-        "future edge must restrict this unauthenticated path",
-        "no proxy or systemd unit configuration",
+        "reference public Nginx virtual host rejects this unauthenticated path",
+        "host-local monitor may query it only through the loopback",
     ):
         assert contract.casefold() in text.casefold()
 
@@ -362,7 +367,7 @@ def test_activation_checklist_reference_plan_acceptance_and_threats_exist():
         assert contract.casefold() in checklist.casefold()
 
     for section in (
-        "## 14. Later reference implementation plan",
+        "## 14. Implemented reference artifacts and operator installation boundary",
         "## 15. Deployment acceptance-test plan",
         "## 16. Threat model and ownership",
         "## 17. Non-goals and known limitations",
@@ -391,6 +396,45 @@ def test_activation_checklist_reference_plan_acceptance_and_threats_exist():
         assert threat in text
 
 
+def test_reference_artifacts_host_acceptance_and_rollback_are_documented():
+    text = document_text()
+
+    for contract in (
+        "deploy/systemd/ai-security-log-analyzer.service",
+        "deploy/nginx/ai-security-log-analyzer.conf",
+        "systemd 252 or newer",
+        "Nginx 1.24 or newer",
+        "dedicated `ai-security-log-analyzer` user/group",
+        "systemd, not the unit, supplies `CREDENTIALS_DIRECTORY`",
+        "reserved `linux-audit-api.example.invalid` name",
+        "PrivateNetwork=` is excluded",
+        "proxy_request_buffering on",
+        "Access logs use method and `$uri`",
+        "default app paths `/api/analyze` and `/api/health`",
+        "nginx -t",
+        "systemd-analyze verify",
+        "Repository text tests cannot substitute for those host checks",
+        "Rollback removes public traffic first",
+        "not guaranteed safe capacity",
+    ):
+        assert contract.casefold() in text.casefold()
+
+    checklist = text.split(
+        "## 13. Production activation checklist",
+        1,
+    )[1].split("## 14.", 1)[0]
+    for contract in (
+        "Dedicated service account",
+        "Certificate issuance",
+        "Socket inspection",
+        "successful fixture analysis",
+        "Journal field allowlisting",
+        "credential rotation",
+        "Peak memory",
+    ):
+        assert contract.casefold() in checklist.casefold()
+
+
 def test_official_sources_record_exact_urls_facts_limits_and_access_date():
     text = document_text()
 
@@ -402,7 +446,7 @@ def test_official_sources_record_exact_urls_facts_limits_and_access_date():
     assert text.count("| Nginx |") >= 5
     assert text.count("| OWASP") >= 6
     assert text.count("| NIST |") >= 2
-    assert text.count("| systemd |") >= 3
+    assert text.count("| systemd |") >= 5
     assert text.count("| Python Software Foundation |") >= 3
 
 
