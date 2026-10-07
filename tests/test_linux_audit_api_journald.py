@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import gc
 import os
@@ -127,7 +128,23 @@ def make_sink(transport=None):
 
 
 def run_emit(sink, event=None):
-    asyncio.run(sink.emit(event or audit_event()))
+    async def scenario():
+        try:
+            await sink.emit(event or audit_event())
+        finally:
+            await sink.close()
+
+    asyncio.run(scenario())
+
+
+async def release_tasks_and_close(sink, transport, tasks):
+    transport.release.set()
+    if tasks:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks, return_exceptions=True),
+            2,
+        )
+    await asyncio.wait_for(sink.close(), 2)
 
 
 def test_production_factory_fails_closed_without_journald(monkeypatch, capsys, caplog):
@@ -211,6 +228,7 @@ def test_sink_conforms_to_existing_contract_and_has_safe_repr():
     assert repr(sink) == "LinuxAuditApiJournaldSink()"
     assert not hasattr(sink, "transport")
     assert not hasattr(sink, "events")
+    asyncio.run(sink.close())
 
 
 @pytest.mark.parametrize(
@@ -361,8 +379,11 @@ def test_duplicate_events_are_submitted_without_retry_or_deduplication():
     sink, transport = make_sink()
 
     async def scenario():
-        await sink.emit(audit_event())
-        await sink.emit(audit_event())
+        try:
+            await sink.emit(audit_event())
+            await sink.emit(audit_event())
+        finally:
+            await sink.close()
 
     asyncio.run(scenario())
 
@@ -412,10 +433,10 @@ def test_concurrent_direct_submissions_complete_without_an_event_queue():
 
     async def scenario():
         tasks = [asyncio.create_task(sink.emit(audit_event())) for _ in range(2)]
-        assert await asyncio.to_thread(transport.entered.wait, 1)
-        transport.release.set()
-        await asyncio.gather(*tasks)
-        await sink.close()
+        try:
+            assert await asyncio.to_thread(transport.entered.wait, 1)
+        finally:
+            await release_tasks_and_close(sink, transport, tasks)
 
     asyncio.run(scenario())
 
@@ -430,22 +451,76 @@ def test_concurrent_submission_bound_fails_closed_without_queueing():
     sink, _ = make_sink(transport)
 
     async def scenario():
+        asyncio.get_running_loop().set_default_executor(
+            ThreadPoolExecutor(max_workers=1)
+        )
         tasks = [
             asyncio.create_task(sink.emit(audit_event()))
             for _ in range(journald_module.JOURNALD_MAX_CONCURRENT_SUBMISSIONS)
         ]
-        assert await asyncio.to_thread(transport.entered.wait, 1)
-        with pytest.raises(LinuxAuditApiJournaldSinkError) as captured:
-            await sink.emit(audit_event())
-        transport.release.set()
-        await asyncio.gather(*tasks)
-        await sink.close()
-        return captured.value
+        try:
+            assert await asyncio.to_thread(transport.entered.wait, 1)
+            with pytest.raises(LinuxAuditApiJournaldSinkError) as captured:
+                await sink.emit(audit_event())
+            return captured.value
+        finally:
+            await release_tasks_and_close(sink, transport, tasks)
 
     error = asyncio.run(scenario())
 
     assert error.code == "LINUX_AUDIT_JOURNALD_SUBMISSION_FAILED"
     assert len(transport.submissions) == journald_module.JOURNALD_MAX_CONCURRENT_SUBMISSIONS
+
+
+def test_separate_sinks_have_independent_submission_executors():
+    blocked_transport = BlockingTransport(
+        target=journald_module.JOURNALD_MAX_CONCURRENT_SUBMISSIONS
+    )
+    blocked_sink, _ = make_sink(blocked_transport)
+    independent_sink, independent_transport = make_sink()
+
+    async def scenario():
+        asyncio.get_running_loop().set_default_executor(
+            ThreadPoolExecutor(max_workers=1)
+        )
+        tasks = [
+            asyncio.create_task(blocked_sink.emit(audit_event()))
+            for _ in range(journald_module.JOURNALD_MAX_CONCURRENT_SUBMISSIONS)
+        ]
+        try:
+            assert await asyncio.to_thread(blocked_transport.entered.wait, 1)
+            await independent_sink.emit(audit_event())
+            assert len(independent_transport.submissions) == 1
+        finally:
+            await release_tasks_and_close(
+                blocked_sink,
+                blocked_transport,
+                tasks,
+            )
+            await asyncio.wait_for(independent_sink.close(), 2)
+
+    asyncio.run(scenario())
+
+
+def test_blocking_submission_cleanup_runs_after_an_assertion_failure():
+    transport = BlockingTransport(target=1)
+    sink, _ = make_sink(transport)
+
+    async def scenario():
+        task = asyncio.create_task(sink.emit(audit_event()))
+        failure_observed = False
+        try:
+            assert await asyncio.to_thread(transport.entered.wait, 1)
+            raise AssertionError("synthetic test assertion")
+        except AssertionError:
+            failure_observed = True
+        finally:
+            await release_tasks_and_close(sink, transport, [task])
+        return failure_observed
+
+    assert asyncio.run(scenario()) is True
+    assert len(transport.submissions) == 1
+    assert transport.close_calls == 1
 
 
 def test_cancellation_propagates_and_close_waits_for_blocking_submission():
@@ -454,12 +529,13 @@ def test_cancellation_propagates_and_close_waits_for_blocking_submission():
 
     async def scenario():
         task = asyncio.create_task(sink.emit(audit_event()))
-        assert await asyncio.to_thread(transport.entered.wait, 1)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        transport.release.set()
-        await sink.close()
+        try:
+            assert await asyncio.to_thread(transport.entered.wait, 1)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        finally:
+            await release_tasks_and_close(sink, transport, [task])
 
     asyncio.run(scenario())
 

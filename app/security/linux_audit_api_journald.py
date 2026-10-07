@@ -3,6 +3,7 @@ import re
 import socket
 import threading
 from abc import ABC, abstractmethod
+from concurrent.futures import BrokenExecutor, ThreadPoolExecutor
 from datetime import timezone
 
 from app.security.linux_audit_api import (
@@ -236,7 +237,7 @@ def _encode_journal_fields(fields: dict[str, str]) -> bytes:
     return bytes(payload)
 
 
-def _consume_background_task(task: asyncio.Task) -> None:
+def _consume_background_task(task: asyncio.Future) -> None:
     try:
         task.exception()
     except asyncio.CancelledError:
@@ -247,6 +248,7 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
     __slots__ = (
         "__background_tasks",
         "__close_lock",
+        "__executor",
         "__in_flight",
         "__in_flight_zero",
         "__state",
@@ -260,6 +262,10 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
                 "LINUX_AUDIT_JOURNALD_INITIALIZATION_FAILED"
             )
         self.__transport = transport
+        self.__executor = ThreadPoolExecutor(
+            max_workers=JOURNALD_MAX_CONCURRENT_SUBMISSIONS,
+            thread_name_prefix="linux-audit-journald",
+        )
         self.__state_lock = threading.Lock()
         self.__state = "open"
         self.__in_flight = 0
@@ -301,6 +307,25 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
             if self.__state == "open":
                 self.__state = "failed"
 
+    def _mark_shutdown_failed(self) -> None:
+        with self.__state_lock:
+            if self.__state != "closed":
+                self.__state = "failed"
+
+    def _shutdown_executor(self) -> None:
+        with self.__state_lock:
+            executor = self.__executor
+            self.__executor = None
+        if executor is not None:
+            executor.shutdown(wait=False)
+
+    def _executor(self) -> ThreadPoolExecutor:
+        with self.__state_lock:
+            executor = self.__executor
+        if executor is None:
+            raise _sink_error("LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED")
+        return executor
+
     def _submit(self, fields: dict[str, str]) -> None:
         try:
             result = self.__transport.submit(fields)
@@ -309,10 +334,10 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
         finally:
             self._finish_submission()
 
-    def _track_background_task(self, task: asyncio.Task) -> None:
+    def _track_background_task(self, task: asyncio.Future) -> None:
         self.__background_tasks.add(task)
 
-        def finished(completed: asyncio.Task) -> None:
+        def finished(completed: asyncio.Future) -> None:
             self.__background_tasks.discard(completed)
             _consume_background_task(completed)
 
@@ -321,7 +346,18 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
     async def emit(self, event: LinuxAuditApiAccessAuditEvent) -> None:
         fields = _project_journal_fields(event)
         self._begin_submission()
-        operation = asyncio.create_task(asyncio.to_thread(self._submit, fields))
+        try:
+            operation = asyncio.get_running_loop().run_in_executor(
+                self._executor(),
+                self._submit,
+                fields,
+            )
+        except RuntimeError:
+            self._finish_submission()
+            self._mark_failed()
+            raise _sink_error(
+                "LINUX_AUDIT_JOURNALD_SUBMISSION_FAILED"
+            ) from None
         try:
             await asyncio.wait_for(
                 asyncio.shield(operation),
@@ -337,7 +373,7 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
             raise _sink_error(
                 "LINUX_AUDIT_JOURNALD_SUBMISSION_FAILED"
             ) from None
-        except _JournaldTransportError:
+        except (_JournaldTransportError, BrokenExecutor):
             self._mark_failed()
             raise _sink_error(
                 "LINUX_AUDIT_JOURNALD_SUBMISSION_FAILED"
@@ -350,18 +386,33 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
                     return
                 self.__state = "closing"
 
-            completed = await asyncio.to_thread(
-                self.__in_flight_zero.wait,
-                JOURNALD_CLOSE_TIMEOUT_SECONDS,
-            )
+            try:
+                completed = await asyncio.to_thread(
+                    self.__in_flight_zero.wait,
+                    JOURNALD_CLOSE_TIMEOUT_SECONDS,
+                )
+            except asyncio.CancelledError:
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
+                raise
             if not completed:
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
                 raise _sink_error(
                     "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
                 )
 
-            operation = asyncio.create_task(
-                asyncio.to_thread(self.__transport.close)
-            )
+            try:
+                operation = asyncio.get_running_loop().run_in_executor(
+                    self._executor(),
+                    self.__transport.close,
+                )
+            except RuntimeError:
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
+                raise _sink_error(
+                    "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
+                ) from None
             try:
                 await asyncio.wait_for(
                     asyncio.shield(operation),
@@ -369,17 +420,24 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
                 )
             except asyncio.CancelledError:
                 self._track_background_task(operation)
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
                 raise
             except TimeoutError:
                 self._track_background_task(operation)
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
                 raise _sink_error(
                     "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
                 ) from None
-            except _JournaldTransportError:
+            except (_JournaldTransportError, BrokenExecutor):
+                self._mark_shutdown_failed()
+                self._shutdown_executor()
                 raise _sink_error(
                     "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
                 ) from None
 
+            self._shutdown_executor()
             with self.__state_lock:
                 self.__state = "closed"
 
@@ -397,9 +455,11 @@ class LinuxAuditApiJournaldSink(LinuxAuditApiAccessAuditSink):
         except _JournaldTransportError:
             with self.__state_lock:
                 self.__state = "failed"
+            self._shutdown_executor()
             raise _sink_error(
                 "LINUX_AUDIT_JOURNALD_SHUTDOWN_FAILED"
             ) from None
+        self._shutdown_executor()
         with self.__state_lock:
             self.__state = "closed"
 

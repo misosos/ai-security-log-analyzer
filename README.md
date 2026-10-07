@@ -124,7 +124,7 @@ Never upload real sensitive logs to an untrusted deployment. Never commit creden
 
 ## Testing
 
-The final repository audit and CI contract completed **1,150 passing tests** in the locked environment. Important suites cover loaders/parsers, detections, correlations, risk, CLI/reporting, API/OpenAPI, Linux Audit staging and cleanup, orchestration, strict projection, bearer authorization, concurrency, access auditing, secret bootstrap, journald projection, application lifespan/readiness, deployment-reference contracts, and the CI workflow itself.
+The final repository audit and CI contract completed **1,152 passing tests** in the locked environment. Important suites cover loaders/parsers, detections, correlations, risk, CLI/reporting, API/OpenAPI, Linux Audit staging and cleanup, orchestration, strict projection, bearer authorization, concurrency, access auditing, secret bootstrap, journald projection, application lifespan/readiness, deployment-reference contracts, and the CI workflow itself.
 
 ```bash
 uv run pytest

@@ -255,7 +255,7 @@ def test_implemented_journald_sink_contract_is_bounded_and_route_independent():
         "fails with a fixed bounded initialization error",
         "There is no logger, syslog, file, stdout/stderr, memory or network fallback",
         "production factory now supplies this adapter to `create_app()`",
-        "there is no event queue and no automatic retry",
+        "there is no application-level waiting queue and no automatic retry",
         "cannot guarantee termination of an already-running blocking send",
         "does not claim exactly-once delivery",
         "`close()` is explicit, bounded and idempotent",
@@ -268,7 +268,8 @@ def test_implemented_journald_sink_contract_is_bounded_and_route_independent():
     for url in (
         "https://systemd.io/JOURNAL_NATIVE_PROTOCOL/",
         "https://github.com/systemd/systemd/blob/main/man/systemd.journal-fields.xml",
-        "https://docs.python.org/3/library/asyncio-task.html",
+        "https://docs.python.org/3.12/library/asyncio-eventloop.html#asyncio.loop.run_in_executor",
+        "https://docs.python.org/3.12/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor",
     ):
         assert url in text
 
