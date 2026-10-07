@@ -1,6 +1,7 @@
-def main():
-    print("Hello from ai-security-log-analyzer!")
+import sys
+
+from app.main import main
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
