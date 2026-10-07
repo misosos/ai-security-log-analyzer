@@ -17,7 +17,8 @@ def test_design_defines_phase_and_architecture_boundaries():
 
     assert "The initial phase produced design documentation" in text
     assert "documentation and documentation contract\ntests" in text
-    assert "It does not add an HTML\nrenderer" in text
+    assert "The approved renderer phase adds only the pure standalone" in text
+    assert "file\nwriter, or CLI option" in text
     assert "explicit immutable report projection" in text
     assert "pure standalone HTML rendering" in text
     assert "must not invoke the CLI" in text
@@ -180,7 +181,10 @@ def test_design_requires_standalone_rendering_security():
         "form-action 'none'",
         "script-src 'none'",
         "script-src-attr 'none'",
-        "style-src 'sha256-{BASE64_SHA256_OF_EXACT_STATIC_STYLE_BLOCK}'",
+        (
+            "style-src "
+            "'sha256-HrSeyxAgCRxOqI488GcfpWXohRBDF7JsJjos2KT0Jqk='"
+        ),
         "style-src-attr 'none'",
         "img-src 'none'",
         "font-src 'none'",
@@ -190,9 +194,14 @@ def test_design_requires_standalone_rendering_security():
 
     assert "must be escaped for its exact HTML\ntext context" in text
     assert "no inline event handler" in text
-    assert "Do not add\n`report-uri`/`report-to`" in text
+    assert "Do\nnot add `report-uri`/`report-to`" in text
     assert "neither makes the\nreport non-sensitive" in text
     assert "remove it on every failure" in text
+    assert "render_investigation_report_html()" in text
+    assert "InvestigationReportRendererError" in text
+    assert "includes one final newline" in text
+    assert "The renderer does not write a file" in text
+    assert "Projected or other dynamic data never\nenters CSS" in text
 
 
 def test_design_covers_empty_states_future_sequence_and_official_research():

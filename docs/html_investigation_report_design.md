@@ -14,10 +14,11 @@ HTTP 200 response is not proof of file disclosure, and a successful login is
 not proof of account compromise.
 
 The initial phase produced design documentation and documentation contract
-tests. The approved projection phase adds only the immutable projection types,
-strict builder, and focused tests described below. It does not add an HTML
-renderer, template, frontend, route, endpoint, JavaScript, CSS bundle,
-dependency, file writer, or CLI option.
+tests. The approved projection phase added the immutable projection types and
+strict builder. The approved renderer phase adds only the pure standalone
+renderer and focused tests described below. It does not add a template,
+frontend, route, endpoint, JavaScript, external CSS bundle, dependency, file
+writer, or CLI option.
 
 ## 2. Current architecture findings
 
@@ -518,7 +519,13 @@ recent-file lists, backups, and synchronized copies when handling the file.
 
 ## 11. Rendering security contract
 
-The future renderer accepts only a validated `InvestigationReportProjection`.
+`app.analyzer.html_report.render_investigation_report_html()` accepts only the
+exact `InvestigationReportProjection` runtime type and returns one complete
+HTML document as `str`. It performs no file, environment, clock, randomness,
+network, analysis, CLI, API, or LLM access and does not mutate the projection.
+It uses `\n` for every line ending and includes one final newline, so the same
+projection and renderer version produce byte-identical UTF-8 encoding.
+
 All report-derived text is untrusted and must be escaped for its exact HTML
 text context before insertion. No report data may be inserted as HTML, URL,
 CSS, JavaScript, tag name, attribute name, event handler, or unquoted
@@ -535,7 +542,7 @@ form-action 'none';
 object-src 'none';
 script-src 'none';
 script-src-attr 'none';
-style-src 'sha256-{BASE64_SHA256_OF_EXACT_STATIC_STYLE_BLOCK}';
+style-src 'sha256-HrSeyxAgCRxOqI488GcfpWXohRBDF7JsJjos2KT0Jqk=';
 style-src-attr 'none';
 img-src 'none';
 font-src 'none';
@@ -546,9 +553,13 @@ worker-src 'none';
 manifest-src 'none'
 ```
 
-The placeholder is replaced with the reproducible SHA-256 hash of the exact,
-constant inline style block. Dynamic data never enters CSS. Do not add
-`report-uri`/`report-to`, because CSP reporting would make a network request.
+The renderer calculates the reproducible SHA-256 hash from the UTF-8 bytes of
+its exact, constant inline style block and places that digest in the fixed
+policy above. The hash authorizes only those renderer-owned CSS bytes; any CSS
+change necessarily changes the digest. Projected or other dynamic data never
+enters CSS, so the style hash cannot authorize data-derived style content. Do
+not add `report-uri`/`report-to`, because CSP reporting would make a network
+request.
 Do not claim `frame-ancestors` or `sandbox` protection from the meta policy;
 browsers do not support those directives in `<meta>`. The file has no forms,
 links requiring network access, scripts, media, frames, manifests, or images.
@@ -560,11 +571,13 @@ maps. Fixed structural IDs/classes may be used only when they contain no input
 or sensitive value. CSP and escaping reduce rendering risk; neither makes the
 report non-sensitive.
 
-Rendering failure must produce a fixed bounded error, never internal exception
-text, rejected fields, or object dumps. Create output with restrictive file
-permissions where supported. A future implementation must write to a private
-temporary sibling, close/flush it, remove it on every failure, and consider
-atomic replacement for finalization. It must never leave a partial final file.
+Rendering failure raises `InvestigationReportRendererError` with one fixed
+bounded message, never internal exception text, rejected fields, or object
+dumps. The renderer does not write a file. A future file-output implementation
+must create output with restrictive permissions where supported, write to a
+private temporary sibling, close/flush it, remove it on every failure, and
+consider atomic replacement for finalization. It must never leave a partial
+final file.
 
 ## 12. Empty, unsupported, and malformed states
 
@@ -624,9 +637,9 @@ The approved delivery sequence is:
 2. **Implemented in the projection phase:** projection unit tests, privacy
    canaries, ordering/count invariants, non-mutation tests, and API/LLM
    isolation tests.
-3. **Not implemented:** add a pure renderer from the immutable projection to
-   deterministic UTF-8 standalone HTML, with escaping, CSP, and no-network
-   tests.
+3. **Implemented in the renderer phase:** a pure renderer from the immutable
+   projection to deterministic UTF-8 standalone HTML, with escaping, CSP, and
+   no-network tests.
 4. **Not implemented:** add private temporary-file creation, restrictive
    permissions, failure cleanup, and atomic-finalization tests.
 5. **Not implemented:** only after projection and renderer tests pass,
@@ -639,8 +652,8 @@ field, LLM integration, JavaScript, or frontend framework.
 
 ## 15. Test plan
 
-Projection tests cover the projection-specific items below; later renderer
-and file-output phases must cover their remaining HTML and filesystem items:
+Projection and renderer tests cover their applicable items below; the later
+file-output phase must cover the remaining filesystem items:
 
 - exact projection fields and rejection of extra/internal fields;
 - deterministic subject, detection, and correlation ordering and tie breaks;
