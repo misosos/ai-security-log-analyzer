@@ -1,14 +1,272 @@
+from copy import deepcopy
 from datetime import datetime
 
 import pytest
 
 from app.analyzer.report import (
     print_analysis_result,
+    print_detection_result,
     print_global_correlation,
 )
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
+from app.models.schemas import DetectionResult, Evidence
+
+
+def evidence(evidence_type, value, source):
+    return Evidence(
+        type=evidence_type,
+        value=value,
+        source=source,
+    )
+
+
+def authentication_detection(
+    detection_type="brute_force",
+    *,
+    failure_count=5,
+    target_count=1,
+    window_seconds=16.0,
+):
+    if detection_type == "brute_force":
+        target_type = "single_target_user"
+        source = "brute_force_detector"
+    else:
+        target_type = "multiple_target_users"
+        source = "password_spray_detector"
+
+    return DetectionResult(
+        is_detected=True,
+        detection_type=detection_type,
+        evidence=[
+            evidence("multiple_login_failures", failure_count, source),
+            evidence(target_type, target_count, source),
+            evidence("failures_within_short_window", window_seconds, source),
+        ],
+    )
+
+
+def path_traversal_detection(*, response_size=2048):
+    source = "path_traversal_detector"
+    return DetectionResult(
+        is_detected=True,
+        detection_type="path_traversal",
+        evidence=[
+            evidence("url_decoded_path", "/download", source),
+            evidence("path_pattern", "../", source),
+            evidence(
+                "url_decoded_query",
+                "file=../../etc/passwd",
+                source,
+            ),
+            evidence("http_method", "GET", source),
+            evidence("http_status_code", 200, source),
+            evidence("http_response_size", response_size, source),
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    ("detection", "expected"),
+    [
+        (
+            authentication_detection(),
+            "Detection:\n"
+            "  - brute_force\n"
+            "    Evidence:\n"
+            "      Failed attempts : 5\n"
+            "      Target accounts : 1\n"
+            "      Time window     : 16.0 seconds\n",
+        ),
+        (
+            authentication_detection(
+                "password_spraying_like",
+                failure_count=4,
+                target_count=4,
+                window_seconds=6.0,
+            ),
+            "Detection:\n"
+            "  - password_spraying_like\n"
+            "    Evidence:\n"
+            "      Failed attempts : 4\n"
+            "      Target accounts : 4\n"
+            "      Time window     : 6.0 seconds\n",
+        ),
+        (
+            path_traversal_detection(),
+            "Detection:\n"
+            "  - path_traversal\n"
+            "    Evidence:\n"
+            "      Request path    : /download\n"
+            "      Matched pattern : ../\n"
+            "      Query           : file=../../etc/passwd\n"
+            "      HTTP method     : GET\n"
+            "      Response status : 200\n"
+            "      Response size   : 2048 bytes\n",
+        ),
+    ],
+)
+def test_detection_report_prints_exact_labeled_evidence(
+    capsys,
+    detection,
+    expected,
+):
+    print_detection_result({"result": detection})
+
+    output = capsys.readouterr().out
+    assert output == expected
+    assert "      - " not in output
+
+
+@pytest.mark.parametrize(
+    ("window_seconds", "expected_value"),
+    [
+        (0, "0 seconds"),
+        (1, "1 seconds"),
+        (1.5, "1.5 seconds"),
+    ],
+)
+def test_detection_report_preserves_numeric_second_formatting(
+    capsys,
+    window_seconds,
+    expected_value,
+):
+    detection = authentication_detection(
+        failure_count=0,
+        target_count=0,
+        window_seconds=window_seconds,
+    )
+
+    print_detection_result({"result": detection})
+
+    output = capsys.readouterr().out
+    assert "Failed attempts : 0" in output
+    assert "Target accounts : 0" in output
+    assert f"Time window     : {expected_value}" in output
+
+
+def test_detection_report_prints_zero_byte_unit(capsys):
+    print_detection_result({
+        "path_traversal": path_traversal_detection(response_size=0),
+    })
+
+    assert "Response size   : 0 bytes" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "detection",
+    [
+        DetectionResult(
+            is_detected=True,
+            detection_type="brute_force",
+            evidence=authentication_detection().evidence[:2],
+        ),
+        DetectionResult(
+            is_detected=True,
+            detection_type="brute_force",
+            evidence=[
+                evidence(
+                    "private_linux_audit_process_evidence",
+                    "CLI-PRIVATE-CANARY",
+                    "brute_force_detector",
+                ),
+                *authentication_detection().evidence[1:],
+            ],
+        ),
+        authentication_detection(failure_count="CLI-PRIVATE-CANARY"),
+        DetectionResult(
+            is_detected=True,
+            detection_type="CLI-PRIVATE-CANARY",
+            evidence=[
+                evidence(
+                    "raw_records",
+                    "CLI-PRIVATE-CANARY",
+                    "private_detector",
+                ),
+            ],
+        ),
+    ],
+)
+def test_detection_report_redacts_malformed_or_unsupported_evidence(
+    capsys,
+    detection,
+):
+    print_detection_result({"result": detection})
+
+    output = capsys.readouterr().out
+    assert (
+        "Evidence unavailable: unsupported or malformed contract"
+        in output
+    )
+    assert "CLI-PRIVATE-CANARY" not in output
+    assert "raw_records" not in output
+    assert "private_linux_audit_process_evidence" not in output
+    assert "      - " not in output
+
+
+def test_detection_report_does_not_mutate_detection_or_evidence(capsys):
+    detection = path_traversal_detection()
+    original = deepcopy(detection)
+    evidence_identities = [id(item) for item in detection.evidence]
+
+    print_detection_result({"path_traversal": detection})
+    capsys.readouterr()
+
+    assert detection == original
+    assert [id(item) for item in detection.evidence] == evidence_identities
+
+
+def test_labeled_evidence_preserves_risk_and_correlation_output(capsys):
+    detection = authentication_detection()
+    print_analysis_result({
+        "results": {
+            "192.0.2.1": {
+                "detections": {"brute_force": detection},
+                "risk_level": "HIGH",
+                "risk_factors": {
+                    "likelihood": {
+                        "level": "HIGH",
+                        "rationale": ["existing likelihood rationale"],
+                    },
+                    "impact": {
+                        "level": "MEDIUM",
+                        "rationale": ["existing impact rationale"],
+                    },
+                    "confidence": {
+                        "level": "HIGH",
+                        "rationale": ["existing confidence rationale"],
+                    },
+                },
+                "correlation": {
+                    "authentication": {
+                        "is_correlated": True,
+                        "type": "failed_to_successful_login",
+                        "user": "operator",
+                        "time_delta_seconds": 3.0,
+                    },
+                },
+            },
+        },
+    })
+
+    output = capsys.readouterr().out
+    expected_unchanged_output = (
+        "Risk:\n"
+        "  Risk        : HIGH\n"
+        "Assessment:\n"
+        "  Likelihood  : HIGH\n"
+        "    - existing likelihood rationale\n"
+        "  Impact      : MEDIUM\n"
+        "    - existing impact rationale\n"
+        "  Confidence  : HIGH\n"
+        "    - existing confidence rationale\n"
+        "Correlation:\n"
+        "  - failed_to_successful_login\n"
+        "    User: operator\n"
+        "    Time delta: 3.0 seconds\n"
+    )
+    assert expected_unchanged_output in output
 
 
 def test_report_prints_distributed_authentication_observations(capsys):

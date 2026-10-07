@@ -1,7 +1,129 @@
+import math
+
 from app.correlation.session_process import SessionProcessReviewSummary
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
+from app.models.schemas import Evidence
+
+
+_INVALID_EVIDENCE_MESSAGE = (
+    "      Evidence unavailable: unsupported or malformed contract"
+)
+_SUPPORTED_DETECTION_TYPES = (
+    "brute_force",
+    "password_spraying_like",
+    "path_traversal",
+)
+
+
+def _is_non_negative_int(value):
+    return type(value) is int and value >= 0
+
+
+def _is_non_negative_number(value):
+    if type(value) is int:
+        return value >= 0
+    return type(value) is float and math.isfinite(value) and value >= 0
+
+
+def _authentication_evidence_lines(detection):
+    if detection.detection_type == "brute_force":
+        target_type = "single_target_user"
+        source = "brute_force_detector"
+    else:
+        target_type = "multiple_target_users"
+        source = "password_spray_detector"
+
+    expected = (
+        ("multiple_login_failures", _is_non_negative_int),
+        (target_type, _is_non_negative_int),
+        ("failures_within_short_window", _is_non_negative_number),
+    )
+
+    if type(detection.evidence) is not list or len(detection.evidence) != 3:
+        return None
+
+    for item, (expected_type, value_validator) in zip(
+        detection.evidence,
+        expected,
+    ):
+        if (
+            type(item) is not Evidence
+            or item.type != expected_type
+            or item.source != source
+            or not value_validator(item.value)
+        ):
+            return None
+
+    values = [item.value for item in detection.evidence]
+    return (
+        ("Failed attempts", str(values[0])),
+        ("Target accounts", str(values[1])),
+        ("Time window", f"{values[2]} seconds"),
+    )
+
+
+def _path_traversal_evidence_lines(detection):
+    expected = (
+        ("url_decoded_path", "Request path", str, True, ""),
+        ("path_pattern", "Matched pattern", str, True, ""),
+        ("url_decoded_query", "Query", str, False, ""),
+        ("http_method", "HTTP method", str, False, ""),
+        ("http_status_code", "Response status", int, False, ""),
+        ("http_response_size", "Response size", int, False, " bytes"),
+    )
+
+    if type(detection.evidence) is not list:
+        return None
+    if not 2 <= len(detection.evidence) <= len(expected):
+        return None
+
+    actual_index = 0
+    lines = []
+
+    for evidence_type, label, value_type, required, unit in expected:
+        if actual_index >= len(detection.evidence):
+            if required:
+                return None
+            continue
+
+        item = detection.evidence[actual_index]
+        if type(item) is not Evidence:
+            return None
+
+        if item.type != evidence_type:
+            if required:
+                return None
+            continue
+
+        if item.source != "path_traversal_detector":
+            return None
+        if type(item.value) is not value_type:
+            return None
+        if value_type is int and item.value < 0:
+            return None
+
+        lines.append((label, f"{item.value}{unit}"))
+        actual_index += 1
+
+    if actual_index != len(detection.evidence):
+        return None
+
+    return tuple(lines)
+
+
+def _detection_evidence_lines(detection):
+    if detection.detection_type in {
+        "brute_force",
+        "password_spraying_like",
+    }:
+        return _authentication_evidence_lines(detection)
+
+    if detection.detection_type == "path_traversal":
+        return _path_traversal_evidence_lines(detection)
+
+    return None
 
 
 def print_detection_result(detections):
@@ -13,17 +135,21 @@ def print_detection_result(detections):
         if not detection.is_detected:
             continue
 
-        print(
-            f"  - {detection.detection_type}"
-        )
+        if detection.detection_type in _SUPPORTED_DETECTION_TYPES:
+            print(f"  - {detection.detection_type}")
+        else:
+            print("  - unsupported detection type")
 
         print("    Evidence:")
 
-        for evidence in detection.evidence:
+        evidence_lines = _detection_evidence_lines(detection)
 
-            print(
-                f"      - {evidence.value}"
-            )
+        if evidence_lines is None:
+            print(_INVALID_EVIDENCE_MESSAGE)
+            continue
+
+        for label, value in evidence_lines:
+            print(f"      {label:<16}: {value}")
 
 
 def print_correlation_result(correlation):
