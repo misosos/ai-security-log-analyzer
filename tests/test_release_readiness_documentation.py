@@ -38,9 +38,11 @@ def test_readme_has_verified_cli_and_development_api_commands():
     text = _read(README)
     assert "uv sync --dev" in text
     assert "uv run pytest" in text
-    assert "uv run python -m app.main" in text
+    assert "uv run python -m app.main --help" in text
+    assert "uv run python -m app.main --html-report investigation.html" in text
     assert "--linux-audit" in text
     assert "uv run uvicorn app.api:app --reload" in text
+    assert "curl --fail --silent http://127.0.0.1:8000/api/health" in text
     assert "uvicorn app.deployment.asgi:create_linux_audit_api_app --factory" in text
 
 
@@ -57,8 +59,9 @@ def test_readme_matches_actual_route_and_multipart_contracts():
         "linux_audit_files",
     ):
         assert value in text
-    assert "does **not** register `/api/analyze-linux-audit`" in text
-    assert "excluded from OpenAPI" in text
+    assert "`/api/analyze-linux-audit`" in text
+    assert "`/internal/readiness`는 기본 앱에 없습니다" in text
+    assert "OpenAPI에서 제외" in text
 
 
 def test_readme_matches_deployment_constants_and_boundaries():
@@ -69,22 +72,21 @@ def test_readme_matches_deployment_constants_and_boundaries():
     assert "LINUX_AUDIT_API_MAX_CONCURRENT_ANALYSES" in text
     assert "systemd" in text
     assert "Nginx" in text
-    assert "not approved" in text.lower()
+    assert "승인되지는 않습니다" in text
 
 
 def test_readme_states_evidence_and_privacy_limits():
     text = _read(README)
     for value in (
-        "not by itself proof of compromise",
-        "Correlation is not causation",
+        "탐지는 침해 확인이 아닙니다",
+        "상관관계는 인과관계가 아닙니다",
         "argv",
         "PROCTITLE",
-        "raw compound records",
-        "not sent to the LLM",
-        "do not generically serialize internal objects",
-        "No implemented frontend",
-        "No stable process identity",
-        "process-local",
+        "raw record",
+        "LLM을 호출하지 않으며",
+        "전체 HTTP query",
+        "고유 프로세스, 공격자 또는 사고 수가 아닙니다",
+        "실시간·streaming 수집",
     ):
         assert value in text
 
@@ -152,7 +154,7 @@ def test_release_entry_metadata_and_test_total_are_current():
     metadata = tomllib.loads(_read(ROOT / "pyproject.toml"))["project"]
     assert metadata["description"] != "Add your description here"
     assert metadata["requires-python"] == ">=3.12"
-    assert "1,152 passing tests" in _read(README)
+    assert "passing tests" not in _read(README)
     assert "1,152 tests pass" in _read(RELEASE)
     launcher = _read(ROOT / "main.py")
     assert "from app.main import main" in launcher
