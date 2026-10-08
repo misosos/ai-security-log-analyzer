@@ -392,6 +392,18 @@ Gemini Investigation Copilot은 Phase 6의 optional side path다. 이번 V1 설�
 | Phase 5 — task-based usability test | 두 persona formative test 결과와 issue list | protocol/artifact contract check | 실제 민감 로그 사용 금지 | 10/30/60초 tasks와 오류 측정 | 치명적 오해·접근 blocker·privacy issue면 release no-go |
 | Phase 6 — optional AI Investigation Copilot | 별도 승인된 projection input과 구분된 AI output | no grouping/risk mutation, schema validation, failure independence | LLM payload canary 0 | AI/규칙 구분 과업 | deterministic case가 AI에 의존하거나 추정 fact가 생기면 중단 |
 
+### 21.1 Phase 1 구현 상태
+
+Phase 1 순수 assembler는 `app/analyzer/incident_case.py`에 구현되었다. Public function은 `assemble_incident_cases(subjects: tuple[IncidentCaseSubjectInput, ...]) -> IncidentCaseAssembly`이며 raw analysis dict를 받지 않는다. 입력은 frozen `IncidentCaseSubjectInput`, `IncidentCaseDetectionInput`, `IncidentCaseCorrelationInput`의 tuple이고, 반환은 frozen `IncidentCaseObservation`, `IncidentCaseRelation`, `IncidentCase`, `IndependentObservation`, `IncidentCaseAssembly`과 tuple만으로 구성된다. 반환 객체에 raw `DetectionResult`, `Evidence`, correlation/risk dict, account 원문이나 Linux Audit context를 보관하지 않는다.
+
+실제 지원 rule은 `CASE-BRUTE-SUCCESS-01`, `CASE-AUTH-TRANSITION-01` 순의 `CASE_RULE_PRECEDENCE`로 고정된다. Brute-specific case가 exact account·failure timestamp·success timestamp·delta가 모두 같은 generic relation을 supporting relation으로 흡수하고 endpoint fact는 복제하지 않는다. 완전히 같은 detection/relation은 typed scalar identity로 deduplicate하지만, timestamp·range·type·approved evidence scalar가 다른 관찰은 별개로 보존한다. Case review ordering은 기존 risk, relation 존재, 기존 confidence, earliest aware UTC timestamp, IPv4/IPv6 numeric subject order, fixed rule tie-break 순이다.
+
+`CASE-SPRAY-SUCCESS-01`은 Phase 1에서 **no-go**다. Production correlation과 `features["target_users"]`가 가변 dict/list 계약이고 correlation이 성공 account의 target membership을 typed result로 보장하지 않아, ambiguous dict parsing 없이 조건을 입증할 수 없다. Assembler는 이 상태를 `NO_GO_UNTYPED_PRODUCTION_TARGET_MEMBERSHIP`으로 고정하고 Spray detection/relation을 독립 관찰로 보존한다.
+
+Naive/non-UTC timestamp를 추정하지 않고 case로 결합하지 않으며, Brute case의 detection start→success 범위가 120초를 넘거나 exact membership·endpoint가 입증되지 않으면 fail closed한다. 관계가 없는 detection, Path Traversal, post-authentication/Spray/unsupported relation, timestamp 미검증 관찰은 독립 관찰로 보존한다. 모호한 다중 membership은 fixed-code `IncidentCaseAssemblyError`로 중단하며 error `str`/`repr`에 입력값을 복사하지 않는다.
+
+이 모듈은 CLI, API, HTML report, frontend, Gemini/LLM, Linux Audit public output, file/database/network에 연결되지 않았다. Phase 2의 다음 경계는 원래 account를 report-local alias로 교체하는 별도 privacy-safe case projection이다.
+
 ## 22. 알려진 한계
 
 - 현재 detector는 aggregated `DetectionResult`에 모든 source event identity를 보존하지 않는다. Exact Timeline event linkage는 timestamp/range와 existing correlation endpoint 이상을 추정해서는 안 된다.
