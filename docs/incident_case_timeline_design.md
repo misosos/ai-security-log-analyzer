@@ -402,7 +402,19 @@ Phase 1 순수 assembler는 `app/analyzer/incident_case.py`에 구현되었다. 
 
 Naive/non-UTC timestamp를 추정하지 않고 case로 결합하지 않으며, Brute case의 detection start→success 범위가 120초를 넘거나 exact membership·endpoint가 입증되지 않으면 fail closed한다. 관계가 없는 detection, Path Traversal, post-authentication/Spray/unsupported relation, timestamp 미검증 관찰은 독립 관찰로 보존한다. 모호한 다중 membership은 fixed-code `IncidentCaseAssemblyError`로 중단하며 error `str`/`repr`에 입력값을 복사하지 않는다.
 
-이 모듈은 CLI, API, HTML report, frontend, Gemini/LLM, Linux Audit public output, file/database/network에 연결되지 않았다. Phase 2의 다음 경계는 원래 account를 report-local alias로 교체하는 별도 privacy-safe case projection이다.
+이 모듈은 CLI, API, HTML report, frontend, Gemini/LLM, Linux Audit public output, file/database/network에 연결되지 않았다. Phase 2의 다음 경계는 원래 account를 다시 조회하지 않는 별도 privacy-safe case projection이다.
+
+### 21.2 Phase 2 구현 상태
+
+Phase 2 projection은 `app/analyzer/incident_case_projection.py`에 구현되었다. Public function은 `build_investigation_case_projection(assembly: IncidentCaseAssembly) -> InvestigationCaseProjection`이며 exact `IncidentCaseAssembly` runtime type만 받는다. 반환은 frozen `InvestigationCaseProjection`, summary, case row/detail, Timeline entry, assessment, limitation, unverified item, next step, independent observation, notice projection과 tuple·명시적 scalar만으로 구성된다. Raw event, detection, evidence, correlation/risk 객체나 임의 metadata를 보관하지 않는다.
+
+Case identity는 assembler review order를 그대로 보존해 report-local `조사 사례 1..N`으로 부여한다. Phase 1 반환 계약에는 original account도 privacy-safe account reference도 없으므로 Phase 2는 raw correlation을 다시 읽거나 account를 추측하지 않는다. 모든 account alias field는 `None`이고 `ACCOUNT_REFERENCE_UNAVAILABLE` 상태와 고정 사용자 문구를 제공한다. Phase 1이 향후 승인된 안전 참조를 제공하기 전에는 `Account N` alias를 만들지 않는다.
+
+Timeline category는 `OBSERVED_FACT`, `DETECTION_OBSERVATION`, `SUPPORTED_RELATION`으로 제한한다. 실제 observation/relation만 Timeline entry로 만들고 기존 위험도 평가, 해석 시 유의사항, 확인되지 않은 사항, 다음 조사 단계는 별도 typed section으로 유지한다. Timestamped entry는 aware UTC, category/display/identity tie-break로 정렬하고 시간 없는 entry는 `시간 정보 없음` label과 별도 tuple에 둔다. KST는 시스템 timezone이나 locale 대신 `ZoneInfo("Asia/Seoul")`로 변환하며 UTC는 `Z`로 표시한다. Microsecond가 0이면 소수부를 생략하고 0이 아니면 6자리를 보존한다. Relation timestamp는 Phase 1의 검증된 endpoint 범위만 사용하고 합성하지 않는다.
+
+Evidence는 Brute Force와 Password Spraying-like의 실패 횟수, 대상 계정 수, 시간 범위만 type별 explicit dispatch로 표시한다. Path Traversal 상세는 Phase 1 반환 계약에 없으므로 path/query를 재구성하지 않고 approved-evidence-unavailable 상태로 둔다. 공통·rule별 limitation, unverified item과 최대 3개의 read-only next step은 고정 ID·한국어 allowlist를 사용한다. Independent observation은 assembler 순서, risk/confidence, 검증된 timestamp/evidence와 bounded reason을 보존한다. Spray detection/relation은 no-go notice와 함께 독립 관찰로 표시하며, 이는 공격 또는 보안 문제의 부재를 뜻하지 않는다.
+
+Malformed rule, level, display mapping, relation 조합, timestamp 또는 evidence는 고정 메시지의 `InvestigationCaseProjectionError`로 fail closed한다. Error `str`/`repr`에는 assembly repr, IP, account, evidence, path 또는 내부 예외를 넣지 않는다. Projection은 CLI, API, 기존 HTML report, frontend, Gemini/LLM에 아직 연결되지 않았다. 다음 단계는 CLI-only 구조 preview 또는 HTML/API 연결 전에 동일 privacy·accessibility 의미 계약을 별도로 검증하는 것이다.
 
 ## 22. 알려진 한계
 
