@@ -83,7 +83,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/investigations/sample
 
 ### 로컬 합성 샘플 웹 체험
 
-개발 서버를 `127.0.0.1`에서 실행한 뒤 `http://127.0.0.1:8000/`을 브라우저로 열고 **샘플로 체험하기**를 선택하세요. 위의 `uv run uvicorn app.api:app --reload` 명령을 사용할 수 있습니다. 이 화면은 합성 샘플 전용이며 실제 로그 웹 업로드나 LLM 호출은 없습니다. 결과는 현재 탭에만 표시되고 새로고침하면 사라집니다. 이 개발 서버는 production deployment가 아닙니다.
+개발 서버를 `127.0.0.1`에서 실행한 뒤 `http://127.0.0.1:8000/`을 브라우저로 열고 **샘플로 체험하기**를 선택하세요. 위의 `uv run uvicorn app.api:app --reload` 명령을 사용할 수 있습니다. 결과에서 조사 사례를 펼쳐 시간순 조사 흐름, 근거, 해석 한계와 다음 조사 단계를 볼 수 있습니다. 이 화면은 합성 샘플 전용이며 실제 로그 웹 업로드나 LLM 호출은 없습니다. 결과는 현재 탭에만 표시되고 새로고침하면 사라집니다. 이 개발 서버는 production deployment가 아닙니다.
 
 ## 입력 개요
 
@@ -166,7 +166,7 @@ tests/                              단위·경계·통합·수용 테스트
 docs/                               설계, 배포 경계와 시연 문서
 ```
 
-`frontend/`는 합성 샘플 Landing과 결과 개요만 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 실시간·streaming 수집, 실제 로그 웹 업로드, 전체 사례 상세/Timeline 웹 탐색, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
+`frontend/`는 합성 샘플 Landing, 결과 개요와 사례·Timeline 상세를 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 실시간·streaming 수집, 실제 로그 웹 업로드, HTML 보고서 웹 다운로드, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
 ## 안전한 정리
 

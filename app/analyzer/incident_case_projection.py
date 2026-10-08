@@ -544,7 +544,7 @@ def _observation_category(observation: IncidentCaseObservation) -> TimelineCateg
 
 def _observation_interpretation(category: TimelineCategory) -> str:
     if category == "OBSERVED_FACT":
-        return "로그에서 기존 상관분석 endpoint로 확인된 인증 관찰입니다."
+        return "기존 상관분석에서 관계가 확인된 인증 관찰입니다."
     if category == "DETECTION_OBSERVATION":
         return "기존 결정적 탐지 규칙의 조건을 충족한 관찰입니다."
     _fail()

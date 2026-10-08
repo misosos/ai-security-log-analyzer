@@ -61,7 +61,17 @@ Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60
 
 화면은 same-origin static vanilla HTML/CSS/JavaScript만 사용한다. `lang="ko"`, skip link, native button, visible focus, 고정 polite status, 오류 요약 focus, risk text+색상, 의미 순서와 DOM 순서 일치, mobile reflow와 reduced-motion 규칙을 포함한다. 실제 로그 입력 form은 없다. 명시적 클릭에서만 빈 body로 `POST /api/v1/investigations/sample`을 한 번 호출한다. 브라우저는 response byte·문자열·배열 상한과 exact top-level field, schema version, approved risk/category, 사례 수 partition을 검증하고 malformed 응답은 전체 실패로 표시한다. 렌더링은 `createElement`/`textContent`와 고정 class만 사용하고 원래 계정·근거·query·raw log를 화면에 넣지 않는다. 결과는 현재 탭의 DOM/메모리에만 남으며 refresh 시 사라진다. 성공 시 focus를 강제로 옮기지 않고 선택 가능한 결과 이동 링크를 보이며, 실패 시 고정 오류 요약으로 focus를 옮긴다.
 
-화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약, 사례의 제한된 개요와 독립 관찰 이유만 보여 준다. 전체 case detail/Timeline, HTML report download, 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. 자동 검증은 HTML 구조, 소스 보안 제약, TestClient 경로·헤더·API 호환성 및 JavaScript 구문까지이며 실제 브라우저/스크린리더, keyboard, 320px/200% zoom의 시각적 acceptance는 별도 수동 검증이 필요하다. hosted actual-log upload는 여전히 no-go다.
+Phase 2 완료 시 화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약과 제한된 개요를 표시했다. 아래 Phase 3가 사례 상세와 Timeline을 추가했다. HTML report download, 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. hosted actual-log upload는 여전히 no-go다.
+
+### 구현된 Phase 3 사례 상세와 시간순 조사 흐름
+
+기존 sample API response와 경로·schema는 변경하지 않았다. 결과 상단의 합성 샘플·침해 미확정 주의사항은 항상 보이며, 사례 목록은 API review order 그대로 native `<details>/<summary>`를 사용한다. HIGH/MEDIUM은 기본 펼침, LOW는 기본 접힘이다. Summary에는 사례명·대상·위험도 text·주요 탐지·주요 관계·고정 결합 설명을 두고, 펼친 본문에 시간 범위, 수직 `<ol>` Timeline, 탐지 관찰, 지원되는 관계, 기존 위험도 평가, 사례별 한계, 미확인 사항과 최대 3개의 읽기 전용 다음 조사 단계를 순서대로 둔다. 중첩 disclosure와 custom accordion은 없다.
+
+Timeline의 DOM 순서는 API tuple 순서이며 다시 정렬하지 않는다. `OBSERVED_FACT`/`DETECTION_OBSERVATION`/`SUPPORTED_RELATION`은 각각 `관찰된 사실`/`탐지 관찰`/`지원되는 관계` text와 고정 border로 구분한다. 검증된 UTC 문자열만 `<time datetime>`에 넣고 KST를 주요 표시, UTC를 보조 text로 표시한다. 6자리 microseconds와 `시간 정보 없음`을 보존한다. 관계는 기존 상관분석의 지원 관계로만 표시하고 실제 발생 이벤트나 인과관계로 위장하지 않는다.
+
+Public Evidence wire field는 내부 type ID가 아닌 `label/value/unit`이므로 browser는 entry category와 승인된 탐지·관계 표시명에 따라 정확한 allowlist를 검증한다. Brute Force/Password Spraying-like는 `실패 횟수(회)`, `대상 계정 수(개)`, `시간 범위(초)`의 순서·unit·숫자 범위를, 인증 관계는 `시간 차이(초)`를 허용하고 `<dl>`로 표시한다. Path Traversal은 현재 API에 상세 path/evidence가 없어 재구성하지 않고 승인 근거 unavailable 문구만 표시한다. Unknown evidence, category, risk, timestamp, 중복 사례 순서, 비연속 Timeline sequence 또는 3개 초과 next step은 전체 응답 실패로 처리한다. 다음 단계 문구는 기존 fixed read-only allowlist와 정확한 순서를 검증한다.
+
+독립 관찰은 위험도·신뢰도·시각·기존 bounded 이유와 사용 가능한 typed 근거를 표시한다. Password Spraying-like의 typed target membership no-go와 Path Traversal의 인증 사례 미결합 이유를 기존 응답 문구로만 전달한다. 공통 한계는 접힌 사례 밖에 남긴다. 렌더러는 `createElement`/`textContent`와 고정 class만 쓰며 결과 상태는 현재 탭 메모리에만 둔다. Node 내장 VM의 최소 DOM stub 검사는 실제 sample response에 대한 disclosure, 순서, microseconds/no-time 및 malformed nested data의 전체 폐기를 확인하지만 실제 browser layout·keyboard·screen reader acceptance는 아니다. Phase 3에서도 Safari WebDriver는 `Allow remote automation` 비활성화로 세션 생성이 거부되었다. Loopback HTTP에서 HTML/CSS/JS/sample API의 200 응답은 확인했지만 실제 브라우저의 시각·키보드·스크린리더 acceptance는 아직 미검증이다. 다음 단계는 Phase 4 stateless HTML report export다.
 
 ## 4. 사용자 유형
 
@@ -459,7 +469,7 @@ Task는 (1) sample 시작, (2) 지원 파일·데이터 처리 찾기, (3) 의�
 
 ## 24. 알려진 한계
 
-- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API와 합성 샘플 웹 개요 화면은 구현되었다.
+- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API와 합성 샘플 웹 사례·Timeline 화면은 구현되었다.
 - 현재 file validation은 suffix/size 중심이고 whole-file memory read, total limit 부재와 crash orphan 위험이 있다.
 - 현재 HTML report에는 조사 사례와 Timeline이 없다.
 - account alias는 Phase 1 assembly가 safe reference를 보존하지 않아 unavailable이다. 원본을 복원하지 않는다.

@@ -71,6 +71,10 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
         "DETECTION_OBSERVATION", "OBSERVED_FACT", "SUPPORTED_RELATION",
         "SUPPORTED_RELATION", "OBSERVED_FACT",
     ]
+    assert body["cases"][0]["timeline"][1]["fact"] == (
+        "기존 상관분석에서 관계가 확인된 인증 관찰입니다."
+    )
+    assert "endpoint" not in str(body["cases"][0]["timeline"])
     assert body["cases"][0]["timeline"][0]["start_time"]["display_kst"].endswith("KST (UTC+09:00)")
     assert body["cases"][0]["timeline"][0]["start_time"]["display_utc"].endswith("Z")
     assert body["cases"][0]["account_alias_state"] == "unavailable"

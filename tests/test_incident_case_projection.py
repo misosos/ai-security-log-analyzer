@@ -306,6 +306,11 @@ def test_timeline_separates_fact_detection_and_relation_in_canonical_order():
     )
     assert tuple(entry.sequence for entry in case.timeline_entries) == (1, 2, 3, 4, 5)
     relation = case.timeline_entries[2]
+    fact = case.timeline_entries[1]
+    assert fact.interpretation_label == (
+        "기존 상관분석에서 관계가 확인된 인증 관찰입니다."
+    )
+    assert "endpoint" not in fact.interpretation_label
     assert relation.start_time.canonical_utc == BASE + timedelta(seconds=20)
     assert relation.end_time.canonical_utc == BASE + timedelta(seconds=40)
     assert relation.interpretation_label.endswith("인과관계를 의미하지 않습니다.")

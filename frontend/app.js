@@ -5,8 +5,62 @@
   const MAX_RESPONSE_BYTES = 512 * 1024;
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
+  const MAX_CASES = 64;
+  const MAX_INDEPENDENT = 128;
+  const MAX_EVIDENCE_VALUE = 1000000000;
   const RISK_CLASSES = Object.freeze({HIGH: "risk-high", MEDIUM: "risk-medium", LOW: "risk-low"});
   const TIMELINE_CATEGORIES = new Set(["OBSERVED_FACT", "DETECTION_OBSERVATION", "SUPPORTED_RELATION"]);
+  const CATEGORY_LABELS = Object.freeze({
+    OBSERVED_FACT: "관찰된 사실", DETECTION_OBSERVATION: "탐지 관찰",
+    SUPPORTED_RELATION: "지원되는 관계"
+  });
+  const DETECTION_NAMES = new Set(["Brute Force", "Password Spraying-like"]);
+  const RELATION_NAMES = new Set(["Brute Force → Successful Login", "Failed Login → Successful Login"]);
+  const INDEPENDENT_NAMES = new Set([
+    "Brute Force", "Password Spraying-like", "Path Traversal", "인증 실패 관찰",
+    "인증 성공 관찰", "지원되지 않는 탐지 관찰", "지원되지 않는 관계 관찰",
+    "Brute Force 계약 미검증 관찰", "Brute Force 시간 미검증 관찰",
+    "Password Spraying-like 계약 미검증 관찰", "Password Spraying-like 시간 미검증 관찰",
+    "Failed Login → Successful Login", "Brute Force → Successful Login",
+    "Password Spraying-like → Successful Login", "Successful Login → File Access",
+    "Failed Login → Successful Login 시간 미검증 관찰",
+    "Brute Force → Successful Login 시간 미검증 관찰"
+  ]);
+  const DETECTION_EVIDENCE = Object.freeze([
+    ["실패 횟수", "회", true], ["대상 계정 수", "개", true], ["시간 범위", "초", false]
+  ]);
+  const RELATION_EVIDENCE = Object.freeze([["시간 차이", "초", false]]);
+  const NEXT_STEP_SEQUENCES = Object.freeze([
+    [
+      "인증 실패의 출발지와 시간 범위를 확인하십시오.",
+      "상관된 로그인의 IdP, MFA, 장치 및 세션 기록을 확인하십시오.",
+      "후속 세션 활동을 확인하십시오."
+    ],
+    [
+      "인증 실패와 성공의 출발지 및 시간대를 비교하십시오.",
+      "성공 로그인의 MFA, 장치 및 세션 기록을 확인하십시오.",
+      "승인된 사용자 또는 자동화 활동인지 확인하십시오."
+    ]
+  ]);
+  const LIMITATION_TEXTS = new Set([
+    "동일 계정의 후속 로그인 관계만으로 계정 탈취를 판단할 수 없습니다.",
+    "실패 후 성공 관계만으로 이전 실패의 주체와 성공 주체가 동일하다고 판단할 수 없습니다."
+  ]);
+  const UNVERIFIED_TEXTS = new Set([
+    "로그인 주체의 정당성은 확인되지 않았습니다.", "MFA 승인 주체는 확인되지 않았습니다.",
+    "사용 장치의 신뢰 여부는 확인되지 않았습니다.", "세션의 후속 활동은 확인되지 않았습니다.",
+    "계정 침해 여부는 확인되지 않았습니다.", "NAT, proxy 또는 공유 시스템의 영향은 확인되지 않았습니다.",
+    "승인된 자동화 또는 관리 작업 여부는 확인되지 않았습니다."
+  ]);
+  const INDEPENDENT_REASONS = new Set([
+    "V1에서 지원되는 관계가 없어 독립 관찰로 유지되었습니다.",
+    "검증된 시간 정보가 부족하여 자동 시간 결합에서 제외되었습니다.",
+    "인증 사례와 안전하게 결합할 관계를 입증하지 못했습니다.",
+    "V1 조사 사례 지원 범위 밖의 관찰이라 독립적으로 유지되었습니다.",
+    "Password Spraying-like 관찰은 유지되었지만 성공 로그인 계정이 탐지 대상에 포함됨을 형식이 보장된 내부 계약으로 입증하지 못해 자동 사례 결합을 수행하지 않았습니다.",
+    "Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다.",
+    "모호한 관계라 자동 사례 결합을 수행하지 않았습니다."
+  ]);
   const ERROR_CODES = new Set([
     "NON_EMPTY_BODY", "QUERY_NOT_ALLOWED", "RATE_LIMITED", "CONCURRENCY_LIMIT",
     "ANALYSIS_TIMEOUT", "FIXTURE_UNAVAILABLE", "ANALYSIS_FAILED",
@@ -18,6 +72,10 @@
     "bounded_warnings", "report_export"
   ];
   const ACCOUNT_MESSAGE = "계정 별칭을 표시할 수 없음. 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다.";
+  const GROUPING_EXPLANATIONS = new Set([
+    "Brute Force 탐지 관찰과 이후 동일 계정의 로그인 성공 관계가 기존 상관분석에서 확인되어 함께 검토합니다.",
+    "동일 계정의 로그인 실패 후 성공 관계가 기존 상관분석에서 확인되어 함께 검토합니다."
+  ]);
 
   const button = document.getElementById("sample-button");
   const status = document.getElementById("sample-status");
@@ -76,26 +134,37 @@
   }
 
   function timestamp(value) {
-    if (value === null) return;
+    if (value === null) return null;
     closedRecord(value, ["display_kst", "display_utc"]);
-    boundedText(value.display_kst);
-    boundedText(value.display_utc);
+    const utc = boundedText(value.display_utc);
+    const kst = boundedText(value.display_kst);
+    const utcMatch = /^(\d{4}-\d\d-\d\d)T(\d\d:\d\d:\d\d)(\.\d{6})?Z$/.exec(utc);
+    const kstMatch = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(\.\d{6})? KST \(UTC\+09:00\)$/.exec(kst);
+    if (!utcMatch || !kstMatch || (utcMatch[3] || "") !== (kstMatch[3] || "")) failContract();
+    const base = `${utcMatch[1]}T${utcMatch[2]}`;
+    const milliseconds = Date.parse(`${base}Z`);
+    if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString().slice(0, 19) !== base) failContract();
+    const kstBase = new Date(milliseconds + 9 * 60 * 60 * 1000).toISOString().slice(0, 19);
+    if (`${kstMatch[1]}T${kstMatch[2]}` !== kstBase) failContract();
+    return `${base}${utcMatch[3] || ".000000"}`;
   }
 
-  function evidence(value) {
-    items(value).forEach((item) => {
+  function evidence(value, expected) {
+    if (items(value).length !== expected.length) failContract();
+    value.forEach((item, index) => {
       closedRecord(item, ["label", "value", "unit"]);
-      boundedText(item.label);
-      if (typeof item.value !== "number" || !Number.isFinite(item.value)) failContract();
-      if (item.unit !== null) boundedText(item.unit);
+      const [label, unit, integer] = expected[index];
+      if (item.label !== label || item.unit !== unit ||
+          typeof item.value !== "number" || !Number.isFinite(item.value) ||
+          item.value < 0 || item.value > MAX_EVIDENCE_VALUE ||
+          (integer && !Number.isSafeInteger(item.value))) failContract();
     });
   }
 
-  function textItems(value) {
+  function textItems(value, label, approvedTexts) {
     items(value).forEach((item) => {
       closedRecord(item, ["label", "text"]);
-      boundedText(item.label);
-      boundedText(item.text);
+      if (item.label !== label || !approvedTexts.has(boundedText(item.text))) failContract();
     });
   }
 
@@ -104,20 +173,45 @@
   }
 
   function timeline(value) {
+    let previousStart = null;
+    let seenNoTime = false;
     items(value).forEach((entry, index) => {
       closedRecord(entry, [
         "sequence", "category", "category_label", "timestamp_state", "timestamp_state_label",
         "start_time", "end_time", "title", "fact", "subject",
         "detection_display_name", "relation_display_name", "evidence"
       ]);
-      if (entry.sequence !== index + 1 || !TIMELINE_CATEGORIES.has(entry.category)) failContract();
+      if (entry.sequence !== index + 1 || !TIMELINE_CATEGORIES.has(entry.category) ||
+          entry.category_label !== CATEGORY_LABELS[entry.category]) failContract();
       if (entry.timestamp_state !== "TIMESTAMPED" && entry.timestamp_state !== "NO_TIME") failContract();
-      ["category_label", "timestamp_state_label", "title", "fact", "subject"].forEach((key) => boundedText(entry[key]));
+      ["title", "fact", "subject"].forEach((key) => boundedText(entry[key]));
+      if (entry.timestamp_state_label !== (entry.timestamp_state === "TIMESTAMPED" ? "시각 정보 있음" : "시간 정보 없음")) failContract();
       if (entry.detection_display_name !== null) boundedText(entry.detection_display_name);
       if (entry.relation_display_name !== null) boundedText(entry.relation_display_name);
-      timestamp(entry.start_time);
-      timestamp(entry.end_time);
-      evidence(entry.evidence);
+      const startKey = timestamp(entry.start_time);
+      const endKey = timestamp(entry.end_time);
+      if (entry.timestamp_state === "NO_TIME" ?
+          entry.start_time !== null || entry.end_time !== null : entry.start_time === null) failContract();
+      if (startKey === null) {
+        seenNoTime = true;
+      } else {
+        if (seenNoTime || (previousStart !== null && startKey < previousStart) ||
+            (endKey !== null && endKey < startKey)) failContract();
+        previousStart = startKey;
+      }
+      if (entry.category === "OBSERVED_FACT") {
+        if (!["인증 실패 관찰", "인증 성공 관찰"].includes(entry.title) ||
+            entry.detection_display_name !== null || entry.relation_display_name !== null) failContract();
+        evidence(entry.evidence, []);
+      } else if (entry.category === "DETECTION_OBSERVATION") {
+        if (!DETECTION_NAMES.has(entry.detection_display_name) || entry.relation_display_name !== null ||
+            entry.title !== `${entry.detection_display_name} 탐지 관찰`) failContract();
+        evidence(entry.evidence, DETECTION_EVIDENCE);
+      } else {
+        if (!RELATION_NAMES.has(entry.relation_display_name) || entry.detection_display_name !== null ||
+            entry.title !== entry.relation_display_name) failContract();
+        evidence(entry.evidence, RELATION_EVIDENCE);
+      }
     });
   }
 
@@ -133,18 +227,30 @@
     boundedText(item.subject);
     risk(item.included_highest_risk);
     risk(item.included_highest_confidence);
-    timestamp(item.start_time);
-    timestamp(item.end_time);
+    const startKey = timestamp(item.start_time);
+    const endKey = timestamp(item.end_time);
+    if (startKey !== null && endKey !== null && endKey < startKey) failContract();
     count(item.observation_count);
     count(item.supporting_relation_count);
-    boundedText(item.grouping_explanation);
-    texts(item.supported_detections);
-    texts(item.supported_relations);
+    if (!GROUPING_EXPLANATIONS.has(boundedText(item.grouping_explanation))) failContract();
+    if (!texts(item.supported_detections).every((name) => DETECTION_NAMES.has(name)) ||
+        !texts(item.supported_relations).every((name) => RELATION_NAMES.has(name))) failContract();
     if (item.timeline_label !== "시간순 조사 흐름") failContract();
     timeline(item.timeline);
-    textItems(item.limitations);
-    textItems(item.unverified_items);
-    textItems(item.next_steps);
+    const detections = [...new Set(item.timeline.map((entry) => entry.detection_display_name).filter((name) => name !== null))];
+    const relations = [...new Set(item.timeline.map((entry) => entry.relation_display_name).filter((name) => name !== null))];
+    if (item.supported_detections.join("|") !== detections.join("|") ||
+        item.supported_relations.join("|") !== relations.join("|") ||
+        item.supporting_relation_count !== relations.length ||
+        item.observation_count + item.supporting_relation_count !== item.timeline.length) failContract();
+    textItems(item.limitations, "해석 시 유의사항", LIMITATION_TEXTS);
+    textItems(item.unverified_items, "확인되지 않은 사항", UNVERIFIED_TEXTS);
+    if (items(item.next_steps, 3).length !== 0) {
+      textItems(item.next_steps, "다음 조사 단계", new Set(NEXT_STEP_SEQUENCES.flat()));
+      const expected = item.supported_relations.includes("Brute Force → Successful Login") ?
+        NEXT_STEP_SEQUENCES[0] : NEXT_STEP_SEQUENCES[1];
+      if (item.next_steps.map((step) => step.text).join("|") !== expected.join("|")) failContract();
+    }
     account(item);
   }
 
@@ -156,12 +262,17 @@
     ]);
     if (item.review_order !== index + 1 || item.label !== "독립 관찰") failContract();
     ["category_label", "display_type", "subject", "reason"].forEach((key) => boundedText(item[key]));
+    if (!["관찰된 사실", "탐지 관찰", "지원되는 관계"].includes(item.category_label) ||
+        !INDEPENDENT_NAMES.has(item.display_type) || !INDEPENDENT_REASONS.has(item.reason)) failContract();
     risk(item.existing_risk_level);
     risk(item.existing_confidence);
-    timestamp(item.start_time);
-    timestamp(item.end_time);
+    const startKey = timestamp(item.start_time);
+    const endKey = timestamp(item.end_time);
+    if (startKey !== null && endKey !== null && endKey < startKey) failContract();
     if (item.timestamp_state !== "TIMESTAMPED" && item.timestamp_state !== "NO_TIME") failContract();
-    evidence(item.evidence);
+    if (item.timestamp_state === "NO_TIME" ?
+        item.start_time !== null || item.end_time !== null : item.start_time === null) failContract();
+    evidence(item.evidence, DETECTION_NAMES.has(item.display_type) ? DETECTION_EVIDENCE : []);
     account(item);
   }
 
@@ -181,11 +292,16 @@
     Object.values(value.case_summary).forEach(count);
     const summary = value.case_summary;
     if (summary.case_count !== summary.high_case_count + summary.medium_case_count + summary.low_case_count ||
-        summary.case_count !== items(value.cases).length ||
-        summary.independent_observation_count !== items(value.independent_observations).length ||
+        summary.case_count !== items(value.cases, MAX_CASES).length ||
+        summary.independent_observation_count !== items(value.independent_observations, MAX_INDEPENDENT).length ||
         summary.relation_case_count > summary.case_count) failContract();
     value.cases.forEach(validateCase);
     value.independent_observations.forEach(validateIndependent);
+    const risks = {HIGH: 0, MEDIUM: 0, LOW: 0};
+    value.cases.forEach((item) => { risks[item.included_highest_risk] += 1; });
+    if (risks.HIGH !== summary.high_case_count || risks.MEDIUM !== summary.medium_case_count ||
+        risks.LOW !== summary.low_case_count ||
+        value.cases.filter((item) => item.supporting_relation_count > 0).length !== summary.relation_case_count) failContract();
     texts(value.interpretation_notices);
     texts(value.bounded_warnings);
     closedRecord(value.capabilities, [
@@ -256,9 +372,158 @@
     return element("span", value, `risk ${RISK_CLASSES[value]}`);
   }
 
-  function timeRange(start, end) {
-    if (!start || !end) return "시간 정보 없음";
-    return `${start.display_kst} ~ ${end.display_kst}`;
+  function timeNode(value) {
+    const node = element("time", value.display_kst);
+    node.setAttribute("datetime", value.display_utc);
+    return node;
+  }
+
+  function timeBlock(value) {
+    const block = document.createElement("div");
+    block.className = "time-block";
+    const kst = document.createElement("div");
+    kst.className = "time-line time-kst";
+    kst.append(element("span", "KST", "time-zone-label"), timeNode(value));
+    const utc = document.createElement("div");
+    utc.className = "time-line time-utc";
+    utc.append(element("span", "UTC", "time-zone-label"),
+      element("span", value.display_utc, "time-utc-value"));
+    block.append(kst, utc);
+    return block;
+  }
+
+  function appendTime(parent, start, end) {
+    if (!start) {
+      parent.append(element("span", "시간 정보 없음"));
+      return;
+    }
+    if (!end || end.display_utc === start.display_utc) {
+      parent.append(timeBlock(start));
+      return;
+    }
+    const range = document.createElement("dl");
+    range.className = "time-range";
+    const startRow = document.createElement("div");
+    startRow.className = "time-row";
+    const startValue = document.createElement("dd");
+    startValue.append(timeBlock(start));
+    startRow.append(element("dt", "시작"), startValue);
+    const endRow = document.createElement("div");
+    endRow.className = "time-row";
+    const endValue = document.createElement("dd");
+    endValue.append(timeBlock(end));
+    endRow.append(element("dt", "종료"), endValue);
+    range.append(startRow, endRow);
+    parent.append(range);
+  }
+
+  function detailSection(title) {
+    const section = document.createElement("section");
+    section.className = "case-section";
+    section.append(element("h5", title));
+    return section;
+  }
+
+  function textList(section, values, ordered, emptyMessage) {
+    if (values.length === 0) {
+      section.append(element("p", emptyMessage));
+      return;
+    }
+    const list = document.createElement(ordered ? "ol" : "ul");
+    values.forEach((value) => list.append(element("li", value)));
+    section.append(list);
+  }
+
+  function evidenceList(values) {
+    const list = document.createElement("dl");
+    list.className = "evidence-list";
+    values.forEach((item) => detail(list, item.label, `${item.value} ${item.unit}`));
+    return list;
+  }
+
+  function renderTimeline(caseItem) {
+    const section = detailSection("시간순 조사 흐름");
+    if (caseItem.timeline.length === 0) {
+      section.append(element("p", "표시할 시간순 조사 항목이 없습니다."));
+      return section;
+    }
+    const list = document.createElement("ol");
+    list.className = "timeline";
+    caseItem.timeline.forEach((entry) => {
+      const row = document.createElement("li");
+      row.className = `timeline-item ${{
+        OBSERVED_FACT: "timeline-fact", DETECTION_OBSERVATION: "timeline-detection",
+        SUPPORTED_RELATION: "timeline-relation"
+      }[entry.category]}`;
+      row.append(element("span", entry.category_label, "category-label"),
+        element("strong", entry.title));
+      const time = document.createElement("div");
+      time.className = "timeline-time";
+      appendTime(time, entry.start_time, entry.end_time);
+      row.append(time, element("p", entry.fact));
+      list.append(row);
+    });
+    section.append(list);
+    return section;
+  }
+
+  function renderObservedSection(caseItem, category, title, emptyMessage) {
+    const section = detailSection(title);
+    const entries = caseItem.timeline.filter((entry) => entry.category === category);
+    if (entries.length === 0) {
+      section.append(element("p", emptyMessage));
+      return section;
+    }
+    const list = document.createElement("ul");
+    list.className = "observation-list";
+    entries.forEach((entry) => {
+      const item = document.createElement("li");
+      item.append(element("strong", category === "DETECTION_OBSERVATION" ?
+        entry.detection_display_name : entry.relation_display_name));
+      item.append(evidenceList(entry.evidence));
+      list.append(item);
+    });
+    section.append(list);
+    if (category === "SUPPORTED_RELATION") {
+      section.append(element("p", caseItem.account_alias_message, "account-note"));
+    }
+    return section;
+  }
+
+  function renderCaseDetail(caseItem) {
+    const body = document.createElement("div");
+    body.className = "case-detail";
+    body.append(element("p", caseItem.grouping_explanation, "grouping-explanation"));
+    const meta = document.createElement("dl");
+    meta.className = "card-meta";
+    detail(meta, "관찰 수", String(caseItem.observation_count));
+    body.append(meta);
+    const range = detailSection("시간 범위");
+    const time = document.createElement("div");
+    appendTime(time, caseItem.start_time, caseItem.end_time);
+    range.append(time);
+    body.append(range, renderTimeline(caseItem),
+      renderObservedSection(caseItem, "DETECTION_OBSERVATION", "탐지 관찰", "표시할 지원 탐지 관찰이 없습니다."),
+      renderObservedSection(caseItem, "SUPPORTED_RELATION", "지원되는 관계", "표시할 지원되는 관계가 없습니다."));
+    const assessment = detailSection("위험도 평가");
+    const assessmentValues = document.createElement("dl");
+    assessmentValues.className = "card-meta";
+    detail(assessmentValues, "포함된 최고 위험도", caseItem.included_highest_risk);
+    detail(assessmentValues, "포함된 최고 신뢰도", caseItem.included_highest_confidence);
+    assessment.append(assessmentValues, element("p",
+      "이 위험도는 사례 안에 포함된 기존 분석 결과 중 가장 높은 값입니다. 새로운 사건 점수나 침해 확률이 아닙니다."));
+    body.append(assessment);
+    const limitations = detailSection("해석 시 유의사항");
+    textList(limitations, caseItem.limitations.map((item) => item.text), false,
+      "추가로 표시할 사례별 해석 한계가 없습니다. 공통 해석 주의사항도 확인하십시오.");
+    const unverified = detailSection("확인되지 않은 사항");
+    textList(unverified, caseItem.unverified_items.map((item) => item.text), false,
+      "추가로 표시할 미확인 사항이 없습니다.");
+    const nextSteps = detailSection("다음 조사 단계");
+    textList(nextSteps, caseItem.next_steps.map((item) => item.text), true,
+      "표시할 고정 조사 단계가 없습니다.");
+    body.append(limitations, unverified, nextSteps);
+    return body;
   }
 
   function renderSummary(data) {
@@ -285,31 +550,26 @@
       caseList.append(element("p", "지원되는 규칙으로 구성된 조사 사례가 없습니다. 이 결과는 보안 문제가 없다는 의미가 아닙니다."));
     }
     cases.forEach((item) => {
-      const card = document.createElement("article");
+      const card = document.createElement("details");
       card.className = "case-card";
-      card.append(element("h4", item.case_label));
-      const meta = document.createElement("dl");
-      meta.className = "card-meta";
-      detail(meta, "조사 순서", String(item.review_order));
-      detail(meta, "분석 대상", item.subject);
-      const riskPair = document.createElement("div");
-      riskPair.append(element("dt", "포함된 최고 위험도"));
-      const riskValue = document.createElement("dd");
-      riskValue.append(riskBadge(item.included_highest_risk));
-      riskPair.append(riskValue);
-      meta.append(riskPair);
-      detail(meta, "시간 범위 (KST)", timeRange(item.start_time, item.end_time));
-      detail(meta, "관찰 수", String(item.observation_count));
-      detail(meta, "주요 탐지 관찰", item.supported_detections.join(", ") || "탐지 관찰 없음");
-      detail(meta, "지원되는 관계", item.supported_relations.join(", ") || "지원되는 관계 없음");
-      card.append(meta, element("p", item.grouping_explanation), element("p", item.account_alias_message, "account-note"));
+      card.open = item.included_highest_risk === "HIGH" || item.included_highest_risk === "MEDIUM";
+      const summary = document.createElement("summary");
+      summary.className = "case-summary";
+      summary.append(element("h4", item.case_label),
+        element("span", `조사 순서 ${item.review_order} · 분석 대상 ${item.subject}`, "summary-subject"));
+      summary.append(riskBadge(item.included_highest_risk),
+        element("span", `신뢰도 ${item.included_highest_confidence}`, "summary-confidence"),
+        element("span", `주요 탐지: ${item.supported_detections.join(", ") || "표시할 지원 탐지 관찰이 없습니다."}`, "summary-line"),
+        element("span", `지원 관계: ${item.supported_relations.join(", ") || "표시할 지원되는 관계가 없습니다."}`, "summary-line"),
+        element("span", "기존 지원 관계에 따라 함께 검토합니다.", "summary-line"));
+      card.append(summary, renderCaseDetail(item));
       caseList.append(card);
     });
   }
 
   function renderIndependentObservations(observations) {
     if (observations.length === 0) {
-      independentList.append(element("p", "독립 관찰이 없습니다. 이는 안전하다는 의미가 아닙니다."));
+      independentList.append(element("p", "별도로 표시할 독립 관찰이 없습니다."));
     }
     observations.forEach((item) => {
       const card = document.createElement("article");
@@ -325,8 +585,19 @@
       riskPair.append(riskValue);
       meta.append(riskPair);
       detail(meta, "기존 신뢰도", item.existing_confidence);
-      detail(meta, "시간 범위 (KST)", timeRange(item.start_time, item.end_time));
-      card.append(meta, element("p", item.reason));
+      card.append(meta);
+      const time = document.createElement("div");
+      time.className = "independent-time";
+      appendTime(time, item.start_time, item.end_time);
+      card.append(time, element("p", item.reason));
+      if (item.evidence.length > 0) {
+        const evidenceSection = document.createElement("section");
+        evidenceSection.className = "independent-evidence";
+        evidenceSection.append(element("h5", "관찰 근거"), evidenceList(item.evidence));
+        card.append(evidenceSection);
+      } else {
+        card.append(element("p", "이 응답에서 승인된 상세 관찰 근거를 표시할 수 없습니다."));
+      }
       independentList.append(card);
     });
   }

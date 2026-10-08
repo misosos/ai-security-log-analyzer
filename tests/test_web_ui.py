@@ -2,9 +2,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 import base64
+import json
+import shutil
+import subprocess
 
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+import pytest
 
 import app.api as api
 import app.web_ui as web_ui
@@ -93,6 +97,43 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
     assert "errorSummary.focus()" in js and "button.disabled = false" in js
     assert "prefers-reduced-motion" in css and ":focus-visible" in css
     assert "risk-high" in css and "risk-medium" in css and "risk-low" in css
+
+
+def test_case_detail_source_uses_native_ordered_semantics_and_fixed_mappings():
+    js = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    css = (FRONTEND / "style.css").read_text(encoding="utf-8")
+    assert 'document.createElement("details")' in js
+    assert 'document.createElement("summary")' in js
+    assert 'document.createElement("ol")' in js
+    assert 'document.createElement("dl")' in js
+    assert 'element("time", value.display_kst)' in js
+    assert 'node.setAttribute("datetime", value.display_utc)' in js
+    assert 'element("dt", "시작")' in js
+    assert 'element("dt", "종료")' in js
+    assert 'element("span", "KST", "time-zone-label")' in js
+    assert 'element("span", "UTC", "time-zone-label")' in js
+    assert 'appendTimeRange' not in js
+    assert 'time-connector' not in js
+    assert '"부터"' not in js
+    assert 'UTC: ${' not in js
+    assert '${start.display_kst} ~ ${end.display_kst}' not in js
+    assert 'item.append(evidenceList(entry.evidence))' in js
+    assert 'item.included_highest_risk === "HIGH" || item.included_highest_risk === "MEDIUM"' in js
+    assert 'caseItem.timeline.forEach' in js
+    assert 'caseItem.next_steps.map' in js
+    assert 'item.evidence' in js
+    assert 'DETECTION_EVIDENCE' in js and 'RELATION_EVIDENCE' in js
+    assert 'NEXT_STEP_SEQUENCES' in js and 'LIMITATION_TEXTS' in js
+    assert 'category === "SUPPORTED_RELATION"' in js
+    assert '.sort(' not in js
+    assert 'JSON.stringify(' not in js
+    assert 'Object.entries(' not in js
+    assert 'case-summary:focus-visible' in css
+    assert '.timeline' in css and '.evidence-list' in css
+    assert '.time-range' in css and '.time-row' in css
+    assert '.time-line' in css and '.time-utc' in css
+    assert 'overflow-wrap: anywhere' in css
+    assert '@media (max-width: 42rem)' in css
 
 
 def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
@@ -197,3 +238,21 @@ def test_protected_linux_audit_factory_does_not_gain_public_ui_routes():
     assert client.get("/assets/style.css").status_code == 404
     assert client.get("/assets/app.js").status_code == 404
     assert "/api/analyze-linux-audit" in protected.openapi()["paths"]
+
+
+def test_renderer_logic_with_sample_contract_and_malformed_nested_data():
+    if shutil.which("node") is None:
+        pytest.skip("Node unavailable; source and API contract tests still run")
+    payload = TestClient(api.create_app()).post("/api/v1/investigations/sample")
+    assert payload.status_code == 200
+    result = subprocess.run(
+        ["node", str(ROOT / "tests" / "web_ui_behavior.cjs")],
+        input=json.dumps(payload.json()),
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+        timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "renderer logic verified\n"
