@@ -16,6 +16,14 @@ from app.api_uploads import (
     stage_linux_audit_uploads,
 )
 from app.main import analyze
+from app.analyzer.incident_case_adapter import (
+    project_investigation_cases_from_analysis,
+)
+from app.models.investigation_sample_api import (
+    InvestigationErrorResponse,
+    InvestigationResponse,
+)
+from app.sample_investigation_api import create_sample_endpoint
 from app.models.linux_audit_api import (
     LinuxAuditAnalysisResponse,
     LinuxAuditApiErrorResponse,
@@ -441,6 +449,19 @@ def create_app(
         analyze_logs,
         methods=["POST"],
         response_model=AnalysisResponse,
+    )
+    configured_app.add_api_route(
+        "/api/v1/investigations/sample",
+        create_sample_endpoint(
+            lambda sources: analyze(sources),
+            lambda result: project_investigation_cases_from_analysis(result),
+        ),
+        methods=["POST"],
+        response_model=InvestigationResponse,
+        responses={
+            code: {"model": InvestigationErrorResponse}
+            for code in (400, 429, 500, 503)
+        },
     )
 
     if enable_linux_audit_api:

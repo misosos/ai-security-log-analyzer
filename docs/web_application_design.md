@@ -25,7 +25,7 @@
 
 ### 확인된 현재 구현
 
-FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app의 route는 `GET /api/health`와 `POST /api/analyze`뿐이다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
+FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app에는 `GET /api/health`, `POST /api/analyze`, `POST /api/v1/investigations/sample`이 있다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
 
 `GET /api/health`는 `{"status":"ok"}`만 반환한다. readiness, dependency health 또는 privacy 보장을 뜻하지 않는다.
 
@@ -45,9 +45,15 @@ FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 
 
 `frontend/index.html`, `frontend/style.css`, `frontend/app.js`는 0-byte placeholder이고 mount/template/static route가 없다. 일반 웹 dashboard는 구현되지 않았다. 테스트는 `fastapi.testclient.TestClient(app)` 또는 `TestClient(create_app(...))`로 ASGI app을 직접 시작한다. 저장소의 Nginx/systemd 자료는 보호된 Linux Audit endpoint 전용 참조 배포이며 일반 `/api/analyze`를 공개하지 않는다.
 
-### 현재와 목표의 구분
+### 구현된 Phase 1 sample API와 남은 목표
 
-위 사실은 현재 계약이다. 아래의 `/api/v1/*`, 웹 화면, report payload, 인증 모드는 모두 승인될 미래 계약이며 아직 존재하지 않는다. 기존 `/api/analyze`, API schema, CLI, HTML, LLM과 Linux Audit 경계는 이 설계 단계에서 변경하지 않는다.
+`POST /api/v1/investigations/sample`은 빈 request만 받는다. query, JSON, form, multipart, file과 non-empty body는 고정 400 envelope로 거부한다. `GET`은 지원하지 않는다. 세 합성 로그는 `app/sample_investigation_api.py`의 immutable allowlist에 source, module-relative filename, SHA-256으로 고정되며 각 4 KiB 이하의 비어 있지 않은 regular file만 허용한다. parent/fixture symlink, 누락, 크기 초과와 digest 변경은 고정 `FIXTURE_UNAVAILABLE`로 fail closed한다. fixture filename/path는 response/error/log에 넣지 않는다. 검증된 byte는 요청마다 private 임시 디렉터리에 복사되며 `analyze()` 한 번과 `project_investigation_cases_from_analysis()` 한 번을 거쳐 명시적 Pydantic response로 변환된다. risk metadata loader의 경로도 module-relative로 고정해 cwd와 무관하다.
+
+Phase 1 response는 Section 9–10의 closed field set에 `sample_context`를 더한다. 실제 값은 `schema_version="1"`, `analysis_summary`, `case_summary`, `cases`, `independent_observations`, `interpretation_notices`, `capabilities`, `bounded_warnings`, `report_export`다. 기본 fixture acceptance count는 대상 10, 지원 탐지 4, 지원 관계 3, 사례 2(HIGH 1/MEDIUM 0/LOW 1), 독립 관찰 3, 관계 포함 사례 2, no-time 0이다. Password Spraying-like와 Path Traversal은 독립 관찰이며 원래 계정 대신 user-facing unavailable 문구만 표시한다. HTML, 실제 로그 업로드, LLM과 Linux Audit capability는 모두 false다.
+
+Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60 seconds sliding window와 동시 작업 2개 제한을 가진다. client IP/fingerprint는 보관하지 않는다. 10초 응답 deadline이 지나면 bounded 503을 반환하지만 Python worker thread를 종료하지 않는다. 작업이 실제로 끝날 때까지 concurrency slot을 유지하고 완료 시 callback이 예외를 소비하고 slot을 해제한다. 따라서 이 deadline은 hard CPU stop이 아니며 여러 worker/process에 걸친 production rate limit도 아니다. ASGI server/proxy가 이미 받아 메모리에 만든 단일 chunk 크기는 이 handler가 제어하지 못한다. 공개 배포에는 별도 edge body/rate/timeout 통제가 필요하다.
+
+오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. 웹 화면, static mount, report download와 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
 
 ## 4. 사용자 유형
 
@@ -175,7 +181,7 @@ V1 page 후보는 `/`, `/demo`, `/analyze`, `/results`, `/results/cases/{case-nu
 | B. 새 versioned synchronous endpoint | 새 UI가 정확한 projection만 받음 | 한 요청·한 분석 | 기본 stateless, browser memory | 같은 response에서 생성한 export payload 사용 가능 | V1에 가장 작고 기존 API 보존. 긴 요청 timeout 한계 |
 | C. POST 생성 + GET/report/DELETE | refresh·async·download가 편함 | 없음 | result storage, ownership, expiration, deletion, auth 필요 | 별도 GET 가능 | hosted/실시간 확장에는 좋으나 V1 보안·운영 복잡도가 큼 |
 
-추천은 B다. `POST /api/v1/investigations/sample`은 upload 없는 synthetic sample, `POST /api/v1/investigations`는 local/private에서만 세 파일을 받는다. 기존 `/api/analyze`는 그대로 둔다. one request 안에서 deterministic analysis는 한 번, case adapter는 한 번, report projection/render는 필요할 때 같은 result에서 한 번만 실행한다.
+추천은 B다. `POST /api/v1/investigations/sample`은 Phase 1에서 구현된 upload 없는 synthetic sample이다. `POST /api/v1/investigations`는 향후 local/private에서만 세 파일을 받는다. 기존 `/api/analyze`는 그대로 둔다. one request 안에서 deterministic analysis는 한 번, case adapter는 한 번, report projection/render는 필요할 때 같은 result에서 한 번만 실행한다.
 
 V1은 server-side persistent result, result GET endpoint와 raw log 재업로드를 요구하는 report endpoint를 만들지 않는다. report HTML은 같은 response의 bounded export section에 포함하거나, 초기 phase에서 capability를 false로 두었다가 Phase 4에 추가한다. `Accept: text/html`로 같은 upload를 다시 보내 분석을 반복하는 방식은 채택하지 않는다. 향후 C는 authentication·ownership·retention이 승인된 hosted phase에서만 다시 평가한다.
 
@@ -183,7 +189,7 @@ V1은 server-side persistent result, result GET endpoint와 raw log 재업로드
 
 ### Endpoint와 request
 
-- `POST /api/v1/investigations/sample`: body와 user file 없음. allowlisted synthetic fixture key를 server가 고정한다. public 가능하나 rate/concurrency/timeout을 둔다.
+- `POST /api/v1/investigations/sample`: 구현됨. body와 user file 없음. allowlisted synthetic fixture를 server가 고정한다. process-local rate/concurrency와 응답 timeout을 둔다.
 - `POST /api/v1/investigations`: `multipart/form-data`, exact field `application_file`, `ssh_file`, `access_file`, 모두 하나씩 필수. 최대 file count는 3이며 unknown/repeated field는 reject한다. local/private-only로 시작한다.
 - Linux Audit는 이 계약에 포함하지 않는다. 별도 secured boundary를 “optional file”로 위장하지 않는다.
 
@@ -445,7 +451,7 @@ Task는 (1) sample 시작, (2) 지원 파일·데이터 처리 찾기, (3) 의�
 
 ## 24. 알려진 한계
 
-- 현재 API는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다.
+- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API는 구현되었다.
 - 현재 file validation은 suffix/size 중심이고 whole-file memory read, total limit 부재와 crash orphan 위험이 있다.
 - 현재 HTML report에는 조사 사례와 Timeline이 없다.
 - account alias는 Phase 1 assembly가 safe reference를 보존하지 않아 unavailable이다. 원본을 복원하지 않는다.

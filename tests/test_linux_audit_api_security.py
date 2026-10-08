@@ -210,6 +210,7 @@ def test_factory_is_fail_closed_and_keeps_the_default_app_disabled():
     assert set(api_module.app.openapi()["paths"]) == {
         "/api/health",
         "/api/analyze",
+        "/api/v1/investigations/sample",
     }
     assert "securitySchemes" not in api_module.app.openapi().get(
         "components", {}

@@ -161,7 +161,9 @@ def test_default_app_is_disabled_and_does_not_invoke_linux_audit_helpers(
         assert all(CANARY not in value for value in response.headers.values())
 
     schema = api_module.app.openapi()
-    assert set(schema["paths"]) == {"/api/health", "/api/analyze"}
+    assert set(schema["paths"]) == {
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample"
+    }
     assert ENDPOINT not in schema["paths"]
     assert not any(
         "LinuxAudit" in name
@@ -188,12 +190,14 @@ def test_enabled_route_and_openapi_are_exact_and_app_instances_are_isolated():
         ]
         assert route_paths.count("/api/health") == 1
         assert route_paths.count("/api/analyze") == 1
+        assert route_paths.count("/api/v1/investigations/sample") == 1
         assert route_paths.count(ENDPOINT) == 1
 
         schema = configured_app.openapi()
         assert set(schema["paths"]) == {
             "/api/health",
             "/api/analyze",
+            "/api/v1/investigations/sample",
             ENDPOINT,
         }
         endpoint_schema = schema["paths"][ENDPOINT]

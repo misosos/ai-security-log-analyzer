@@ -1,8 +1,16 @@
 import json
+from pathlib import Path
+
+
+_ACCOUNT_METADATA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "account_metadata.json"
+)
 
 
 def load_account_metadata():
-    with open("data/account_metadata.json", "r") as f:
+    with _ACCOUNT_METADATA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
