@@ -416,6 +416,28 @@ Evidence는 Brute Force와 Password Spraying-like의 실패 횟수, 대상 계�
 
 Malformed rule, level, display mapping, relation 조합, timestamp 또는 evidence는 고정 메시지의 `InvestigationCaseProjectionError`로 fail closed한다. Error `str`/`repr`에는 assembly repr, IP, account, evidence, path 또는 내부 예외를 넣지 않는다. Projection은 CLI, API, 기존 HTML report, frontend, Gemini/LLM에 아직 연결되지 않았다. 다음 단계는 CLI-only 구조 preview 또는 HTML/API 연결 전에 동일 privacy·accessibility 의미 계약을 별도로 검증하는 것이다.
 
+### 21.3 Production analysis adapter 구현 상태
+
+Production adapter는 `app/analyzer/incident_case_adapter.py`에 구현되었다. Public function은 `project_investigation_cases_from_analysis(analysis_result: dict) -> InvestigationCaseProjection`이다. 현재 `analyze()`의 실제 반환 타입이 별도 model이 없는 mutable dict이므로 exact runtime `dict`만 받고 top-level `results`/`global_correlation`, subject, feature, detection slot, correlation slot과 필요한 risk key를 고정 검증한다. API model, CLI 문자열, event tuple과 arbitrary iterable은 받지 않는다.
+
+| Existing per-subject field | Adapter mapping | Phase 1/2 behavior |
+|---|---|---|
+| `features.target_users` | 검증 후 temporary `target_accounts` tuple | Brute exact account join에만 사용하고 projection에는 보관하지 않음 |
+| `detections.brute_force` | copied `IncidentCaseDetectionInput("brute_force", ...)` | exact evidence/range가 유효하면 Brute case 후보 |
+| `detections.password_spray` | copied `IncidentCaseDetectionInput("password_spray", ...)` | detection은 독립 관찰, Spray case no-go 유지 |
+| `detections.path_traversal` | private path/query를 제거한 detection input | 인증 사례와 결합하지 않고 독립 관찰로 보존 |
+| `correlation.authentication` | exact account, failure/success UTC와 delta | Failed Login → Successful Login 후보 |
+| `correlation.brute_force_to_success` | exact account, failure/success UTC와 delta | Brute Force → Successful Login 후보; precedence는 assembler가 결정 |
+| `correlation.password_spray_to_success` | exact endpoint relation input | membership을 추측하지 않고 독립 관찰/no-go 유지 |
+| `correlation.post_authentication` | success/file-access endpoint를 독립 relation input으로 복사 | V1 case 범위 밖 독립 관찰 |
+| `risk_level`, `risk_factors.confidence.level` | 기존 `HIGH`/`MEDIUM`/`LOW`만 복사 | 새 risk/confidence 계산 없음 |
+
+Flow는 exact 이미 계산된 입력 검증 → typed subject input을 한 번 구성 → `assemble_incident_cases()` 한 번 → `build_investigation_case_projection()` 한 번이다. Loader, parser, detector, correlation, risk, `analyze()`를 호출하지 않는다. Detection evidence는 type별 explicit dispatch로 count/window/type/source를 검증하고 bool, negative, non-finite와 signed 64-bit 범위 밖 수를 거부한다. Case-eligible relation endpoint는 exact aware UTC와 계산된 delta 일치를 요구한다. 독립 보존 가능한 detection의 비정상 시간은 no-time observation으로 제한하지만 relation endpoint 시간이 비정상이면 fail closed한다.
+
+`global_correlation`은 per-subject case input이 아니므로 dict type만 확인하고 내용은 순회·복사·해석하지 않는다. Linux Audit context도 입력 mapping에 없다. Original account는 typed input과 assembler call scope에서만 사용되고 projection, repr, error에 남지 않으며 account alias는 계속 unavailable이다. Unknown detector type은 raw evidence와 type text를 제거한 unsupported independent observation으로 보존하고, unknown correlation type은 의미를 안전하게 변환할 수 없어 fail closed한다.
+
+Adapter boundary 오류는 고정 code/message의 `IncidentCaseAdapterError`로 반환하며 입력값이나 downstream exception text를 포함하지 않는다. Downstream assembler/projection bounded error도 원문 없이 adapter error로 변환한다. 이 helper는 아직 `main.py`, CLI, API route/response, HTML report, frontend, Gemini/LLM에서 호출되지 않는다. 다음 단계는 별도 승인된 user-facing web API contract와 web integration이다.
+
 ## 22. 알려진 한계
 
 - 현재 detector는 aggregated `DetectionResult`에 모든 source event identity를 보존하지 않는다. Exact Timeline event linkage는 timestamp/range와 existing correlation endpoint 이상을 추정해서는 안 된다.
