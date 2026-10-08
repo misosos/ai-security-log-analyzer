@@ -60,6 +60,8 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "a" and attrs.get("href") == "#main" for tag, attrs in nodes)
     assert "main" in ids
     assert any(tag == "button" and attrs.get("type") == "button" and attrs.get("id") == "sample-button" for tag, attrs in nodes)
+    assert any(tag == "button" and attrs.get("type") == "button" and attrs.get("id") == "report-button" for tag, attrs in nodes)
+    assert any(attrs.get("id") == "report-download" and "hidden" in attrs for _, attrs in nodes)
     assert any(attrs.get("id") == "error-summary" and attrs.get("tabindex") == "-1" for _, attrs in nodes)
     assert any(attrs.get("id") == "sample-status" and attrs.get("aria-live") == "polite" for _, attrs in nodes)
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
@@ -67,6 +69,8 @@ def test_landing_has_semantic_static_accessible_contract():
     for phrase in (
         "샘플로 체험하기", "합성 샘플을 사용합니다", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
         "탐지는 침해 확인이 아니며", "독립 관찰", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
+        "HTML 보고서 다운로드", "현재 형식: 대상별 결정적 조사 보고서", "민감한 조사 자료",
+        "서버에 영구 저장되지 않으며", "Timeline이 포함되지 않습니다",
     ):
         assert phrase in text
     assert not any(tag in {"form", "input", "iframe", "object", "embed", "video", "audio"} for tag, _ in nodes)
@@ -84,9 +88,10 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
         "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(",
         "new Function", "localStorage", "sessionStorage", "indexedDB", "document.cookie",
         "serviceWorker", "sourceMappingURL", "data:", "blob:", "unsafe-inline", "unsafe-eval",
-        "console.log", "console.error", "https://", "http://", "@import", "url(",
+        "console.log", "console.error", "https://", "http://", "url(",
     ):
         assert forbidden not in all_source
+    assert "@import" not in html + css
     assert 'const ENDPOINT = "/api/v1/investigations/sample"' in js
     assert 'method: "POST"' in js
     assert 'credentials: "omit"' in js
@@ -95,6 +100,9 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
     assert "validateInvestigationResponse" in js and "failContract()" in js
     assert "summary.case_count !== summary.high_case_count + summary.medium_case_count + summary.low_case_count" in js
     assert "errorSummary.focus()" in js and "button.disabled = false" in js
+    assert "URL.createObjectURL(file)" in js and "URL.revokeObjectURL(objectUrl)" in js
+    assert "new Blob([bytes]" in js and "reportButton.addEventListener" in js
+    assert "validateReportExport(value.report_export)" in js
     assert "prefers-reduced-motion" in css and ":focus-visible" in css
     assert "risk-high" in css and "risk-medium" in css and "risk-low" in css
 

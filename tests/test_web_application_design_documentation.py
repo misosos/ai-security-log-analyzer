@@ -195,6 +195,27 @@ def test_html_frontend_realtime_and_roadmap_decisions_are_bounded():
         assert f"Phase {phase}" in text
 
 
+def test_implemented_phase_four_report_contract_is_stateless_and_bounded():
+    text = _text()
+    for contract in (
+        "구현된 Phase 4 stateless HTML 보고서 다운로드",
+        "같은 analysis result",
+        "24,966 bytes",
+        "32 KiB",
+        "64 KiB",
+        "REPORT_GENERATION_FAILED",
+        "standalone_html",
+        "investigation-report.html",
+        "byte_count",
+        "HTML 보고서 다운로드",
+        "Blob/object URL",
+        "조사 사례의 typed Timeline은 포함하지",
+        "서버 측 결과/HTML 영구 저장은 없다",
+        "실제 로그 업로드·hosted deployment·LLM 설명은 여전히 범위 밖",
+    ):
+        assert contract in text
+
+
 def test_deployment_gates_and_usability_protocol_define_no_go():
     text = _text()
 

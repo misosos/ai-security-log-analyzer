@@ -300,6 +300,21 @@ def test_renderer_accepts_only_exact_projection_runtime_type():
         assert str(caught.value) == "Investigation report rendering failed."
 
 
+def test_sample_notice_is_opt_in_without_changing_default_style_or_csp():
+    projection = populated_projection()
+    original = render_investigation_report_html(projection)
+    sample = render_investigation_report_html(projection, synthetic_sample=True)
+    notice = (
+        '<p class="notice">교육용 합성 샘플 결과입니다. 실제 조직 환경의 '
+        '보안 상태나 보안 점검 인증서를 나타내지 않습니다.</p>\n'
+    )
+    assert notice not in original
+    assert sample == original.replace("<main>\n", "<main>\n" + notice, 1)
+    assert "style-src 'sha256-" in sample
+    with pytest.raises(InvestigationReportRendererError):
+        render_investigation_report_html(projection, synthetic_sample="yes")
+
+
 def test_complete_html5_document_metadata_fixed_title_and_utf8():
     html = render_investigation_report_html(populated_projection())
     parser = inspect(html)

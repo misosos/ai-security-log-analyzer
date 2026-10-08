@@ -1,6 +1,6 @@
 # Web-first Investigation Experience and Secure API Contract
 
-상태: 설계 계약, 구현 전<br>
+상태: 설계 계약 및 합성 샘플 Phase 1–4 구현 사실<br>
 기준일: 2026-10-08<br>
 범위: 기존 FastAPI 저장소의 웹 UX와 API 경계. 아래의 현재 구현 사실과 아직 승인만 된 후속 설계를 구분한다.
 
@@ -8,7 +8,7 @@
 
 일반 사용자가 터미널이나 로컬 HTML 생성 명령을 몰라도 `사이트 접속 → 샘플 체험 또는 로그 선택 → 분석 실행 → 조사 사례 목록 → 시간순 조사 흐름 → 근거·한계·다음 조사 단계 → HTML 보고서 다운로드`를 완료할 수 있는 제품 구조를 고정한다. 웹은 이미 계산된 결정적 분석을 `IncidentCaseSubjectInput` adapter, `assemble_incident_cases()`, `build_investigation_case_projection()` 순서로 한 번만 통과시킨다. 탐지·상관분석·위험도를 presentation에서 다시 만들지 않는다.
 
-Phase 0의 산출물은 정보 구조, typed JSON 후보, 위협 모델과 release gate였다. Phase 1 sample API와 Phase 2 합성 샘플 웹 화면의 구현 사실은 Section 3에 별도로 기록한다.
+Phase 0의 산출물은 정보 구조, typed JSON 후보, 위협 모델과 release gate였다. Phase 1–4의 합성 샘플 구현 사실은 Section 3에 별도로 기록한다.
 
 ## 2. 제품 원칙
 
@@ -49,11 +49,11 @@ FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 
 
 `POST /api/v1/investigations/sample`은 빈 request만 받는다. query, JSON, form, multipart, file과 non-empty body는 고정 400 envelope로 거부한다. `GET`은 지원하지 않는다. 세 합성 로그는 `app/sample_investigation_api.py`의 immutable allowlist에 source, module-relative filename, SHA-256으로 고정되며 각 4 KiB 이하의 비어 있지 않은 regular file만 허용한다. parent/fixture symlink, 누락, 크기 초과와 digest 변경은 고정 `FIXTURE_UNAVAILABLE`로 fail closed한다. fixture filename/path는 response/error/log에 넣지 않는다. 검증된 byte는 요청마다 private 임시 디렉터리에 복사되며 `analyze()` 한 번과 `project_investigation_cases_from_analysis()` 한 번을 거쳐 명시적 Pydantic response로 변환된다. risk metadata loader의 경로도 module-relative로 고정해 cwd와 무관하다.
 
-Phase 1 response는 Section 9–10의 closed field set에 `sample_context`를 더한다. 실제 값은 `schema_version="1"`, `analysis_summary`, `case_summary`, `cases`, `independent_observations`, `interpretation_notices`, `capabilities`, `bounded_warnings`, `report_export`다. 기본 fixture acceptance count는 대상 10, 지원 탐지 4, 지원 관계 3, 사례 2(HIGH 1/MEDIUM 0/LOW 1), 독립 관찰 3, 관계 포함 사례 2, no-time 0이다. Password Spraying-like와 Path Traversal은 독립 관찰이며 원래 계정 대신 user-facing unavailable 문구만 표시한다. HTML, 실제 로그 업로드, LLM과 Linux Audit capability는 모두 false다.
+Phase 1에서 시작한 response는 Section 9–10의 closed field set에 `sample_context`를 더한다. 실제 값은 `schema_version="1"`, `analysis_summary`, `case_summary`, `cases`, `independent_observations`, `interpretation_notices`, `capabilities`, `bounded_warnings`, `report_export`다. 기본 fixture acceptance count는 대상 10, 지원 탐지 4, 지원 관계 3, 사례 2(HIGH 1/MEDIUM 0/LOW 1), 독립 관찰 3, 관계 포함 사례 2, no-time 0이다. Password Spraying-like와 Path Traversal은 독립 관찰이며 원래 계정 대신 user-facing unavailable 문구만 표시한다. Phase 4 이후 HTML capability는 true이고 실제 로그 업로드, LLM과 Linux Audit capability는 false다.
 
 Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60 seconds sliding window와 동시 작업 2개 제한을 가진다. client IP/fingerprint는 보관하지 않는다. 10초 응답 deadline이 지나면 bounded 503을 반환하지만 Python worker thread를 종료하지 않는다. 작업이 실제로 끝날 때까지 concurrency slot을 유지하고 완료 시 callback이 예외를 소비하고 slot을 해제한다. 따라서 이 deadline은 hard CPU stop이 아니며 여러 worker/process에 걸친 production rate limit도 아니다. ASGI server/proxy가 이미 받아 메모리에 만든 단일 chunk 크기는 이 handler가 제어하지 못한다. 공개 배포에는 별도 edge body/rate/timeout 통제가 필요하다.
 
-오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. report download와 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
+오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, report generation, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
 
 ### 구현된 Phase 2 합성 샘플 웹 화면
 
@@ -61,7 +61,7 @@ Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60
 
 화면은 same-origin static vanilla HTML/CSS/JavaScript만 사용한다. `lang="ko"`, skip link, native button, visible focus, 고정 polite status, 오류 요약 focus, risk text+색상, 의미 순서와 DOM 순서 일치, mobile reflow와 reduced-motion 규칙을 포함한다. 실제 로그 입력 form은 없다. 명시적 클릭에서만 빈 body로 `POST /api/v1/investigations/sample`을 한 번 호출한다. 브라우저는 response byte·문자열·배열 상한과 exact top-level field, schema version, approved risk/category, 사례 수 partition을 검증하고 malformed 응답은 전체 실패로 표시한다. 렌더링은 `createElement`/`textContent`와 고정 class만 사용하고 원래 계정·근거·query·raw log를 화면에 넣지 않는다. 결과는 현재 탭의 DOM/메모리에만 남으며 refresh 시 사라진다. 성공 시 focus를 강제로 옮기지 않고 선택 가능한 결과 이동 링크를 보이며, 실패 시 고정 오류 요약으로 focus를 옮긴다.
 
-Phase 2 완료 시 화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약과 제한된 개요를 표시했다. 아래 Phase 3가 사례 상세와 Timeline을 추가했다. HTML report download, 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. hosted actual-log upload는 여전히 no-go다.
+Phase 2 완료 시 화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약과 제한된 개요를 표시했다. 아래 Phase 3가 사례 상세와 Timeline을, Phase 4가 대상별 HTML 보고서 다운로드를 추가했다. 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. hosted actual-log upload는 여전히 no-go다.
 
 ### 구현된 Phase 3 사례 상세와 시간순 조사 흐름
 
@@ -72,6 +72,16 @@ Timeline의 DOM 순서는 API tuple 순서이며 다시 정렬하지 않는다. 
 Public Evidence wire field는 내부 type ID가 아닌 `label/value/unit`이므로 browser는 entry category와 승인된 탐지·관계 표시명에 따라 정확한 allowlist를 검증한다. Brute Force/Password Spraying-like는 `실패 횟수(회)`, `대상 계정 수(개)`, `시간 범위(초)`의 순서·unit·숫자 범위를, 인증 관계는 `시간 차이(초)`를 허용하고 `<dl>`로 표시한다. Path Traversal은 현재 API에 상세 path/evidence가 없어 재구성하지 않고 승인 근거 unavailable 문구만 표시한다. Unknown evidence, category, risk, timestamp, 중복 사례 순서, 비연속 Timeline sequence 또는 3개 초과 next step은 전체 응답 실패로 처리한다. 다음 단계 문구는 기존 fixed read-only allowlist와 정확한 순서를 검증한다.
 
 독립 관찰은 위험도·신뢰도·시각·기존 bounded 이유와 사용 가능한 typed 근거를 표시한다. Password Spraying-like의 typed target membership no-go와 Path Traversal의 인증 사례 미결합 이유를 기존 응답 문구로만 전달한다. 공통 한계는 접힌 사례 밖에 남긴다. 렌더러는 `createElement`/`textContent`와 고정 class만 쓰며 결과 상태는 현재 탭 메모리에만 둔다. Node 내장 VM의 최소 DOM stub 검사는 실제 sample response에 대한 disclosure, 순서, microseconds/no-time 및 malformed nested data의 전체 폐기를 확인하지만 실제 browser layout·keyboard·screen reader acceptance는 아니다. Phase 3에서도 Safari WebDriver는 `Allow remote automation` 비활성화로 세션 생성이 거부되었다. Loopback HTTP에서 HTML/CSS/JS/sample API의 200 응답은 확인했지만 실제 브라우저의 시각·키보드·스크린리더 acceptance는 아직 미검증이다. 다음 단계는 Phase 4 stateless HTML report export다.
+
+### 구현된 Phase 4 stateless HTML 보고서 다운로드
+
+빈 `POST /api/v1/investigations/sample`은 기존 allowlisted synthetic fixture를 검증하고 private 임시 분석 입력으로 `analyze()`를 정확히 한 번 호출한다. 같은 analysis result로 case adapter를 한 번 실행한 뒤 기존 `build_investigation_report_projection()`과 `render_investigation_report_html()`을 각각 한 번 실행한다. CLI secure writer, 별도 report endpoint, 보고서 임시 파일이나 서버 측 결과/HTML 영구 저장은 없다. 분석 입력용 임시 디렉터리는 요청 처리 종료 시 정리한다.
+
+현재 fixture에서 합성 안내가 붙은 renderer의 UTF-8 HTML은 24,966 bytes, 전체 JSON은 39,216 bytes였다. report export 상한은 32 KiB, browser JSON 수신 상한은 64 KiB다. HTML은 standalone HTML5, 기존 CSS와 검증된 CSP style hash, JavaScript·원격 리소스 없음 및 6열 대상별 표를 유지한다. 기존 renderer의 기본 출력은 변경하지 않고 sample 전용 고정 한국어 합성 안내만 opt-in으로 포함한다. 빈·초과·잘못된 renderer output이나 projection/renderer 예외는 고정 `REPORT_GENERATION_FAILED`로 전체 sample transaction을 실패시킨다. 사례 결과만 반환하는 partial success는 없다. 응답 deadline은 여전히 worker thread를 강제로 종료하지 않는다.
+
+`report_export`는 closed Pydantic object로 `available=true`, `format=standalone_html`, `filename=investigation-report.html`, `media_type=text/html;charset=utf-8`, UTF-8 `html`, 실제 인코딩 길이인 `byte_count`, 고정 `format_notice`, 고정 `handling_warning`을 포함한다. Browser는 전체 응답과 export를 검증한 후에만 native `HTML 보고서 다운로드` 버튼을 표시하고, 클릭할 때 export를 재검증해 탭 메모리의 UTF-8 Blob/object URL로 다운로드한다. 생성한 URL과 임시 anchor는 즉시 제거한다. 자동 다운로드, 추가 fetch, DOM HTML 삽입과 browser storage는 없다. 현재 형식은 `대상별 결정적 조사 보고서`이며 조사 사례의 typed Timeline은 포함하지 않는다는 안내와 민감한 파일의 저장·공유·삭제 경고를 버튼 앞에 표시한다. 이 report는 합성 샘플 결과이지 실제 조직의 보안 상태나 인증서가 아니다.
+
+Node 최소 DOM stub은 클릭 전 다운로드 없음, Blob type·크기·고정 파일명, 추가 fetch 없음, URL revoke, malformed export 전체 실패를 검사한다. 이는 실제 browser layout·keyboard·screen reader 검수나 WCAG 합격을 뜻하지 않는다. 실제 로그 업로드·hosted deployment·LLM 설명은 여전히 범위 밖이다.
 
 ## 4. 사용자 유형
 
@@ -234,7 +244,7 @@ InvestigationResponse
 
 `schema_version`은 API payload schema version이다. raw analysis dict, assembly, event, Evidence, correlation, global correlation, arbitrary metadata는 반환하지 않는다. `capabilities`는 `html_report_available`, `llm_summary_available`, `linux_audit_aggregate_available`의 bool만 가지며 권한·보안 보장 또는 실행 성공을 뜻하지 않는다. 기본 `llm_summary_available`은 false다.
 
-`report_export`는 Phase 4 이전에는 `available=false`와 고정 이유만 둔다. Phase 4에는 서버가 같은 computed result에서 단 한 번 생성한 escaped standalone HTML text, fixed media type, fixed generic download name과 format notice를 제공한다. source filename은 suggested name에 쓰지 않는다. browser는 text를 Blob download로만 사용한다.
+`report_export`는 Phase 4 이전에 `available=false`와 고정 이유만 두었다. 구현된 Phase 4는 서버가 같은 computed result에서 단 한 번 생성한 escaped standalone HTML text, fixed media type, fixed generic download name과 format notice를 제공한다. source filename은 suggested name에 쓰지 않는다. browser는 text를 Blob download로만 사용한다.
 
 응답에는 raw logs, original accounts, full query, source filename/path, internal error, Linux Audit argv/PROCTITLE/CWD/PATH detail 또는 LLM output을 넣지 않는다.
 
@@ -287,7 +297,7 @@ InvestigationErrorResponse
 
 문구는 무엇을 완료하지 못했는지, 확인할 입력, retry 가능 여부와 결과 생성 여부를 말한다. exception text, traceback, absolute path, filename echo, account, evidence/query/raw line, credential/token, internal class를 포함하지 않는다. unknown error도 request correlation용 비민감 opaque support ID가 승인되기 전에는 내부 identifier를 노출하지 않는다.
 
-V1은 all-or-nothing이다. case projection까지 성공해야 complete success이며 분석 또는 projection 실패를 빈/0 결과로 위장하지 않는다. raw partial analysis를 반환하지 않고 만들어진 partial object를 버린다. report export만 실패했을 때 분석 projection을 성공으로 반환할지 여부는 Phase 4 전에 별도 결정한다. 기본 gate는 report를 요청한 transaction이면 전체 `REPORT_GENERATION_FAILED`, 요청하지 않았다면 projection success다. legacy `/api/analyze` 오류 계약은 이 단계에서 변경하지 않는다.
+V1은 all-or-nothing이다. case projection까지 성공해야 complete success이며 분석 또는 projection 실패를 빈/0 결과로 위장하지 않는다. raw partial analysis를 반환하지 않고 만들어진 partial object를 버린다. 구현된 Phase 4 sample transaction은 report export까지 성공해야 complete success이고 report 생성·검증 실패는 전체 `REPORT_GENERATION_FAILED`다. legacy `/api/analyze` 오류 계약은 변경하지 않는다.
 
 ## 12. Upload security
 

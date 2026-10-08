@@ -21,17 +21,20 @@ class Node {
   }
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((child) => child.textContent).join(""); }
-  append(...children) { this.children.push(...children); }
+  append(...children) { children.forEach((child) => { child.parent = this; }); this.children.push(...children); }
   replaceChildren(...children) { this.children = children; this._text = ""; }
   setAttribute(name, value) { this.attributes[name] = value; }
   focus() { this.focused = true; }
   addEventListener(name, listener) { this.listener = listener; }
+  remove() {
+    if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
+  }
 }
 
 const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
   "error-recovery", "results", "result-jump", "summary-cards",
-  "case-list", "independent-list", "capability-message"
+  "case-list", "independent-list", "capability-message", "report-download", "report-button"
 ];
 
 function nodesOf(root, tag) {
@@ -49,11 +52,31 @@ function sectionNamed(root, name) {
 function makeApp(initial) {
   const nodes = Object.fromEntries(ids.map((id) => [id, new Node("div")]));
   let response = initial;
+  let fetchCount = 0;
+  const downloads = [];
+  const revoked = [];
+  const body = new Node("body");
+  const objectUrl = {
+    createObjectURL: (file) => {
+      downloads.push({file, clicked: false, filename: null});
+      return "test-object-url";
+    },
+    revokeObjectURL: (value) => revoked.push(value)
+  };
   const document = {
     getElementById: (id) => nodes[id],
-    createElement: (tag) => new Node(tag)
+    body,
+    createElement: (tag) => {
+      const node = new Node(tag);
+      if (tag === "a") node.click = () => {
+        downloads.at(-1).clicked = true;
+        downloads.at(-1).filename = node.download;
+      };
+      return node;
+    }
   };
   const fetch = async () => {
+    fetchCount += 1;
     const bytes = new TextEncoder().encode(JSON.stringify(response));
     let used = false;
     return {
@@ -70,8 +93,14 @@ function makeApp(initial) {
       })}
     };
   };
-  vm.runInNewContext(script, {document, fetch, TextDecoder, Uint8Array, Date});
-  return {nodes, click: () => nodes["sample-button"].listener(), setResponse: (value) => { response = value; }};
+  vm.runInNewContext(script, {document, fetch, TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
+  return {
+    nodes, downloads, revoked, body,
+    click: () => nodes["sample-button"].listener(),
+    download: () => nodes["report-button"].listener(),
+    fetchCount: () => fetchCount,
+    setResponse: (value) => { response = value; }
+  };
 }
 
 function copy() { return JSON.parse(JSON.stringify(input)); }
@@ -84,6 +113,19 @@ async function main() {
   assert.equal(nodes["error-summary"].hidden, true);
   assert.equal(nodes["case-list"].children.length, 2);
   assert.equal(nodes["independent-list"].children.length, 3);
+  assert.equal(nodes["report-download"].hidden, false);
+  assert.equal(app.downloads.length, 0, "no automatic download");
+  const callsBeforeDownload = app.fetchCount();
+  app.download();
+  assert.equal(app.fetchCount(), callsBeforeDownload, "download does not refetch");
+  assert.equal(app.downloads.length, 1);
+  assert.equal(app.downloads[0].clicked, true);
+  assert.equal(app.downloads[0].filename, "investigation-report.html");
+  assert.equal(app.downloads[0].file.type, "text/html;charset=utf-8");
+  assert.equal(app.downloads[0].file.size, input.report_export.byte_count);
+  assert.equal(input.report_export.html.includes("교육용 합성 샘플 결과입니다"), true);
+  assert.deepEqual(app.revoked, ["test-object-url"]);
+  assert.equal(app.body.children.length, 0, "temporary anchor removed");
   const [high, low] = nodes["case-list"].children;
   assert.equal(high.tagName, "details");
   assert.equal(high.open, true);
@@ -167,7 +209,11 @@ async function main() {
     (value) => { value.cases[0].next_steps.push(value.cases[0].next_steps[0]); },
     (value) => { value.cases[0].next_steps[0].text = "IP를 차단하십시오."; },
     (value) => { value.cases[0].included_highest_confidence = "UNKNOWN"; },
-    (value) => { value.cases[0].account_alias_state = "ACCOUNT_REFERENCE_UNAVAILABLE"; }
+    (value) => { value.cases[0].account_alias_state = "ACCOUNT_REFERENCE_UNAVAILABLE"; },
+    (value) => { value.report_export.byte_count += 1; },
+    (value) => { value.report_export.html = "x".repeat(32769); },
+    (value) => { value.report_export.html = "<script>bad</script>"; },
+    (value) => { value.report_export.html = value.report_export.html.replace("교육용 합성 샘플 결과입니다.", ""); }
   ];
   for (const mutate of mutations) {
     const malformed = copy();
@@ -176,6 +222,7 @@ async function main() {
     await app.click();
     assert.equal(nodes.results.hidden, true);
     assert.equal(nodes["case-list"].children.length, 0);
+    assert.equal(nodes["report-download"].hidden, true);
     assert.equal(nodes["error-summary"].hidden, false);
     assert.equal(nodes["error-summary"].focused, true);
     assert.equal(nodes["error-message"].textContent, "결과 형식을 확인할 수 없습니다.");

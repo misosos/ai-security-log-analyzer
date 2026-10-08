@@ -4,6 +4,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 import hashlib
+from html.parser import HTMLParser
 import os
 from pathlib import Path
 import stat
@@ -18,6 +19,7 @@ from pydantic import ValidationError
 
 from app.analyzer.incident_case_adapter import IncidentCaseAdapterError
 from app.analyzer.incident_case_projection import InvestigationCaseProjection
+from app.analyzer.html_report import _CONTENT_SECURITY_POLICY, _STATIC_CSS
 from app.models.investigation_sample_api import (
     AnalysisSummary,
     Capabilities,
@@ -42,6 +44,7 @@ _RATE_CAPACITY = 12
 _RATE_WINDOW_SECONDS = 60.0
 _CONCURRENT_CAPACITY = 2
 _TIMEOUT_SECONDS = 10.0
+_MAX_REPORT_BYTES = 32768  # verified labeled synthetic report: 24,966 UTF-8 bytes
 _ACCOUNT_MESSAGE = (
     "계정 별칭을 표시할 수 없음. "
     "원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다."
@@ -67,6 +70,7 @@ _ERRORS = {
     "ANALYSIS_FAILED": (500, "샘플 분석을 완료하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
     "CASE_PROJECTION_FAILED": (500, "조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
     "RESPONSE_INVALID": (500, "결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
+    "REPORT_GENERATION_FAILED": (500, "HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
 }
 
 
@@ -92,6 +96,126 @@ class _FixtureUnavailable(ValueError):
 class _ResponseInvalid(ValueError):
     def __init__(self):
         super().__init__("Investigation response contract failed.")
+
+
+class _ReportGenerationFailed(ValueError):
+    def __init__(self):
+        super().__init__("Synthetic report export failed.")
+
+
+_REPORT_TAG_ATTRIBUTES = {
+    "html": frozenset({"lang"}),
+    "meta": frozenset({"charset", "name", "content", "http-equiv"}),
+    "details": frozenset({"class", "open"}),
+    "th": frozenset({"scope"}),
+    **{tag: frozenset({"class"}) for tag in (
+        "article", "div", "dl", "p", "span",
+    )},
+    **{tag: frozenset() for tag in (
+        "head", "title", "style", "body", "header", "main", "footer",
+        "section", "h1", "h2", "h3", "h4", "h5", "ul", "li",
+        "table", "caption", "thead", "tbody", "tr", "td", "details",
+        "summary", "dt", "dd", "code",
+    ) if tag != "details"},
+}
+
+
+class _ReportShape(HTMLParser):
+    """Check the approved standalone renderer shape before export."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.doctype_count = 0
+        self.meta = []
+        self.style = []
+        self.style_count = 0
+        self.th_count = 0
+        self.tags = []
+
+    def handle_decl(self, declaration):
+        if declaration.lower() != "doctype html" or self.doctype_count:
+            raise _ReportGenerationFailed() from None
+        self.doctype_count += 1
+
+    def handle_starttag(self, tag, attrs):
+        approved = _REPORT_TAG_ATTRIBUTES.get(tag)
+        if approved is None or any(name not in approved for name, _ in attrs):
+            raise _ReportGenerationFailed() from None
+        if len({name for name, _ in attrs}) != len(attrs):
+            raise _ReportGenerationFailed() from None
+        values = dict(attrs)
+        if tag == "html" and values != {"lang": "ko"}:
+            raise _ReportGenerationFailed() from None
+        if tag == "meta":
+            if self.stack != ["html", "head"]:
+                raise _ReportGenerationFailed() from None
+            self.meta.append(values)
+            return
+        if tag == "th":
+            if values != {"scope": "col"}:
+                raise _ReportGenerationFailed() from None
+            self.th_count += 1
+        if tag == "style":
+            self.style_count += 1
+        self.stack.append(tag)
+        self.tags.append(tag)
+
+    def handle_endtag(self, tag):
+        if not self.stack or self.stack[-1] != tag:
+            raise _ReportGenerationFailed() from None
+        self.stack.pop()
+
+    def handle_data(self, data):
+        if not self.stack and data.strip():
+            raise _ReportGenerationFailed() from None
+        if self.stack and self.stack[-1] == "style":
+            self.style.append(data)
+
+    def handle_comment(self, _data):
+        raise _ReportGenerationFailed() from None
+
+    def handle_startendtag(self, _tag, _attrs):
+        raise _ReportGenerationFailed() from None
+
+
+def _report_export(html: str) -> ReportExport:
+    if (
+        type(html) is not str
+        or not html.startswith("<!doctype html>\n")
+        or not html.endswith("</html>\n")
+        or "교육용 합성 샘플 결과입니다." not in html
+    ):
+        raise _ReportGenerationFailed() from None
+    encoded = html.encode("utf-8")
+    if not 0 < len(encoded) <= _MAX_REPORT_BYTES:
+        raise _ReportGenerationFailed() from None
+    shape = _ReportShape()
+    shape.feed(html)
+    shape.close()
+    if (
+        shape.stack or shape.doctype_count != 1 or shape.style_count != 1
+        or "".join(shape.style) != _STATIC_CSS or shape.th_count != 6
+        or shape.meta != [
+            {"charset": "utf-8"},
+            {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+            {"name": "referrer", "content": "no-referrer"},
+            {"http-equiv": "Content-Security-Policy", "content": _CONTENT_SECURITY_POLICY},
+        ]
+        or shape.tags[:4] != ["html", "head", "title", "style"]
+        or shape.tags.count("footer") != 1
+    ):
+        raise _ReportGenerationFailed() from None
+    return ReportExport(
+        available=True,
+        format="standalone_html",
+        filename="investigation-report.html",
+        media_type="text/html;charset=utf-8",
+        html=html,
+        byte_count=len(encoded),
+        format_notice="현재 형식: 대상별 결정적 조사 보고서. 조사 사례 Timeline은 포함하지 않습니다.",
+        handling_warning="다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오.",
+    )
 
 
 class _SampleLimit:
@@ -257,9 +381,15 @@ def _independent(item) -> IndependentObservation:
 
 
 def build_sample_response(
-    analysis: dict, projection: InvestigationCaseProjection
+    analysis: dict,
+    projection: InvestigationCaseProjection,
+    report_export: ReportExport,
 ) -> InvestigationResponse:
-    if type(analysis) is not dict or type(projection) is not InvestigationCaseProjection:
+    if (
+        type(analysis) is not dict
+        or type(projection) is not InvestigationCaseProjection
+        or type(report_export) is not ReportExport
+    ):
         raise _ResponseInvalid() from None
     results = analysis.get("results")
     if (
@@ -306,21 +436,21 @@ def build_sample_response(
         independent_observations=independent,
         interpretation_notices=_INTERPRETATION_NOTICES,
         capabilities=Capabilities(
-            html_report_available=False,
+            html_report_available=True,
             llm_summary_available=False,
             linux_audit_aggregate_available=False,
             actual_log_upload_available=False,
         ),
         bounded_warnings=_EMPTY_WARNINGS if summary.case_count == 0 else (),
-        report_export=ReportExport(
-            available=False,
-            message="HTML 보고서 다운로드는 이 단계에서 제공되지 않습니다.",
-        ),
+        report_export=report_export,
     )
 
 
 def _execute(
-    analyze: Callable, project: Callable
+    analyze: Callable,
+    project: Callable,
+    build_report_projection: Callable,
+    render_report: Callable,
 ) -> InvestigationResponse:
     verified = tuple(_fixture_bytes(spec) for spec in _FIXTURES)
     with tempfile.TemporaryDirectory(prefix="investigation-sample-") as directory:
@@ -333,7 +463,12 @@ def _execute(
         analysis = analyze(sources)
         projection = project(analysis)
         try:
-            return build_sample_response(analysis, projection)
+            report_projection = build_report_projection(analysis)
+            report_export = _report_export(render_report(report_projection))
+        except Exception:
+            raise _ReportGenerationFailed() from None
+        try:
+            return build_sample_response(analysis, projection, report_export)
         except ValidationError:
             raise _ResponseInvalid() from None
 
@@ -347,7 +482,12 @@ def _complete(task: asyncio.Task, limiter: _SampleLimit) -> None:
         limiter.release()
 
 
-def create_sample_endpoint(analyze: Callable, project: Callable):
+def create_sample_endpoint(
+    analyze: Callable,
+    project: Callable,
+    build_report_projection: Callable,
+    render_report: Callable,
+):
     limiter = _SampleLimit()
 
     async def sample_investigation(request: Request):
@@ -363,7 +503,9 @@ def create_sample_endpoint(analyze: Callable, project: Callable):
         rejection = limiter.admit()
         if rejection is not None:
             return _error(rejection)
-        task = asyncio.create_task(asyncio.to_thread(_execute, analyze, project))
+        task = asyncio.create_task(asyncio.to_thread(
+            _execute, analyze, project, build_report_projection, render_report,
+        ))
         task.add_done_callback(lambda completed: _complete(completed, limiter))
         try:
             return await asyncio.wait_for(asyncio.shield(task), _TIMEOUT_SECONDS)
@@ -375,6 +517,8 @@ def create_sample_endpoint(analyze: Callable, project: Callable):
             return _error("CASE_PROJECTION_FAILED")
         except _ResponseInvalid:
             return _error("RESPONSE_INVALID")
+        except _ReportGenerationFailed:
+            return _error("REPORT_GENERATION_FAILED")
         except Exception:
             return _error("ANALYSIS_FAILED")
 

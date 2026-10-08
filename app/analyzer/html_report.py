@@ -658,8 +658,10 @@ def _linux_audit_lines(linux_audit):
     return lines
 
 
-def render_investigation_report_html(projection):
+def render_investigation_report_html(projection, *, synthetic_sample=False):
     if type(projection) is not InvestigationReportProjection:
+        _fail()
+    if type(synthetic_sample) is not bool:
         _fail()
     if type(projection.schema_version) is not str:
         _fail()
@@ -695,6 +697,11 @@ def render_investigation_report_html(projection):
         "</header>",
         "<main>",
     ]
+    if synthetic_sample:
+        lines.extend([
+            '<p class="notice">교육용 합성 샘플 결과입니다. 실제 조직 환경의 '
+            '보안 상태나 보안 점검 인증서를 나타내지 않습니다.</p>',
+        ])
     lines.extend(_coverage_lines(summary, linux_audit))
     lines.extend(_summary_lines(summary))
     lines.extend(_review_table_lines(subjects))

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _ClosedModel(BaseModel):
@@ -103,15 +103,27 @@ class IndependentObservation(_ClosedModel):
 
 
 class Capabilities(_ClosedModel):
-    html_report_available: Literal[False]
+    html_report_available: Literal[True]
     llm_summary_available: Literal[False]
     linux_audit_aggregate_available: Literal[False]
     actual_log_upload_available: Literal[False]
 
 
 class ReportExport(_ClosedModel):
-    available: Literal[False]
-    message: Literal["HTML 보고서 다운로드는 이 단계에서 제공되지 않습니다."]
+    available: Literal[True]
+    format: Literal["standalone_html"]
+    filename: Literal["investigation-report.html"]
+    media_type: Literal["text/html;charset=utf-8"]
+    html: str = Field(min_length=1, max_length=32768, repr=False)
+    byte_count: int = Field(gt=0, le=32768)
+    format_notice: Literal["현재 형식: 대상별 결정적 조사 보고서. 조사 사례 Timeline은 포함하지 않습니다."]
+    handling_warning: Literal["다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오."]
+
+    @model_validator(mode="after")
+    def validate_byte_count(self):
+        if len(self.html.encode("utf-8")) != self.byte_count:
+            raise ValueError("Report export byte count mismatch.")
+        return self
 
 
 class InvestigationResponse(_ClosedModel):
@@ -132,6 +144,7 @@ class InvestigationErrorResponse(_ClosedModel):
         "NON_EMPTY_BODY", "QUERY_NOT_ALLOWED", "RATE_LIMITED",
         "CONCURRENCY_LIMIT", "ANALYSIS_TIMEOUT", "FIXTURE_UNAVAILABLE",
         "ANALYSIS_FAILED", "CASE_PROJECTION_FAILED", "RESPONSE_INVALID",
+        "REPORT_GENERATION_FAILED",
     ]
     user_message: str
     recovery_action: str

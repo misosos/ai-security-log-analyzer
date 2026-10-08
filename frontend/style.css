@@ -90,6 +90,8 @@ a { color: #064f96; text-underline-offset: .2em; }
 .risk-medium { color: #704500; background: #fff7dc; }
 .risk-low { color: #135839; background: #eaf8ee; }
 .account-note { color: #3c5066; border-top: 1px solid #d3dce7; padding-top: .65rem; }
+.report-warning { border-inline-start: .3rem solid #8a1515; background: #fff5f3; padding: .7rem 1rem; font-weight: 650; }
+#report-download button { margin-block-start: .4rem; max-width: 100%; white-space: normal; }
 .site-footer { border-top: 1px solid #cbd5e1; background: #fff; padding-block: 1rem; }
 @media (max-width: 42rem) {
   .info-grid, .card-meta { grid-template-columns: 1fr; }

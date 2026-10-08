@@ -12,6 +12,8 @@ import pytest
 import app.api as api
 import app.sample_investigation_api as sample
 from app.analyzer.incident_case_adapter import project_investigation_cases_from_analysis
+from app.analyzer.report_projection import build_investigation_report_projection
+from app.analyzer.html_report import render_investigation_report_html, _CONTENT_SECURITY_POLICY
 from app.main import analyze
 
 
@@ -82,12 +84,26 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
         "계정 별칭을 표시할 수 없음. 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다."
     )
     assert body["capabilities"] == {
-        "html_report_available": False,
+        "html_report_available": True,
         "llm_summary_available": False,
         "linux_audit_aggregate_available": False,
         "actual_log_upload_available": False,
     }
-    assert body["report_export"]["available"] is False
+    report = body["report_export"]
+    assert report["available"] is True
+    assert report["format"] == "standalone_html"
+    assert report["filename"] == "investigation-report.html"
+    assert report["media_type"] == "text/html;charset=utf-8"
+    assert report["byte_count"] == 24966
+    assert report["byte_count"] == len(report["html"].encode("utf-8"))
+    assert report["html"].startswith("<!doctype html>\n<html lang=\"ko\">")
+    assert report["html"].endswith("</html>\n")
+    assert _CONTENT_SECURITY_POLICY in report["html"]
+    assert "<script" not in report["html"].lower()
+    assert "https://" not in report["html"] and "http://" not in report["html"]
+    assert "현재 형식: 대상별 결정적 조사 보고서" in report["format_notice"]
+    assert "민감한 조사 자료" in report["handling_warning"]
+    assert "교육용 합성 샘플 결과입니다" in report["html"]
     assert len(body["interpretation_notices"]) == 5
     assert body["bounded_warnings"] == []
 
@@ -171,8 +187,8 @@ def test_fixture_digest_is_pinned_and_sample_files_have_no_secret_values():
         ))
 
 
-def test_success_calls_analysis_and_adapter_once_without_other_pipelines(monkeypatch):
-    calls = {"analyze": 0, "project": 0}
+def test_success_calls_analysis_adapter_report_projection_and_renderer_once(monkeypatch):
+    calls = {"analyze": 0, "project": 0, "report_projection": 0, "render": 0}
 
     def tracked_analyze(sources):
         calls["analyze"] += 1
@@ -183,17 +199,27 @@ def test_success_calls_analysis_and_adapter_once_without_other_pipelines(monkeyp
         calls["project"] += 1
         return project_investigation_cases_from_analysis(result)
 
+    def tracked_report_projection(result):
+        calls["report_projection"] += 1
+        return build_investigation_report_projection(result)
+
+    def tracked_render(projection, *, synthetic_sample=False):
+        calls["render"] += 1
+        assert synthetic_sample is True
+        return render_investigation_report_html(projection, synthetic_sample=True)
+
     monkeypatch.setattr(api, "analyze", tracked_analyze)
     monkeypatch.setattr(api, "project_investigation_cases_from_analysis", tracked_project)
+    monkeypatch.setattr(api, "build_investigation_report_projection", tracked_report_projection)
+    monkeypatch.setattr(api, "render_investigation_report_html", tracked_render)
     response = _client().post("/api/v1/investigations/sample")
     assert response.status_code == 200
-    assert calls == {"analyze": 1, "project": 1}
+    assert calls == {"analyze": 1, "project": 1, "report_projection": 1, "render": 1}
 
 
-def test_unrelated_llm_linux_audit_and_html_boundaries_are_not_called(monkeypatch):
+def test_unrelated_llm_linux_audit_and_html_writer_are_not_called(monkeypatch):
     import socket
     import app.analyzer.llm as llm
-    import app.analyzer.html_report as html_report
     import app.analyzer.html_report_file as html_writer
     import app.analyzer.linux_audit_api as linux_audit
 
@@ -201,7 +227,6 @@ def test_unrelated_llm_linux_audit_and_html_boundaries_are_not_called(monkeypatc
         raise AssertionError("unrelated boundary was called")
 
     monkeypatch.setattr(llm.genai, "Client", forbidden)
-    monkeypatch.setattr(html_report, "render_investigation_report_html", forbidden)
     monkeypatch.setattr(html_writer, "write_investigation_report_html", forbidden)
     monkeypatch.setattr(linux_audit, "analyze_staged_linux_audit_inputs", forbidden)
     monkeypatch.setattr(socket.socket, "connect", forbidden)
@@ -261,7 +286,10 @@ def test_timeout_keeps_slot_until_worker_finishes_and_consumes_exception(monkeyp
         release.wait(10)
         raise RuntimeError("PRIVATE_INTERNAL_EXCEPTION")
 
-    endpoint = sample.create_sample_endpoint(blocked_analyze, lambda result: result)
+    endpoint = sample.create_sample_endpoint(
+        blocked_analyze, lambda result: result, lambda result: result,
+        lambda projection: projection,
+    )
 
     async def receive():
         return {"type": "http.request", "body": b"", "more_body": False}
@@ -324,7 +352,11 @@ def test_response_contains_no_raw_fixture_or_internal_private_values(capsys):
 
 
 def test_model_repr_and_openapi_examples_have_no_fixture_or_account_values():
-    result = sample._execute(analyze, project_investigation_cases_from_analysis)
+    result = sample._execute(
+        analyze, project_investigation_cases_from_analysis,
+        build_investigation_report_projection,
+        lambda projection: render_investigation_report_html(projection, synthetic_sample=True),
+    )
     serialized = repr(result) + json.dumps(_client().app.openapi(), ensure_ascii=False)
     for canary in (
         "brute_force.log", "ssh_auth.log", "web_shell.log", "admin",
@@ -338,7 +370,12 @@ def test_empty_projection_yields_two_fixed_non_safety_warnings():
     from app.analyzer.incident_case_projection import build_investigation_case_projection
 
     projection = build_investigation_case_projection(assemble_incident_cases(()))
-    body = sample.build_sample_response({"results": {}, "global_correlation": {}}, projection)
+    report = sample._execute(
+        analyze, project_investigation_cases_from_analysis,
+        build_investigation_report_projection,
+        lambda projection: render_investigation_report_html(projection, synthetic_sample=True),
+    ).report_export
+    body = sample.build_sample_response({"results": {}, "global_correlation": {}}, projection, report)
     assert body.case_summary.case_count == 0
     assert body.bounded_warnings == (
         "지원되는 규칙으로 구성된 조사 사례가 없습니다.",
@@ -352,5 +389,69 @@ def test_response_invariant_failure_is_bounded():
 
     projection = build_investigation_case_projection(assemble_incident_cases(()))
     invalid = replace(projection, summary=replace(projection.summary, high_case_count=1))
+    report = sample._execute(
+        analyze, project_investigation_cases_from_analysis,
+        build_investigation_report_projection,
+        lambda projection: render_investigation_report_html(projection, synthetic_sample=True),
+    ).report_export
     with pytest.raises(sample._ResponseInvalid):
-        sample.build_sample_response({"results": {}, "global_correlation": {}}, invalid)
+        sample.build_sample_response({"results": {}, "global_correlation": {}}, invalid, report)
+
+
+@pytest.mark.parametrize("html", [
+    "", "x" * (sample._MAX_REPORT_BYTES + 1),
+    "<!doctype html>\n<html lang=\"ko\"><script>PRIVATE_INTERNAL_EXCEPTION</script></html>\n",
+    "<!doctype html>\n<html lang=\"ko\"></html>\n",
+])
+def test_bad_report_output_fails_entire_transaction_without_private_detail(monkeypatch, html):
+    monkeypatch.setattr(
+        api, "render_investigation_report_html",
+        lambda _projection, *, synthetic_sample: html,
+    )
+    response = _client().post("/api/v1/investigations/sample")
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "REPORT_GENERATION_FAILED"
+    assert set(response.json()) == {"error_code", "user_message", "recovery_action", "retryable"}
+    assert "case_count" not in response.text
+    assert "PRIVATE_INTERNAL_EXCEPTION" not in response.text
+
+
+def test_structurally_valid_but_oversized_report_fails_closed(monkeypatch):
+    valid = _client().post("/api/v1/investigations/sample").json()["report_export"]["html"]
+    oversized = valid.replace("</main>", "<p>" + "x" * sample._MAX_REPORT_BYTES + "</p></main>", 1)
+    assert len(oversized.encode("utf-8")) > sample._MAX_REPORT_BYTES
+    monkeypatch.setattr(
+        api, "render_investigation_report_html",
+        lambda _projection, *, synthetic_sample: oversized,
+    )
+    response = _client().post("/api/v1/investigations/sample")
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "REPORT_GENERATION_FAILED"
+    assert "case_count" not in response.text
+
+
+def test_report_projection_and_renderer_exceptions_are_bounded(monkeypatch):
+    def private_failure(_value, *, synthetic_sample=True):
+        raise RuntimeError("PRIVATE_INTERNAL_EXCEPTION PRIVATE_PATH_CANARY")
+
+    for name in ("build_investigation_report_projection", "render_investigation_report_html"):
+        with monkeypatch.context() as scoped:
+            scoped.setattr(api, name, private_failure)
+            response = _client().post("/api/v1/investigations/sample")
+        assert response.status_code == 500
+        assert response.json()["error_code"] == "REPORT_GENERATION_FAILED"
+        assert "PRIVATE_INTERNAL_EXCEPTION" not in response.text
+        assert "PRIVATE_PATH_CANARY" not in response.text
+
+
+def test_report_export_model_rejects_mismatched_utf8_count():
+    from pydantic import ValidationError
+    from app.models.investigation_sample_api import ReportExport
+
+    with pytest.raises(ValidationError):
+        ReportExport(
+            available=True, format="standalone_html", filename="investigation-report.html",
+            media_type="text/html;charset=utf-8", html="한글", byte_count=2,
+            format_notice="현재 형식: 대상별 결정적 조사 보고서. 조사 사례 Timeline은 포함하지 않습니다.",
+            handling_warning="다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오.",
+        )

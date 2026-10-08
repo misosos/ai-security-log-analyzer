@@ -2,7 +2,8 @@
 
 (() => {
   const ENDPOINT = "/api/v1/investigations/sample";
-  const MAX_RESPONSE_BYTES = 512 * 1024;
+  const MAX_RESPONSE_BYTES = 64 * 1024;
+  const MAX_REPORT_BYTES = 32 * 1024;
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
   const MAX_CASES = 64;
@@ -64,7 +65,7 @@
   const ERROR_CODES = new Set([
     "NON_EMPTY_BODY", "QUERY_NOT_ALLOWED", "RATE_LIMITED", "CONCURRENCY_LIMIT",
     "ANALYSIS_TIMEOUT", "FIXTURE_UNAVAILABLE", "ANALYSIS_FAILED",
-    "CASE_PROJECTION_FAILED", "RESPONSE_INVALID"
+    "CASE_PROJECTION_FAILED", "RESPONSE_INVALID", "REPORT_GENERATION_FAILED"
   ]);
   const TOP_LEVEL = [
     "schema_version", "sample_context", "analysis_summary", "case_summary", "cases",
@@ -88,7 +89,10 @@
   const caseList = document.getElementById("case-list");
   const independentList = document.getElementById("independent-list");
   const capabilityMessage = document.getElementById("capability-message");
+  const reportDownload = document.getElementById("report-download");
+  const reportButton = document.getElementById("report-button");
   let pending = false;
+  let currentReport = null;
 
   class PublicFailure extends Error {
     constructor(message, recovery) {
@@ -276,6 +280,32 @@
     account(item);
   }
 
+  function validateReportExport(value) {
+    closedRecord(value, [
+      "available", "format", "filename", "media_type", "html", "byte_count",
+      "format_notice", "handling_warning"
+    ]);
+    if (value.available !== true || value.format !== "standalone_html" ||
+        value.filename !== "investigation-report.html" ||
+        value.media_type !== "text/html;charset=utf-8" ||
+        value.format_notice !== "현재 형식: 대상별 결정적 조사 보고서. 조사 사례 Timeline은 포함하지 않습니다." ||
+        value.handling_warning !== "다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오." ||
+        !Number.isSafeInteger(value.byte_count) || value.byte_count < 1 ||
+        value.byte_count > MAX_REPORT_BYTES || typeof value.html !== "string" ||
+        value.html.length > MAX_REPORT_BYTES) failContract();
+    const bytes = new TextEncoder().encode(value.html);
+    if (bytes.byteLength !== value.byte_count ||
+        !value.html.startsWith("<!doctype html>\n<html lang=\"ko\">") ||
+        !value.html.endsWith("</html>\n") ||
+        !value.html.includes('http-equiv="Content-Security-Policy"') ||
+        !value.html.includes("교육용 합성 샘플 결과입니다.") ||
+        !value.html.includes("script-src 'none'") ||
+        !value.html.includes("connect-src 'none'") ||
+        !value.html.includes("style-src 'sha256-") ||
+        /<(?:script|iframe|object|embed|link|img)\b|\b(?:src|href|onload|onclick)\s*=|https?:\/\/|@import|url\s*\(/i.test(value.html)) failContract();
+    return value;
+  }
+
   function validateInvestigationResponse(value) {
     closedRecord(value, TOP_LEVEL);
     if (value.schema_version !== "1") failContract();
@@ -307,10 +337,11 @@
     closedRecord(value.capabilities, [
       "html_report_available", "llm_summary_available", "linux_audit_aggregate_available", "actual_log_upload_available"
     ]);
-    if (Object.values(value.capabilities).some((flag) => flag !== false)) failContract();
-    closedRecord(value.report_export, ["available", "message"]);
-    if (value.report_export.available !== false ||
-        value.report_export.message !== "HTML 보고서 다운로드는 이 단계에서 제공되지 않습니다.") failContract();
+    if (value.capabilities.html_report_available !== true ||
+        value.capabilities.llm_summary_available !== false ||
+        value.capabilities.linux_audit_aggregate_available !== false ||
+        value.capabilities.actual_log_upload_available !== false) failContract();
+    validateReportExport(value.report_export);
     return value;
   }
 
@@ -603,6 +634,8 @@
   }
 
   function clearPreviousResult() {
+    currentReport = null;
+    reportDownload.hidden = true;
     results.hidden = true;
     resultJump.hidden = true;
     errorSummary.hidden = true;
@@ -620,6 +653,29 @@
     errorRecovery.textContent = publicFailure.recovery;
     errorSummary.hidden = false;
     errorSummary.focus();
+  }
+
+  function downloadReport() {
+    if (pending || currentReport === null) return;
+    try {
+      const report = validateReportExport(currentReport);
+      const bytes = new TextEncoder().encode(report.html);
+      const file = new Blob([bytes], {type: "text/html;charset=utf-8"});
+      const objectUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      try {
+        link.href = objectUrl;
+        link.download = "investigation-report.html";
+        document.body.append(link);
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (failure) {
+      clearPreviousResult();
+      renderError(failure);
+    }
   }
 
   async function requestSampleInvestigation() {
@@ -642,7 +698,9 @@
       renderSummary(data);
       renderCaseOverview(data.cases);
       renderIndependentObservations(data.independent_observations);
-      capabilityMessage.textContent = "실제 로그 웹 업로드, HTML 보고서 다운로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다.";
+      capabilityMessage.textContent = "실제 로그 웹 업로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다.";
+      currentReport = data.report_export;
+      reportDownload.hidden = false;
       results.hidden = false;
       resultJump.hidden = false;
       status.textContent = "합성 샘플 분석이 완료되었습니다.";
@@ -657,4 +715,5 @@
   }
 
   button.addEventListener("click", requestSampleInvestigation);
+  reportButton.addEventListener("click", downloadReport);
 })();

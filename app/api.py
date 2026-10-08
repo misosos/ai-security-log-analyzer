@@ -19,6 +19,8 @@ from app.main import analyze
 from app.analyzer.incident_case_adapter import (
     project_investigation_cases_from_analysis,
 )
+from app.analyzer.report_projection import build_investigation_report_projection
+from app.analyzer.html_report import render_investigation_report_html
 from app.models.investigation_sample_api import (
     InvestigationErrorResponse,
     InvestigationResponse,
@@ -468,6 +470,10 @@ def create_app(
         create_sample_endpoint(
             lambda sources: analyze(sources),
             lambda result: project_investigation_cases_from_analysis(result),
+            lambda result: build_investigation_report_projection(result),
+            lambda projection: render_investigation_report_html(
+                projection, synthetic_sample=True,
+            ),
         ),
         methods=["POST"],
         response_model=InvestigationResponse,
