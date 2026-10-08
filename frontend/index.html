@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>합성 샘플 조사 | AI Security Log Analyzer</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header">
+    <div class="shell"><p class="brand">AI Security Log Analyzer</p></div>
+  </header>
+  <main id="main" class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">설명 가능한 보안 로그 조사</p>
+      <h1 id="page-title">로그의 관찰을 조사 사례로 정리합니다</h1>
+      <p class="lead">보안 로그에서 지원되는 탐지 관찰과 관계를 분석하고, 함께 검토할 조사 사례와 다음 조사 단계를 보여줍니다.</p>
+      <div class="sample-notice">
+        <strong>합성 샘플을 사용합니다.</strong>
+        <p>실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
+        <p>사용자 파일은 업로드되지 않으며 LLM도 호출하지 않습니다. 이 결과는 보안 점검 인증서가 아닙니다.</p>
+      </div>
+      <div class="action-row">
+        <button id="sample-button" type="button">샘플로 체험하기</button>
+        <a id="result-jump" href="#results-heading" hidden>결과 요약으로 이동</a>
+      </div>
+      <p id="sample-status" class="status" aria-live="polite">샘플 분석을 시작할 수 있습니다.</p>
+      <div id="error-summary" class="error-summary" tabindex="-1" hidden>
+        <h2>샘플 분석을 완료하지 못했습니다</h2>
+        <p id="error-message"></p>
+        <p id="error-recovery"></p>
+      </div>
+    </section>
+
+    <section class="info-grid" aria-label="체험 안내">
+      <div class="info-panel">
+        <h2>지원되는 관찰</h2>
+        <p>Brute Force, Password Spraying-like, Path Traversal과 기존 분석에서 확인한 인증 관계를 다룹니다.</p>
+        <p>모든 로그 형식이나 공격을 지원하는 것은 아닙니다.</p>
+      </div>
+      <div class="info-panel">
+        <h2>결과에서 볼 수 있는 것</h2>
+        <p>포함된 최고 위험도, 조사 사례 목록, 함께 묶인 이유와 독립 관찰 요약을 확인할 수 있습니다.</p>
+        <p>사례별 시간순 조사 흐름의 전체 탐색은 다음 단계에서 제공됩니다.</p>
+      </div>
+    </section>
+
+    <section id="results" class="results" aria-labelledby="results-heading" hidden>
+      <h2 id="results-heading">합성 샘플 결과</h2>
+      <p class="result-notice"><strong>합성 샘플을 사용합니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
+      <p>탐지는 침해 확인이 아니며, 상관관계는 인과관계가 아닙니다. 로그인 성공도 공격 성공을 입증하지 않습니다. 조사 사례는 확정된 사고가 아닙니다.</p>
+      <section aria-labelledby="summary-heading">
+        <h3 id="summary-heading">결과 요약</h3>
+        <div id="summary-cards" class="summary-grid"></div>
+      </section>
+      <section aria-labelledby="case-list-heading">
+        <h3 id="case-list-heading">조사 사례</h3>
+        <p>이 순서는 새로운 보안 점수가 아닌 검토 순서입니다.</p>
+        <div id="case-list" class="card-stack"></div>
+      </section>
+      <section aria-labelledby="independent-heading">
+        <h3 id="independent-heading">독립 관찰</h3>
+        <p>다른 관찰과 안전하게 결합할 근거가 부족해 별도로 표시한 항목입니다. 독립 관찰은 중요하지 않거나 안전하다는 의미가 아닙니다.</p>
+        <div id="independent-list" class="card-stack"></div>
+      </section>
+      <section aria-labelledby="capabilities-heading">
+        <h3 id="capabilities-heading">현재 제공 범위</h3>
+        <p id="capability-message"></p>
+      </section>
+      <p class="result-action">다른 합성 샘플 결과를 확인하려면 위의 <strong>샘플로 체험하기</strong>를 다시 누르세요.</p>
+    </section>
+
+    <section class="boundaries" aria-labelledby="boundary-heading">
+      <h2 id="boundary-heading">해석과 개인정보 경계</h2>
+      <p>탐지는 침해 확정이 아닙니다. 상관관계는 인과관계가 아닙니다. 같은 IP가 같은 사람이나 공격자임을 뜻하지 않으며 NAT, 프록시, 공유 시스템일 수 있습니다.</p>
+      <p id="privacy">샘플 체험에는 실제 사용자 로그를 업로드하지 않습니다. 응답은 현재 탭의 화면에만 표시하며 새로고침하면 사라집니다. 원래 계정명, 원시 로그와 전체 쿼리는 화면에 표시하지 않습니다.</p>
+      <h3>실제 로그 분석</h3>
+      <p>실제 로그 분석은 현재 로컬 환경의 CLI와 개발 API에서만 지원됩니다. 인증 없는 공개 웹 업로드는 제공하지 않습니다.</p>
+      <p>로컬 분석이 필요한 경우 <a href="/docs">개발 API 문서</a> 또는 프로젝트 README의 CLI 사용법을 확인하세요. 개발 API는 인증 없는 공개 서비스로 배포하지 마세요.</p>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="shell"><p>결정적 관찰을 설명하는 학습·초기 조사 도구입니다. 확정 사고 판정이나 보안 인증이 아닙니다.</p></div></footer>
+</body>
+</html>

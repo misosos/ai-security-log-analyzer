@@ -24,6 +24,7 @@ from app.models.investigation_sample_api import (
     InvestigationResponse,
 )
 from app.sample_investigation_api import create_sample_endpoint
+from app.web_ui import serve_demo_index, serve_demo_script, serve_demo_styles
 from app.models.linux_audit_api import (
     LinuxAuditAnalysisResponse,
     LinuxAuditApiErrorResponse,
@@ -439,6 +440,18 @@ def create_app(
         description="Security log analysis API",
         version="0.1.0",
     )
+    if not enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/", serve_demo_index, methods=["GET"], include_in_schema=False,
+        )
+        configured_app.add_api_route(
+            "/assets/style.css", serve_demo_styles, methods=["GET"],
+            include_in_schema=False,
+        )
+        configured_app.add_api_route(
+            "/assets/app.js", serve_demo_script, methods=["GET"],
+            include_in_schema=False,
+        )
     configured_app.add_api_route(
         "/api/health",
         health_check,

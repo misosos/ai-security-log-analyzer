@@ -43,7 +43,7 @@ def test_general_web_local_cli_and_three_modes_are_explicit():
         assert gate in text
 
 
-def test_current_api_is_recorded_without_claiming_a_frontend():
+def test_current_api_and_sample_frontend_are_recorded_without_claiming_upload():
     text = _normalized()
 
     for route in ("GET /api/health", "POST /api/analyze"):
@@ -52,8 +52,10 @@ def test_current_api_is_recorded_without_claiming_a_frontend():
         assert f"`{field}`" in text
     assert "10 MiB" in text
     assert "CORS middleware도 없다" in text
-    assert "0-byte placeholder" in text
-    assert "일반 웹 dashboard는 구현되지 않았다" in text
+    assert "GET /assets/style.css" in text
+    assert "GET /assets/app.js" in text
+    assert "합성 샘플 Landing/결과 개요" in text
+    assert "실제 로그 웹 업로드" in text
     assert "기존 `/api/analyze`는 그대로 둔다" in text
 
 

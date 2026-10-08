@@ -2,13 +2,13 @@
 
 상태: 설계 계약, 구현 전<br>
 기준일: 2026-10-08<br>
-범위: 기존 FastAPI 저장소의 향후 웹 UX와 API 경계. 이 문서는 route, schema, frontend, dependency 또는 deployment를 구현하지 않는다.
+범위: 기존 FastAPI 저장소의 웹 UX와 API 경계. 아래의 현재 구현 사실과 아직 승인만 된 후속 설계를 구분한다.
 
 ## 1. 목적
 
 일반 사용자가 터미널이나 로컬 HTML 생성 명령을 몰라도 `사이트 접속 → 샘플 체험 또는 로그 선택 → 분석 실행 → 조사 사례 목록 → 시간순 조사 흐름 → 근거·한계·다음 조사 단계 → HTML 보고서 다운로드`를 완료할 수 있는 제품 구조를 고정한다. 웹은 이미 계산된 결정적 분석을 `IncidentCaseSubjectInput` adapter, `assemble_incident_cases()`, `build_investigation_case_projection()` 순서로 한 번만 통과시킨다. 탐지·상관분석·위험도를 presentation에서 다시 만들지 않는다.
 
-이 단계의 산출물은 정보 구조, typed JSON 후보, 위협 모델, 접근성·사용성 gate와 단계별 구현 계획뿐이다. production code와 현재 사용자가 보는 경계는 그대로다.
+Phase 0의 산출물은 정보 구조, typed JSON 후보, 위협 모델과 release gate였다. Phase 1 sample API와 Phase 2 합성 샘플 웹 화면의 구현 사실은 Section 3에 별도로 기록한다.
 
 ## 2. 제품 원칙
 
@@ -25,7 +25,7 @@
 
 ### 확인된 현재 구현
 
-FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app에는 `GET /api/health`, `POST /api/analyze`, `POST /api/v1/investigations/sample`이 있다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
+FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app에는 `GET /`, 고정 정적 자산 `GET /assets/style.css`, `GET /assets/app.js`, `GET /api/health`, `POST /api/analyze`, `POST /api/v1/investigations/sample`이 있다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
 
 `GET /api/health`는 `{"status":"ok"}`만 반환한다. readiness, dependency health 또는 privacy 보장을 뜻하지 않는다.
 
@@ -43,7 +43,7 @@ FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 
 
 현재 renderer는 file 없이 `render_investigation_report_html(projection) -> str`로 standalone HTML을 반환할 수 있다. `write_investigation_report_html()`은 CLI용 secure local writer다. 현재 HTML은 기존 subject 중심 `InvestigationReportProjection`을 표시하며 새 조사 사례/typed Timeline은 포함하지 않는다.
 
-`frontend/index.html`, `frontend/style.css`, `frontend/app.js`는 0-byte placeholder이고 mount/template/static route가 없다. 일반 웹 dashboard는 구현되지 않았다. 테스트는 `fastapi.testclient.TestClient(app)` 또는 `TestClient(create_app(...))`로 ASGI app을 직접 시작한다. 저장소의 Nginx/systemd 자료는 보호된 Linux Audit endpoint 전용 참조 배포이며 일반 `/api/analyze`를 공개하지 않는다.
+`frontend/index.html`, `frontend/style.css`, `frontend/app.js`는 Phase 2의 합성 샘플 Landing/결과 개요다. 고정 GET route만 있고 directory mount, template, SPA catch-all은 없다. 테스트는 `fastapi.testclient.TestClient(app)` 또는 `TestClient(create_app(...))`로 ASGI app을 직접 시작한다. 저장소의 Nginx/systemd 자료는 보호된 Linux Audit endpoint 전용 참조 배포이며 일반 `/api/analyze`를 공개하지 않는다.
 
 ### 구현된 Phase 1 sample API와 남은 목표
 
@@ -53,7 +53,15 @@ Phase 1 response는 Section 9–10의 closed field set에 `sample_context`를 �
 
 Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60 seconds sliding window와 동시 작업 2개 제한을 가진다. client IP/fingerprint는 보관하지 않는다. 10초 응답 deadline이 지나면 bounded 503을 반환하지만 Python worker thread를 종료하지 않는다. 작업이 실제로 끝날 때까지 concurrency slot을 유지하고 완료 시 callback이 예외를 소비하고 slot을 해제한다. 따라서 이 deadline은 hard CPU stop이 아니며 여러 worker/process에 걸친 production rate limit도 아니다. ASGI server/proxy가 이미 받아 메모리에 만든 단일 chunk 크기는 이 handler가 제어하지 못한다. 공개 배포에는 별도 edge body/rate/timeout 통제가 필요하다.
 
-오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. 웹 화면, static mount, report download와 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
+오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. report download와 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
+
+### 구현된 Phase 2 합성 샘플 웹 화면
+
+기본 app의 `GET /`는 module-relative regular `frontend/index.html`을, `/assets/style.css`와 `/assets/app.js`는 두 고정 파일만 제공한다. 보호된 Linux Audit app factory에는 이 세 정적 route를 등록하지 않는다. 정적 파일은 symlink와 비정규 파일, 빈 파일, 128 KiB 초과 파일을 거부하며 cwd 또는 request path를 사용하지 않는다. 세 route는 OpenAPI에서 제외되어 기존 API schema를 유지한다. 인덱스와 비해시 자산은 `Cache-Control: no-store`이며 `nosniff`, `no-referrer`, 불필요한 브라우저 권한을 비활성화한 `Permissions-Policy`, `frame-ancestors 'none'`을 포함한 HTTP CSP를 사용한다. CSP는 self의 JS/CSS/API만 허용하고 inline/eval/remote source를 허용하지 않는다.
+
+화면은 same-origin static vanilla HTML/CSS/JavaScript만 사용한다. `lang="ko"`, skip link, native button, visible focus, 고정 polite status, 오류 요약 focus, risk text+색상, 의미 순서와 DOM 순서 일치, mobile reflow와 reduced-motion 규칙을 포함한다. 실제 로그 입력 form은 없다. 명시적 클릭에서만 빈 body로 `POST /api/v1/investigations/sample`을 한 번 호출한다. 브라우저는 response byte·문자열·배열 상한과 exact top-level field, schema version, approved risk/category, 사례 수 partition을 검증하고 malformed 응답은 전체 실패로 표시한다. 렌더링은 `createElement`/`textContent`와 고정 class만 사용하고 원래 계정·근거·query·raw log를 화면에 넣지 않는다. 결과는 현재 탭의 DOM/메모리에만 남으며 refresh 시 사라진다. 성공 시 focus를 강제로 옮기지 않고 선택 가능한 결과 이동 링크를 보이며, 실패 시 고정 오류 요약으로 focus를 옮긴다.
+
+화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약, 사례의 제한된 개요와 독립 관찰 이유만 보여 준다. 전체 case detail/Timeline, HTML report download, 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. 자동 검증은 HTML 구조, 소스 보안 제약, TestClient 경로·헤더·API 호환성 및 JavaScript 구문까지이며 실제 브라우저/스크린리더, keyboard, 320px/200% zoom의 시각적 acceptance는 별도 수동 검증이 필요하다. hosted actual-log upload는 여전히 no-go다.
 
 ## 4. 사용자 유형
 
@@ -451,7 +459,7 @@ Task는 (1) sample 시작, (2) 지원 파일·데이터 처리 찾기, (3) 의�
 
 ## 24. 알려진 한계
 
-- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API는 구현되었다.
+- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API와 합성 샘플 웹 개요 화면은 구현되었다.
 - 현재 file validation은 suffix/size 중심이고 whole-file memory read, total limit 부재와 crash orphan 위험이 있다.
 - 현재 HTML report에는 조사 사례와 Timeline이 없다.
 - account alias는 Phase 1 assembly가 safe reference를 보존하지 않아 unavailable이다. 원본을 복원하지 않는다.
