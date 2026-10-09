@@ -36,7 +36,7 @@ class Node {
 
 const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
-  "error-recovery", "results", "result-jump", "summary-cards",
+  "error-recovery", "error-retry", "results", "result-jump", "summary-cards",
   "case-list", "independent-list", "capability-message", "report-download", "report-button",
   "local-form", "local-upload", "local-button", "local-status", "results-heading", "result-context",
   "application-file", "ssh-file", "access-file",
@@ -60,6 +60,8 @@ function makeApp(initial, hostname = "127.0.0.1") {
   let response = initial;
   let httpStatus = 200;
   let fetchCount = 0;
+  let pendingFetch = null;
+  let failFetch = false;
   const fetchCalls = [];
   const downloads = [];
   const revoked = [];
@@ -90,6 +92,8 @@ function makeApp(initial, hostname = "127.0.0.1") {
   const fetch = async (url, options) => {
     fetchCount += 1;
     fetchCalls.push({url, options});
+    if (pendingFetch) await pendingFetch;
+    if (failFetch) throw new Error("private-network-detail");
     const bytes = new TextEncoder().encode(JSON.stringify(response));
     let used = false;
     return {
@@ -117,7 +121,13 @@ function makeApp(initial, hostname = "127.0.0.1") {
     fetchCount: () => fetchCount,
     fetchCalls,
     setHttpStatus: (value) => { httpStatus = value; },
-    setResponse: (value) => { response = value; }
+    setResponse: (value) => { response = value; },
+    holdFetch: () => {
+      let release;
+      pendingFetch = new Promise((resolve) => { release = resolve; });
+      return () => { pendingFetch = null; release(); };
+    },
+    setNetworkFailure: (value) => { failFetch = value; }
   };
 }
 
@@ -302,7 +312,32 @@ async function main() {
     assert.equal(local.nodes["ssh-error"].hidden, false);
     assert.equal(local.nodes["ssh-file"].attributes["aria-invalid"], "true");
     assert.equal(local.nodes["error-message"].textContent, "UTF-8 로그로 읽을 수 없습니다.");
+    assert.equal(local.nodes["error-retry"].textContent.includes("그대로 재시도하지 마세요"), true);
     assert.equal(local.nodes["local-button"].disabled, false);
+    local.setResponse({
+      error_code: "PARSER_INCOMPATIBLE", user_message: "지원하는 로그 형식이 아닙니다.",
+      recovery_action: "파일 종류와 입력칸을 확인한 뒤 다시 선택하십시오.",
+      retryable: false, field: "application_file"
+    });
+    await local.submit();
+    assert.equal(local.nodes["application-error"].hidden, false);
+    assert.equal(local.nodes["error-recovery"].textContent.includes("입력칸"), true);
+    local.setResponse({
+      error_code: "RATE_LIMITED", user_message: "로컬 분석 요청 횟수 한도에 도달했습니다.",
+      recovery_action: "잠시 후 다시 시도하십시오.", retryable: true, field: null
+    });
+    local.setHttpStatus(429);
+    await local.submit();
+    assert.equal(local.nodes["error-retry"].textContent.includes("재시도 가능"), true);
+    assert.equal(local.nodes["error-summary"].focused, true);
+    const mismatched = {
+      error_code: "INVALID_UTF8", user_message: "UTF-8 로그로 읽을 수 없습니다.",
+      recovery_action: "잠시 후 다시 시도하십시오.", retryable: true, field: "ssh_file"
+    };
+    local.setResponse(mismatched);
+    await local.submit();
+    assert.equal(local.nodes["error-message"].textContent, "결과 형식을 확인할 수 없습니다.");
+    assert.equal(local.nodes["ssh-error"].hidden, true);
     local.setResponse({
       error_code: "INVALID_UTF8", user_message: "raw-private-canary",
       recovery_action: "UTF-8 텍스트 파일을 선택하십시오.", retryable: false,
@@ -310,6 +345,36 @@ async function main() {
     });
     await local.submit();
     assert.equal(local.nodes["error-message"].textContent.includes("raw-private-canary"), false);
+    local.setResponse(supplied.local);
+    local.setHttpStatus(200);
+    local.nodes["ssh-file"].files = [];
+    await local.submit();
+    assert.equal(local.nodes["error-summary"].focused, true);
+    assert.equal(local.nodes["ssh-error"].hidden, false);
+    assert.equal(local.nodes["ssh-file"].attributes["aria-invalid"], "true");
+    assert.equal(local.nodes.results.hidden, true);
+    local.nodes["ssh-file"].files = [selected];
+    await local.submit();
+    assert.equal(local.nodes.results.hidden, false, "missing-file recovery succeeds");
+    const release = local.holdFetch();
+    const beforeConcurrent = local.fetchCount();
+    const firstRequest = local.submit();
+    await local.submit();
+    assert.equal(local.fetchCount(), beforeConcurrent + 1, "duplicate submit is ignored");
+    assert.equal(local.nodes["local-button"].disabled, true);
+    release();
+    await firstRequest;
+    assert.equal(local.nodes["local-button"].disabled, false);
+    local.setNetworkFailure(true);
+    await local.submit();
+    assert.equal(local.nodes.results.hidden, true);
+    assert.equal(local.nodes["report-download"].hidden, true);
+    assert.equal(local.nodes["error-message"].textContent.includes("private-network-detail"), false);
+    local.setNetworkFailure(false);
+    local.setResponse(copy());
+    await local.click();
+    assert.equal(local.nodes["ssh-error"].hidden, true, "sample restart clears local field errors");
+    assert.equal(local.nodes.results.hidden, false);
   }
   process.stdout.write("renderer logic verified\n");
 }

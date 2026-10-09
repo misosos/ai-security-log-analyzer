@@ -63,47 +63,46 @@
     "Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다.",
     "모호한 관계라 자동 사례 결합을 수행하지 않았습니다."
   ]);
-  const ERROR_CODES = new Set([
-    "NON_EMPTY_BODY", "QUERY_NOT_ALLOWED", "RATE_LIMITED", "CONCURRENCY_LIMIT",
-    "ANALYSIS_TIMEOUT", "FIXTURE_UNAVAILABLE", "ANALYSIS_FAILED",
-    "CASE_PROJECTION_FAILED", "RESPONSE_INVALID", "REPORT_GENERATION_FAILED"
-  ]);
-  const LOCAL_ERROR_CODES = new Set([
-    "LOCAL_ONLY", "INVALID_MEDIA_TYPE", "QUERY_NOT_ALLOWED", "MALFORMED_MULTIPART",
-    "MISSING_FIELD", "REPEATED_FIELD", "UNKNOWN_FIELD", "FILE_COUNT_EXCEEDED",
-    "FILE_TOO_LARGE", "TOTAL_TOO_LARGE", "ENVELOPE_TOO_LARGE", "ARCHIVE_UNSUPPORTED",
-    "BINARY_INPUT", "INVALID_UTF8", "EMPTY_INPUT", "LINE_TOO_LONG",
-    "LINE_COUNT_EXCEEDED", "PARSER_INCOMPATIBLE", "UPLOAD_TIMEOUT", "ANALYSIS_TIMEOUT",
-    "CONCURRENCY_LIMIT", "RATE_LIMITED", "ANALYSIS_FAILED", "CASE_PROJECTION_FAILED",
-    "REPORT_GENERATION_FAILED", "RESPONSE_INVALID"
-  ]);
-  const LOCAL_ERROR_MESSAGES = new Set([
-    "이 기능은 로컬 서버에서만 사용할 수 있습니다.", "세 로그의 multipart 요청이 필요합니다.",
-    "조회 조건을 받을 수 없습니다.", "업로드 형식을 확인할 수 없습니다.",
-    "필수 로그가 누락되었습니다.", "같은 로그 입력이 여러 번 전송되었습니다.",
-    "지원하지 않는 업로드 항목이 있습니다.", "업로드 파일 수가 한도를 넘었습니다.",
-    "로그 파일 크기가 한도를 넘었습니다.", "로그 전체 크기가 한도를 넘었습니다.",
-    "요청 크기가 한도를 넘었습니다.", "압축·보관 파일은 지원하지 않습니다.",
-    "텍스트 로그 형식을 확인할 수 없습니다.", "UTF-8 로그로 읽을 수 없습니다.",
-    "로그가 비었거나 공백만 있습니다.", "로그 한 줄이 길이 한도를 넘었습니다.",
-    "로그 줄 수가 한도를 넘었습니다.", "지원하는 로그 형식이 아닙니다.",
-    "업로드 처리 시간이 초과되었습니다.", "분석 시간이 초과되었습니다.",
-    "다른 로컬 분석이 진행 중입니다.", "로컬 분석 요청 횟수 한도에 도달했습니다.",
-    "로그 분석을 완료하지 못했습니다.", "조사 사례를 구성하지 못했습니다.",
-    "HTML 보고서를 준비하지 못했습니다.", "결과를 준비하지 못했습니다."
-  ]);
-  const LOCAL_ERROR_ACTIONS = new Set([
-    "127.0.0.1에 직접 연결하십시오.", "세 파일을 다시 선택하십시오.",
-    "조회 조건 없이 다시 시도하십시오.", "표시된 로그 파일을 선택하십시오.",
-    "각 로그를 한 번씩 선택하십시오.", "세 로그 파일만 선택하십시오.",
-    "더 작은 파일을 선택하십시오.", "압축을 풀고 텍스트 로그를 선택하십시오.",
-    "UTF-8 텍스트 로그를 선택하십시오.", "UTF-8 텍스트 파일을 선택하십시오.",
-    "내용이 있는 로그를 선택하십시오.",
-    "입력 형식을 확인하십시오.", "표시된 형식의 로그를 선택하십시오.",
-    "잠시 후 다시 시도하십시오.", "더 작은 로그로 다시 시도하십시오.",
-    "완료 후 다시 시도하십시오.",
-    "입력 형식을 확인하고 다시 시도하십시오."
-  ]);
+  const SAMPLE_ERRORS = Object.freeze({
+    NON_EMPTY_BODY: ["요청 본문을 받을 수 없습니다.", "본문 없이 다시 요청하십시오.", false],
+    QUERY_NOT_ALLOWED: ["조회 조건을 받을 수 없습니다.", "조회 조건 없이 다시 요청하십시오.", false],
+    RATE_LIMITED: ["요청 횟수 한도에 도달했습니다.", "잠시 후 다시 시도하십시오.", true],
+    CONCURRENCY_LIMIT: ["현재 처리 가능한 요청 수를 넘었습니다.", "잠시 후 다시 시도하십시오.", true],
+    ANALYSIS_TIMEOUT: ["분석 응답 시간이 초과되었습니다.", "잠시 후 다시 시도하십시오.", true],
+    FIXTURE_UNAVAILABLE: ["합성 샘플을 사용할 수 없습니다.", "잠시 후 다시 시도하십시오.", true],
+    ANALYSIS_FAILED: ["샘플 분석을 완료하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    CASE_PROJECTION_FAILED: ["조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    RESPONSE_INVALID: ["결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    REPORT_GENERATION_FAILED: ["HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true]
+  });
+  const LOCAL_ERRORS = Object.freeze({
+    LOCAL_ONLY: ["이 기능은 로컬 서버에서만 사용할 수 있습니다.", "127.0.0.1에 직접 연결하십시오.", false],
+    INVALID_MEDIA_TYPE: ["세 로그의 multipart 요청이 필요합니다.", "세 파일을 다시 선택하십시오.", false],
+    QUERY_NOT_ALLOWED: ["조회 조건을 받을 수 없습니다.", "조회 조건 없이 다시 시도하십시오.", false],
+    MALFORMED_MULTIPART: ["업로드 형식을 확인할 수 없습니다.", "세 파일을 다시 선택하십시오.", false],
+    MISSING_FIELD: ["필수 로그가 누락되었습니다.", "표시된 로그 파일을 선택하십시오.", false],
+    REPEATED_FIELD: ["같은 로그 입력이 여러 번 전송되었습니다.", "각 로그를 한 번씩 선택하십시오.", false],
+    UNKNOWN_FIELD: ["지원하지 않는 업로드 항목이 있습니다.", "세 로그 파일만 선택하십시오.", false],
+    FILE_COUNT_EXCEEDED: ["업로드 파일 수가 한도를 넘었습니다.", "세 로그 파일만 선택하십시오.", false],
+    FILE_TOO_LARGE: ["로그 파일 크기가 한도를 넘었습니다.", "더 작은 파일을 선택하십시오.", false],
+    TOTAL_TOO_LARGE: ["로그 전체 크기가 한도를 넘었습니다.", "더 작은 파일을 선택하십시오.", false],
+    ENVELOPE_TOO_LARGE: ["요청 크기가 한도를 넘었습니다.", "더 작은 파일을 선택하십시오.", false],
+    ARCHIVE_UNSUPPORTED: ["압축·보관 파일은 지원하지 않습니다.", "압축을 풀고 텍스트 로그를 선택하십시오.", false],
+    BINARY_INPUT: ["텍스트 로그 형식을 확인할 수 없습니다.", "UTF-8 텍스트 로그를 선택하십시오.", false],
+    INVALID_UTF8: ["UTF-8 로그로 읽을 수 없습니다.", "UTF-8 텍스트 파일을 선택하십시오.", false],
+    EMPTY_INPUT: ["로그가 비었거나 공백만 있습니다.", "내용이 있는 로그를 선택하십시오.", false],
+    LINE_TOO_LONG: ["로그 한 줄이 길이 한도를 넘었습니다.", "입력 형식을 확인하십시오.", false],
+    LINE_COUNT_EXCEEDED: ["로그 줄 수가 한도를 넘었습니다.", "더 작은 파일을 선택하십시오.", false],
+    PARSER_INCOMPATIBLE: ["지원하는 로그 형식이 아닙니다.", "파일 종류와 입력칸을 확인한 뒤 다시 선택하십시오.", false],
+    UPLOAD_TIMEOUT: ["업로드 처리 시간이 초과되었습니다.", "잠시 후 다시 시도하십시오.", true],
+    ANALYSIS_TIMEOUT: ["분석 시간이 초과되었습니다.", "더 작은 로그로 다시 시도하십시오.", true],
+    CONCURRENCY_LIMIT: ["다른 로컬 분석이 진행 중입니다.", "완료 후 다시 시도하십시오.", true],
+    RATE_LIMITED: ["로컬 분석 요청 횟수 한도에 도달했습니다.", "잠시 후 다시 시도하십시오.", true],
+    ANALYSIS_FAILED: ["로그 분석을 완료하지 못했습니다.", "입력 형식을 확인하고 다시 시도하십시오.", true],
+    CASE_PROJECTION_FAILED: ["조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    REPORT_GENERATION_FAILED: ["HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    RESPONSE_INVALID: ["결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true]
+  });
   const TOP_LEVEL = [
     "schema_version", "sample_context", "analysis_summary", "case_summary", "cases",
     "independent_observations", "interpretation_notices", "capabilities",
@@ -126,6 +125,7 @@
   const errorSummary = document.getElementById("error-summary");
   const errorMessage = document.getElementById("error-message");
   const errorRecovery = document.getElementById("error-recovery");
+  const errorRetry = document.getElementById("error-retry");
   const results = document.getElementById("results");
   const resultJump = document.getElementById("result-jump");
   const summaryCards = document.getElementById("summary-cards");
@@ -147,10 +147,11 @@
   localSection.hidden = !loopbackPage;
 
   class PublicFailure extends Error {
-    constructor(message, recovery) {
+    constructor(message, recovery, retryable = null) {
       super("Sample request failed");
       this.publicMessage = message;
       this.recovery = recovery;
+      this.retryable = retryable;
     }
   }
 
@@ -443,15 +444,18 @@
     closedRecord(value, mode === "sample" ?
       ["error_code", "user_message", "recovery_action", "retryable"] :
       ["error_code", "user_message", "recovery_action", "retryable", "field"]);
-    if (!(mode === "sample" ? ERROR_CODES : LOCAL_ERROR_CODES).has(value.error_code) ||
-        typeof value.retryable !== "boolean") failContract();
+    if (typeof value.retryable !== "boolean") failContract();
+    if (mode === "sample" && !Object.hasOwn(SAMPLE_ERRORS, value.error_code)) failContract();
+    if (mode === "local" && !Object.hasOwn(LOCAL_ERRORS, value.error_code)) failContract();
     if (mode === "local" && value.field !== null &&
         !FILE_FIELDS.some(([field]) => field === value.field)) failContract();
     boundedText(value.user_message);
     boundedText(value.recovery_action);
-    if (mode === "local" && (!LOCAL_ERROR_MESSAGES.has(value.user_message) ||
-        !LOCAL_ERROR_ACTIONS.has(value.recovery_action))) failContract();
-    return value;
+    const approved = (mode === "local" ? LOCAL_ERRORS : SAMPLE_ERRORS)[value.error_code];
+    if (value.user_message !== approved[0] || value.recovery_action !== approved[1] ||
+        value.retryable !== approved[2]) failContract();
+    return {user_message: approved[0], recovery_action: approved[1],
+      retryable: approved[2], field: mode === "local" ? value.field : null};
   }
 
   function element(tag, text, className) {
@@ -721,6 +725,11 @@
     localStatus.textContent = "분석을 완료하지 못했습니다.";
     errorMessage.textContent = publicFailure.publicMessage;
     errorRecovery.textContent = publicFailure.recovery;
+    errorRetry.textContent = publicFailure.retryable === true ?
+      "재시도 가능: 안내된 조건을 확인한 뒤 다시 요청할 수 있습니다." :
+      publicFailure.retryable === false ?
+        "같은 요청을 그대로 재시도하지 마세요. 위 안내를 확인한 뒤 다시 진행하세요." :
+        "연결 또는 응답 상태를 확인한 뒤 다시 시도하세요.";
     errorSummary.hidden = false;
     errorSummary.focus();
   }
@@ -754,6 +763,7 @@
     button.disabled = true;
     localButton.disabled = true;
     button.textContent = "분석 요청 중";
+    clearFieldErrors();
     clearPreviousResult();
     status.textContent = "합성 샘플 분석을 요청하고 있습니다. 조사 결과를 준비하고 있습니다.";
     try {
@@ -763,7 +773,7 @@
       const payload = await boundedJson(response);
       if (!response.ok) {
         const error = validateApiError(payload);
-        throw new PublicFailure(error.user_message, error.recovery_action);
+        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
       }
       const data = validateInvestigationResponse(payload);
       renderResult(data, "sample");
@@ -825,7 +835,7 @@
     const files = FILE_FIELDS.map(([field, inputId]) => [field, document.getElementById(inputId).files]);
     const missing = files.find(([, selected]) => selected.length !== 1);
     if (missing) {
-      const failure = new PublicFailure("필수 로그가 누락되었습니다.", "표시된 세 로그 파일을 각각 선택하십시오.");
+      const failure = new PublicFailure("필수 로그가 누락되었습니다.", "표시된 세 로그 파일을 각각 선택하십시오.", false);
       fieldError(missing[0], failure.publicMessage);
       renderError(failure);
       return;
@@ -845,7 +855,7 @@
       if (!response.ok) {
         const error = validateApiError(payload, "local");
         if (error.field) fieldError(error.field, error.user_message);
-        throw new PublicFailure(error.user_message, error.recovery_action);
+        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
       }
       const data = validateInvestigationResponse(payload, "local");
       renderResult(data, "local");

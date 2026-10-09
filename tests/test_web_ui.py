@@ -63,6 +63,7 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "button" and attrs.get("type") == "button" and attrs.get("id") == "report-button" for tag, attrs in nodes)
     assert any(attrs.get("id") == "report-download" and "hidden" in attrs for _, attrs in nodes)
     assert any(attrs.get("id") == "error-summary" and attrs.get("tabindex") == "-1" for _, attrs in nodes)
+    assert "error-retry" in ids
     assert any(attrs.get("id") == "sample-status" and attrs.get("aria-live") == "polite" for _, attrs in nodes)
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
@@ -106,6 +107,9 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
     assert "document.createElement" in js and ".textContent" in js
     assert "MAX_RESPONSE_BYTES" in js and "MAX_ITEMS" in js and "MAX_TEXT" in js
     assert "validateInvestigationResponse" in js and "failContract()" in js
+    assert "SAMPLE_ERRORS" in js and "LOCAL_ERRORS" in js
+    assert 'value.retryable !== approved[2]' in js
+    assert 'errorRetry.textContent' in js
     assert "summary.case_count !== summary.high_case_count + summary.medium_case_count + summary.low_case_count" in js
     assert "errorSummary.focus()" in js and "button.disabled = false" in js
     assert "URL.createObjectURL(file)" in js and "URL.revokeObjectURL(objectUrl)" in js

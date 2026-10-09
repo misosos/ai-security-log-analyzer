@@ -1,6 +1,6 @@
 # Web-first Investigation Experience and Secure API Contract
 
-상태: 설계 계약 및 합성 샘플 Phase 1–4·로컬 업로드 Phase 5 구현 사실<br>
+상태: 설계 계약 및 합성 샘플 Phase 1–4·로컬 업로드 Phase 5·로컬 실행 Phase 5.5 구현 사실<br>
 기준일: 2026-10-09<br>
 범위: 기존 FastAPI 저장소의 웹 UX와 API 경계. 아래의 현재 구현 사실과 아직 승인만 된 후속 설계를 구분한다.
 
@@ -94,6 +94,14 @@ ASGI `request.client.host`를 표준 IP 판정으로 확인하고 IPv4 `127.0.0.
 상한의 작은 로컬 학습 목적 근거: 기존 synthetic 세 로그 2001바이트·27줄, 약 0.048초 분석, tracemalloc peak 약 193 KiB; 이를 20회 반복한 합성 입력 40020바이트·540줄, 약 0.221초 분석, peak 약 388 KiB였다. 이는 단일 개발 환경의 관찰이고 p95 또는 모든 입력의 CPU/메모리 보증이 아니다. 요청별 10초 업로드 deadline과 10초 별도 분석 worker-process deadline, 프로세스별 동시 분석 1개, 60초당 6회 rate를 둔다. Timeout·취소 시 worker를 종료하고 그 뒤 요청별 디렉터리를 정리한다. 여러 worker/process 전체 제한, upstream request body 제한, crash orphan cleanup은 보장하지 않는다.
 
 `TemporaryDirectory`는 요청별 `0700`, `O_EXCL|O_NOFOLLOW`와 고정 내부 이름으로 만든 파일은 `0600`이다. 성공·검증 실패·분석/사례/보고서 실패·timeout·cancellation 뒤 알려진 staging 디렉터리를 정리한다. 비정상 process/host crash의 잔존 파일은 자동 정리한다고 주장하지 않는다. DB, 지속 결과 저장, 서버 보고서 파일, LLM과 Linux Audit 호출은 없다. Browser는 loopback 주소에서만 local upload 영역을 표시하되 서버가 독립적으로 다시 검증한다. Native labelled file input 세 개와 fieldset/legend, required text, field-linked 오류, focus되는 오류 요약을 사용하고 `FormData` 세 part만 전송한다. Sample을 먼저 보이고 로컬 결과에는 합성 label을 사용하지 않는다. 동일 사례·Timeline 렌더러와 Blob 다운로드를 재사용한다. 결과는 tab memory뿐이며 새 요청 또는 실패에서 이전 export를 폐기한다. Node DOM stub은 field 구성·단일 fetch·context 분리·다운로드 재업로드 부재를 검사하지만 Safari 시각·키보드·200% 확대·WCAG 검수는 별도다.
+
+### 구현된 Phase 5.5 로컬 첫 실행과 오류 복구
+
+`uv run python -m app.local_web`은 `127.0.0.1:8000`에만 바인딩하는 전경 실행기다. `--port`는 1024~65535의 정수 하나만 허용하고 host override와 reload는 없다. loopback 소켓을 먼저 점유해 포트 충돌을 구분하고, `GET /api/health`의 고정 응답을 최대 40회·5초 동안 확인한 뒤 URL과 `Ctrl+C` 종료 방법을 안내한다. 준비 후에만 표준 라이브러리로 브라우저를 한 번 열며 `--no-browser`를 지원한다. 브라우저 실패는 서버를 종료하지 않고 수동 URL을 안내한다. 서버는 access log와 proxy header 신뢰를 비활성화한다. 시작·준비·종료 오류는 고정 code와 경로 없는 문구로 반환한다. 종료 시 실행기가 소유한 listener와 server thread를 정리하지만 process/host crash 후 요청별 임시 파일의 잔존을 보장하지 않는다. 기존 직접 Uvicorn 명령은 유지된다.
+
+실제 로그 업로드 staging은 `O_NOFOLLOW`가 없는 플랫폼에서 fail closed한다. Windows의 완전한 local upload/브라우저 사용성은 아직 검증되지 않았다. 위 명령을 문서에 싣는 것과 플랫폼별 수동 수용을 완료하는 것은 별개다.
+
+첫 화면은 합성 샘플 행동을 먼저 두고 로컬 업로드에 선행하는 경고와 세 입력칸 대응을 간결하게 표시한다. 로컬 오류 UI는 서버의 `error_code`별 고정 메시지·복구 행동·`retryable` 조합을 정확히 검증하며 서버 문자열을 임의로 섞어 렌더링하지 않는다. 지원하지 않는 형식은 파일 종류와 입력칸을 확인하도록 안내한다. 누락 필드는 오류 요약과 연결된 필드 오류를 제공하고, 재제출 시 이전 결과·report payload는 폐기한다. 자동 Node DOM stub과 API/launcher 테스트는 동작 계약을 검증하지만 실제 Safari 시각·키보드·320px·200% 확대 검수와 첫 사용자 소요 시간 목표를 입증하지 않는다. Hosted upload와 실시간 수집은 여전히 no-go다.
 
 ## 4. 사용자 유형
 

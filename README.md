@@ -27,7 +27,28 @@ Gemini 설명 기능은 `app/analyzer/llm.py`에 있는 선택적 개발 경계�
 
 ## 빠른 시작
 
-### 1. 도움말 확인
+처음 사용하는 경우 웹 UI부터 시작하십시오. macOS·Linux·Windows에서 Python 3.12 이상과 `uv`를 설치한 뒤 터미널에서 다음 명령을 실행합니다.
+
+```bash
+git clone https://github.com/misosos/ai-security-log-analyzer.git
+cd ai-security-log-analyzer
+uv sync --dev
+uv run python -m app.local_web
+```
+
+서버가 준비되면 `http://127.0.0.1:8000/`을 안내하고 기본 브라우저를 한 번 엽니다. 브라우저가 열리지 않으면 안내된 주소를 직접 여십시오. 브라우저 자동 열기를 원하지 않으면 `--no-browser`를 붙입니다. 기본 포트는 8000이며, 충돌할 때만 `--port 8001`처럼 1024~65535 사이의 포트를 하나 지정할 수 있습니다. host는 언제나 `127.0.0.1`이고 외부 인터페이스 지정과 `--reload`는 지원하지 않습니다. 종료는 실행한 터미널에서 `Ctrl+C`입니다. 이것은 현재 컴퓨터에서 직접 사용하는 전경 개발 실행기이며 hosted 배포가 아닙니다.
+
+로컬 실제 로그 업로드의 임시 파일 보호는 플랫폼의 `O_NOFOLLOW` 지원을 요구합니다. 지원하지 않는 플랫폼에서는 업로드가 고정 오류로 거부됩니다. Windows에서 전체 업로드·브라우저 흐름은 아직 검증되지 않았으므로 이 문서를 Windows 지원 완료의 근거로 사용하지 마십시오.
+
+첫 화면에서 **샘플로 체험하기**를 누르면 사용자 파일 없이 합성 로그의 조사 사례·Timeline을 볼 수 있습니다. 실제 로그는 **내 로그 분석하기**에서 세 칸에 각각 애플리케이션 인증 로그(`sample_logs/brute_force.log`), SSH 인증 로그(`sample_logs/ssh_auth.log`), 웹 접근 로그(`sample_logs/web_shell.log`) 형식의 UTF-8 파일을 넣습니다. 세 sample 파일로도 로컬 입력 절차를 연습할 수 있습니다. 결과의 **HTML 보고서 다운로드**는 현재 탭의 응답에서 대상별 보고서를 저장하며, 사례 Timeline 전체를 포함하지 않습니다. 샘플 결과는 실제 조직 환경의 보안 상태를 증명하지 않습니다.
+
+입력 한계는 파일당 32 KiB, 합계 80 KiB, multipart 요청 전체 96 KiB, 한 줄 2048바이트, 파일당 512줄입니다. 압축 파일은 지원하지 않습니다. 분석은 외부 LLM을 호출하지 않습니다. 로그·결과·보고서를 서버에 영구 저장하지 않으며 정상·오류·취소·timeout 종료 때 요청별 임시 파일을 정리합니다. 프로세스나 호스트의 비정상 종료 뒤에는 임시 파일 잔존 가능성이 있습니다. 다운로드한 보고서는 민감한 조사 자료이므로 안전하게 저장·공유·삭제하십시오. 이 경로는 공개 인터넷 업로드나 실시간 수집 기능이 아닙니다. 포트 포워딩 및 `0.0.0.0` 바인딩을 하지 마십시오.
+
+첫 실행이 막히면 `uv sync --dev` 완료 여부를 확인하고, 포트 충돌 메시지가 나오면 해당 로컬 서버를 종료하거나 다른 허용 포트를 지정하십시오. 브라우저가 열리지 않으면 출력된 주소를 직접 여십시오. 분석 오류가 나오면 세 입력칸의 파일 종류, UTF-8, 크기·줄 한계를 확인하고 화면의 필드별 오류와 복구 행동을 따르십시오. 결과가 비어 보인다고 안전하다는 뜻은 아닙니다. 실제 Safari·키보드·확대 검증은 사용자 환경에서 별도로 확인해야 합니다.
+
+### 기존 CLI와 개발 API
+
+CLI 도움말:
 
 ```bash
 uv run python -m app.main --help
@@ -35,7 +56,7 @@ uv run python -m app.main --help
 
 `--linux-audit PATH`와 `--html-report PATH`가 표시됩니다.
 
-### 2. 기본 sample logs 분석
+### 기본 sample logs 분석
 
 ```bash
 uv run python -m app.main
@@ -43,7 +64,7 @@ uv run python -m app.main
 
 이 명령은 저장소의 `sample_logs/brute_force.log`, `sample_logs/ssh_auth.log`, `sample_logs/web_shell.log`를 한 번씩 읽어 기존 텍스트 보고서를 출력합니다. 출력에는 탐지 근거, 위험도, 신뢰도와 지원되는 상관관계가 포함됩니다.
 
-### 3. 독립형 HTML 조사 보고서 생성
+### 독립형 HTML 조사 보고서 생성
 
 ```bash
 uv run python -m app.main --html-report investigation.html
@@ -57,7 +78,7 @@ open investigation.html
 
 CLI가 브라우저를 자동으로 열지는 않습니다. 같은 대상에 다시 쓰지 않으므로 재시연 전에는 아래의 [안전한 정리](#안전한-정리)를 따르십시오.
 
-### 4. 개발 API 실행과 상태 확인
+### 개발 API를 직접 실행하고 상태 확인
 
 첫 번째 터미널:
 

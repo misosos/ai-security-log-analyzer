@@ -36,6 +36,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 .error-summary h2 { margin-bottom: .4rem; }
 .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
 .local-upload, .results, .boundaries { margin-top: 1.5rem; }
+.local-warning { border-inline-start: .3rem solid #8a1515; background: #fff5f3; padding: .7rem 1rem; font-weight: 650; }
 .local-upload fieldset { border: 1px solid #9badc3; border-radius: .4rem; min-width: 0; margin: 1rem 0; padding: 1rem; }
 .local-upload legend { font-weight: 750; }
 .file-field { padding-block: .6rem; min-width: 0; }
