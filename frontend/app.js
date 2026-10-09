@@ -2,7 +2,8 @@
 
 (() => {
   const ENDPOINT = "/api/v1/investigations/sample";
-  const MAX_RESPONSE_BYTES = 64 * 1024;
+  const LOCAL_ENDPOINT = "/api/v1/investigations";
+  const MAX_RESPONSE_BYTES = 128 * 1024;
   const MAX_REPORT_BYTES = 32 * 1024;
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
@@ -67,11 +68,53 @@
     "ANALYSIS_TIMEOUT", "FIXTURE_UNAVAILABLE", "ANALYSIS_FAILED",
     "CASE_PROJECTION_FAILED", "RESPONSE_INVALID", "REPORT_GENERATION_FAILED"
   ]);
+  const LOCAL_ERROR_CODES = new Set([
+    "LOCAL_ONLY", "INVALID_MEDIA_TYPE", "QUERY_NOT_ALLOWED", "MALFORMED_MULTIPART",
+    "MISSING_FIELD", "REPEATED_FIELD", "UNKNOWN_FIELD", "FILE_COUNT_EXCEEDED",
+    "FILE_TOO_LARGE", "TOTAL_TOO_LARGE", "ENVELOPE_TOO_LARGE", "ARCHIVE_UNSUPPORTED",
+    "BINARY_INPUT", "INVALID_UTF8", "EMPTY_INPUT", "LINE_TOO_LONG",
+    "LINE_COUNT_EXCEEDED", "PARSER_INCOMPATIBLE", "UPLOAD_TIMEOUT", "ANALYSIS_TIMEOUT",
+    "CONCURRENCY_LIMIT", "RATE_LIMITED", "ANALYSIS_FAILED", "CASE_PROJECTION_FAILED",
+    "REPORT_GENERATION_FAILED", "RESPONSE_INVALID"
+  ]);
+  const LOCAL_ERROR_MESSAGES = new Set([
+    "이 기능은 로컬 서버에서만 사용할 수 있습니다.", "세 로그의 multipart 요청이 필요합니다.",
+    "조회 조건을 받을 수 없습니다.", "업로드 형식을 확인할 수 없습니다.",
+    "필수 로그가 누락되었습니다.", "같은 로그 입력이 여러 번 전송되었습니다.",
+    "지원하지 않는 업로드 항목이 있습니다.", "업로드 파일 수가 한도를 넘었습니다.",
+    "로그 파일 크기가 한도를 넘었습니다.", "로그 전체 크기가 한도를 넘었습니다.",
+    "요청 크기가 한도를 넘었습니다.", "압축·보관 파일은 지원하지 않습니다.",
+    "텍스트 로그 형식을 확인할 수 없습니다.", "UTF-8 로그로 읽을 수 없습니다.",
+    "로그가 비었거나 공백만 있습니다.", "로그 한 줄이 길이 한도를 넘었습니다.",
+    "로그 줄 수가 한도를 넘었습니다.", "지원하는 로그 형식이 아닙니다.",
+    "업로드 처리 시간이 초과되었습니다.", "분석 시간이 초과되었습니다.",
+    "다른 로컬 분석이 진행 중입니다.", "로컬 분석 요청 횟수 한도에 도달했습니다.",
+    "로그 분석을 완료하지 못했습니다.", "조사 사례를 구성하지 못했습니다.",
+    "HTML 보고서를 준비하지 못했습니다.", "결과를 준비하지 못했습니다."
+  ]);
+  const LOCAL_ERROR_ACTIONS = new Set([
+    "127.0.0.1에 직접 연결하십시오.", "세 파일을 다시 선택하십시오.",
+    "조회 조건 없이 다시 시도하십시오.", "표시된 로그 파일을 선택하십시오.",
+    "각 로그를 한 번씩 선택하십시오.", "세 로그 파일만 선택하십시오.",
+    "더 작은 파일을 선택하십시오.", "압축을 풀고 텍스트 로그를 선택하십시오.",
+    "UTF-8 텍스트 로그를 선택하십시오.", "UTF-8 텍스트 파일을 선택하십시오.",
+    "내용이 있는 로그를 선택하십시오.",
+    "입력 형식을 확인하십시오.", "표시된 형식의 로그를 선택하십시오.",
+    "잠시 후 다시 시도하십시오.", "더 작은 로그로 다시 시도하십시오.",
+    "완료 후 다시 시도하십시오.",
+    "입력 형식을 확인하고 다시 시도하십시오."
+  ]);
   const TOP_LEVEL = [
     "schema_version", "sample_context", "analysis_summary", "case_summary", "cases",
     "independent_observations", "interpretation_notices", "capabilities",
     "bounded_warnings", "report_export"
   ];
+  const LOCAL_TOP_LEVEL = TOP_LEVEL.map((field) => field === "sample_context" ? "local_context" : field);
+  const FILE_FIELDS = Object.freeze([
+    ["application_file", "application-file", "application-error"],
+    ["ssh_file", "ssh-file", "ssh-error"],
+    ["access_file", "access-file", "access-error"]
+  ]);
   const ACCOUNT_MESSAGE = "계정 별칭을 표시할 수 없음. 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다.";
   const GROUPING_EXPLANATIONS = new Set([
     "Brute Force 탐지 관찰과 이후 동일 계정의 로그인 성공 관계가 기존 상관분석에서 확인되어 함께 검토합니다.",
@@ -91,8 +134,17 @@
   const capabilityMessage = document.getElementById("capability-message");
   const reportDownload = document.getElementById("report-download");
   const reportButton = document.getElementById("report-button");
+  const localForm = document.getElementById("local-form");
+  const localSection = document.getElementById("local-upload");
+  const localButton = document.getElementById("local-button");
+  const localStatus = document.getElementById("local-status");
+  const resultsHeading = document.getElementById("results-heading");
+  const resultContext = document.getElementById("result-context");
   let pending = false;
   let currentReport = null;
+  let currentReportMode = null;
+  const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
+  localSection.hidden = !loopbackPage;
 
   class PublicFailure extends Error {
     constructor(message, recovery) {
@@ -280,7 +332,7 @@
     account(item);
   }
 
-  function validateReportExport(value) {
+  function validateReportExport(value, mode = "sample") {
     closedRecord(value, [
       "available", "format", "filename", "media_type", "html", "byte_count",
       "format_notice", "handling_warning"
@@ -298,7 +350,9 @@
         !value.html.startsWith("<!doctype html>\n<html lang=\"ko\">") ||
         !value.html.endsWith("</html>\n") ||
         !value.html.includes('http-equiv="Content-Security-Policy"') ||
-        !value.html.includes("교육용 합성 샘플 결과입니다.") ||
+        !value.html.includes(mode === "sample" ? "교육용 합성 샘플 결과입니다." :
+          "사용자가 제공한 로그를 로컬에서 분석한 결과입니다.") ||
+        (mode === "local" && value.html.includes("교육용 합성 샘플 결과입니다.")) ||
         !value.html.includes("script-src 'none'") ||
         !value.html.includes("connect-src 'none'") ||
         !value.html.includes("style-src 'sha256-") ||
@@ -306,13 +360,20 @@
     return value;
   }
 
-  function validateInvestigationResponse(value) {
-    closedRecord(value, TOP_LEVEL);
+  function validateInvestigationResponse(value, mode = "sample") {
+    closedRecord(value, mode === "sample" ? TOP_LEVEL : LOCAL_TOP_LEVEL);
     if (value.schema_version !== "1") failContract();
-    closedRecord(value.sample_context, ["label", "environment_notice", "certificate_notice"]);
-    if (value.sample_context.label !== "합성 샘플 결과" ||
-        value.sample_context.environment_notice !== "실제 조직 환경의 보안 상태가 아닙니다." ||
-        value.sample_context.certificate_notice !== "보안 점검 인증서가 아닙니다.") failContract();
+    if (mode === "sample") {
+      closedRecord(value.sample_context, ["label", "environment_notice", "certificate_notice"]);
+      if (value.sample_context.label !== "합성 샘플 결과" ||
+          value.sample_context.environment_notice !== "실제 조직 환경의 보안 상태가 아닙니다." ||
+          value.sample_context.certificate_notice !== "보안 점검 인증서가 아닙니다.") failContract();
+    } else {
+      closedRecord(value.local_context, ["label", "environment_notice", "interpretation_notice"]);
+      if (value.local_context.label !== "로컬 실제 로그 분석 결과" ||
+          value.local_context.environment_notice !== "사용자가 제공한 로그를 이 로컬 서버에서 분석한 결과입니다." ||
+          value.local_context.interpretation_notice !== "탐지와 관계는 침해 확정이 아닙니다.") failContract();
+    }
     closedRecord(value.analysis_summary, ["analyzed_subject_count", "supported_detection_count", "supported_relation_count"]);
     Object.values(value.analysis_summary).forEach(count);
     closedRecord(value.case_summary, [
@@ -340,8 +401,8 @@
     if (value.capabilities.html_report_available !== true ||
         value.capabilities.llm_summary_available !== false ||
         value.capabilities.linux_audit_aggregate_available !== false ||
-        value.capabilities.actual_log_upload_available !== false) failContract();
-    validateReportExport(value.report_export);
+        value.capabilities.actual_log_upload_available !== (mode === "local")) failContract();
+    validateReportExport(value.report_export, mode);
     return value;
   }
 
@@ -378,11 +439,18 @@
     }
   }
 
-  function validateApiError(value) {
-    closedRecord(value, ["error_code", "user_message", "recovery_action", "retryable"]);
-    if (!ERROR_CODES.has(value.error_code) || typeof value.retryable !== "boolean") failContract();
+  function validateApiError(value, mode = "sample") {
+    closedRecord(value, mode === "sample" ?
+      ["error_code", "user_message", "recovery_action", "retryable"] :
+      ["error_code", "user_message", "recovery_action", "retryable", "field"]);
+    if (!(mode === "sample" ? ERROR_CODES : LOCAL_ERROR_CODES).has(value.error_code) ||
+        typeof value.retryable !== "boolean") failContract();
+    if (mode === "local" && value.field !== null &&
+        !FILE_FIELDS.some(([field]) => field === value.field)) failContract();
     boundedText(value.user_message);
     boundedText(value.recovery_action);
+    if (mode === "local" && (!LOCAL_ERROR_MESSAGES.has(value.user_message) ||
+        !LOCAL_ERROR_ACTIONS.has(value.recovery_action))) failContract();
     return value;
   }
 
@@ -635,6 +703,7 @@
 
   function clearPreviousResult() {
     currentReport = null;
+    currentReportMode = null;
     reportDownload.hidden = true;
     results.hidden = true;
     resultJump.hidden = true;
@@ -647,8 +716,9 @@
 
   function renderError(failure) {
     const publicFailure = failure instanceof PublicFailure ? failure :
-      new PublicFailure("샘플 분석 결과를 가져오지 못했습니다.", "연결 상태를 확인한 뒤 다시 시도하십시오.");
-    status.textContent = "샘플 분석에 실패했습니다.";
+      new PublicFailure("분석 결과를 가져오지 못했습니다.", "연결 상태를 확인한 뒤 다시 시도하십시오.");
+    status.textContent = "분석을 완료하지 못했습니다.";
+    localStatus.textContent = "분석을 완료하지 못했습니다.";
     errorMessage.textContent = publicFailure.publicMessage;
     errorRecovery.textContent = publicFailure.recovery;
     errorSummary.hidden = false;
@@ -658,7 +728,7 @@
   function downloadReport() {
     if (pending || currentReport === null) return;
     try {
-      const report = validateReportExport(currentReport);
+      const report = validateReportExport(currentReport, currentReportMode);
       const bytes = new TextEncoder().encode(report.html);
       const file = new Blob([bytes], {type: "text/html;charset=utf-8"});
       const objectUrl = URL.createObjectURL(file);
@@ -682,6 +752,7 @@
     if (pending) return;
     pending = true;
     button.disabled = true;
+    localButton.disabled = true;
     button.textContent = "분석 요청 중";
     clearPreviousResult();
     status.textContent = "합성 샘플 분석을 요청하고 있습니다. 조사 결과를 준비하고 있습니다.";
@@ -695,14 +766,7 @@
         throw new PublicFailure(error.user_message, error.recovery_action);
       }
       const data = validateInvestigationResponse(payload);
-      renderSummary(data);
-      renderCaseOverview(data.cases);
-      renderIndependentObservations(data.independent_observations);
-      capabilityMessage.textContent = "실제 로그 웹 업로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다.";
-      currentReport = data.report_export;
-      reportDownload.hidden = false;
-      results.hidden = false;
-      resultJump.hidden = false;
+      renderResult(data, "sample");
       status.textContent = "합성 샘플 분석이 완료되었습니다.";
     } catch (failure) {
       clearPreviousResult();
@@ -710,10 +774,94 @@
     } finally {
       pending = false;
       button.disabled = false;
+      localButton.disabled = false;
       button.textContent = "샘플로 체험하기";
     }
   }
 
+  function renderResult(data, mode) {
+    resultsHeading.textContent = mode === "sample" ? "합성 샘플 결과" : "로컬 실제 로그 분석 결과";
+    resultContext.textContent = mode === "sample" ?
+      "합성 샘플을 사용합니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
+      "사용자가 제공한 로그를 로컬에서 분석했습니다. 탐지와 관계는 침해 확정이 아닙니다.";
+    renderSummary(data);
+    renderCaseOverview(data.cases);
+    renderIndependentObservations(data.independent_observations);
+    capabilityMessage.textContent = mode === "sample" ?
+      "실제 로그 웹 업로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다." :
+      "실제 로그는 이 로컬 요청에서만 분석합니다. LLM 설명과 Linux Audit 집계는 제공되지 않습니다.";
+    currentReport = data.report_export;
+    currentReportMode = mode;
+    reportDownload.hidden = false;
+    results.hidden = false;
+    resultJump.hidden = false;
+  }
+
+  function clearFieldErrors() {
+    FILE_FIELDS.forEach(([, inputId, errorId]) => {
+      const input = document.getElementById(inputId);
+      const error = document.getElementById(errorId);
+      input.removeAttribute("aria-invalid");
+      error.textContent = "";
+      error.hidden = true;
+    });
+  }
+
+  function fieldError(field, message) {
+    const entry = FILE_FIELDS.find(([name]) => name === field);
+    if (!entry) return;
+    const input = document.getElementById(entry[1]);
+    const error = document.getElementById(entry[2]);
+    input.setAttribute("aria-invalid", "true");
+    error.textContent = message;
+    error.hidden = false;
+  }
+
+  async function requestLocalInvestigation(event) {
+    event.preventDefault();
+    if (pending || !loopbackPage) return;
+    clearFieldErrors();
+    clearPreviousResult();
+    const files = FILE_FIELDS.map(([field, inputId]) => [field, document.getElementById(inputId).files]);
+    const missing = files.find(([, selected]) => selected.length !== 1);
+    if (missing) {
+      const failure = new PublicFailure("필수 로그가 누락되었습니다.", "표시된 세 로그 파일을 각각 선택하십시오.");
+      fieldError(missing[0], failure.publicMessage);
+      renderError(failure);
+      return;
+    }
+    pending = true;
+    button.disabled = true;
+    localButton.disabled = true;
+    localButton.textContent = "로컬 로그 분석 중";
+    localStatus.textContent = "로그를 전송하고 조사 결과를 준비하고 있습니다.";
+    const form = new FormData();
+    files.forEach(([field, selected]) => form.append(field, selected[0]));
+    try {
+      const response = await fetch(LOCAL_ENDPOINT, {
+        method: "POST", headers: {Accept: "application/json"}, body: form, credentials: "omit"
+      });
+      const payload = await boundedJson(response);
+      if (!response.ok) {
+        const error = validateApiError(payload, "local");
+        if (error.field) fieldError(error.field, error.user_message);
+        throw new PublicFailure(error.user_message, error.recovery_action);
+      }
+      const data = validateInvestigationResponse(payload, "local");
+      renderResult(data, "local");
+      localStatus.textContent = "로컬 실제 로그 분석이 완료되었습니다.";
+    } catch (failure) {
+      clearPreviousResult();
+      renderError(failure);
+    } finally {
+      pending = false;
+      button.disabled = false;
+      localButton.disabled = false;
+      localButton.textContent = "실제 로그 분석하기";
+    }
+  }
+
   button.addEventListener("click", requestSampleInvestigation);
+  localForm.addEventListener("submit", requestLocalInvestigation);
   reportButton.addEventListener("click", downloadReport);
 })();

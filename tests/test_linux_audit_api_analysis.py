@@ -590,7 +590,7 @@ def test_failed_orchestration_still_cleans_staging_directory():
 
 def test_existing_api_routes_openapi_and_new_helper_isolation():
     assert set(app.openapi()["paths"]) == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
     }
     assert "/api/analyze-linux-audit" not in app.openapi()["paths"]
 

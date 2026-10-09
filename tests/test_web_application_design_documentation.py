@@ -43,7 +43,7 @@ def test_general_web_local_cli_and_three_modes_are_explicit():
         assert gate in text
 
 
-def test_current_api_and_sample_frontend_are_recorded_without_claiming_upload():
+def test_current_api_and_sample_frontend_are_recorded_with_local_only_upload():
     text = _normalized()
 
     for route in ("GET /api/health", "POST /api/analyze"):
@@ -55,7 +55,8 @@ def test_current_api_and_sample_frontend_are_recorded_without_claiming_upload():
     assert "GET /assets/style.css" in text
     assert "GET /assets/app.js" in text
     assert "합성 샘플 Landing/결과 개요" in text
-    assert "실제 로그 웹 업로드" in text
+    assert "loopback-only `POST /api/v1/investigations`" in text
+    assert "Hosted upload" in text and "no-go" in text
     assert "기존 `/api/analyze`는 그대로 둔다" in text
 
 
@@ -211,7 +212,26 @@ def test_implemented_phase_four_report_contract_is_stateless_and_bounded():
         "Blob/object URL",
         "조사 사례의 typed Timeline은 포함하지",
         "서버 측 결과/HTML 영구 저장은 없다",
-        "실제 로그 업로드·hosted deployment·LLM 설명은 여전히 범위 밖",
+        "Phase 5가 아래에서 local-only upload를 추가한다",
+        "Hosted deployment·LLM 설명은 여전히 범위 밖",
+    ):
+        assert contract in text
+
+
+def test_phase_five_local_upload_limits_and_hosted_no_go_are_documented():
+    text = _text()
+    for contract in (
+        "구현된 Phase 5 loopback/local-only 세 로그 업로드",
+        "POST /api/v1/investigations",
+        "LocalInvestigationResponse",
+        "application_file", "ssh_file", "access_file",
+        "32 KiB", "80 KiB", "96 KiB", "2048바이트", "512줄",
+        "0700", "0600", "O_NOFOLLOW", "UTF-8 incremental decoder",
+        "Starlette 1.6.0", "python-multipart 0.0.32",
+        "max_part_size", "ASGI/proxy 단일 청크",
+        "crash orphan cleanup", "Hosted actual-log upload는 no-go",
+        "--no-access-log --no-proxy-headers",
+        "field-linked 오류", "Safari 시각·키보드",
     ):
         assert contract in text
 

@@ -41,7 +41,7 @@ def test_readme_has_verified_cli_and_development_api_commands():
     assert "uv run python -m app.main --help" in text
     assert "uv run python -m app.main --html-report investigation.html" in text
     assert "--linux-audit" in text
-    assert "uv run uvicorn app.api:app --reload" in text
+    assert "uv run uvicorn app.api:app --host 127.0.0.1 --port 8000" in text
     assert "curl --fail --silent http://127.0.0.1:8000/api/health" in text
     assert "uvicorn app.deployment.asgi:create_linux_audit_api_app --factory" in text
 

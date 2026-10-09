@@ -467,6 +467,7 @@ def test_explicit_path_ignores_environment_and_integration_stays_disabled(
         "/api/health",
         "/api/analyze",
         "/api/v1/investigations/sample",
+        "/api/v1/investigations",
     }
     assert "securitySchemes" not in api_module.app.openapi().get(
         "components", {}

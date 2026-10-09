@@ -62,7 +62,7 @@ CLI가 브라우저를 자동으로 열지는 않습니다. 같은 대상에 다
 첫 번째 터미널:
 
 ```bash
-uv run uvicorn app.api:app --reload
+uv run uvicorn app.api:app --host 127.0.0.1 --port 8000 --no-access-log --no-proxy-headers
 ```
 
 두 번째 터미널:
@@ -79,11 +79,17 @@ curl --fail --silent http://127.0.0.1:8000/api/health
 curl -X POST http://127.0.0.1:8000/api/v1/investigations/sample
 ```
 
-응답은 `합성 샘플 결과`로 표시되는 개인정보 제한 JSON이며 실제 조직의 보안 상태를 뜻하지 않습니다. 같은 분석 결과로 만든 대상별 standalone HTML이 `report_export`에 포함됩니다. 실제 로그 업로드용 V1 API와 LLM 호출은 없습니다. 샘플 요청 제한은 단일 프로세스 범위이므로 공개 배포용 edge 제한을 대신하지 않습니다.
+응답은 `합성 샘플 결과`로 표시되는 개인정보 제한 JSON이며 실제 조직의 보안 상태를 뜻하지 않습니다. 같은 분석 결과로 만든 대상별 standalone HTML이 `report_export`에 포함됩니다. 샘플 요청 제한은 단일 프로세스 범위이므로 공개 배포용 edge 제한을 대신하지 않습니다.
 
-### 로컬 합성 샘플 웹 체험
+### 로컬 웹 체험과 실제 로그 분석
 
-개발 서버를 `127.0.0.1`에서 실행한 뒤 `http://127.0.0.1:8000/`을 브라우저로 열고 **샘플로 체험하기**를 선택하세요. 위의 `uv run uvicorn app.api:app --reload` 명령을 사용할 수 있습니다. 결과에서 조사 사례를 펼쳐 시간순 조사 흐름, 근거, 해석 한계와 다음 조사 단계를 볼 수 있습니다. 분석이 완료되면 **HTML 보고서 다운로드** 버튼으로 기존 대상별 결정적 조사 보고서를 받을 수 있습니다. 이 파일에는 웹의 조사 사례 Timeline이 포함되지 않습니다. 서버는 보고서를 영구 저장하지 않고, 브라우저가 현재 탭 메모리의 HTML로 UTF-8 Blob을 만들어 명시적 클릭에만 내려받습니다. 다운로드 파일은 민감한 조사 자료로 취급하고 조직의 정책에 따라 안전하게 저장·공유·삭제하십시오. 이 화면은 합성 샘플 전용이며 실제 조직의 보안 상태나 점검 인증서가 아닙니다. 실제 로그 웹 업로드나 LLM 호출은 없습니다. 결과는 현재 탭에만 표시되고 새로고침하면 사라집니다. 이 개발 서버는 production deployment가 아닙니다.
+위 명령으로 개발 서버를 `127.0.0.1`에 바인딩한 뒤 `http://127.0.0.1:8000/`을 여세요. **샘플로 체험하기**가 첫 번째 경로입니다. 직접 실행한 로컬 서버에서만 **내 로그 분석하기**의 애플리케이션 인증·SSH 인증·웹 접근 로그를 각각 선택할 수 있습니다. `POST /api/v1/investigations`는 세 multipart field `application_file`, `ssh_file`, `access_file`을 정확히 한 번씩 받고, loopback client와 고정 loopback Host를 확인합니다. 교차 출처 Origin과 forwarding header를 거부합니다. 확장자·MIME·사용자 filename은 신뢰하지 않습니다. Linux Audit, archive와 외부 LLM은 이 경계에서 처리하지 않습니다.
+
+각 파일의 decoded 상한은 32 KiB, 합계는 80 KiB, multipart envelope는 96 KiB, 한 줄은 2048바이트, 파일당 512줄입니다. 업로드 처리와 분석은 각각 10초, 동시 분석은 1개, 요청은 프로세스당 60초에 6회로 제한합니다. 이는 작은 로컬 학습·초기 조사 용도입니다. 기준 측정에서 기존 합성 세 파일은 총 2001바이트·27줄·분석 약 0.05초였고, 20회 반복한 입력은 약 40020바이트·540줄·약 0.22초였습니다. 측정값은 해당 개발 환경의 참고치이지 모든 로그의 처리시간 보장은 아닙니다. 특히 ASGI 서버/프록시가 앱에 넘기기 전 보유한 단일 네트워크 청크에는 앱 제한을 적용할 수 없으므로 공개 업로드 보호로 해석하지 마십시오.
+
+요청별 임시 디렉터리는 `0700`, 고정 내부 파일은 `0600`으로 만들고 정상 응답, 검증·분석·보고서 실패, 취소와 timeout 때 알려진 디렉터리를 정리합니다. timeout의 별도 worker process는 종료하고 정리 후 응답합니다. 프로세스 또는 호스트가 비정상 종료되면 orphan 임시 파일 삭제를 보장하지 않습니다. 로그·분석 결과·보고서는 서버의 영구 저장소에 보관하지 않으며, 결과는 현재 브라우저 탭 메모리에만 둡니다. HTML 다운로드는 사용자 클릭 때 Blob으로 만들고 서버에 재요청하지 않습니다. 현재 형식은 대상별 결정적 조사 보고서이며 사례 Timeline 전체는 포함하지 않습니다. 로컬 로그 보고서에서는 HTTP 요청 경로 값을 표시하지 않지만 Path Traversal 일치 패턴과 승인된 상태 근거는 유지합니다. 다운로드 파일은 민감한 조사 자료로 안전하게 저장·공유·삭제하십시오.
+
+이 local endpoint의 loopback 확인은 인증이나 방화벽을 대신하지 않습니다. 위 실행 명령은 Uvicorn의 URL query가 포함될 수 있는 access log와 proxy-header 신뢰를 끕니다. 다른 실행·프록시 구성을 쓸 경우 동일한 로그 비노출과 client 주소 검증을 다시 입증해야 합니다. 기존 `/api/analyze`는 호환성을 위해 남아 있으며 whole-file read, filename suffix, 인증·rate 제한 부재 등 기존 한계가 있으므로 공개용으로 사용하지 마십시오. `0.0.0.0` 바인딩, 포트 포워딩과 무인증 hosted upload는 금지입니다. 실제 Safari·키보드·확대·WCAG 검증은 별도로 수행해야 합니다. 분석 결과는 침해 확정이 아닙니다.
 
 ## 입력 개요
 
@@ -109,7 +115,7 @@ uv run python -m app.main \
 - **CLI 텍스트**: IP별 탐지, 위험도, 평가 근거와 상관관계를 출력합니다. Linux Audit 프로세스 관련 출력은 승인된 집계 위주이지만, 일반 인증 상관관계에는 계정 등 조사 필드가 나타날 수 있으므로 CLI도 민감하게 취급하십시오.
 - **HTML 조사 보고서**: 한국어 UI, 결정적인 검토 순서, 타입이 지정된 증거, 보고서 로컬 `Account N` 별칭, 해석 한계와 고정 조사 단계를 포함하는 독립형 파일입니다. 원본 로그와 전체 HTTP query는 projection에 포함하지 않습니다.
 - **Linux Audit 집계**: 별도 입력이 있을 때 프로세스 관찰, shared-memory 검토 관찰, session/process 동시 관찰 등의 count-only 요약을 제공합니다. 상세 argv·PATH record·command line·`PROCTITLE`·raw record·세션 컨텍스트는 HTML과 공용 API 경계에 내보내지 않습니다.
-- **기본 API 응답**: `/api/analyze`는 기존 per-IP 결과, global correlation과 `ai_summary: null`을 반환합니다. 별도 보고서 route는 없으며 합성 샘플 API의 같은 응답에만 bounded `report_export`가 포함됩니다.
+- **기본 API 응답**: `/api/analyze`는 기존 per-IP 결과, global correlation과 `ai_summary: null`을 반환합니다. 별도 보고서 route는 없으며 sample 및 loopback-only 조사 API의 같은 응답에 bounded `report_export`가 포함됩니다.
 - **선택적 LLM 설명**: 개발자가 명시적으로 직접 호출할 때만 결정적 분석 결과를 설명합니다. 탐지·상관관계·위험도를 만들거나 변경하는 분석 권한은 없습니다.
 
 ## HTML 보고서 보안
@@ -166,7 +172,7 @@ tests/                              단위·경계·통합·수용 테스트
 docs/                               설계, 배포 경계와 시연 문서
 ```
 
-`frontend/`는 합성 샘플 Landing, 결과 개요와 사례·Timeline 상세를 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 실시간·streaming 수집, 실제 로그 웹 업로드, HTML 보고서 웹 다운로드, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
+`frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드를 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 실시간·streaming 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
 ## 안전한 정리
 

@@ -12,7 +12,7 @@ _FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 _MAX_ASSET_BYTES = 128 * 1024
 _HEADERS = {
     "Content-Security-Policy": (
-        "default-src 'none'; base-uri 'none'; form-action 'none'; "
+        "default-src 'none'; base-uri 'none'; form-action 'self'; "
         "frame-ancestors 'none'; object-src 'none'; script-src 'self'; "
         "script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; "
         "connect-src 'self'; img-src 'none'; font-src 'none'; "

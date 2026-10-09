@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>합성 샘플 조사 | AI Security Log Analyzer</title>
+  <title>보안 로그 조사 | AI Security Log Analyzer</title>
   <link rel="stylesheet" href="/assets/style.css">
   <script src="/assets/app.js" defer></script>
 </head>
@@ -28,10 +28,43 @@
       </div>
       <p id="sample-status" class="status" aria-live="polite">샘플 분석을 시작할 수 있습니다.</p>
       <div id="error-summary" class="error-summary" tabindex="-1" hidden>
-        <h2>샘플 분석을 완료하지 못했습니다</h2>
+        <h2>분석을 완료하지 못했습니다</h2>
         <p id="error-message"></p>
         <p id="error-recovery"></p>
       </div>
+    </section>
+
+    <section id="local-upload" class="local-upload" aria-labelledby="local-heading" hidden>
+      <h2 id="local-heading">내 로그 분석하기</h2>
+      <p>이 기능은 사용자가 직접 실행한 로컬 서버에서만 사용할 수 있습니다. 민감한 로그를 공개 서버에 업로드하지 마세요.</p>
+      <p>이 요청은 외부 LLM을 호출하지 않습니다. 로그, 분석 결과와 보고서를 서버에 영구 저장하지 않습니다. 다만 서버 프로세스가 비정상 종료되면 임시 파일의 자동 삭제를 보장할 수 없습니다.</p>
+      <p>애플리케이션 인증 로그, SSH 인증 로그, 웹 접근 로그 세 종류가 모두 필요합니다. 압축 파일은 지원하지 않습니다.</p>
+      <p>각 파일은 최대 32 KiB, 세 파일 합계는 80 KiB입니다. 요청 전체는 최대 96 KiB입니다. 한 줄은 최대 2048바이트, 파일당 최대 512줄입니다.</p>
+      <form id="local-form" novalidate>
+        <fieldset>
+          <legend>분석할 로그 선택 — 세 파일 모두 필수</legend>
+          <div class="file-field">
+            <label for="application-file">애플리케이션 인증 로그 (필수)</label>
+            <p id="application-help">시간, 인증 결과, 계정과 출발지 정보가 있는 UTF-8 텍스트 로그를 선택하세요.</p>
+            <input id="application-file" name="application_file" type="file" required aria-describedby="application-help application-error">
+            <p id="application-error" class="field-error" hidden></p>
+          </div>
+          <div class="file-field">
+            <label for="ssh-file">SSH 인증 로그 (필수)</label>
+            <p id="ssh-help">시간과 SSH 인증 성공·실패가 기록된 UTF-8 텍스트 로그를 선택하세요.</p>
+            <input id="ssh-file" name="ssh_file" type="file" required aria-describedby="ssh-help ssh-error">
+            <p id="ssh-error" class="field-error" hidden></p>
+          </div>
+          <div class="file-field">
+            <label for="access-file">웹 접근 로그 (필수)</label>
+            <p id="access-help">시간, 요청, 응답 상태가 있는 UTF-8 웹 접근 로그를 선택하세요.</p>
+            <input id="access-file" name="access_file" type="file" required aria-describedby="access-help access-error">
+            <p id="access-error" class="field-error" hidden></p>
+          </div>
+        </fieldset>
+        <button id="local-button" type="submit">실제 로그 분석하기</button>
+      </form>
+      <p id="local-status" class="status" aria-live="polite">로컬 서버에서 파일을 선택해 분석할 수 있습니다.</p>
     </section>
 
     <section class="info-grid" aria-label="체험 안내">
@@ -49,7 +82,7 @@
 
     <section id="results" class="results" aria-labelledby="results-heading" hidden>
       <h2 id="results-heading">합성 샘플 결과</h2>
-      <p class="result-notice"><strong>합성 샘플을 사용합니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
+      <p id="result-context" class="result-notice"><strong>합성 샘플을 사용합니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
       <p>탐지는 침해 확인이 아니며, 상관관계는 인과관계가 아닙니다. 로그인 성공도 공격 성공을 입증하지 않습니다. 조사 사례는 확정된 사고가 아닙니다.</p>
       <section aria-labelledby="summary-heading">
         <h3 id="summary-heading">결과 요약</h3>
@@ -76,16 +109,14 @@
         <p class="report-warning">다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오.</p>
         <button id="report-button" type="button">HTML 보고서 다운로드</button>
       </section>
-      <p class="result-action"><a href="#sample-button">다시 분석하기</a> — 같은 합성 샘플을 다시 실행합니다.</p>
+      <p class="result-action">새 분석을 시작하려면 위의 샘플 버튼 또는 로컬 로그 입력을 사용하세요. 이전 결과는 현재 탭에서 교체됩니다.</p>
     </section>
 
     <section class="boundaries" aria-labelledby="boundary-heading">
       <h2 id="boundary-heading">해석과 개인정보 경계</h2>
       <p>탐지는 침해 확정이 아닙니다. 상관관계는 인과관계가 아닙니다. 같은 IP가 같은 사람이나 공격자임을 뜻하지 않으며 NAT, 프록시, 공유 시스템일 수 있습니다.</p>
-      <p id="privacy">샘플 체험에는 실제 사용자 로그를 업로드하지 않습니다. 응답은 현재 탭의 화면에만 표시하며 새로고침하면 사라집니다. 원래 계정명, 원시 로그와 전체 쿼리는 화면에 표시하지 않습니다.</p>
-      <h3>실제 로그 분석</h3>
-      <p>실제 로그 분석은 현재 로컬 환경의 CLI와 개발 API에서만 지원됩니다. 인증 없는 공개 웹 업로드는 제공하지 않습니다.</p>
-      <p>로컬 분석이 필요한 경우 <a href="/docs">개발 API 문서</a> 또는 프로젝트 README의 CLI 사용법을 확인하세요. 개발 API는 인증 없는 공개 서비스로 배포하지 마세요.</p>
+      <p id="privacy">샘플 체험에는 사용자 로그를 업로드하지 않습니다. 실제 로그 입력은 loopback 연결에서만 처리합니다. 결과는 현재 탭 메모리에만 있고 새로고침하면 사라집니다. 원래 계정명, 원시 로그와 전체 쿼리는 화면에 표시하지 않습니다.</p>
+      <p>로컬 업로드는 인증·방화벽·호스팅 보안의 대체 수단이 아닙니다. 인증 없는 공개 웹 업로드는 제공하지 않습니다. <a href="/docs">개발 API 문서</a>와 프로젝트 README에서 사용 범위를 확인하세요.</p>
     </section>
   </main>
   <footer class="site-footer"><div class="shell"><p>결정적 관찰을 설명하는 학습·초기 조사 도구입니다. 확정 사고 판정이나 보안 인증이 아닙니다.</p></div></footer>

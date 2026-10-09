@@ -215,7 +215,7 @@ def _dimension_lines(title, dimension):
     return level, lines
 
 
-def _evidence_lines(evidence):
+def _evidence_lines(evidence, *, local_upload=False):
     if type(evidence) is BruteForceEvidenceProjection:
         return (
             ("실패 횟수", _non_negative_int(evidence.failed_attempt_count)),
@@ -235,8 +235,13 @@ def _evidence_lines(evidence):
             ),
         )
     if type(evidence) is PathTraversalEvidenceProjection:
+        approved_path = _text(evidence.request_path)
         lines = [
-            ("요청 경로", f"<code>{_text(evidence.request_path)}</code>"),
+            (
+                "요청 경로",
+                "개인정보 보호를 위해 표시하지 않습니다."
+                if local_upload else f"<code>{approved_path}</code>",
+            ),
             ("일치 패턴", f"<code>{_text(evidence.matched_pattern)}</code>"),
         ]
         if evidence.http_method is not None:
@@ -255,7 +260,7 @@ def _evidence_lines(evidence):
     _fail()
 
 
-def _detection_lines(detections, unsupported):
+def _detection_lines(detections, unsupported, *, local_upload=False):
     if type(detections) is not tuple or type(unsupported) is not bool:
         _fail()
     lines = ["<section>", "<h4>탐지 근거</h4>"]
@@ -269,7 +274,7 @@ def _detection_lines(detections, unsupported):
             f"<h5>{_text(detection.display_name)}</h5>",
             '<dl class="evidence-list">',
         ])
-        for label, value in _evidence_lines(detection.evidence):
+        for label, value in _evidence_lines(detection.evidence, local_upload=local_upload):
             lines.extend([
                 "<div>",
                 f"<dt>{label}</dt>",
@@ -418,7 +423,7 @@ def _assessment_lines(assessment):
     return lines
 
 
-def _subject_lines(subject):
+def _subject_lines(subject, *, local_upload=False):
     if type(subject) is not InvestigationSubjectRow:
         _fail()
     review_order = _positive_int(subject.review_order)
@@ -442,6 +447,7 @@ def _subject_lines(subject):
     lines.extend(_detection_lines(
         subject.detections,
         subject.unsupported_detection_observed,
+        local_upload=local_upload,
     ))
     lines.extend(_correlation_lines(
         subject.correlations,
@@ -658,10 +664,14 @@ def _linux_audit_lines(linux_audit):
     return lines
 
 
-def render_investigation_report_html(projection, *, synthetic_sample=False):
+def render_investigation_report_html(
+    projection, *, synthetic_sample=False, local_upload=False,
+):
     if type(projection) is not InvestigationReportProjection:
         _fail()
-    if type(synthetic_sample) is not bool:
+    if type(synthetic_sample) is not bool or type(local_upload) is not bool:
+        _fail()
+    if synthetic_sample and local_upload:
         _fail()
     if type(projection.schema_version) is not str:
         _fail()
@@ -702,6 +712,11 @@ def render_investigation_report_html(projection, *, synthetic_sample=False):
             '<p class="notice">교육용 합성 샘플 결과입니다. 실제 조직 환경의 '
             '보안 상태나 보안 점검 인증서를 나타내지 않습니다.</p>',
         ])
+    if local_upload:
+        lines.extend([
+            '<p class="notice">사용자가 제공한 로그를 로컬에서 분석한 결과입니다. '
+            '탐지와 관계는 침해 확정이 아닙니다.</p>',
+        ])
     lines.extend(_coverage_lines(summary, linux_audit))
     lines.extend(_summary_lines(summary))
     lines.extend(_review_table_lines(subjects))
@@ -709,7 +724,7 @@ def render_investigation_report_html(projection, *, synthetic_sample=False):
     if not subjects:
         lines.append("<p>세부 검토 대상으로 투영된 분석 대상이 없습니다.</p>")
     for subject in subjects:
-        lines.extend(_subject_lines(subject))
+        lines.extend(_subject_lines(subject, local_upload=local_upload))
     lines.append("</section>")
     if linux_audit is not None:
         lines.extend(_linux_audit_lines(linux_audit))

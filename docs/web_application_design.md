@@ -1,7 +1,7 @@
 # Web-first Investigation Experience and Secure API Contract
 
-상태: 설계 계약 및 합성 샘플 Phase 1–4 구현 사실<br>
-기준일: 2026-10-08<br>
+상태: 설계 계약 및 합성 샘플 Phase 1–4·로컬 업로드 Phase 5 구현 사실<br>
+기준일: 2026-10-09<br>
 범위: 기존 FastAPI 저장소의 웹 UX와 API 경계. 아래의 현재 구현 사실과 아직 승인만 된 후속 설계를 구분한다.
 
 ## 1. 목적
@@ -25,7 +25,7 @@ Phase 0의 산출물은 정보 구조, typed JSON 후보, 위협 모델과 relea
 
 ### 확인된 현재 구현
 
-FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app에는 `GET /`, 고정 정적 자산 `GET /assets/style.css`, `GET /assets/app.js`, `GET /api/health`, `POST /api/analyze`, `POST /api/v1/investigations/sample`이 있다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
+FastAPI entry point는 `app/api.py`의 module-level `app = create_app()`이다. 기본 app에는 `GET /`, 고정 정적 자산 `GET /assets/style.css`, `GET /assets/app.js`, `GET /api/health`, `POST /api/analyze`, `POST /api/v1/investigations/sample`, loopback-only `POST /api/v1/investigations`가 있다. 별도 security config와 audit sink로 factory를 호출할 때만 보호된 `POST /api/analyze-linux-audit`가 추가되며, 이는 일반 웹 업로드 계약이 아니다.
 
 `GET /api/health`는 `{"status":"ok"}`만 반환한다. readiness, dependency health 또는 privacy 보장을 뜻하지 않는다.
 
@@ -53,15 +53,15 @@ Phase 1에서 시작한 response는 Section 9–10의 closed field set에 `sampl
 
 Sample endpoint는 app instance마다 고정 전역 process-local 12 requests/60 seconds sliding window와 동시 작업 2개 제한을 가진다. client IP/fingerprint는 보관하지 않는다. 10초 응답 deadline이 지나면 bounded 503을 반환하지만 Python worker thread를 종료하지 않는다. 작업이 실제로 끝날 때까지 concurrency slot을 유지하고 완료 시 callback이 예외를 소비하고 slot을 해제한다. 따라서 이 deadline은 hard CPU stop이 아니며 여러 worker/process에 걸친 production rate limit도 아니다. ASGI server/proxy가 이미 받아 메모리에 만든 단일 chunk 크기는 이 handler가 제어하지 못한다. 공개 배포에는 별도 edge body/rate/timeout 통제가 필요하다.
 
-오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, report generation, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. 실제 로그 `/api/v1/investigations`는 아직 구현되지 않았고 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
+Sample 오류 모델은 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`만 노출한다. body/query 거부, rate/concurrency, timeout, fixture, analysis, case projection, report generation, response invariant 실패를 각각 bounded code로 구분한다. 내부 exception, path, filename, 원래 계정이나 원시 근거를 반환하지 않는다. 실패는 0건 결과로 바꾸지 않는다. 기존 `/api/analyze`와 보호된 Linux Audit route는 변경하지 않는다. Phase 5 local-only upload는 아래 별도 계약이며 hosted actual-log upload는 Section 21의 gate 전까지 no-go다.
 
 ### 구현된 Phase 2 합성 샘플 웹 화면
 
 기본 app의 `GET /`는 module-relative regular `frontend/index.html`을, `/assets/style.css`와 `/assets/app.js`는 두 고정 파일만 제공한다. 보호된 Linux Audit app factory에는 이 세 정적 route를 등록하지 않는다. 정적 파일은 symlink와 비정규 파일, 빈 파일, 128 KiB 초과 파일을 거부하며 cwd 또는 request path를 사용하지 않는다. 세 route는 OpenAPI에서 제외되어 기존 API schema를 유지한다. 인덱스와 비해시 자산은 `Cache-Control: no-store`이며 `nosniff`, `no-referrer`, 불필요한 브라우저 권한을 비활성화한 `Permissions-Policy`, `frame-ancestors 'none'`을 포함한 HTTP CSP를 사용한다. CSP는 self의 JS/CSS/API만 허용하고 inline/eval/remote source를 허용하지 않는다.
 
-화면은 same-origin static vanilla HTML/CSS/JavaScript만 사용한다. `lang="ko"`, skip link, native button, visible focus, 고정 polite status, 오류 요약 focus, risk text+색상, 의미 순서와 DOM 순서 일치, mobile reflow와 reduced-motion 규칙을 포함한다. 실제 로그 입력 form은 없다. 명시적 클릭에서만 빈 body로 `POST /api/v1/investigations/sample`을 한 번 호출한다. 브라우저는 response byte·문자열·배열 상한과 exact top-level field, schema version, approved risk/category, 사례 수 partition을 검증하고 malformed 응답은 전체 실패로 표시한다. 렌더링은 `createElement`/`textContent`와 고정 class만 사용하고 원래 계정·근거·query·raw log를 화면에 넣지 않는다. 결과는 현재 탭의 DOM/메모리에만 남으며 refresh 시 사라진다. 성공 시 focus를 강제로 옮기지 않고 선택 가능한 결과 이동 링크를 보이며, 실패 시 고정 오류 요약으로 focus를 옮긴다.
+화면은 same-origin static vanilla HTML/CSS/JavaScript만 사용한다. `lang="ko"`, skip link, native button, visible focus, 고정 polite status, 오류 요약 focus, risk text+색상, 의미 순서와 DOM 순서 일치, mobile reflow와 reduced-motion 규칙을 포함한다. Phase 2 시점에는 실제 로그 입력 form이 없었다. 명시적 클릭에서만 빈 body로 `POST /api/v1/investigations/sample`을 한 번 호출한다. 브라우저는 response byte·문자열·배열 상한과 exact top-level field, schema version, approved risk/category, 사례 수 partition을 검증하고 malformed 응답은 전체 실패로 표시한다. 렌더링은 `createElement`/`textContent`와 고정 class만 사용하고 원래 계정·근거·query·raw log를 화면에 넣지 않는다. 결과는 현재 탭의 DOM/메모리에만 남으며 refresh 시 사라진다. 성공 시 focus를 강제로 옮기지 않고 선택 가능한 결과 이동 링크를 보이며, 실패 시 고정 오류 요약으로 focus를 옮긴다.
 
-Phase 2 완료 시 화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약과 제한된 개요를 표시했다. 아래 Phase 3가 사례 상세와 Timeline을, Phase 4가 대상별 HTML 보고서 다운로드를 추가했다. 실제 로그 웹 업로드, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. hosted actual-log upload는 여전히 no-go다.
+Phase 2 완료 시 화면은 합성 샘플 결과, 분석·사례·독립 관찰 요약과 제한된 개요를 표시했다. 아래 Phase 3가 사례 상세와 Timeline을, Phase 4가 대상별 HTML 보고서 다운로드를, Phase 5가 로컬 전용 세 로그 입력을 추가했다. Hosted upload, LLM, Linux Audit와 실시간 기능은 제공하지 않는다. `계정 별칭을 표시할 수 없음`은 분석 실패가 아닌 개인정보 경계로 표시한다. hosted actual-log upload는 여전히 no-go다.
 
 ### 구현된 Phase 3 사례 상세와 시간순 조사 흐름
 
@@ -81,7 +81,19 @@ Public Evidence wire field는 내부 type ID가 아닌 `label/value/unit`이므�
 
 `report_export`는 closed Pydantic object로 `available=true`, `format=standalone_html`, `filename=investigation-report.html`, `media_type=text/html;charset=utf-8`, UTF-8 `html`, 실제 인코딩 길이인 `byte_count`, 고정 `format_notice`, 고정 `handling_warning`을 포함한다. Browser는 전체 응답과 export를 검증한 후에만 native `HTML 보고서 다운로드` 버튼을 표시하고, 클릭할 때 export를 재검증해 탭 메모리의 UTF-8 Blob/object URL로 다운로드한다. 생성한 URL과 임시 anchor는 즉시 제거한다. 자동 다운로드, 추가 fetch, DOM HTML 삽입과 browser storage는 없다. 현재 형식은 `대상별 결정적 조사 보고서`이며 조사 사례의 typed Timeline은 포함하지 않는다는 안내와 민감한 파일의 저장·공유·삭제 경고를 버튼 앞에 표시한다. 이 report는 합성 샘플 결과이지 실제 조직의 보안 상태나 인증서가 아니다.
 
-Node 최소 DOM stub은 클릭 전 다운로드 없음, Blob type·크기·고정 파일명, 추가 fetch 없음, URL revoke, malformed export 전체 실패를 검사한다. 이는 실제 browser layout·keyboard·screen reader 검수나 WCAG 합격을 뜻하지 않는다. 실제 로그 업로드·hosted deployment·LLM 설명은 여전히 범위 밖이다.
+Node 최소 DOM stub은 클릭 전 다운로드 없음, Blob type·크기·고정 파일명, 추가 fetch 없음, URL revoke, malformed export 전체 실패를 검사한다. 이는 실제 browser layout·keyboard·screen reader 검수나 WCAG 합격을 뜻하지 않는다. 이 문단은 Phase 4 완료 시점의 기록이며 Phase 5가 아래에서 local-only upload를 추가한다. Hosted deployment·LLM 설명은 여전히 범위 밖이다.
+
+### 구현된 Phase 5 loopback/local-only 세 로그 업로드
+
+`app/local_investigation_api.py`의 `POST /api/v1/investigations`는 `multipart/form-data`로 `application_file`, `ssh_file`, `access_file` 각 파일을 정확히 하나씩 받는다. 응답은 closed `LocalInvestigationResponse`다. `schema_version`, `local_context`, `analysis_summary`, `case_summary`, `cases`, `independent_observations`, `interpretation_notices`, `capabilities`, `bounded_warnings`, `report_export`가 top-level 전부다. `local_context`는 합성 샘플이 아닌 사용자 제공 로그의 로컬 분석임을 명시한다. 고정 파일명 HTML export는 동일 analysis에서 만들며 sample 안내를 포함하지 않는다. 로컬 HTML에서는 HTTP 요청 경로 값을 개인정보 보호 안내로 대체하고 Path Traversal의 일치 패턴·승인 상태 근거는 유지한다. 기존 sample/CLI renderer 출력은 바꾸지 않는다. 실패는 `error_code`, 고정 한국어 `user_message`, `recovery_action`, `retryable`, 세 필드 중 하나 또는 null인 `field`만 반환한다. Partial success 또는 0건 위장은 없다.
+
+ASGI `request.client.host`를 표준 IP 판정으로 확인하고 IPv4 `127.0.0.1`과 IPv6 `::1`만 허용한다. IPv4-mapped IPv6, 누락·파싱 불가 주소는 거부한다. Host도 literal loopback이어야 한다. `X-Forwarded-*`, `Forwarded`, `X-Real-IP`, `Via`, 교차 출처 Origin과 cross-site Fetch Metadata를 거부하지만 이 검사는 인증·방화벽·proxy 설정의 대체물이 아니다. 문서화한 로컬 Uvicorn 명령은 `--no-access-log --no-proxy-headers`를 사용해 URL query access log와 proxy-header 신뢰를 끈다. 다른 서버 설정은 이 경계를 다시 검증해야 한다. 기존 `/api/analyze`는 호환성 때문에 남아 있으며 인증 없이 whole-file read를 수행하므로 공개 노출하면 안 된다. Hosted actual-log upload는 no-go다.
+
+설치된 Starlette 1.6.0 / python-multipart 0.0.32의 `max_files`와 `max_fields`는 parser 단계에서 동작하지만 `max_part_size`는 파일 part 크기를 제한하지 않는다. 따라서 FastAPI의 자동 `File(...)` 파싱을 쓰지 않고 `Request.stream()`의 누적 multipart envelope를 96 KiB에서 끊은 뒤 `MultiPartParser(max_files=3, max_fields=0)`로 구조를 확인한다. 파일은 4096바이트 단위로 읽어 각 32 KiB, 합계 80 KiB, 한 줄 2048바이트, 파일당 512줄을 검사한다. Archive signature, control/NUL, invalid UTF-8, whitespace-only와 source별 최소 parser shape를 거부한다. UTF-8 incremental decoder를 사용한다. Extension, part MIME과 filename은 신뢰하지 않는다. 앱 이전의 ASGI/proxy 단일 청크 할당은 통제할 수 없으므로 edge 수준 제한이 없는 공개 배포는 승인되지 않는다.
+
+상한의 작은 로컬 학습 목적 근거: 기존 synthetic 세 로그 2001바이트·27줄, 약 0.048초 분석, tracemalloc peak 약 193 KiB; 이를 20회 반복한 합성 입력 40020바이트·540줄, 약 0.221초 분석, peak 약 388 KiB였다. 이는 단일 개발 환경의 관찰이고 p95 또는 모든 입력의 CPU/메모리 보증이 아니다. 요청별 10초 업로드 deadline과 10초 별도 분석 worker-process deadline, 프로세스별 동시 분석 1개, 60초당 6회 rate를 둔다. Timeout·취소 시 worker를 종료하고 그 뒤 요청별 디렉터리를 정리한다. 여러 worker/process 전체 제한, upstream request body 제한, crash orphan cleanup은 보장하지 않는다.
+
+`TemporaryDirectory`는 요청별 `0700`, `O_EXCL|O_NOFOLLOW`와 고정 내부 이름으로 만든 파일은 `0600`이다. 성공·검증 실패·분석/사례/보고서 실패·timeout·cancellation 뒤 알려진 staging 디렉터리를 정리한다. 비정상 process/host crash의 잔존 파일은 자동 정리한다고 주장하지 않는다. DB, 지속 결과 저장, 서버 보고서 파일, LLM과 Linux Audit 호출은 없다. Browser는 loopback 주소에서만 local upload 영역을 표시하되 서버가 독립적으로 다시 검증한다. Native labelled file input 세 개와 fieldset/legend, required text, field-linked 오류, focus되는 오류 요약을 사용하고 `FormData` 세 part만 전송한다. Sample을 먼저 보이고 로컬 결과에는 합성 label을 사용하지 않는다. 동일 사례·Timeline 렌더러와 Blob 다운로드를 재사용한다. 결과는 tab memory뿐이며 새 요청 또는 실패에서 이전 export를 폐기한다. Node DOM stub은 field 구성·단일 fetch·context 분리·다운로드 재업로드 부재를 검사하지만 Safari 시각·키보드·200% 확대·WCAG 검수는 별도다.
 
 ## 4. 사용자 유형
 
@@ -221,7 +233,7 @@ V1은 server-side persistent result, result GET endpoint와 raw log 재업로드
 - `POST /api/v1/investigations`: `multipart/form-data`, exact field `application_file`, `ssh_file`, `access_file`, 모두 하나씩 필수. 최대 file count는 3이며 unknown/repeated field는 reject한다. local/private-only로 시작한다.
 - Linux Audit는 이 계약에 포함하지 않는다. 별도 secured boundary를 “optional file”로 위장하지 않는다.
 
-현재 legacy 값은 per-file 10 MiB지만 whole-file memory read 후 검사하므로 새 endpoint의 안전 근거가 아니다. 새 V1의 per-file size, total decoded size, multipart envelope size, line length, field count, processing timeout과 concurrency는 `TO_BE_BENCHMARKED` configuration requirement다. 대표 small/large/malformed fixtures로 peak memory, CPU와 p95 latency를 측정하고 edge와 app limit을 함께 고정하기 전 hosted upload는 no-go다.
+현재 legacy 값은 per-file 10 MiB지만 whole-file memory read 후 검사하므로 새 endpoint의 안전 근거가 아니다. Phase 5 local-only endpoint의 작은 고정 상한과 단일 환경 측정은 위에 기록했다. Hosted upload의 edge/app 제한과 실제 처리량·p95는 여전히 `TO_BE_BENCHMARKED` 배포 요구사항이다. 대표 small/large/malformed fixtures로 peak memory, CPU와 p95 latency를 다시 측정하고 edge와 app limit을 함께 고정하기 전 hosted upload는 no-go다.
 
 request media type은 exact `multipart/form-data` boundary를 요구한다. 개별 part MIME은 client 주장으로 간주하여 allowlist prefilter만 하고 신뢰하지 않는다. extension도 보조 signal이다. chunked byte count, archive signature 거부, NUL/binary rejection, strict UTF-8, non-whitespace, maximum line length와 실제 parser compatibility를 server에서 검증한다. archive는 V1에서 지원하지 않는다. filename은 비신뢰 input이며 path, temp name, response, error, log 또는 report에 쓰지 않는다.
 

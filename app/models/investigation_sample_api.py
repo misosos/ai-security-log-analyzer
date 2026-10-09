@@ -13,6 +13,12 @@ class SampleContext(_ClosedModel):
     certificate_notice: Literal["보안 점검 인증서가 아닙니다."]
 
 
+class LocalContext(_ClosedModel):
+    label: Literal["로컬 실제 로그 분석 결과"]
+    environment_notice: Literal["사용자가 제공한 로그를 이 로컬 서버에서 분석한 결과입니다."]
+    interpretation_notice: Literal["탐지와 관계는 침해 확정이 아닙니다."]
+
+
 class AnalysisSummary(_ClosedModel):
     analyzed_subject_count: int
     supported_detection_count: int
@@ -109,6 +115,13 @@ class Capabilities(_ClosedModel):
     actual_log_upload_available: Literal[False]
 
 
+class LocalCapabilities(_ClosedModel):
+    html_report_available: Literal[True]
+    llm_summary_available: Literal[False]
+    linux_audit_aggregate_available: Literal[False]
+    actual_log_upload_available: Literal[True]
+
+
 class ReportExport(_ClosedModel):
     available: Literal[True]
     format: Literal["standalone_html"]
@@ -137,6 +150,36 @@ class InvestigationResponse(_ClosedModel):
     capabilities: Capabilities
     bounded_warnings: tuple[str, ...]
     report_export: ReportExport
+
+
+class LocalInvestigationResponse(_ClosedModel):
+    schema_version: Literal["1"]
+    local_context: LocalContext
+    analysis_summary: AnalysisSummary
+    case_summary: CaseSummary
+    cases: tuple[InvestigationCase, ...]
+    independent_observations: tuple[IndependentObservation, ...]
+    interpretation_notices: tuple[str, ...]
+    capabilities: LocalCapabilities
+    bounded_warnings: tuple[str, ...]
+    report_export: ReportExport
+
+
+class LocalInvestigationErrorResponse(_ClosedModel):
+    error_code: Literal[
+        "LOCAL_ONLY", "INVALID_MEDIA_TYPE", "QUERY_NOT_ALLOWED", "MALFORMED_MULTIPART",
+        "MISSING_FIELD", "REPEATED_FIELD", "UNKNOWN_FIELD", "FILE_COUNT_EXCEEDED",
+        "FILE_TOO_LARGE", "TOTAL_TOO_LARGE", "ENVELOPE_TOO_LARGE",
+        "ARCHIVE_UNSUPPORTED", "BINARY_INPUT", "INVALID_UTF8", "EMPTY_INPUT",
+        "LINE_TOO_LONG", "LINE_COUNT_EXCEEDED", "PARSER_INCOMPATIBLE",
+        "ANALYSIS_TIMEOUT", "UPLOAD_TIMEOUT", "CONCURRENCY_LIMIT", "RATE_LIMITED",
+        "ANALYSIS_FAILED", "CASE_PROJECTION_FAILED", "REPORT_GENERATION_FAILED",
+        "RESPONSE_INVALID",
+    ]
+    user_message: str
+    recovery_action: str
+    retryable: bool
+    field: Literal["application_file", "ssh_file", "access_file"] | None
 
 
 class InvestigationErrorResponse(_ClosedModel):

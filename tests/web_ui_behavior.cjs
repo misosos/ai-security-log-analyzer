@@ -6,7 +6,8 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const script = fs.readFileSync("frontend/app.js", "utf8");
-const input = JSON.parse(fs.readFileSync(0, "utf8"));
+const supplied = JSON.parse(fs.readFileSync(0, "utf8"));
+const input = supplied.sample || supplied;
 
 class Node {
   constructor(tagName) {
@@ -18,12 +19,14 @@ class Node {
     this.open = false;
     this.disabled = false;
     this.focused = false;
+    this.files = [];
   }
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((child) => child.textContent).join(""); }
   append(...children) { children.forEach((child) => { child.parent = this; }); this.children.push(...children); }
   replaceChildren(...children) { this.children = children; this._text = ""; }
   setAttribute(name, value) { this.attributes[name] = value; }
+  removeAttribute(name) { delete this.attributes[name]; }
   focus() { this.focused = true; }
   addEventListener(name, listener) { this.listener = listener; }
   remove() {
@@ -34,7 +37,10 @@ class Node {
 const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
   "error-recovery", "results", "result-jump", "summary-cards",
-  "case-list", "independent-list", "capability-message", "report-download", "report-button"
+  "case-list", "independent-list", "capability-message", "report-download", "report-button",
+  "local-form", "local-upload", "local-button", "local-status", "results-heading", "result-context",
+  "application-file", "ssh-file", "access-file",
+  "application-error", "ssh-error", "access-error"
 ];
 
 function nodesOf(root, tag) {
@@ -49,10 +55,12 @@ function sectionNamed(root, name) {
   );
 }
 
-function makeApp(initial) {
+function makeApp(initial, hostname = "127.0.0.1") {
   const nodes = Object.fromEntries(ids.map((id) => [id, new Node("div")]));
   let response = initial;
+  let httpStatus = 200;
   let fetchCount = 0;
+  const fetchCalls = [];
   const downloads = [];
   const revoked = [];
   const body = new Node("body");
@@ -75,12 +83,17 @@ function makeApp(initial) {
       return node;
     }
   };
-  const fetch = async () => {
+  class FormDataStub {
+    constructor() { this.entries = []; }
+    append(field, file) { this.entries.push([field, file]); }
+  }
+  const fetch = async (url, options) => {
     fetchCount += 1;
+    fetchCalls.push({url, options});
     const bytes = new TextEncoder().encode(JSON.stringify(response));
     let used = false;
     return {
-      ok: true,
+      ok: httpStatus < 400,
       headers: {get: (name) => name === "content-type" ? "application/json" : String(bytes.length)},
       body: {getReader: () => ({
         read: async () => {
@@ -93,12 +106,17 @@ function makeApp(initial) {
       })}
     };
   };
-  vm.runInNewContext(script, {document, fetch, TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
+  vm.runInNewContext(script, {document, fetch, FormData: FormDataStub,
+    window: {location: {hostname}},
+    TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
   return {
     nodes, downloads, revoked, body,
     click: () => nodes["sample-button"].listener(),
+    submit: () => nodes["local-form"].listener({preventDefault: () => {}}),
     download: () => nodes["report-button"].listener(),
     fetchCount: () => fetchCount,
+    fetchCalls,
+    setHttpStatus: (value) => { httpStatus = value; },
     setResponse: (value) => { response = value; }
   };
 }
@@ -106,6 +124,10 @@ function makeApp(initial) {
 function copy() { return JSON.parse(JSON.stringify(input)); }
 
 async function main() {
+  const remote = makeApp(copy(), "public.example");
+  assert.equal(remote.nodes["local-upload"].hidden, true);
+  await remote.submit();
+  assert.equal(remote.fetchCount(), 0, "remote landing cannot submit local files");
   const app = makeApp(copy());
   await app.click();
   const nodes = app.nodes;
@@ -243,6 +265,52 @@ async function main() {
   assert.equal(nodes.results.hidden, false);
   assert.equal(nodes["case-list"].textContent.includes("보안 문제가 없다는 의미가 아닙니다"), true);
   assert.equal(nodes["independent-list"].textContent, "별도로 표시할 독립 관찰이 없습니다.");
+  if (supplied.local) {
+    const local = makeApp(supplied.local);
+    const selected = {name: "browser-only-name.log"};
+    ["application-file", "ssh-file", "access-file"].forEach((id) => {
+      local.nodes[id].files = [selected];
+    });
+    await local.submit();
+    assert.equal(local.nodes.results.hidden, false);
+    assert.equal(local.nodes["results-heading"].textContent, "로컬 실제 로그 분석 결과");
+    assert.equal(local.nodes["result-context"].textContent.includes("합성 샘플"), false);
+    assert.equal(local.nodes["case-list"].children.length, 2);
+    assert.equal(local.nodes["independent-list"].children.length, 3);
+    assert.equal(local.fetchCalls.length, 1);
+    assert.equal(local.fetchCalls[0].url, "/api/v1/investigations");
+    assert.equal(local.fetchCalls[0].options.method, "POST");
+    assert.equal(local.fetchCalls[0].options.headers["Content-Type"], undefined);
+    assert.deepEqual(local.fetchCalls[0].options.body.entries.map(([field]) => field),
+      ["application_file", "ssh_file", "access_file"]);
+    assert.equal(local.nodes["case-list"].textContent.includes(selected.name), false);
+    const before = local.fetchCount();
+    local.download();
+    assert.equal(local.fetchCount(), before);
+    assert.equal(local.downloads.at(-1).filename, "investigation-report.html");
+    assert.equal(local.revoked.at(-1), "test-object-url");
+    local.setResponse({
+      error_code: "INVALID_UTF8", user_message: "UTF-8 로그로 읽을 수 없습니다.",
+      recovery_action: "UTF-8 텍스트 파일을 선택하십시오.", retryable: false,
+      field: "ssh_file"
+    });
+    local.setHttpStatus(400);
+    await local.submit();
+    assert.equal(local.nodes.results.hidden, true, "failure discards prior local result");
+    assert.equal(local.nodes["report-download"].hidden, true);
+    assert.equal(local.nodes["error-summary"].focused, true);
+    assert.equal(local.nodes["ssh-error"].hidden, false);
+    assert.equal(local.nodes["ssh-file"].attributes["aria-invalid"], "true");
+    assert.equal(local.nodes["error-message"].textContent, "UTF-8 로그로 읽을 수 없습니다.");
+    assert.equal(local.nodes["local-button"].disabled, false);
+    local.setResponse({
+      error_code: "INVALID_UTF8", user_message: "raw-private-canary",
+      recovery_action: "UTF-8 텍스트 파일을 선택하십시오.", retryable: false,
+      field: "ssh_file"
+    });
+    await local.submit();
+    assert.equal(local.nodes["error-message"].textContent.includes("raw-private-canary"), false);
+  }
   process.stdout.write("renderer logic verified\n");
 }
 

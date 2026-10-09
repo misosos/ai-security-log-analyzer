@@ -73,7 +73,15 @@ def test_landing_has_semantic_static_accessible_contract():
         "서버에 영구 저장되지 않으며", "Timeline이 포함되지 않습니다",
     ):
         assert phrase in text
-    assert not any(tag in {"form", "input", "iframe", "object", "embed", "video", "audio"} for tag, _ in nodes)
+    assert not any(tag in {"iframe", "object", "embed", "video", "audio"} for tag, _ in nodes)
+    assert any(tag == "fieldset" for tag, _ in nodes)
+    assert any(tag == "legend" for tag, _ in nodes)
+    assert any(attrs.get("id") == "local-upload" and "hidden" in attrs for _, attrs in nodes)
+    assert {attrs.get("name") for tag, attrs in nodes if tag == "input"} == {
+        "application_file", "ssh_file", "access_file"
+    }
+    assert all("required" in attrs and attrs.get("type") == "file"
+               for tag, attrs in nodes if tag == "input")
     assert not any(attr.startswith("on") or attr == "style" for _, attrs in nodes for attr in attrs)
     assert not any(attrs.get("src", "").startswith(("http:", "https:", "data:")) for _, attrs in nodes)
     assert "<style" not in source.lower() and "<script>" not in source.lower()
@@ -102,7 +110,7 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
     assert "errorSummary.focus()" in js and "button.disabled = false" in js
     assert "URL.createObjectURL(file)" in js and "URL.revokeObjectURL(objectUrl)" in js
     assert "new Blob([bytes]" in js and "reportButton.addEventListener" in js
-    assert "validateReportExport(value.report_export)" in js
+    assert "validateReportExport(value.report_export, mode)" in js
     assert "prefers-reduced-motion" in css and ":focus-visible" in css
     assert "risk-high" in css and "risk-medium" in css and "risk-low" in css
 
@@ -162,7 +170,7 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
         policy = response.headers["content-security-policy"]
         for directive in (
             "default-src 'none'", "script-src 'self'", "style-src 'self'",
-            "connect-src 'self'", "frame-ancestors 'none'", "form-action 'none'",
+            "connect-src 'self'", "frame-ancestors 'none'", "form-action 'self'",
         ):
             assert directive in policy
         assert "unsafe-" not in policy and "http:" not in policy and "https:" not in policy
@@ -174,7 +182,7 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
     assert client.get("/api/health").json() == {"status": "ok"}
     assert client.get("/docs").status_code == 200
     schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample"}
+    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"}
     assert client.post("/api/analyze").status_code == 422
 
 

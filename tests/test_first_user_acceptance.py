@@ -66,7 +66,7 @@ def test_environment_help_and_documented_paths_match_current_contract():
         "uv run python -m app.main",
         "uv run python -m app.main --html-report investigation.html",
         "open investigation.html",
-        "uv run uvicorn app.api:app --reload",
+        "uv run uvicorn app.api:app --host 127.0.0.1 --port 8000",
         "curl --fail --silent http://127.0.0.1:8000/api/health",
         "uv run pytest",
     ):

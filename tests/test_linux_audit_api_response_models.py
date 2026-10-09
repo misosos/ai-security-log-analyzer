@@ -779,7 +779,7 @@ def test_existing_openapi_health_api_cli_and_llm_boundaries(monkeypatch):
 
     schema = app.openapi()
     assert set(schema["paths"]) == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
     }
     assert "/api/analyze-linux-audit" not in schema["paths"]
     assert not any(

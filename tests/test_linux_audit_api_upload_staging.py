@@ -533,7 +533,7 @@ def test_existing_api_routes_and_openapi_are_not_changed():
     }
 
     assert route_paths == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
     }
     assert openapi_paths == route_paths
     assert callable(api_module.stage_linux_audit_uploads)

@@ -23,7 +23,7 @@ h3 { font-size: 1.16rem; }
 p { max-width: 75ch; }
 .eyebrow { color: #174d86; font-weight: 750; margin: 0; }
 .lead { font-size: 1.12rem; }
-.hero, .info-panel, .results, .boundaries { background: #fff; border: 1px solid #d3dce7; border-radius: .75rem; padding: clamp(1rem, 3vw, 2rem); }
+.hero, .info-panel, .local-upload, .results, .boundaries { background: #fff; border: 1px solid #d3dce7; border-radius: .75rem; padding: clamp(1rem, 3vw, 2rem); }
 .sample-notice, .result-notice { border-left: .3rem solid #225b9b; background: #eef5fc; padding: .8rem 1rem; }
 .sample-notice p { margin: .25rem 0; }
 .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1.3rem; }
@@ -35,7 +35,15 @@ a { color: #064f96; text-underline-offset: .2em; }
 .error-summary { border: 2px solid #a12828; background: #fff5f5; padding: 1rem; margin-top: 1rem; }
 .error-summary h2 { margin-bottom: .4rem; }
 .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
-.results, .boundaries { margin-top: 1.5rem; }
+.local-upload, .results, .boundaries { margin-top: 1.5rem; }
+.local-upload fieldset { border: 1px solid #9badc3; border-radius: .4rem; min-width: 0; margin: 1rem 0; padding: 1rem; }
+.local-upload legend { font-weight: 750; }
+.file-field { padding-block: .6rem; min-width: 0; }
+.file-field + .file-field { border-top: 1px solid #d3dce7; }
+.file-field label { display: block; font-weight: 700; }
+.file-field p { margin: .35rem 0; }
+.file-field input { display: block; width: 100%; max-width: 100%; font: inherit; }
+.field-error { color: #8a1515; font-weight: 650; }
 .results > section { border-top: 1px solid #d3dce7; margin-top: 1.5rem; padding-top: 1.25rem; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; }
 .summary-card, .case-card, .independent-card { border: 1px solid #bccbdb; border-radius: .5rem; background: #fff; padding: 1rem; min-width: 0; }

@@ -24,8 +24,11 @@ from app.analyzer.html_report import render_investigation_report_html
 from app.models.investigation_sample_api import (
     InvestigationErrorResponse,
     InvestigationResponse,
+    LocalInvestigationErrorResponse,
+    LocalInvestigationResponse,
 )
 from app.sample_investigation_api import create_sample_endpoint
+from app.local_investigation_api import create_local_endpoint
 from app.web_ui import serve_demo_index, serve_demo_script, serve_demo_styles
 from app.models.linux_audit_api import (
     LinuxAuditAnalysisResponse,
@@ -482,6 +485,21 @@ def create_app(
             for code in (400, 429, 500, 503)
         },
     )
+    if not enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/api/v1/investigations",
+            create_local_endpoint(
+                analyze,
+                project_investigation_cases_from_analysis,
+                build_investigation_report_projection,
+            ),
+            methods=["POST"],
+            response_model=LocalInvestigationResponse,
+            responses={
+                code: {"model": LocalInvestigationErrorResponse}
+                for code in (400, 403, 413, 415, 422, 429, 500, 503)
+            },
+        )
 
     if enable_linux_audit_api:
         configured_app.add_exception_handler(

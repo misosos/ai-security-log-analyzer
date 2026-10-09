@@ -179,12 +179,19 @@ class _ReportShape(HTMLParser):
         raise _ReportGenerationFailed() from None
 
 
-def _report_export(html: str) -> ReportExport:
+def _report_export(html: str, *, synthetic_sample: bool = True) -> ReportExport:
+    if type(synthetic_sample) is not bool:
+        raise _ReportGenerationFailed() from None
+    required_notice = (
+        "교육용 합성 샘플 결과입니다."
+        if synthetic_sample
+        else "사용자가 제공한 로그를 로컬에서 분석한 결과입니다."
+    )
     if (
         type(html) is not str
         or not html.startswith("<!doctype html>\n")
         or not html.endswith("</html>\n")
-        or "교육용 합성 샘플 결과입니다." not in html
+        or required_notice not in html
     ):
         raise _ReportGenerationFailed() from None
     encoded = html.encode("utf-8")
