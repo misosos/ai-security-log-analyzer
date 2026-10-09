@@ -36,7 +36,7 @@ def test_primary_documents_are_nonempty_utf8_and_link_targets_exist():
 
 def test_readme_has_verified_cli_and_development_api_commands():
     text = _read(README)
-    assert "uv sync --dev" in text
+    assert "uv sync --locked --dev" in text
     assert "uv run pytest" in text
     assert "uv run python -m app.main --help" in text
     assert "uv run python -m app.main --html-report investigation.html" in text

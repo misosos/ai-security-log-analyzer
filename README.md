@@ -17,10 +17,10 @@ AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로
 - Python 3.12 이상(`pyproject.toml`의 `requires-python = ">=3.12"`)
 - [uv](https://docs.astral.sh/uv/)
 
-저장소를 받은 뒤 프로젝트 루트에서 개발 의존성까지 동기화합니다.
+저장소를 받은 뒤 프로젝트 루트에서 검증된 잠금 파일로 개발 의존성까지 동기화합니다. 프로젝트 버전의 단일 출처는 `pyproject.toml`의 `0.1.0`이며 API/평가 schema version과 별개입니다. 이 버전의 공식 설치 방식은 source checkout입니다. 현재 `uv build`는 flat-layout package discovery 오류로 실패하므로 wheel/PyPI 설치를 지원한다고 주장하지 않습니다.
 
 ```bash
-uv sync --dev
+uv sync --locked --dev
 ```
 
 기본 로컬 CLI, HTML 보고서, 개발 API에는 환경 변수가 필요하지 않습니다. 실제 키나 운영 로그를 저장소, `.env`, 명령행 또는 문서에 넣지 마십시오.
@@ -29,12 +29,12 @@ Gemini 설명 기능은 `app/analyzer/llm.py`에 있는 선택적 개발 경계�
 
 ## 빠른 시작
 
-처음 사용하는 경우 웹 UI부터 시작하십시오. macOS·Linux·Windows에서 Python 3.12 이상과 `uv`를 설치한 뒤 터미널에서 다음 명령을 실행합니다.
+처음 사용하는 경우 웹 UI부터 시작하십시오. macOS 또는 Linux에서 Python 3.12와 `uv`를 설치한 뒤 터미널에서 다음 명령을 실행합니다. Windows의 실제 로그 업로드는 지원 완료로 검증되지 않았습니다.
 
 ```bash
 git clone https://github.com/misosos/ai-security-log-analyzer.git
 cd ai-security-log-analyzer
-uv sync --dev
+uv sync --locked --dev
 uv run python -m app.local_web
 ```
 
@@ -46,7 +46,31 @@ uv run python -m app.local_web
 
 입력 한계는 파일당 32 KiB, 합계 80 KiB, multipart 요청 전체 96 KiB, 한 줄 2048바이트, 파일당 512줄입니다. 압축 파일은 지원하지 않습니다. 분석은 외부 LLM을 호출하지 않습니다. 로그·결과·보고서를 서버에 영구 저장하지 않으며 정상·오류·취소·timeout 종료 때 요청별 임시 파일을 정리합니다. 프로세스나 호스트의 비정상 종료 뒤에는 임시 파일 잔존 가능성이 있습니다. 다운로드한 보고서는 민감한 조사 자료이므로 안전하게 저장·공유·삭제하십시오. 이 경로는 공개 인터넷 업로드나 실시간 수집 기능이 아닙니다. 포트 포워딩 및 `0.0.0.0` 바인딩을 하지 마십시오.
 
-첫 실행이 막히면 `uv sync --dev` 완료 여부를 확인하고, 포트 충돌 메시지가 나오면 해당 로컬 서버를 종료하거나 다른 허용 포트를 지정하십시오. 브라우저가 열리지 않으면 출력된 주소를 직접 여십시오. 분석 오류가 나오면 세 입력칸의 파일 종류, UTF-8, 크기·줄 한계를 확인하고 화면의 필드별 오류와 복구 행동을 따르십시오. 결과가 비어 보인다고 안전하다는 뜻은 아닙니다. 실제 Safari·키보드·확대 검증은 사용자 환경에서 별도로 확인해야 합니다.
+첫 실행이 막히면 `uv sync --locked --dev` 완료 여부를 확인하고, 포트 충돌 메시지가 나오면 해당 로컬 서버를 종료하거나 다른 허용 포트를 지정하십시오. 브라우저가 열리지 않으면 출력된 주소를 직접 여십시오. 분석 오류가 나오면 세 입력칸의 파일 종류, UTF-8, 크기·줄 한계를 확인하고 화면의 필드별 오류와 복구 행동을 따르십시오. 결과가 비어 보인다고 안전하다는 뜻은 아닙니다. 실제 Safari·키보드·확대 검증은 사용자 환경에서 별도로 확인해야 합니다.
+
+### 지원 환경과 공개 릴리스 상태
+
+| 환경 | 현재 상태 | 근거·남은 확인 |
+| --- | --- | --- |
+| macOS Apple Silicon | 로컬 자동 검증됨 | Python 3.12 locked 설치, launcher·loopback API·전체 테스트. Safari 수동 키보드/확대/screen-reader 검증은 미완료 |
+| Linux | CI 자동 테스트 범위 | Ubuntu 24.04/Python 3.12 workflow. 실제 호스트·브라우저 수동 검증은 별도 |
+| Windows | 제한적 | `O_NOFOLLOW` 미지원 시 실제 업로드 거부; 전체 업로드 흐름 미검증 |
+| Hosted server | 지원 안 함 | 인증·인가·tenant isolation 없음 |
+| Public internet | 노출 금지 | 실제 로그 업로드 보안 gate 미충족 |
+
+`v0.1.0`은 [변경 이력](CHANGELOG.md), [릴리스 노트 초안](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)로 준비 중이며 아직 tag·GitHub Release가 아니다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). Safari 수동 검증과 원격 CI는 아직 남아 있어 공개 릴리스 승인을 뜻하지 않는다. 실제 운영환경 탐지율·WCAG 2.2 AA·hosted 배포를 주장하지 않는다.
+
+### 업데이트와 삭제
+
+먼저 Ctrl+C로 서버를 종료하고 `git status`로 local change와 미추적 보고서를 확인한다. Clean working tree에서만 다음을 실행한다.
+
+```bash
+git status
+git pull --ff-only
+uv sync --locked --dev
+```
+
+삭제할 때는 사용자가 저장한 HTML 보고서의 위치를 먼저 확인한다. 저장소를 제거해도 브라우저 다운로드 파일은 자동 삭제되지 않는다. 보고서는 민감한 조사 자료이므로 별도로 확인해 안전하게 삭제한다. 저장소 디렉터리 자체의 삭제는 내용을 확인한 사용자가 명시적으로 선택해야 하며, 여기에는 재귀 삭제 명령을 제공하지 않는다.
 
 ### 기존 CLI와 개발 API
 

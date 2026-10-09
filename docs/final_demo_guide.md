@@ -8,7 +8,7 @@
 
 - 저장소 루트에서 실행합니다.
 - Python 3.12 이상과 uv가 설치되어 있어야 합니다.
-- `uv sync --dev`가 성공해야 합니다.
+- `uv sync --locked --dev`가 성공해야 합니다.
 - `investigation.html`이 없어야 합니다. writer는 기존 파일을 덮어쓰지 않습니다.
 - 실제 credential, 사용자 로그, LLM 또는 외부 네트워크는 필요하지 않습니다.
 
@@ -84,7 +84,7 @@ curl --fail --silent http://127.0.0.1:8000/api/health
 
 ## 6. 개인정보 및 해석 경고
 
-HTML에는 원본 로그, 전체 HTTP query, 원래 계정 이름, credential, Linux Audit argv·`PROCTITLE`·raw record·실행 경로·세션 상세가 포함되지 않습니다. `Account N`은 한 보고서 안의 상관 참조일 뿐 실제 사용자 신원이나 보고서 간 안정 ID가 아닙니다.
+HTML에는 원본 로그, 원래 HTTP path와 전체 query, 원래 계정 이름, credential, Linux Audit argv·`PROCTITLE`·raw record·실행 경로·세션 상세가 포함되지 않습니다. `Account N`은 한 보고서 안의 상관 참조일 뿐 실제 사용자 신원이나 보고서 간 안정 ID가 아닙니다.
 
 그래도 IP, 위험도, 관찰 내용과 상관관계는 민감합니다. 보고서를 승인된 위치에 저장·공유하고 조직의 보존·삭제 정책을 따르십시오. 탐지는 침해 확정이 아니고, 상관관계는 인과관계가 아니며, 로그인 성공이나 HTTP 200은 공격 성공을 입증하지 않습니다.
 
@@ -100,7 +100,7 @@ rm -- investigation.html
 
 ## 8. 문제 해결
 
-- `uv`를 찾을 수 없으면 공식 uv 설치 안내에 따라 설치한 뒤 `uv sync --dev`를 다시 실행합니다.
+- `uv`를 찾을 수 없으면 공식 uv 설치 안내에 따라 설치한 뒤 `uv sync --locked --dev`를 다시 실행합니다.
 - HTML 대상이 유효하지 않으면 소문자 `.html` suffix인지, 부모 디렉터리가 이미 존재하는 실제 디렉터리인지, 대상이 아직 존재하지 않는지 확인합니다. 오류 메시지는 경로나 내부 예외를 노출하지 않습니다.
 - Linux Audit 입력이 거부되면 비어 있지 않은 일반 파일인지와 동일 파일을 중복 지정하지 않았는지 확인합니다. CLI 오류는 입력 번호로 식별합니다.
 - API가 응답하지 않으면 로컬 웹 또는 uvicorn 터미널이 실행 중인지와 `http://127.0.0.1:8000/api/health`를 사용했는지 확인합니다. 포트 충돌이면 해당 서버를 종료하거나 `app.local_web --port 8001`처럼 허용 포트를 하나 지정합니다.

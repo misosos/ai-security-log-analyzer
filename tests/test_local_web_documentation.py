@@ -11,7 +11,7 @@ def test_readme_starts_with_working_loopback_web_command():
     quick = text.split("## 빠른 시작", 1)[1].split("### 기존 CLI", 1)[0]
     for command in (
         "git clone https://github.com/misosos/ai-security-log-analyzer.git",
-        "cd ai-security-log-analyzer", "uv sync --dev",
+        "cd ai-security-log-analyzer", "uv sync --locked --dev",
         "uv run python -m app.local_web",
     ):
         assert command in quick

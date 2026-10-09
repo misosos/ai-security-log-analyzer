@@ -61,7 +61,7 @@ def test_environment_help_and_documented_paths_match_current_contract():
     assert project["requires-python"] == ">=3.12"
     assert "Python 3.12 이상" in readme
     for command in (
-        "uv sync --dev",
+        "uv sync --locked --dev",
         "uv run python -m app.main --help",
         "uv run python -m app.main",
         "uv run python -m app.main --html-report investigation.html",
@@ -113,7 +113,7 @@ def test_demo_guide_is_bounded_reproducible_and_has_safe_cleanup():
         "Path Traversal",
         "Account N",
         "원본 로그",
-        "전체 HTTP query",
+        "원래 HTTP path와 전체 query",
         "상관관계는 인과관계가 아니며",
         "HTTP 200은 공격 성공을 입증하지 않습니다",
         "rm -- investigation.html",

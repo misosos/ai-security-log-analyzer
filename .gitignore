@@ -4,6 +4,19 @@
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local generated outputs, never source fixtures
+investigation.html
+investigation-report.html
+investigation-report-*.html
+investigation-local-*/
+investigation-sample-*/
+dist/
+build/
+*.egg-info/
 
 # Environment variables
 .env

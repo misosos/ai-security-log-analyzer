@@ -1,5 +1,7 @@
 # Repository Release Readiness
 
+Historical repository/secured Linux Audit API audit only; its old test counts and frontend inventory are not the current v0.1.0 local-web release status. For the current candidate use [v0.1.0 checklist](release_checklist.md). This historical audit's production-host acceptance does not approve hosted actual-log upload.
+
 ## Decision scope
 
 This audit evaluates the repository at commit `07863a0ce570ad1d6d32a479c8dae954779d9383` before the documentation/entry-point corrections in this release commit. It verifies deterministic repository behavior in the locked development environment. It does not approve any Linux host, certificate, firewall, proxy, service account, journald policy, secret store, or operational process.
