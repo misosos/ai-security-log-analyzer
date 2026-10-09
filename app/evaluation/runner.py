@@ -98,12 +98,15 @@ class ParserSummary:
     ignored: int
     failed: int
     matched_scenarios: int
+    unexpected_parse_count: int
+    unexpected_rejection_count: int
 
 
 @dataclass(frozen=True)
 class LayerSummary:
     matched_scenarios: int
     failed_scenarios: int
+    applicable_scenarios: int
 
 
 @dataclass(frozen=True)
@@ -118,6 +121,9 @@ class EvaluationSummary:
     schema_version: str
     corpus_kind: str
     scenario_count: int
+    ssh_scenario_count: int
+    excluded_ambiguous_scenarios: int
+    excluded_reasons: tuple[str, ...]
     passed_scenarios: int
     failed_scenarios: int
     parser_summary: ParserSummary
@@ -138,6 +144,34 @@ def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
         if type(item) is not EvaluationScenario or type(item.id) is not str or not item.id.isascii() or not item.id.replace("_", "").isalnum() or item.id in ids:
             raise EvaluationError("invalid_label")
         ids.add(item.id)
+        if (
+            type(item.parser) is not ExpectedParser
+            or type(item.detections) is not tuple
+            or type(item.relations) is not tuple
+            or type(item.risks) is not tuple
+            or type(item.cases) is not tuple
+            or any(type(d) is not ExpectedDetection for d in item.detections)
+            or any(type(r) is not ExpectedRelation for r in item.relations)
+            or any(type(r) is not ExpectedRisk for r in item.risks)
+            or any(type(c) is not ExpectedCase for c in item.cases)
+            or any(type(value) is not tuple for value in (
+                item.parser.event_types, item.parser.account_present,
+                item.parser.http_methods, item.parser.http_statuses,
+                item.parser.line_dispositions,
+            ))
+        ):
+            raise EvaluationError("invalid_label")
+        if item.label_scope not in ("labeled", "parser_only", "ambiguous_operational"):
+            raise EvaluationError("invalid_label")
+        if item.label_scope == "ambiguous_operational":
+            if item.exclusion_reason not in ("authorization_context_unavailable",):
+                raise EvaluationError("invalid_label")
+        elif item.exclusion_reason is not None:
+            raise EvaluationError("invalid_label")
+        if item.label_scope == "parser_only" and (
+            item.detections or item.relations or item.risks or item.cases or item.independent_count
+        ):
+            raise EvaluationError("invalid_label")
         if (type(item.fixture) is not str or type(item.source) is not str
                 or item.source not in ("application", "ssh", "access")
                 or Path(item.fixture).name != item.fixture or not item.fixture.endswith(".log")):
@@ -185,19 +219,7 @@ def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
             for c in item.cases
         ):
             raise EvaluationError("invalid_label")
-        if (
-            type(item.parser) is not ExpectedParser
-            or type(item.detections) is not tuple
-            or type(item.relations) is not tuple
-            or type(item.risks) is not tuple
-            or type(item.cases) is not tuple
-            or any(type(d) is not ExpectedDetection for d in item.detections)
-            or any(type(r) is not ExpectedRelation for r in item.relations)
-            or any(type(r) is not ExpectedRisk for r in item.risks)
-            or any(type(c) is not ExpectedCase for c in item.cases)
-        ):
-            raise EvaluationError("invalid_label")
-        timestamps = (item.parser.first_timestamp, item.parser.last_timestamp) + tuple(
+        timestamps = tuple(t for t in (item.parser.first_timestamp, item.parser.last_timestamp) if t is not None) + tuple(
             timestamp for d in item.detections for timestamp in (d.start, d.end) if timestamp is not None
         ) + tuple(
             timestamp for r in item.relations for timestamp in (r.failure_timestamp, r.success_timestamp)
@@ -205,7 +227,8 @@ def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
         if any(type(t) is not datetime or t.tzinfo is not timezone.utc for t in timestamps):
             raise EvaluationError("invalid_label")
         try:
-            subjects = (item.parser.subject,) + tuple(d.subject for d in item.detections) + tuple(
+            parser_subject = () if item.label_scope == "parser_only" or item.parser.subject is None else (item.parser.subject,)
+            subjects = parser_subject + tuple(d.subject for d in item.detections) + tuple(
                 r.subject for r in item.relations
             ) + tuple(r.subject for r in item.risks)
             if any(type(subject) is not str or str(ip_address(subject)) != subject for subject in subjects):
@@ -219,8 +242,17 @@ def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
             or len(item.parser.account_present) != item.parser.parsed
             or len(item.parser.http_methods) != item.parser.parsed
             or len(item.parser.http_statuses) != item.parser.parsed
+            or len(item.parser.line_dispositions) != item.parser.lines
+            or item.parser.line_dispositions.count("parsed") != item.parser.parsed
+            or item.parser.line_dispositions.count("ignored") != item.parser.ignored
+            or item.parser.line_dispositions.count("rejected") != item.parser.failed
+            or any(value not in ("parsed", "ignored", "rejected") for value in item.parser.line_dispositions)
             or any(type(value) is not bool for value in item.parser.account_present)
         ):
+            raise EvaluationError("invalid_label")
+        if item.parser.parsed == 0 and (item.parser.first_timestamp is not None or item.parser.last_timestamp is not None):
+            raise EvaluationError("invalid_label")
+        if item.parser.parsed > 0 and (item.parser.first_timestamp is None or item.parser.last_timestamp is None):
             raise EvaluationError("invalid_label")
 
 
@@ -234,10 +266,11 @@ def _fixture(item: EvaluationScenario) -> Path:
     return path
 
 
-def _parser_matches(item: EvaluationScenario, path: Path) -> tuple[bool, tuple[int, int, int, int]]:
+def _parser_matches(item: EvaluationScenario, path: Path) -> tuple[bool, tuple[int, int, int, int], int, int]:
     parser = get_parser(item.source)
     zone = get_timezone(item.source)
     parsed = []
+    dispositions = []
     ignored = failed = lines = 0
     try:
         with path.open("r", encoding="utf-8") as stream:
@@ -249,23 +282,36 @@ def _parser_matches(item: EvaluationScenario, path: Path) -> tuple[bool, tuple[i
                         event.timestamp = normalize_to_utc(event.timestamp)
                 except (ValueError, IndexError, TypeError):
                     failed += 1
+                    dispositions.append("rejected")
                     continue
                 if event is None:
                     ignored += 1
+                    dispositions.append("ignored")
                 else:
                     parsed.append(event)
+                    dispositions.append("parsed")
     except (OSError, UnicodeError):
         raise EvaluationError("fixture_unavailable") from None
     observed = (lines, len(parsed), ignored, failed)
     expected = item.parser
     match = observed == (expected.lines, expected.parsed, expected.ignored, expected.failed)
+    match &= tuple(dispositions) == expected.line_dispositions
     match &= tuple(event.event_type for event in parsed) == expected.event_types
-    match &= bool(parsed) and all(event.src_ip == expected.subject for event in parsed)
-    match &= parsed[0].timestamp == expected.first_timestamp and parsed[-1].timestamp == expected.last_timestamp
+    match &= all(event.src_ip == expected.subject for event in parsed)
+    if parsed:
+        match &= parsed[0].timestamp == expected.first_timestamp and parsed[-1].timestamp == expected.last_timestamp
     match &= tuple(bool(event.user) for event in parsed) == expected.account_present
     match &= tuple(event.http.method if event.http is not None else None for event in parsed) == expected.http_methods
     match &= tuple(event.http.status_code if event.http is not None else None for event in parsed) == expected.http_statuses
-    return match, observed
+    unexpected_parse = sum(
+        actual == "parsed" and labeled != "parsed"
+        for actual, labeled in zip(dispositions, expected.line_dispositions)
+    )
+    unexpected_rejection = sum(
+        actual != "parsed" and labeled == "parsed"
+        for actual, labeled in zip(dispositions, expected.line_dispositions)
+    )
+    return match, observed, unexpected_parse, unexpected_rejection
 
 
 def _detection_match(item: EvaluationScenario, results: dict) -> tuple[bool, dict[str, bool]]:
@@ -370,13 +416,22 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
     _validated_corpus(scenarios)
     parser_totals = [0, 0, 0, 0]
     parser_passes = risk_passes = case_passes = 0
+    risk_applicable = case_applicable = 0
+    unexpected_parse_total = unexpected_rejection_total = 0
     detection_counts = {kind: Confusion() for kind in DETECTION_TYPES}
     relation_counts = {kind: Confusion() for kind in RELATION_TYPES}
     outcomes = []
     for item in scenarios:
         path = _fixture(item)
-        parser_ok, observed = _parser_matches(item, path)
+        parser_ok, observed, unexpected_parse, unexpected_rejection = _parser_matches(item, path)
         parser_totals = [old + new for old, new in zip(parser_totals, observed)]
+        unexpected_parse_total += unexpected_parse
+        unexpected_rejection_total += unexpected_rejection
+        if item.label_scope == "parser_only":
+            parser_passes += int(parser_ok)
+            failed = () if parser_ok else ("parser",)
+            outcomes.append(ScenarioResult(item.id, parser_ok, failed))
+            continue
         try:
             analysis = analyze([{"source": item.source, "path": str(path)}])
             projection = project_investigation_cases_from_analysis(analysis)
@@ -390,15 +445,18 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
             case_ok = _case_matches(item, projection)
         except (KeyError, IndexError, TypeError, AttributeError):
             raise EvaluationError("analysis_failed") from None
-        for kind in DETECTION_TYPES:
-            detection_counts[kind] = detection_counts[kind].add(
-                any(d.detection_type == kind for d in item.detections), detections[kind]
-            )
-        for kind in RELATION_TYPES:
-            relation_counts[kind] = relation_counts[kind].add(
-                any(r.relation_type == kind for r in item.relations), relations[kind]
-            )
+        if item.label_scope == "labeled":
+            for kind in DETECTION_TYPES:
+                detection_counts[kind] = detection_counts[kind].add(
+                    any(d.detection_type == kind for d in item.detections), detections[kind]
+                )
+            for kind in RELATION_TYPES:
+                relation_counts[kind] = relation_counts[kind].add(
+                    any(r.relation_type == kind for r in item.relations), relations[kind]
+                )
         parser_passes += int(parser_ok)
+        risk_applicable += 1
+        case_applicable += 1
         risk_passes += int(risk_ok)
         case_passes += int(case_ok)
         failed = tuple(name for name, ok in (
@@ -413,10 +471,18 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
         for kind, count in relation_counts.items()
     )
     failures = tuple(f"{outcome.scenario_id}:{layer}" for outcome in outcomes for layer in outcome.failed_layers)
+    exclusions = tuple(
+        f"{item.id}:{item.exclusion_reason}" for item in scenarios
+        if item.label_scope == "ambiguous_operational"
+    )
     return EvaluationSummary(
-        "1", "synthetic_boundary_corpus", len(scenarios), sum(o.passed for o in outcomes),
-        sum(not o.passed for o in outcomes), ParserSummary(*parser_totals, parser_passes),
+        "1", "synthetic_boundary_corpus", len(scenarios),
+        sum(item.source == "ssh" for item in scenarios), len(exclusions), exclusions,
+        sum(o.passed for o in outcomes),
+        sum(not o.passed for o in outcomes),
+        ParserSummary(*parser_totals, parser_passes, unexpected_parse_total, unexpected_rejection_total),
         tuple(_metric(kind, count) for kind, count in detection_counts.items()), relation_metrics,
-        LayerSummary(risk_passes, len(scenarios) - risk_passes),
-        LayerSummary(case_passes, len(scenarios) - case_passes), failures, tuple(outcomes), NOTICES,
+        LayerSummary(risk_passes, risk_applicable - risk_passes, risk_applicable),
+        LayerSummary(case_passes, case_applicable - case_passes, case_applicable),
+        failures, tuple(outcomes), NOTICES,
     )

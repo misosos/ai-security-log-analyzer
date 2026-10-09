@@ -444,7 +444,7 @@ Adapter boundary 오류는 고정 code/message의 `IncidentCaseAdapterError`로 
 - 현재 HTML projection은 correlation timestamp를 보존하지 않고 `password_spray_to_successful_login`을 지원하지 않는다. Case projection은 기존 report projection을 parsing하거나 필드를 추측할 수 없다.
 - `NormalizedEvent`는 original timezone 표기를 보존하지 않으므로 KST와 canonical UTC만 표시 가능하다.
 - NAT, proxy, shared account, automation, scanner와 정상 재시도는 같은 패턴을 만들 수 있다.
-- Current correlation은 한 관계의 closest endpoint를 반환하므로 다른 관련 event가 case 밖 독립 관찰로 남을 수 있다.
+- Current correlation은 유효한 같은 subject·account의 선행 실패→후속 성공 쌍에서 최소 양의 delta endpoint 하나를 입력 순서와 무관하게 반환한다. 최소 delta에 distinct event 쌍이 동률이면 관계를 만들지 않는다. 따라서 다른 관련 event가 case 밖 독립 관찰로 남을 수 있다.
 - V1은 global/cross-IP relation, Linux Audit 상세와 post-authentication file access를 case로 만들지 않아 false split을 의도적으로 선택한다.
 - Risk 최고값은 낮은 위험 관찰의 차이를 압축한다. 원래 subject assessment를 함께 보여야 한다.
 - 이 설계는 구현, browser validation, assistive technology test 또는 실제 usability test 완료를 뜻하지 않는다.

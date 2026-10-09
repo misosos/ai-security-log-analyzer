@@ -37,20 +37,33 @@ def test_hand_calculated_confusion_and_ratios():
 def test_fixed_corpus_baseline_and_layers():
     result = evaluate()
     assert result.corpus_kind == "synthetic_boundary_corpus"
-    assert (result.scenario_count, result.passed_scenarios, result.failed_scenarios) == (21, 21, 0)
-    assert (result.parser_summary.input_lines, result.parser_summary.parsed) == (75, 75)
+    assert (result.scenario_count, result.passed_scenarios, result.failed_scenarios) == (43, 43, 0)
+    assert (result.parser_summary.input_lines, result.parser_summary.parsed) == (134, 129)
+    assert (result.parser_summary.ignored, result.parser_summary.failed) == (2, 3)
+    assert (result.parser_summary.unexpected_parse_count, result.parser_summary.unexpected_rejection_count) == (0, 0)
+    assert (result.ssh_scenario_count, result.excluded_ambiguous_scenarios) == (13, 1)
+    assert result.excluded_reasons == ("automation_ambiguous:authorization_context_unavailable",)
     assert [(m.detection_type, m.tp, m.fp, m.fn, m.tn, m.support) for m in result.detection_metrics] == [
-        ("brute_force", 6, 0, 0, 15, 6),
-        ("password_spraying_like", 2, 0, 0, 19, 2),
-        ("path_traversal", 2, 0, 0, 19, 2),
+        ("brute_force", 11, 0, 0, 22, 11),
+        ("password_spraying_like", 2, 0, 0, 31, 2),
+        ("path_traversal", 2, 0, 0, 31, 2),
     ]
     assert [(m.relation_type, m.tp, m.fp, m.fn) for m in result.correlation_metrics] == [
-        ("failed_to_successful_login", 3, 0, 0),
-        ("brute_force_to_successful_login", 1, 0, 0),
+        ("failed_to_successful_login", 6, 0, 0),
+        ("brute_force_to_successful_login", 3, 0, 0),
         ("password_spray_to_successful_login", 1, 0, 0),
     ]
-    assert result.risk_summary.matched_scenarios == 21
-    assert result.case_summary.matched_scenarios == 21
+    assert (result.risk_summary.matched_scenarios, result.risk_summary.applicable_scenarios) == (34, 34)
+    assert (result.case_summary.matched_scenarios, result.case_summary.applicable_scenarios) == (34, 34)
+    assert [item.id for item in SCENARIOS[:21]] == [
+        "login_only", "brute_below", "brute_exact", "brute_over_window",
+        "brute_success", "brute_other_account", "brute_success_late",
+        "spray_exact", "spray_success", "spray_below_accounts",
+        "spray_over_window", "auth_transition", "auth_transition_late",
+        "traversal", "normal_web", "brute_above", "low_failures",
+        "spray_below_failures", "success_before", "traversal_raw",
+        "traversal_false_like",
+    ]
 
 
 def test_cli_stability_filter_and_bounded_error():
@@ -59,7 +72,7 @@ def test_cli_stability_filter_and_bounded_error():
     assert one.returncode == two.returncode == 0
     assert one.stdout == two.stdout
     parsed = json.loads(one.stdout)
-    assert parsed["scenario_count"] == 21
+    assert parsed["scenario_count"] == 43
     assert not parsed["invariant_failures"]
     filtered = _cli("--format", "json", "--scenario", "brute_success")
     assert filtered.returncode == 0
@@ -68,6 +81,27 @@ def test_cli_stability_filter_and_bounded_error():
     assert invalid.returncode == 2
     assert invalid.stderr.strip() == "unknown_scenario"
     assert "PRIVATE-CANARY" not in invalid.stderr
+
+
+def test_text_and_json_metrics_report_the_same_counts():
+    text_result = _cli("--format", "text")
+    json_result = _cli("--format", "json")
+    assert text_result.returncode == json_result.returncode == 0
+    lines = text_result.stdout.splitlines()
+    summary = json.loads(json_result.stdout)
+    assert lines[0] == "synthetic_boundary_corpus: 43/43 scenarios passed"
+    for metric in summary["detection_metrics"]:
+        line = next(line for line in lines if line.startswith(f"detection {metric['detection_type']}:"))
+        for key, label in (("tp", "TP"), ("fp", "FP"), ("fn", "FN"),
+                           ("tn", "TN"), ("support", "support")):
+            assert f"{label}={metric[key]}" in line
+    for metric in summary["correlation_metrics"]:
+        line = next(line for line in lines if line.startswith(f"correlation {metric['relation_type']}:"))
+        for key, label in (("tp", "TP"), ("fp", "FP"), ("fn", "FN")):
+            assert f"{label}={metric[key]}" in line
+    parser = summary["parser_summary"]
+    assert (f"parser: {parser['parsed']}/{parser['input_lines']} parsed; "
+            f"ignored={parser['ignored']}; rejected={parser['failed']}") in text_result.stdout
 
 
 def test_invalid_labels_fail_closed():
@@ -118,8 +152,75 @@ def test_microsecond_contract_on_normalized_events():
 
 def test_private_fixture_content_not_in_public_output():
     text = _cli("--format", "json").stdout + _cli("--format", "text").stdout
-    for canary in ("user=synthetic_a", "user=synthetic_b", "user=synthetic_c", "path=%252e", ".log", "sample_logs/"):
+    for canary in ("user=synthetic_a", "user=synthetic_b", "user=synthetic_c", "not-an-ip", "path=%252e", ".log", "sample_logs/"):
         assert canary not in text
+
+
+def test_parser_only_and_ambiguous_are_not_confusion_labels():
+    ids = {item.id: item for item in SCENARIOS}
+    parser_only = evaluate((ids["ssh_unsupported"], ids["ssh_malformed"], ids["access_ignored"]))
+    assert (parser_only.parser_summary.parsed, parser_only.parser_summary.ignored,
+            parser_only.parser_summary.failed) == (1, 1, 1)
+    assert parser_only.risk_summary.applicable_scenarios == 0
+    assert all(metric.precision == "not_applicable" for metric in parser_only.detection_metrics)
+    ambiguous = evaluate((ids["automation_ambiguous"],))
+    assert ambiguous.passed_scenarios == 1
+    assert ambiguous.excluded_ambiguous_scenarios == 1
+    assert all(metric.tp == metric.fp == metric.fn == metric.tn == 0 for metric in ambiguous.detection_metrics)
+    assert ambiguous.risk_summary.applicable_scenarios == 1
+
+
+def test_parser_unexpected_parse_and_rejection_count_by_line():
+    ids = {item.id: item for item in SCENARIOS}
+    ignored_label = replace(
+        ids["ssh_login_only"], label_scope="parser_only", risks=(),
+        parser=replace(
+            ids["ssh_login_only"].parser, parsed=0, ignored=1,
+            event_types=(), first_timestamp=None, last_timestamp=None,
+            account_present=(), http_methods=(), http_statuses=(),
+            line_dispositions=("ignored",),
+        ),
+    )
+    unexpected_parse = evaluate((ignored_label,))
+    assert unexpected_parse.failed_scenarios == 1
+    assert unexpected_parse.parser_summary.unexpected_parse_count == 1
+    parsed_label = replace(
+        ids["access_ignored"],
+        parser=replace(
+            ids["access_ignored"].parser, parsed=1, ignored=0,
+            event_types=("http_request",), first_timestamp=utc(0),
+            last_timestamp=utc(0), account_present=(False,),
+            http_methods=("GET",), http_statuses=(200,),
+            line_dispositions=("parsed",),
+        ),
+    )
+    unexpected_rejection = evaluate((parsed_label,))
+    assert unexpected_rejection.failed_scenarios == 1
+    assert unexpected_rejection.parser_summary.unexpected_rejection_count == 1
+
+
+def test_ssh_multi_success_pipeline_permutations_preserve_endpoint_and_timeline():
+    from app.analyzer.pipeline import load_normalized_logs
+    from app.main import _analyze_normalized_logs
+    from app.analyzer.incident_case_adapter import project_investigation_cases_from_analysis
+    from app.evaluation.corpus import FIXTURE_ROOT
+
+    logs = load_normalized_logs([{"source": "ssh", "path": str(FIXTURE_ROOT / "ssh_multi_success.log")}])
+    assert len(logs) == 7
+    snapshots = []
+    for arrangement in (logs, list(reversed(logs)), logs[:5] + [logs[6], logs[5]]):
+        result = _analyze_normalized_logs(arrangement)
+        subject = result["results"]["192.0.2.10"]
+        relation = subject["correlation"]["authentication"]
+        case = project_investigation_cases_from_analysis(result).cases[0]
+        snapshots.append((
+            relation["failure_timestamp"], relation["success_timestamp"],
+            relation["time_delta_seconds"], subject["risk_level"],
+            case.rule_code, case.row.observation_count,
+            case.row.supporting_relation_count, case.timeline_entries,
+        ))
+    assert snapshots[0] == snapshots[1] == snapshots[2]
+    assert snapshots[0][1] == utc(50)
 
 
 def test_permutation_and_numeric_ip_review_order():

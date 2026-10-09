@@ -31,8 +31,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"detection {metric.detection_type}: TP={metric.tp} FP={metric.fp} FN={metric.fn} TN={metric.tn} precision={metric.precision} recall={metric.recall} F1={metric.f1} support={metric.support}")
         for metric in summary.correlation_metrics:
             print(f"correlation {metric.relation_type}: TP={metric.tp} FP={metric.fp} FN={metric.fn} precision={metric.precision} recall={metric.recall} F1={metric.f1}")
-        print(f"parser: {summary.parser_summary.parsed}/{summary.parser_summary.input_lines} parsed; ignored={summary.parser_summary.ignored}; failed={summary.parser_summary.failed}")
-        print(f"risk: {summary.risk_summary.matched_scenarios}/{summary.scenario_count}; case: {summary.case_summary.matched_scenarios}/{summary.scenario_count}")
+        print(f"parser: {summary.parser_summary.parsed}/{summary.parser_summary.input_lines} parsed; ignored={summary.parser_summary.ignored}; rejected={summary.parser_summary.failed}; unexpected_parse={summary.parser_summary.unexpected_parse_count}; unexpected_rejection={summary.parser_summary.unexpected_rejection_count}")
+        print(f"SSH scenarios: {summary.ssh_scenario_count}; ambiguous operational scenarios excluded from confusion matrices: {summary.excluded_ambiguous_scenarios}")
+        for reason in summary.excluded_reasons:
+            print(f"excluded {reason}")
+        print(f"risk: {summary.risk_summary.matched_scenarios}/{summary.risk_summary.applicable_scenarios}; case: {summary.case_summary.matched_scenarios}/{summary.case_summary.applicable_scenarios}")
         for failure in summary.invariant_failures:
             print(f"FAIL {failure}")
         for notice in summary.interpretation_notices:

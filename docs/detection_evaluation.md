@@ -17,7 +17,7 @@
 | Brute Force → Successful Login | Brute 탐지 선행, 동일 IP·계정, 마지막 실패 뒤 성공 60초 이하 | 동일 경계; 탐지 시작부터의 전체 사례 범위는 별도 case 최대 120초 |
 | Spray → Successful Login | 탐지와 동일 IP·계정 실패 뒤 성공 60초 이하 | production relation은 있지만 typed target membership이 없어 Spray case는 no-go |
 | 정규화 | application·SSH는 `Asia/Seoul`; access는 로그 내 `%z`; 내부 UTC aware | 파일 parser는 초 단위 시각; 직접 normalized-event 테스트로 µs 경계 검사 |
-| 중복·순서 | 실패 이벤트는 중복도 횟수에 포함; subject ordering은 case assembler의 IPv4/IPv6 numeric 순서 | 동일 subject에 여러 성공 후보가 있으면 correlation의 첫 matching success 선택은 입력순서에 영향받을 수 있음. corpus는 이 모호성을 피함 |
+| 중복·순서 (Phase 6 당시) | 실패 이벤트는 중복도 횟수에 포함; subject ordering은 case assembler의 IPv4/IPv6 numeric 순서 | 동일 subject에 여러 성공 후보가 있으면 correlation의 첫 matching success 선택은 입력순서에 영향받았음. Phase 6.1 수정은 아래 참조 |
 | Risk/confidence | HIGH/MEDIUM/LOW categorical; likelihood×impact matrix와 별도 confidence | 새로운 score 없음; 1~2 실패 후 인증 관계만 있는 경우 risk LOW, confidence MEDIUM 가능 |
 | Case | Brute-success가 generic auth 관계에 우선; Path Traversal 독립 | Spray-success no-go, 미지원 관계는 자동 결합하지 않음 |
 
@@ -77,3 +77,39 @@ F1 = 2 × precision × recall / (precision + recall)
 현재 파일 fixture는 parser 실패·ignored line, SSH, 다중 subject 파일, 모든 URL pattern, 동일 relation 중복, 여러 성공 후보 입력순서, 실제 운영 오탐/미탐을 완전히 포괄하지 않는다. 보완은 새로운 **독립 라벨**과 작은 합성 fixture를 먼저 추가한 뒤 수행한다. 특히 다중 성공 후보의 순서성은 현 production correlation의 계약 위험으로 분리해 기록한다. parser 파일 시각은 초 단위이므로 µs 단위는 normalized-event 테스트로만 측정한다.
 
 Phase 6.1에서 실패가 나면 `scenario / expected / actual / affected layer / likely cause / privacy-safe reproduction / recommended follow-up`을 기록하고, telemetry 근거와 오탐·미탐 tradeoff를 검토한 별도 커밋에서만 규칙을 바꾼다. 이 Phase 6은 detector threshold, correlation window, risk, parser 의미, case grouping을 변경하지 않았다.
+
+## Phase 6.1 — SSH·parser 경계와 결정적 관계 선택
+
+2026-10-09 기준 고정 ID 21개를 유지하면서 22개를 추가해 총 **43개**다. SSH 13개는 실제 `ssh` registry/parser 경로를 사용한다. 정상 publickey 성공, password 실패 1회·4회·5회/60초, 같은/다른 계정 성공, 성공 선행, 파일 입력 순서와 다른 두 성공 후보를 평가한다. SSH의 `Failed|Accepted password|publickey for ... from ...`만 positive 라벨이며, 지원하지 않는 문구는 timestamp가 맞으면 `event_type=None`인 parsed event다. 새 SSH 문법은 추가하지 않았다.
+
+Parser-only 9개는 production `analyze()`를 호출하지 않는다. SSH unsupported/잘못된 timestamp/whitespace/extra text/잘못된 IP, application 잘못된 timestamp·IP 누락, access 불완전 요청·빈 line을 직접 parser에 전달한다. `parsed`는 `NormalizedEvent` 반환, `ignored`는 `None`, `rejected`(`failed` JSON 필드)는 parser/UTC 정규화 예외를 뜻한다. SSH unsupported와 잘못된 IP, application의 IP 누락은 **parsed지만 attribution이 되지 않거나 후속 adapter에서 거부**될 수 있다. Invalid UTF-8은 decode·loader 또는 로컬 업로드 경계에서 parser 전에 거부되므로 parser 통계로 세지 않는다. 줄별 typed 기대 disposition과 실제를 비교해 `unexpected_parse_count`, `unexpected_rejection_count`를 별도로 낸다. Parser-only의 분석 결과를 정상 0건으로 위장하지 않는다.
+
+정상 활동 중심 추가 항목은 같은 IP의 다수 성공·같은 시각 성공, 한 번 실패 후 정상 재시도, 모니터링 계정 성공, 집중된 웹 health/metrics 요청과 정상 query·점·percent·HTTP 404/500이다. 정상 재시도도 기존 **인증 관계는 positive**이며 탐지만 negative다. `automation_ambiguous`는 현재 규칙상 Brute 관찰이지만 승인된 자동화 여부가 로그에 없으므로 `ambiguous_operational`로 분리한다. 분석·risk·case 계약은 비교하되 detection/correlation confusion matrix에서는 제외하고 고정 이유와 개수를 출력한다. 이는 실제 FP를 0으로 단정하기 위한 조치가 아니다.
+
+### 성공 후보 선택 정책
+
+수정 전에는 세 인증 관계 함수가 `ip_logs` 입력 순서의 첫 matching success에서 반환했다. 테스트는 같은 실패 뒤 10초·20초 성공에서 20초 기록이 먼저 입력되면 20초 endpoint를 고르는 실패를 먼저 재현했다. 현재는 per-IP 입력의 동일 subject·정확한 account, 실패가 성공보다 엄격히 앞서고 기존 60초 범위 안인 **모든 쌍**의 delta를 비교해 가장 작은 양의 delta 쌍 하나를 선택한다. Production pipeline timestamp는 parser가 canonical UTC로 정규화한다. 직접 호출하는 오래된 단위 테스트의 naive timestamp는 기존 함수 계약을 유지하되, naive/aware 혼합은 후보에서 제외한다. 60초 포함, 0초·역전 제외와 120초 case 상한은 변경하지 않았다.
+
+최소 delta의 완전히 같은 event 쌍(모든 내부 필드가 같은 duplicate)은 한 endpoint fact로 접는다. 같은 최소 delta에서 source·auth context·raw record 등 내부 event 내용이 다른 쌍이나 서로 다른 timestamp 쌍은 안전한 유일 후보를 입증할 수 없어 관계 없음으로 fail closed한다. Raw record는 동률 판별에서 **정확한 중복 여부 확인에만** 쓰고 선택 key·반환값·평가 출력에 복사하지 않는다. UUID/hash/object identity/입력 위치는 쓰지 않는다. 이는 외부 보안 표준의 새 임계값이 아니라 기존 관계에서 입력순서 비결정성을 제거하기 위한 프로젝트 선택 정책이다. 정상 단일-success fixture의 출력은 유지된다.
+
+후보가 모호해 관계가 없어지면 기존 risk의 correlation signal과 case 존재 여부도 달라질 수 있다. 이것은 새 risk 계산이나 case 규칙이 아니라 부정확한 관계를 fail closed한 결과다. Raw 내부 correlation dict는 기존 adapter join 때문에 원래 account와 rationale을 포함하므로 **그 객체의 직접 `repr()`은 개인정보 안전 경계가 아니다**. CLI 평가 text/JSON, case assembly/projection, bounded error에는 원래 account·raw line·query·경로를 넣지 않는다. 내부 dict를 로그에 출력해서는 안 된다.
+
+### 갱신된 baseline
+
+43/43 시나리오 통과. Parser는 입력 134줄 중 parsed 129, ignored 2, rejected 3; unexpected parse/rejection 각 0이다. SSH 시나리오 13개. Parser-only 9개를 제외한 risk·case는 각각 34/34. Ambiguous operational 1개는 confusion matrix에서 제외해 labeled denominator는 33개다.
+
+| Detection | TP | FP | FN | TN | precision | recall | F1 | support |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Brute Force | 11 | 0 | 0 | 22 | 1.000000 | 1.000000 | 1.000000 | 11 |
+| Password Spraying-like | 2 | 0 | 0 | 31 | 1.000000 | 1.000000 | 1.000000 | 2 |
+| Path Traversal | 2 | 0 | 0 | 31 | 1.000000 | 1.000000 | 1.000000 | 2 |
+
+| Relation | TP | FP | FN | precision | recall | F1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Failed Login → Successful Login | 6 | 0 | 0 | 1.000000 | 1.000000 | 1.000000 |
+| Brute Force → Successful Login | 3 | 0 | 0 | 1.000000 | 1.000000 | 1.000000 |
+| Password Spray → Successful Login | 1 | 0 | 0 | 1.000000 | 1.000000 | 1.000000 |
+
+외부 근거: [NIST SP 800-92의 rule-based event correlation 정의](https://csrc.nist.gov/glossary/term/Rule_Based_Event_Correlation)는 timestamp, IP, event type 등 관찰 가능한 필드의 결합을 설명하지만 특정 closest-success 정책이나 60초를 지정하지 않는다. [OpenSSH 공식 매뉴얼](https://www.openssh.org/manual.html)과 [sshd_config의 인증·로그 설정](https://man.openbsd.org/sshd_config)은 password/publickey 및 logging 설정의 배경이다. 실제 `Failed`/`Accepted` 줄 해석은 저장소의 SSH parser regex에 한정한다. 두 자료를 이 프로젝트 임계값의 권위로 사용하지 않는다.
+
+남은 공백: 실제 운영 로그·승인 활동 ground truth, 여러 source의 동시각 distinct event identity, parser 이전의 invalid UTF-8/업로드 검증, 모든 parser 오류 형태, cross-worker·live 순서, 성공·실패 시각이 동률인 일부 데이터 품질 문제. 합성 수치의 운영 일반화는 금지한다.

@@ -205,7 +205,7 @@ uv run python -m app.evaluation --format json
 uv run python -m app.evaluation --scenario brute_success
 ```
 
-결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 평가 과정에서 규칙은 변경하지 않습니다.
+결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 현재 SSH·parser-only·정상 활동 및 모호한 자동화 시나리오를 포함합니다. 모호한 운영 활동은 일반 TP/FP/TN 계산에서 제외합니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 기존 탐지 임계값과 시간 범위는 유지하며, 여러 로그인 성공 후보의 관계는 가장 가까운 유일한 후속 endpoint를 입력 순서와 무관하게 선택합니다.
 
 ## 안전한 정리
 
