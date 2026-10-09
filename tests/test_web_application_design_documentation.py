@@ -57,7 +57,8 @@ def test_current_api_and_sample_frontend_are_recorded_with_local_only_upload():
     assert "합성 샘플 Landing/결과 개요" in text
     assert "loopback-only `POST /api/v1/investigations`" in text
     assert "Hosted upload" in text and "no-go" in text
-    assert "기존 `/api/analyze`는 그대로 둔다" in text
+    assert "기존 `/api/analyze` route와 상위 구조는 유지하지만 deprecated" in text
+    assert "nested 값은 Phase 6.2" in text
 
 
 def test_versioned_api_is_one_analysis_privacy_safe_contract():
@@ -201,7 +202,7 @@ def test_implemented_phase_four_report_contract_is_stateless_and_bounded():
     for contract in (
         "구현된 Phase 4 stateless HTML 보고서 다운로드",
         "같은 analysis result",
-        "24,966 bytes",
+        "25,000 bytes",
         "32 KiB",
         "64 KiB",
         "REPORT_GENERATION_FAILED",

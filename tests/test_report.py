@@ -98,9 +98,9 @@ def path_traversal_detection(*, response_size=2048):
             "Detection:\n"
             "  - path_traversal\n"
             "    Evidence:\n"
-            "      Request path    : /download\n"
+            "      Request path    : 개인정보 보호를 위해 표시하지 않습니다.\n"
             "      Matched pattern : ../\n"
-            "      Query           : file=../../etc/passwd\n"
+            "      Query           : 개인정보 보호를 위해 표시하지 않습니다.\n"
             "      HTTP method     : GET\n"
             "      Response status : 200\n"
             "      Response size   : 2048 bytes\n",
@@ -251,22 +251,22 @@ def test_labeled_evidence_preserves_risk_and_correlation_output(capsys):
     })
 
     output = capsys.readouterr().out
-    expected_unchanged_output = (
+    expected_safe_output = (
         "Risk:\n"
         "  Risk        : HIGH\n"
         "Assessment:\n"
         "  Likelihood  : HIGH\n"
-        "    - existing likelihood rationale\n"
+        "    - 근거 상세는 개인정보 보호를 위해 표시하지 않습니다.\n"
         "  Impact      : MEDIUM\n"
-        "    - existing impact rationale\n"
+        "    - 근거 상세는 개인정보 보호를 위해 표시하지 않습니다.\n"
         "  Confidence  : HIGH\n"
-        "    - existing confidence rationale\n"
+        "    - 근거 상세는 개인정보 보호를 위해 표시하지 않습니다.\n"
         "Correlation:\n"
         "  - failed_to_successful_login\n"
-        "    User: operator\n"
+        "    계정: 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다.\n"
         "    Time delta: 3.0 seconds\n"
     )
-    assert expected_unchanged_output in output
+    assert expected_safe_output in output
 
 
 def test_report_prints_distributed_authentication_observations(capsys):
@@ -306,13 +306,15 @@ def test_report_prints_distributed_authentication_observations(capsys):
 
     output = capsys.readouterr().out
 
-    assert "User: admin" in output
+    assert "계정: 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다." in output
+    assert "User: admin" not in output
     assert "10.0.0.1, 10.0.0.2, 10.0.0.3" in output
     assert "Failure count: 3" in output
     assert "Success source IP: 10.0.0.4" in output
     assert "Success from failure source: False" in output
     assert "Last failure → success: 15.0 seconds" in output
-    assert limitation in output
+    assert limitation not in output
+    assert "상관관계는 인과관계를 입증하지 않습니다." in output
 
 
 def lifecycle_result(**overrides):
@@ -368,7 +370,7 @@ def test_report_prints_bounded_session_lifecycle_observation(capsys):
 
     assert "Telemetry Relations" in output
     assert "Linux Audit 세션 시작/종료 연관" in output
-    assert "계정: alice" in output
+    assert "계정: alice" not in output
     assert "Linux Audit 세션 ID: 51" in output
     assert "시작 이벤트 관찰: 2026-09-18 01:00:00" in output
     assert "종료 이벤트 관찰: 2026-09-18 01:02:00" in output
@@ -420,8 +422,8 @@ def test_report_prints_limitation_once_and_preserves_relation_order(capsys):
 
     output = capsys.readouterr().out
 
-    assert output.index("계정: first-user") < output.index(
-        "계정: second-user"
+    assert output.index("Linux Audit 세션 ID: 52") < output.index(
+        "Linux Audit 세션 ID: 51"
     )
     assert output.count("source-scoped context의 일치") == 1
 
@@ -467,7 +469,7 @@ def test_report_prints_bounded_login_start_co_observation(capsys):
         "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
         in output
     )
-    assert "계정: training-account" in output
+    assert "계정: training-account" not in output
     assert "Linux Audit 세션 ID: 71" in output
     assert (
         "USER_LOGIN 이벤트 관찰 시각: 2026-09-18 01:00:02"
@@ -535,9 +537,8 @@ def test_report_preserves_login_start_engine_order_and_note_once(capsys):
 
     output = capsys.readouterr().out
 
-    assert output.index("계정: first-account") < output.index(
-        "계정: second-account"
-    )
+    assert "first-account" not in output
+    assert "second-account" not in output
     assert output.count(
         "Linux Audit 로그인·세션 시작 이벤트 공동 관찰"
     ) == 2

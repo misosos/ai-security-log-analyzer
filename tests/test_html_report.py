@@ -34,6 +34,7 @@ from app.analyzer.report_projection import (
     RiskAssessmentProjection,
 )
 from app.api import build_analysis_response
+from app.analyzer.legacy_api_projection import LegacyAnalysisProjectionError
 from app.models.schemas import DetectionResult
 
 
@@ -146,7 +147,7 @@ def populated_projection():
     traversal = DetectionDisplayItem(
         "path_traversal",
         "Path Traversal",
-        PathTraversalEvidenceProjection("/download", "../", "GET", 200, 2048),
+        PathTraversalEvidenceProjection("../", "GET", 200, 2048),
     )
     correlation = CorrelationDisplayItem(
         "failed_to_successful_login",
@@ -453,7 +454,7 @@ def test_exact_detection_evidence_labels_units_and_no_positional_fields():
         "<dt>실패 횟수</dt>\n<dd>4</dd>",
         "<dt>대상 계정 수</dt>\n<dd>4</dd>",
         "<dt>시간 범위</dt>\n<dd>6초</dd>",
-        "<dt>요청 경로</dt>\n<dd><code>/download</code></dd>",
+        "<dt>요청 경로</dt>\n<dd>개인정보 보호를 위해 표시하지 않습니다.</dd>",
         "<dt>일치 패턴</dt>\n<dd><code>../</code></dd>",
         "<dt>HTTP 메서드</dt>\n<dd>GET</dd>",
         "<dt>응답 상태</dt>\n<dd>200</dd>",
@@ -709,11 +710,6 @@ def test_html_escapes_all_projected_text_and_keeps_it_out_of_attributes():
     adversarial = "TEXT-CANARY & <tag> > \"double\" 'single'"
     projection = populated_projection()
     high = projection.subjects[1]
-    path = high.detections[1]
-    hostile_path = replace(
-        path,
-        evidence=replace(path.evidence, request_path=adversarial),
-    )
     hostile_limitation = InterpretationLimitationItem(
         "path_traversal_not_file_disclosure",
         adversarial,
@@ -721,7 +717,7 @@ def test_html_escapes_all_projected_text_and_keeps_it_out_of_attributes():
     high = replace(
         high,
         review_reason=adversarial,
-        detections=(high.detections[0], hostile_path),
+        detections=high.detections,
         limitations=(hostile_limitation,),
     )
     projection = replace(
@@ -814,7 +810,7 @@ def test_malformed_nested_projection_uses_bounded_renderer_error():
     assert "192.0.2.10" not in repr(caught.value)
 
 
-def test_existing_cli_api_and_llm_contracts_are_unchanged(capsys):
+def test_report_rendering_does_not_mutate_cli_or_invalid_public_inputs(capsys):
     empty = DetectionResult(False, None, [])
     ip_result = {
         "detections": {
@@ -834,18 +830,18 @@ def test_existing_cli_api_and_llm_contracts_are_unchanged(capsys):
 
     print_analysis_result(analysis)
     cli_before = capsys.readouterr().out
-    api_before = build_analysis_response(analysis, total_sources=1).model_dump()
-    llm_before = build_llm_input("192.0.2.1", ip_result)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_analysis_response(analysis, total_sources=1)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_llm_input("192.0.2.1", ip_result)
 
     render_investigation_report_html(populated_projection())
 
     print_analysis_result(analysis)
     cli_after = capsys.readouterr().out
-    api_after = build_analysis_response(analysis, total_sources=1).model_dump()
-    llm_after = build_llm_input("192.0.2.1", ip_result)
-    api_before.pop("analysis_id")
-    api_after.pop("analysis_id")
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_analysis_response(analysis, total_sources=1)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_llm_input("192.0.2.1", ip_result)
 
     assert cli_after == cli_before
-    assert api_after == api_before
-    assert llm_after == llm_before

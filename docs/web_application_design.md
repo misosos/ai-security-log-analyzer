@@ -4,6 +4,8 @@
 기준일: 2026-10-09<br>
 범위: 기존 FastAPI 저장소의 웹 UX와 API 경계. 아래의 현재 구현 사실과 아직 승인만 된 후속 설계를 구분한다.
 
+Phase 6.2 보안 계약 변경: deprecated `/api/analyze`의 상위 구조는 유지하지만 중첩 값은 명시적인 개인정보 안전 projection이다. 기존 raw nested 값 소비자는 [migration 안내](public_analysis_privacy.md)를 참고한다. HTML 보고서의 원래 HTTP path/full query도 이제 표시하지 않는다. Versioned sample/local JSON의 case 계약은 유지한다.
+
 ## 1. 목적
 
 일반 사용자가 터미널이나 로컬 HTML 생성 명령을 몰라도 `사이트 접속 → 샘플 체험 또는 로그 선택 → 분석 실행 → 조사 사례 목록 → 시간순 조사 흐름 → 근거·한계·다음 조사 단계 → HTML 보고서 다운로드`를 완료할 수 있는 제품 구조를 고정한다. 웹은 이미 계산된 결정적 분석을 `IncidentCaseSubjectInput` adapter, `assemble_incident_cases()`, `build_investigation_case_projection()` 순서로 한 번만 통과시킨다. 탐지·상관분석·위험도를 presentation에서 다시 만들지 않는다.
@@ -77,7 +79,7 @@ Public Evidence wire field는 내부 type ID가 아닌 `label/value/unit`이므�
 
 빈 `POST /api/v1/investigations/sample`은 기존 allowlisted synthetic fixture를 검증하고 private 임시 분석 입력으로 `analyze()`를 정확히 한 번 호출한다. 같은 analysis result로 case adapter를 한 번 실행한 뒤 기존 `build_investigation_report_projection()`과 `render_investigation_report_html()`을 각각 한 번 실행한다. CLI secure writer, 별도 report endpoint, 보고서 임시 파일이나 서버 측 결과/HTML 영구 저장은 없다. 분석 입력용 임시 디렉터리는 요청 처리 종료 시 정리한다.
 
-현재 fixture에서 합성 안내가 붙은 renderer의 UTF-8 HTML은 24,966 bytes, 전체 JSON은 39,216 bytes였다. report export 상한은 32 KiB, browser JSON 수신 상한은 64 KiB다. HTML은 standalone HTML5, 기존 CSS와 검증된 CSP style hash, JavaScript·원격 리소스 없음 및 6열 대상별 표를 유지한다. 기존 renderer의 기본 출력은 변경하지 않고 sample 전용 고정 한국어 합성 안내만 opt-in으로 포함한다. 빈·초과·잘못된 renderer output이나 projection/renderer 예외는 고정 `REPORT_GENERATION_FAILED`로 전체 sample transaction을 실패시킨다. 사례 결과만 반환하는 partial success는 없다. 응답 deadline은 여전히 worker thread를 강제로 종료하지 않는다.
+Phase 6.2의 모든 원래 HTTP path 비표시 정책을 적용한 현재 fixture에서 합성 안내가 붙은 renderer의 UTF-8 HTML은 25,000 bytes, 전체 JSON은 39,250 bytes다. report export 상한은 32 KiB, browser JSON 수신 상한은 64 KiB다. HTML은 standalone HTML5, 기존 CSS와 검증된 CSP style hash, JavaScript·원격 리소스 없음 및 6열 대상별 표를 유지한다. Sample 전용 고정 한국어 합성 안내는 계속 opt-in이고, 요청 경로의 기본 표시는 모든 보고서에서 고정 개인정보 보호 안내로 변경되었다. 빈·초과·잘못된 renderer output이나 projection/renderer 예외는 고정 `REPORT_GENERATION_FAILED`로 전체 sample transaction을 실패시킨다. 사례 결과만 반환하는 partial success는 없다. 응답 deadline은 여전히 worker thread를 강제로 종료하지 않는다.
 
 `report_export`는 closed Pydantic object로 `available=true`, `format=standalone_html`, `filename=investigation-report.html`, `media_type=text/html;charset=utf-8`, UTF-8 `html`, 실제 인코딩 길이인 `byte_count`, 고정 `format_notice`, 고정 `handling_warning`을 포함한다. Browser는 전체 응답과 export를 검증한 후에만 native `HTML 보고서 다운로드` 버튼을 표시하고, 클릭할 때 export를 재검증해 탭 메모리의 UTF-8 Blob/object URL로 다운로드한다. 생성한 URL과 임시 anchor는 즉시 제거한다. 자동 다운로드, 추가 fetch, DOM HTML 삽입과 browser storage는 없다. 현재 형식은 `대상별 결정적 조사 보고서`이며 조사 사례의 typed Timeline은 포함하지 않는다는 안내와 민감한 파일의 저장·공유·삭제 경고를 버튼 앞에 표시한다. 이 report는 합성 샘플 결과이지 실제 조직의 보안 상태나 인증서가 아니다.
 
@@ -229,7 +231,7 @@ V1 page 후보는 `/`, `/demo`, `/analyze`, `/results`, `/results/cases/{case-nu
 | B. 새 versioned synchronous endpoint | 새 UI가 정확한 projection만 받음 | 한 요청·한 분석 | 기본 stateless, browser memory | 같은 response에서 생성한 export payload 사용 가능 | V1에 가장 작고 기존 API 보존. 긴 요청 timeout 한계 |
 | C. POST 생성 + GET/report/DELETE | refresh·async·download가 편함 | 없음 | result storage, ownership, expiration, deletion, auth 필요 | 별도 GET 가능 | hosted/실시간 확장에는 좋으나 V1 보안·운영 복잡도가 큼 |
 
-추천은 B다. `POST /api/v1/investigations/sample`은 Phase 1에서 구현된 upload 없는 synthetic sample이다. `POST /api/v1/investigations`는 향후 local/private에서만 세 파일을 받는다. 기존 `/api/analyze`는 그대로 둔다. one request 안에서 deterministic analysis는 한 번, case adapter는 한 번, report projection/render는 필요할 때 같은 result에서 한 번만 실행한다.
+추천은 B다. `POST /api/v1/investigations/sample`은 Phase 1에서 구현된 upload 없는 synthetic sample이다. `POST /api/v1/investigations`는 구현된 loopback/local-only 세 파일 endpoint다. 기존 `/api/analyze` route와 상위 구조는 유지하지만 deprecated이며 nested 값은 Phase 6.2에서 개인정보 안전 projection으로 변경했다. one request 안에서 deterministic analysis는 한 번, case adapter는 한 번, report projection/render는 필요할 때 같은 result에서 한 번만 실행한다.
 
 V1은 server-side persistent result, result GET endpoint와 raw log 재업로드를 요구하는 report endpoint를 만들지 않는다. report HTML은 같은 response의 bounded export section에 포함하거나, 초기 phase에서 capability를 false로 두었다가 Phase 4에 추가한다. `Accept: text/html`로 같은 upload를 다시 보내 분석을 반복하는 방식은 채택하지 않는다. 향후 C는 authentication·ownership·retention이 승인된 hosted phase에서만 다시 평가한다.
 
@@ -317,7 +319,7 @@ InvestigationErrorResponse
 
 문구는 무엇을 완료하지 못했는지, 확인할 입력, retry 가능 여부와 결과 생성 여부를 말한다. exception text, traceback, absolute path, filename echo, account, evidence/query/raw line, credential/token, internal class를 포함하지 않는다. unknown error도 request correlation용 비민감 opaque support ID가 승인되기 전에는 내부 identifier를 노출하지 않는다.
 
-V1은 all-or-nothing이다. case projection까지 성공해야 complete success이며 분석 또는 projection 실패를 빈/0 결과로 위장하지 않는다. raw partial analysis를 반환하지 않고 만들어진 partial object를 버린다. 구현된 Phase 4 sample transaction은 report export까지 성공해야 complete success이고 report 생성·검증 실패는 전체 `REPORT_GENERATION_FAILED`다. legacy `/api/analyze` 오류 계약은 변경하지 않는다.
+V1은 all-or-nothing이다. case projection까지 성공해야 complete success이며 분석 또는 projection 실패를 빈/0 결과로 위장하지 않는다. raw partial analysis를 반환하지 않고 만들어진 partial object를 버린다. 구현된 Phase 4 sample transaction은 report export까지 성공해야 complete success이고 report 생성·검증 실패는 전체 `REPORT_GENERATION_FAILED`다. Deprecated legacy `/api/analyze`의 분석·projection 실패는 고정 `LEGACY_ANALYSIS_FAILED` envelope로 제한한다.
 
 ## 12. Upload security
 
@@ -499,7 +501,7 @@ Task는 (1) sample 시작, (2) 지원 파일·데이터 처리 찾기, (3) 의�
 
 ## 24. 알려진 한계
 
-- 현재 legacy `/api/analyze`는 privacy-safe case API가 아니며 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API와 합성 샘플 웹 사례·Timeline 화면은 구현되었다.
+- Deprecated legacy `/api/analyze`는 case API가 아니며, nested 값은 개인정보 안전 projection으로 이관했지만 기존 whole-file upload 제한 때문에 인증 없는 실제 upload를 public internet에 노출할 수 없다. 별도 sample-only privacy-safe case API와 합성 샘플 웹 사례·Timeline 화면은 구현되었다.
 - 현재 file validation은 suffix/size 중심이고 whole-file memory read, total limit 부재와 crash orphan 위험이 있다.
 - 현재 HTML report에는 조사 사례와 Timeline이 없다.
 - account alias는 Phase 1 assembly가 safe reference를 보존하지 않아 unavailable이다. 원본을 복원하지 않는다.

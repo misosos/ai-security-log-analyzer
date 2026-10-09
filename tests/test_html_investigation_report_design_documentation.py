@@ -100,7 +100,7 @@ def test_design_defines_projection_and_privacy_exclusions():
         assert prohibited_mechanism in text
 
     for excluded_data in [
-        "full HTTP query strings",
+        "all original HTTP request paths and full query strings",
         "raw log lines",
         "credentials, passwords, tokens, cookies, authorization headers",
         "Linux Audit argv, PROCTITLE, raw records",

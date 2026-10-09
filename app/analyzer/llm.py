@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from google import genai
 
 from app.analyzer.prompt import SYSTEM_PROMPT
+from app.analyzer.legacy_api_projection import project_legacy_analysis_response
 
 
 load_dotenv()
@@ -38,13 +39,16 @@ def serialize_value(value):
 
 
 def build_llm_input(ip, analysis):
-    return serialize_value({
-        "ip": ip,
-        "detections": analysis["detections"],
-        "risk_level": analysis["risk_level"],
-        "risk_factors": analysis["risk_factors"],
-        "correlation": analysis["correlation"],
-    })
+    empty_global = {
+        "multi_ip_authentication": [],
+        "distributed_authentication_to_success": [],
+        "linux_audit_session_lifecycle": [],
+        "linux_audit_login_start_co_observation": [],
+    }
+    projected = project_legacy_analysis_response(
+        {"results": {ip: analysis}, "global_correlation": empty_global}, 0,
+    )
+    return projected.results[0].model_dump(mode="json")
 
 
 def build_llm_messages(ip, analysis):
@@ -100,7 +104,7 @@ def generate_overall_summary(results):
         api_key=os.getenv("GEMINI_API_KEY")
     )
 
-    llm_input = serialize_value(results)
+    llm_input = project_legacy_analysis_response(results, 0).model_dump(mode="json")
 
     prompt = f"""
 {SYSTEM_PROMPT}

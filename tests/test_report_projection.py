@@ -30,6 +30,7 @@ from app.analyzer.report_projection import (
     build_investigation_report_projection,
 )
 from app.api import build_analysis_response
+from app.analyzer.legacy_api_projection import LegacyAnalysisProjectionError
 from app.correlation.session_process import SessionProcessReviewSummary
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
@@ -239,7 +240,6 @@ def test_projection_dataclasses_are_frozen_and_have_exact_field_allowlists():
             "time_window_seconds",
         ),
         PathTraversalEvidenceProjection: (
-            "request_path",
             "matched_pattern",
             "http_method",
             "response_status",
@@ -350,7 +350,6 @@ def test_supported_detection_mappings_typed_values_units_and_query_exclusion():
         "Path Traversal",
     )
     assert traversal.evidence == PathTraversalEvidenceProjection(
-        request_path="/download",
         matched_pattern="../",
         http_method="GET",
         response_status=200,
@@ -814,7 +813,7 @@ def test_builder_is_pure_deterministic_and_does_not_mutate_inputs(monkeypatch):
     assert source == original
 
 
-def test_existing_cli_api_and_llm_outputs_are_unchanged(capsys):
+def test_report_projection_does_not_mutate_cli_or_invalid_public_inputs(capsys):
     source = analysis({
         "192.0.2.1": subject_result(
             brute=brute_force_detection(),
@@ -827,21 +826,21 @@ def test_existing_cli_api_and_llm_outputs_are_unchanged(capsys):
 
     print_analysis_result(source)
     cli_before = capsys.readouterr().out
-    api_before = build_analysis_response(source, total_sources=1).model_dump()
-    llm_before = build_llm_input("192.0.2.1", ip_result)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_analysis_response(source, total_sources=1)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_llm_input("192.0.2.1", ip_result)
 
     build_investigation_report_projection(source)
 
     print_analysis_result(source)
     cli_after = capsys.readouterr().out
-    api_after = build_analysis_response(source, total_sources=1).model_dump()
-    llm_after = build_llm_input("192.0.2.1", ip_result)
-    api_before.pop("analysis_id")
-    api_after.pop("analysis_id")
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_analysis_response(source, total_sources=1)
+    with pytest.raises(LegacyAnalysisProjectionError):
+        build_llm_input("192.0.2.1", ip_result)
 
     assert cli_after == cli_before
-    assert api_after == api_before
-    assert llm_after == llm_before
 
 
 def test_canonical_ip_collision_and_non_exact_top_level_contract_fail_closed():

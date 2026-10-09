@@ -29,7 +29,12 @@ def _analyze_files(
 def _empty_analysis():
     return {
         "results": {},
-        "global_correlation": {},
+        "global_correlation": {
+            "multi_ip_authentication": [],
+            "distributed_authentication_to_success": [],
+            "linux_audit_session_lifecycle": [],
+            "linux_audit_login_start_co_observation": [],
+        },
     }
 
 
@@ -148,7 +153,14 @@ def test_analyze_success_serialization_cleanup_and_llm_isolation(
         "high_risk_ips": 0,
     }
     assert body["results"] == []
-    assert body["global_correlation"] == {}
+    assert body["global_correlation"] == {
+        "multi_ip_authentication_count": 0,
+        "distributed_authentication_to_success_count": 0,
+        "linux_audit_session_lifecycle_count": 0,
+        "linux_audit_login_start_co_observation_count": 0,
+        "limitation": "전체 로그 관계의 건수만 표시하며 개별 대상의 위험도에 자동 적용하지 않습니다.",
+    }
+    assert response.headers["Deprecation"] == "true"
     assert body["ai_summary"] is None
     assert len(analyze_calls) == 1
     assert [source["source"] for source in analyze_calls[0]] == [
@@ -182,7 +194,7 @@ def test_analyze_validation_and_suffix_error_contracts_are_unchanged(
 
     assert suffix_response.status_code == 400
     assert suffix_response.json() == {
-        "detail": "허용되지 않은 파일 형식입니다: .csv"
+        "detail": "허용되지 않은 파일 형식입니다. .log 또는 .txt 파일을 선택하세요."
     }
     assert len(created_paths) == 1
     assert all(not path.exists() for path in created_paths)
@@ -200,11 +212,13 @@ def test_analyze_cleanup_is_preserved_when_analysis_fails(
 
     monkeypatch.setattr(api_module, "analyze", fail_analysis)
 
-    with pytest.raises(RuntimeError, match="synthetic analysis failure"):
-        TestClient(api_module.app).post(
-            "/api/analyze",
-            files=_analyze_files(),
-        )
+    response = TestClient(api_module.app).post(
+        "/api/analyze",
+        files=_analyze_files(),
+    )
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "LEGACY_ANALYSIS_FAILED"
+    assert "synthetic analysis failure" not in response.text
 
     assert len(created_paths) == 3
     assert all(not path.exists() for path in created_paths)

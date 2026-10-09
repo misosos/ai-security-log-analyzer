@@ -1,10 +1,17 @@
 import math
+import re
+from datetime import datetime
+from ipaddress import ip_address
 
 from app.correlation.session_process import SessionProcessReviewSummary
 from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
 from app.models.schemas import Evidence
+from app.analyzer.report_projection import (
+    InvestigationReportProjectionError,
+    _validate_rationale,
+)
 
 
 _INVALID_EVIDENCE_MESSAGE = (
@@ -15,6 +22,31 @@ _SUPPORTED_DETECTION_TYPES = (
     "password_spraying_like",
     "path_traversal",
 )
+_SUPPORTED_RELATION_TYPES = frozenset({
+    "failed_to_successful_login",
+    "successful_login_to_file_access",
+    "brute_force_to_successful_login",
+    "password_spray_to_successful_login",
+})
+_ACCOUNT_NOTICE = "원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다."
+
+
+def _safe_rationale_lines(value):
+    try:
+        return _validate_rationale(value)
+    except InvestigationReportProjectionError:
+        return ("근거 상세는 개인정보 보호를 위해 표시하지 않습니다.",)
+
+
+def _safe_ip_list(value):
+    if type(value) is not list:
+        return "표시할 수 없음"
+    try:
+        if any(type(item) is not str for item in value):
+            return "표시할 수 없음"
+        return ", ".join(str(ip_address(item)) for item in value)
+    except (ValueError, TypeError):
+        return "표시할 수 없음"
 
 
 def _is_non_negative_int(value):
@@ -25,6 +57,35 @@ def _is_non_negative_number(value):
     if type(value) is int:
         return value >= 0
     return type(value) is float and math.isfinite(value) and value >= 0
+
+
+def _safe_number(value):
+    return str(value) if _is_non_negative_number(value) else "표시할 수 없음"
+
+
+def _safe_count(value):
+    return str(value) if _is_non_negative_int(value) else "표시할 수 없음"
+
+
+def _safe_timestamp(value):
+    return str(value) if type(value) is datetime else "표시할 수 없음"
+
+
+def _safe_bool(value):
+    return str(value) if type(value) is bool else "표시할 수 없음"
+
+
+def _safe_ip(value):
+    if type(value) is not str:
+        return "표시할 수 없음"
+    try:
+        return str(ip_address(value))
+    except (ValueError, TypeError):
+        return "표시할 수 없음"
+
+
+def _safe_level(value):
+    return value if type(value) is str and value in {"HIGH", "MEDIUM", "LOW"} else "UNKNOWN"
 
 
 def _authentication_evidence_lines(detection):
@@ -104,10 +165,21 @@ def _path_traversal_evidence_lines(detection):
         if value_type is int and item.value < 0:
             return None
 
-        lines.append((label, f"{item.value}{unit}"))
+        display_value = (
+            "개인정보 보호를 위해 표시하지 않습니다."
+            if evidence_type in {"url_decoded_path", "url_decoded_query"}
+            else f"{item.value}{unit}"
+        )
+        lines.append((label, display_value))
         actual_index += 1
 
     if actual_index != len(detection.evidence):
+        return None
+    values_by_label = dict(lines)
+    if values_by_label.get("Matched pattern") not in {"../", "..\\"}:
+        return None
+    method = values_by_label.get("HTTP method")
+    if method is not None and re.fullmatch(r"[A-Z]{1,16}", method) is None:
         return None
 
     return tuple(lines)
@@ -161,42 +233,39 @@ def print_correlation_result(correlation):
         if not result.get("is_correlated", False):
             continue
 
-        print(
-            f"  - {result.get('type')}"
-        )
+        relation_type = result.get("type")
+        print(f"  - {relation_type if relation_type in _SUPPORTED_RELATION_TYPES else '지원 범위 밖의 관계'}")
 
         if result.get("user") is not None:
 
-            print(
-                f"    User: {result['user']}"
-            )
+            print(f"    계정: {_ACCOUNT_NOTICE}")
 
         if result.get("time_delta_seconds") is not None:
 
             print(
                 f"    Time delta: "
-                f"{result['time_delta_seconds']} seconds"
+                f"{_safe_number(result['time_delta_seconds'])} seconds"
             )
 
         if result.get("source_ips"):
 
             print(
                 f"    Source IPs: "
-                f"{', '.join(result['source_ips'])}"
+                f"{_safe_ip_list(result['source_ips'])}"
             )
 
         if result.get("failure_count") is not None:
 
             print(
                 f"    Failure count: "
-                f"{result['failure_count']}"
+                f"{_safe_count(result['failure_count'])}"
             )
 
         if result.get("time_window_seconds") is not None:
 
             print(
                 f"    Time window: "
-                f"{result['time_window_seconds']} seconds"
+                f"{_safe_number(result['time_window_seconds'])} seconds"
             )
 
 
@@ -206,7 +275,7 @@ def print_risk_result(result):
 
     print(
         f"  Risk        : "
-        f"{result.get('risk_level', 'UNKNOWN')}"
+        f"{_safe_level(result.get('risk_level'))}"
     )
 
     risk_factors = result.get(
@@ -233,13 +302,10 @@ def print_risk_result(result):
 
     print(
         f"  Likelihood  : "
-        f"{likelihood.get('level', 'UNKNOWN')}"
+        f"{_safe_level(likelihood.get('level'))}"
     )
 
-    for rationale in likelihood.get(
-        "rationale",
-        [],
-    ):
+    for rationale in _safe_rationale_lines(likelihood.get("rationale", [])):
 
         print(
             f"    - {rationale}"
@@ -247,13 +313,10 @@ def print_risk_result(result):
 
     print(
         f"  Impact      : "
-        f"{impact.get('level', 'UNKNOWN')}"
+        f"{_safe_level(impact.get('level'))}"
     )
 
-    for rationale in impact.get(
-        "rationale",
-        [],
-    ):
+    for rationale in _safe_rationale_lines(impact.get("rationale", [])):
 
         print(
             f"    - {rationale}"
@@ -261,13 +324,10 @@ def print_risk_result(result):
 
     print(
         f"  Confidence  : "
-        f"{confidence.get('level', 'UNKNOWN')}"
+        f"{_safe_level(confidence.get('level'))}"
     )
 
-    for rationale in confidence.get(
-        "rationale",
-        [],
-    ):
+    for rationale in _safe_rationale_lines(confidence.get("rationale", [])):
 
         print(
             f"    - {rationale}"
@@ -319,34 +379,24 @@ def print_global_correlation(
             "  - Multi-IP Authentication Failure"
         )
 
-        print(
-            f"    User: "
-            f"{multi_ip_result.get('user')}"
-        )
+        print(f"    계정: {_ACCOUNT_NOTICE}")
 
         print(
             f"    Source IPs: "
-            f"{', '.join(multi_ip_result.get('source_ips', []))}"
+            f"{_safe_ip_list(multi_ip_result.get('source_ips', []))}"
         )
 
         print(
             f"    Failure count: "
-            f"{multi_ip_result.get('failure_count')}"
+            f"{_safe_count(multi_ip_result.get('failure_count'))}"
         )
 
         print(
             f"    Time window: "
-            f"{multi_ip_result.get('time_window_seconds')} seconds"
+            f"{_safe_number(multi_ip_result.get('time_window_seconds'))} seconds"
         )
 
-        for rationale in multi_ip_result.get(
-            "rationale",
-            [],
-        ):
-
-            print(
-                f"    - {rationale}"
-            )
+        print("    - 상관관계는 인과관계를 입증하지 않습니다.")
 
     for result in distributed_success_results:
 
@@ -355,38 +405,37 @@ def print_global_correlation(
             "→ Successful Login"
         )
 
-        print(f"    User: {result.get('user')}")
+        print(f"    계정: {_ACCOUNT_NOTICE}")
         print(
             "    Failure source IPs: "
-            f"{', '.join(result.get('failure_source_ips', []))}"
+            f"{_safe_ip_list(result.get('failure_source_ips', []))}"
         )
         print(
-            f"    Failure count: {result.get('failure_count')}"
+            f"    Failure count: {_safe_count(result.get('failure_count'))}"
         )
         print(
             "    Failure time range: "
-            f"{result.get('failure_start_timestamp')} → "
-            f"{result.get('failure_end_timestamp')}"
+            f"{_safe_timestamp(result.get('failure_start_timestamp'))} → "
+            f"{_safe_timestamp(result.get('failure_end_timestamp'))}"
         )
         print(
             f"    Success timestamp: "
-            f"{result.get('success_timestamp')}"
+            f"{_safe_timestamp(result.get('success_timestamp'))}"
         )
         print(
             f"    Success source IP: "
-            f"{result.get('success_source_ip')}"
+            f"{_safe_ip(result.get('success_source_ip'))}"
         )
         print(
             "    Success from failure source: "
-            f"{result.get('success_from_failure_source')}"
+            f"{_safe_bool(result.get('success_from_failure_source'))}"
         )
         print(
             "    Last failure → success: "
-            f"{result.get('time_delta_seconds')} seconds"
+            f"{_safe_number(result.get('time_delta_seconds'))} seconds"
         )
 
-        for rationale in result.get("rationale", []):
-            print(f"    - {rationale}")
+        print("    - 상관관계는 인과관계를 입증하지 않습니다.")
 
     if not lifecycle_results and not login_start_results:
         return
@@ -402,7 +451,6 @@ def print_global_correlation(
         )
 
         fields = (
-            ("계정", "user"),
             ("Linux Audit 세션 ID", "audit_session_id"),
             ("시작 이벤트 관찰", "start_timestamp"),
             ("종료 이벤트 관찰", "end_timestamp"),
@@ -419,7 +467,13 @@ def print_global_correlation(
                 continue
 
             suffix = "초" if field.endswith("_seconds") else ""
-            print(f"    {label}: {value}{suffix}")
+            if field.endswith("_timestamp"):
+                safe_value = _safe_timestamp(value)
+            elif field.endswith("_seconds"):
+                safe_value = _safe_number(value)
+            else:
+                safe_value = _safe_count(value)
+            print(f"    {label}: {safe_value}{suffix}")
 
     if lifecycle_results:
         print(
@@ -440,7 +494,6 @@ def print_global_correlation(
         )
 
         fields = (
-            ("계정", "user"),
             ("Linux Audit 세션 ID", "audit_session_id"),
             ("USER_LOGIN 이벤트 관찰 시각", "login_timestamp"),
             ("USER_START 이벤트 관찰 시각", "start_timestamp"),
@@ -452,7 +505,12 @@ def print_global_correlation(
             if value is None:
                 continue
 
-            print(f"    {label}: {value}")
+            safe_value = (
+                _safe_timestamp(value)
+                if field.endswith("_timestamp")
+                else _safe_count(value)
+            )
+            print(f"    {label}: {safe_value}")
 
     if login_start_results:
         print(
@@ -708,7 +766,7 @@ def print_analysis_result(
     for ip, result in results.items():
 
         print(
-            f"\n===== {ip} ====="
+            f"\n===== {_safe_ip(ip)} ====="
         )
 
         print_detection_result(

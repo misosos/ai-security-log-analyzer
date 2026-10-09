@@ -3,7 +3,7 @@ import os
 import tempfile
 import uuid
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -18,6 +18,9 @@ from app.api_uploads import (
 from app.main import analyze
 from app.analyzer.incident_case_adapter import (
     project_investigation_cases_from_analysis,
+)
+from app.analyzer.legacy_api_projection import (
+    project_legacy_analysis_response,
 )
 from app.analyzer.report_projection import build_investigation_report_projection
 from app.analyzer.html_report import render_investigation_report_html
@@ -40,10 +43,6 @@ from app.models.linux_audit_api import (
 )
 from app.models.schemas import (
     AnalysisResponse,
-    AnalysisResultResponse,
-    AnalysisSummary,
-    DetectionResponse,
-    EvidenceResponse,
 )
 from app.security.linux_audit_api import (
     LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
@@ -78,7 +77,7 @@ def save_upload_to_temp(file: UploadFile) -> str:
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"허용되지 않은 파일 형식입니다: {suffix or '확장자 없음'}",
+            detail="허용되지 않은 파일 형식입니다. .log 또는 .txt 파일을 선택하세요.",
         )
 
     content = file.file.read()
@@ -104,76 +103,11 @@ def save_upload_to_temp(file: UploadFile) -> str:
     return temp_file.name
 
 
-def build_detection_response(detection) -> DetectionResponse:
-    evidence = [
-        EvidenceResponse(
-            type=item.type,
-            value=item.value,
-            source=item.source,
-            timestamp=item.timestamp,
-            time_range=item.time_range,
-        )
-        for item in detection.evidence
-    ]
-
-    return DetectionResponse(
-        is_detected=detection.is_detected,
-        detection_type=detection.detection_type,
-        evidence=evidence,
-    )
-
-
 def build_analysis_response(
     result: dict,
     total_sources: int,
 ) -> AnalysisResponse:
-    ip_results = result["results"]
-    results = []
-
-    for ip, analysis in ip_results.items():
-        results.append(
-            AnalysisResultResponse(
-                ip=ip,
-                risk_level=analysis["risk_level"],
-                detections={
-                    name: build_detection_response(detection)
-                    for name, detection in analysis["detections"].items()
-                },
-                correlation=analysis["correlation"],
-                risk_factors=analysis["risk_factors"],
-            )
-        )
-
-    detected_ips = sum(
-        1
-        for analysis in ip_results.values()
-        if any(
-            detection.is_detected
-            for detection in analysis["detections"].values()
-        )
-    )
-
-    high_risk_ips = sum(
-        1
-        for analysis in ip_results.values()
-        if analysis["risk_level"] == "HIGH"
-    )
-
-    summary = AnalysisSummary(
-        total_sources=total_sources,
-        total_ips=len(ip_results),
-        detected_ips=detected_ips,
-        high_risk_ips=high_risk_ips,
-    )
-
-    return AnalysisResponse(
-        analysis_id=str(uuid.uuid4()),
-        status="completed",
-        summary=summary,
-        results=results,
-        global_correlation=result["global_correlation"],
-        ai_summary=None,
-    )
+    return project_legacy_analysis_response(result, total_sources)
 
 
 def health_check():
@@ -183,10 +117,12 @@ def health_check():
 
 
 async def analyze_logs(
+    response: Response,
     application_file: UploadFile = File(...),
     ssh_file: UploadFile = File(...),
     access_file: UploadFile = File(...),
 ):
+    response.headers["Deprecation"] = "true"
     temp_paths = []
 
     try:
@@ -214,12 +150,20 @@ async def analyze_logs(
             },
         ]
 
-        result = analyze(log_sources)
-
-        return build_analysis_response(
-            result,
-            total_sources=len(log_sources),
-        )
+        try:
+            result = analyze(log_sources)
+            return build_analysis_response(result, total_sources=len(log_sources))
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, RuntimeError):
+            return JSONResponse(
+                status_code=500,
+                headers={"Deprecation": "true"},
+                content={
+                    "error_code": "LEGACY_ANALYSIS_FAILED",
+                    "user_message": "분석 결과를 준비하지 못했습니다.",
+                    "recovery_action": "입력 형식을 확인한 뒤 로컬 분석을 다시 시도하세요.",
+                    "retryable": False,
+                },
+            )
 
     finally:
         for path in temp_paths:
@@ -467,6 +411,7 @@ def create_app(
         analyze_logs,
         methods=["POST"],
         response_model=AnalysisResponse,
+        deprecated=True,
     )
     configured_app.add_api_route(
         "/api/v1/investigations/sample",

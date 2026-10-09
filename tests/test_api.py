@@ -1,24 +1,5 @@
 from app.api import build_analysis_response
-from app.models.schemas import DetectionResult
-
-
-def make_analysis(risk_level, is_detected=False):
-    return {
-        "detections": {
-            "brute_force": DetectionResult(
-                is_detected=is_detected,
-                detection_type=(
-                    "brute_force"
-                    if is_detected
-                    else None
-                ),
-                evidence=[],
-            ),
-        },
-        "correlation": {},
-        "risk_factors": {},
-        "risk_level": risk_level,
-    }
+from app.main import analyze
 
 
 def test_build_analysis_response_uses_canonical_contract():
@@ -134,18 +115,8 @@ def test_build_analysis_response_uses_canonical_contract():
         ],
     }
 
-    analysis = {
-        "results": {
-            "10.0.0.1": make_analysis(
-                risk_level="HIGH",
-                is_detected=True,
-            ),
-            "10.0.0.2": make_analysis(
-                risk_level="LOW",
-            ),
-        },
-        "global_correlation": global_correlation,
-    }
+    analysis = analyze()
+    analysis["global_correlation"] = global_correlation
 
     response = build_analysis_response(
         analysis,
@@ -153,25 +124,13 @@ def test_build_analysis_response_uses_canonical_contract():
     )
 
     assert response.summary.total_sources == 3
-    assert response.summary.total_ips == 2
-    assert response.summary.detected_ips == 1
-    assert response.summary.high_risk_ips == 1
-
-    assert [result.ip for result in response.results] == [
-        "10.0.0.1",
-        "10.0.0.2",
-    ]
-
-    assert response.global_correlation == global_correlation
-    assert response.global_correlation[
-        "linux_audit_session_lifecycle"
-    ][0]["source_instance"] == "prod-audit-feed"
-    assert response.global_correlation[
-        "linux_audit_session_lifecycle"
-    ][0]["node"] == "producer-a.example"
-    assert response.global_correlation[
-        "linux_audit_login_start_co_observation"
-    ][0]["source_instance"] == "prod-audit-feed"
-    assert response.global_correlation[
-        "linux_audit_login_start_co_observation"
-    ][0]["node"] == "producer-a.example"
+    assert response.summary.total_ips == 10
+    assert response.summary.detected_ips == 4
+    assert response.summary.high_risk_ips == 4
+    assert response.global_correlation.multi_ip_authentication_count == 2
+    assert response.global_correlation.distributed_authentication_to_success_count == 1
+    assert response.global_correlation.linux_audit_session_lifecycle_count == 1
+    assert response.global_correlation.linux_audit_login_start_co_observation_count == 1
+    rendered = response.model_dump_json()
+    for forbidden in ("admin", "alice", "training-user", "prod-audit-feed", "producer-a.example"):
+        assert forbidden not in rendered

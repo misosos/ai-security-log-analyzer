@@ -304,7 +304,13 @@ def test_exact_analysis_boundary_rejects_models_strings_and_iterables():
             high_risk_ips=0,
         ),
         results=[],
-        global_correlation={},
+        global_correlation={
+            "multi_ip_authentication_count": 0,
+            "distributed_authentication_to_success_count": 0,
+            "linux_audit_session_lifecycle_count": 0,
+            "linux_audit_login_start_co_observation_count": 0,
+            "limitation": "fixed",
+        },
     )
 
     for value in (

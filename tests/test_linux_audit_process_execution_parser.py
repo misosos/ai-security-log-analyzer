@@ -449,7 +449,8 @@ def test_process_event_is_not_projected_to_api_cli_or_llm(capsys):
     serialized_analysis = serialize_value(analysis)
 
     assert response.results == []
-    assert response.global_correlation == analysis["global_correlation"]
+    assert response.global_correlation.linux_audit_session_lifecycle_count == 0
+    assert response.global_correlation.linux_audit_login_start_co_observation_count == 0
     assert capsys.readouterr().out == ""
     assert "process_execution" not in str(serialized_analysis)
     assert "/usr/bin/example" not in str(serialized_analysis)

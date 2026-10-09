@@ -1,5 +1,7 @@
 # 결정적 탐지 평가 기준선 (Phase 6)
 
+Phase 6.2는 평가 수치나 trusted internal `analyze()` 계산 의미를 변경하지 않는다. 내부 원래 계정은 join을 위해 남을 수 있지만 평가 text/JSON은 승인된 scalar만 출력한다. Deprecated legacy API와 HTML 보고서의 공개 출력 migration은 [개인정보 경계 문서](public_analysis_privacy.md)에 기록한다.
+
 ## 목적과 범위
 
 `uv run python -m app.evaluation`은 오프라인 `synthetic_boundary_corpus`에서 **현재 구현**의 parser·탐지·상관관계·risk·조사 사례 계약을 서로 분리해 검사한다. `--format json`과 `--scenario <고정 ID>`를 지원한다. 결과는 stdout에만 쓰고 네트워크·LLM·현재 시각·환경변수·난수·DB를 사용하지 않는다. 실패 시 종료 코드 1, 라벨·fixture 오류 시 2다. `--scenario`는 정확한 ID만 허용한다. JSON은 고정 필드와 정렬된 키, 고정 6자리 소수 문자열을 사용한다.

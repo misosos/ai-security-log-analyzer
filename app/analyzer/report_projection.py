@@ -195,7 +195,6 @@ class PasswordSprayingLikeEvidenceProjection:
 
 @dataclass(frozen=True)
 class PathTraversalEvidenceProjection:
-    request_path: str
     matched_pattern: str
     http_method: str | None
     response_status: int | None
@@ -468,9 +467,14 @@ def _path_traversal_evidence(detection):
     for evidence_type in ("http_status_code", "http_response_size"):
         if evidence_type in by_type:
             _strict_non_negative_int(by_type[evidence_type].value)
+    if by_type["path_pattern"].value not in {"../", "..\\"}:
+        _fail()
+    if "http_method" in by_type and re.fullmatch(
+        r"[A-Z]{1,16}", by_type["http_method"].value,
+    ) is None:
+        _fail()
 
     return PathTraversalEvidenceProjection(
-        request_path=by_type["url_decoded_path"].value,
         matched_pattern=by_type["path_pattern"].value,
         http_method=(
             by_type["http_method"].value

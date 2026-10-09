@@ -94,7 +94,7 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
     assert report["format"] == "standalone_html"
     assert report["filename"] == "investigation-report.html"
     assert report["media_type"] == "text/html;charset=utf-8"
-    assert report["byte_count"] == 24966
+    assert report["byte_count"] == 25000
     assert report["byte_count"] == len(report["html"].encode("utf-8"))
     assert report["html"].startswith("<!doctype html>\n<html lang=\"ko\">")
     assert report["html"].endswith("</html>\n")

@@ -1,5 +1,7 @@
 # Local HTML Investigation Report Design
 
+Phase 6.2 구현 변경: 모든 원래 HTTP path와 full query는 보고서에서 제외한다. Path Traversal의 승인된 pattern·method·status·size만 남기고 요청 경로는 고정 개인정보 보호 문구로 표시한다. Report-local 계정 별칭, standalone HTML, 6열 표와 CSP style hash `sha256-dugVI89wFmxndpbiVjFenLmRw4HSK3Dw6k21+aq5/dY=`는 유지한다. 자세한 사용자 경계는 [privacy migration](public_analysis_privacy.md)을 참고한다.
+
 ## 1. Decision and product boundary
 
 This document defines a future, privacy-bounded investigation report for a
@@ -378,16 +380,15 @@ not establish reuse of the same password.
 
 | Field | Source evidence type | Type / constraint | Display label |
 |---|---|---|---|
-| `request_path` | `url_decoded_path` | string | Request path |
-| `matched_pattern` | `path_pattern` | string | Matched pattern |
-| `http_method` | `http_method` | string or absent | HTTP method |
+| `matched_pattern` | `path_pattern` | approved `../` or `..\\` | Matched pattern |
+| `http_method` | `http_method` | bounded uppercase token or absent | HTTP method |
 | `response_status` | `http_status_code` | non-negative strict integer or absent | Response status |
 | `response_size_bytes` | `http_response_size` | non-negative strict integer or absent | Response size |
 
 The detector's optional evidence type set from `path_traversal_detector` must
 validate before copying these named fields; list position is not used.
-`url_decoded_query`, when present internally, is validated as a string but is
-never copied into the report projection. The query's omission must not be
+`url_decoded_path` and `url_decoded_query` are validated as internal strings
+but are never copied into the report projection. Their omission must not be
 represented as missing detector evidence. Seconds display with `seconds` and
 response size displays with `bytes`; numeric values are not rounded or
 reinterpreted.
@@ -413,7 +414,7 @@ not causation or proof of compromise.
 Each subject detail keeps four concepts visually and structurally separate:
 
 - **Evidence** is a typed value directly observed in supported detector or
-  correlation output: counts, durations, path, matched pattern, HTTP method,
+  correlation output: counts, durations, approved matched pattern, HTTP method,
   response status, and response size.
 - **Assessment** is the existing risk, likelihood, impact, confidence, and
   their validated existing rationale. The report does not recompute it.
@@ -501,7 +502,8 @@ systems or people, and correlations can disclose behavior and relationships.
   not retained in the projection. Aliases use sequential labels only; hashes
   and source-derived fragments are prohibited.
 - HTTP method, status, and response size are allowed.
-- The decoded request path and matched traversal pattern are allowed.
+- The approved matched traversal pattern is allowed; the original HTTP path
+  is always omitted and displayed only as a fixed privacy notice.
 - Typed authentication failure/target counts and time windows are allowed.
 - Existing risk, likelihood, impact, and confidence values and approved
   rationale contracts are allowed.
@@ -511,7 +513,7 @@ systems or people, and correlations can disclose behavior and relationships.
 
 The following must not enter the projection or rendered HTML:
 
-- full HTTP query strings;
+- all original HTTP request paths and full query strings;
 - raw log lines;
 - credentials, passwords, tokens, cookies, authorization headers, session
   identifiers, keys, or connection strings;
@@ -525,10 +527,11 @@ The following must not enter the projection or rendered HTML:
 - arbitrary global-correlation content;
 - LLM input/output or any LLM transmission.
 
-The HTML must make no external network request. Privacy tests must seed private
-canaries into every excluded source location and confirm absence from the
-projection, HTML, API output, and LLM input. The report feature must not alter
-the existing API or LLM behavior to achieve this separation.
+The HTML must make no external network request. Privacy tests seed private
+canaries into excluded source locations and confirm absence from the
+projection, HTML, API output, and LLM input. Phase 6.2 intentionally migrates
+the deprecated legacy API nested values and LLM prompt input to safe
+projections; the trusted analysis calculation remains unchanged.
 
 ### 10.3 Storage, sharing, and deletion
 
@@ -700,7 +703,7 @@ The approved delivery sequence is:
 5. **Implemented in the delivery phase:** `--html-report PATH` reuses the
    existing normalized logs, analysis, and optional Linux Audit count-only
    summaries. It builds the projection once, renders once, writes once, then
-   prints the unchanged text report followed by the fixed confirmation
+   prints the privacy-hardened text report followed by the fixed confirmation
    `HTML investigation report created.`
 
 The file is finalized before any text report is printed. Projection,
@@ -708,7 +711,7 @@ rendering, or file-creation failure therefore exits non-zero with the fixed
 message `HTML investigation report could not be created.` and prints no
 partial text report. The CLI never prints HTML or the destination path, never
 opens a browser, and does not call the LLM. Omission of `--html-report`
-preserves the existing CLI flow and output.
+preserves the existing CLI flow while withholding raw account/path/query text.
 
 Usage is explicit:
 
@@ -750,7 +753,9 @@ below:
 - HTML text/attribute escaping using adversarial Unicode and markup payloads;
 - exact CSP shape, valid static-style hash, no remote resource, no JavaScript,
   no event handler, and no report/CSP network endpoint;
-- no changes to existing API schemas/output or LLM input/output;
+- Phase 6.2 intentionally changes the deprecated legacy API nested schema and
+  LLM prompt input to privacy-safe projections; versioned case JSON remains
+  unchanged apart from the report HTML payload's fixed path notice;
 - no input object/list/dictionary mutation;
 - byte-for-byte deterministic rendering for the same projection;
 - restrictive file permissions where supported;

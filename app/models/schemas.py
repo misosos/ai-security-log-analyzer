@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # =========================
@@ -149,12 +149,60 @@ class DetectionResponse(BaseModel):
     evidence: list[EvidenceResponse]
 
 
+class LegacyDetectionProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    is_detected: bool
+    detection_type: str | None
+    failed_attempt_count: int | None = None
+    target_account_count: int | None = None
+    time_window_seconds: int | float | None = None
+    matched_pattern: str | None = None
+    http_method: str | None = None
+    response_status: int | None = None
+    response_size_bytes: int | None = None
+
+
+class LegacyRelationProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    relation_type: str
+    start_timestamp_utc: datetime
+    end_timestamp_utc: datetime
+    time_delta_seconds: int | float | None = None
+    account_reference_available: bool = False
+    account_notice: str
+    limitation: str
+
+
+class LegacyRiskProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    likelihood_level: str
+    impact_level: str
+    confidence_level: str
+    rationale_id: str
+    limitation: str
+
+
+class LegacyGlobalCorrelationProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    multi_ip_authentication_count: int
+    distributed_authentication_to_success_count: int
+    linux_audit_session_lifecycle_count: int
+    linux_audit_login_start_co_observation_count: int
+    limitation: str
+
+
 class AnalysisResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     ip: str
     risk_level: str
-    detections: dict[str, DetectionResponse]
-    correlation: dict
-    risk_factors: dict
+    detections: dict[str, LegacyDetectionProjection]
+    correlation: tuple[LegacyRelationProjection, ...]
+    risk_factors: LegacyRiskProjection
 
 
 class AnalysisSummary(BaseModel):
@@ -165,9 +213,11 @@ class AnalysisSummary(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     analysis_id: str
     status: str
     summary: AnalysisSummary
     results: list[AnalysisResultResponse]
-    global_correlation: dict
+    global_correlation: LegacyGlobalCorrelationProjection
     ai_summary: str | None = None

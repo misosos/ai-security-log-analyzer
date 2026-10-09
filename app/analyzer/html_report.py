@@ -235,12 +235,10 @@ def _evidence_lines(evidence, *, local_upload=False):
             ),
         )
     if type(evidence) is PathTraversalEvidenceProjection:
-        approved_path = _text(evidence.request_path)
         lines = [
             (
                 "요청 경로",
-                "개인정보 보호를 위해 표시하지 않습니다."
-                if local_upload else f"<code>{approved_path}</code>",
+                "개인정보 보호를 위해 표시하지 않습니다.",
             ),
             ("일치 패턴", f"<code>{_text(evidence.matched_pattern)}</code>"),
         ]
