@@ -195,6 +195,18 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드를 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 실시간·streaming 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
+## 오프라인 탐지 평가 기준선
+
+작은 합성 경계 corpus에서 현재 parser·탐지·관계·risk·조사 사례 계약을 분리해 평가합니다.
+
+```bash
+uv run python -m app.evaluation
+uv run python -m app.evaluation --format json
+uv run python -m app.evaluation --scenario brute_success
+```
+
+결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 평가 과정에서 규칙은 변경하지 않습니다.
+
 ## 안전한 정리
 
 아래 명령은 위 빠른 시작에서 현재 디렉터리에 직접 만든 `investigation.html`만 제거합니다. 다른 보고서나 디렉터리에 사용하지 마십시오.

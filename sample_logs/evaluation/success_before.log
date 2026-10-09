@@ -1,0 +1,6 @@
+2026-10-08 09:00:00 INFO user_login user=synthetic_a ip=192.0.2.10
+2026-10-08 09:00:10 INFO login_failed user=synthetic_a ip=192.0.2.10
+2026-10-08 09:00:20 INFO login_failed user=synthetic_a ip=192.0.2.10
+2026-10-08 09:00:30 INFO login_failed user=synthetic_a ip=192.0.2.10
+2026-10-08 09:00:40 INFO login_failed user=synthetic_a ip=192.0.2.10
+2026-10-08 09:00:50 INFO login_failed user=synthetic_a ip=192.0.2.10
