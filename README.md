@@ -58,7 +58,7 @@ uv run python -m app.local_web
 | Hosted server | 지원 안 함 | 인증·인가·tenant isolation 없음 |
 | Public internet | 노출 금지 | 실제 로그 업로드 보안 gate 미충족 |
 
-`v0.1.0`은 [변경 이력](CHANGELOG.md), [릴리스 노트 초안](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)로 준비 중이며 아직 tag·GitHub Release가 아니다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). Safari 수동 검증과 원격 CI는 아직 남아 있어 공개 릴리스 승인을 뜻하지 않는다. 실제 운영환경 탐지율·WCAG 2.2 AA·hosted 배포를 주장하지 않는다.
+`v0.1.0`은 [변경 이력](CHANGELOG.md), [릴리스 노트 초안](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)로 준비 중이며 아직 tag·GitHub Release가 아니다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 기준 기능 커밋의 원격 CI는 통과했지만 Safari 수동 키보드·확대·스크린리더 검증은 남아 있어 공개 릴리스 승인을 뜻하지 않는다. 실제 운영환경 탐지율·WCAG 2.2 AA·hosted 배포를 주장하지 않는다.
 
 ### 업데이트와 삭제
 

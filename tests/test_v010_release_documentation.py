@@ -82,3 +82,16 @@ def test_artifact_ignore_is_narrow_and_ci_has_no_release_authority():
     ):
         assert contract in workflow
     assert "upload-artifact" not in workflow
+
+
+def test_phase10_release_evidence_separates_remote_ci_from_manual_gates():
+    readme = _text("README.md")
+    note = _text("docs/releases/v0.1.0.md")
+    checklist = _text("docs/release_checklist.md")
+    assert "2df45cf54f5dd062a2707b09417c9cd63cc2386a" in checklist
+    assert "1,617 passed" in checklist
+    assert "79/79" in checklist and "21/21" in checklist
+    assert "Allow remote automation" in checklist
+    assert "NO-GO" in checklist
+    assert "Safari 수동 검증과 원격 CI는 아직 남아" not in readme
+    assert "Safari 수동 검증과 원격 CI는 공개 릴리스 전 남은 gate" not in note

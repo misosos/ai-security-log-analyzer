@@ -62,4 +62,17 @@ Phase 8 추가 검증 gate:
 - [ ] GitHub Release 생성 여부를 별도 승인한다. **이번 작업에서는 생성 금지**.
 - [ ] Tag/Release 뒤 다른 clean source checkout 설치·smoke와 rollback 기준(태그/배포 철회, 민감 artifact 회수)을 검토한다.
 
-현재 go/no-go: 라이선스와 비공개 신고 경로 결정은 완료됐다. Phase 8·9 이후 clean checkout, Safari 수동 검증과 원격 CI가 미완료이므로 **공개 릴리스 NO-GO**이며, 현재는 기능 커밋까지만 진행한다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.
+## Phase 10 후보 검증 — 2026-10-11
+
+기준 기능 커밋 `2df45cf54f5dd062a2707b09417c9cd63cc2386a`는 검증 시작 시 clean이며 `origin/main`과 일치했다. 다음은 앞선 Phase 7–9 이력과 구분한 현재 증거다.
+
+- [x] 별도 clean checkout에서 CPython 3.12.7, `uv sync --locked --dev`, `uv lock --check`, 전체 회귀 **1,617 passed, 기존 경고 2건**을 확인했다.
+- [x] 합성 인증·웹 평가 79/79와 Linux 평가 21/21, 반복 및 UTC/Asia/Seoul JSON SHA-256 동일(`f15c3c6a0d937e3a49f19fcf7feb7b418fc99d4e3c776d160d01950eec0fe8c9`)을 확인했다. 이는 운영환경 탐지율이 아니다.
+- [x] clean checkout의 `127.0.0.1` launcher에서 root, CSS, 두 JavaScript 자산, health, sample, 실제 3파일, 별도 Linux Audit API를 확인했다. Sample은 사례 2·독립 관찰 4·탐지 5이며 HTML byte count와 기존 CSP hash가 맞았다. Linux 합성 입력은 eligible 1·분류 1·범주 관찰 2로 인증·웹 사례와 결합되지 않았다.
+- [x] 기준 기능 커밋의 GitHub Actions [CI 실행](https://github.com/misosos/ai-security-log-analyzer/actions/runs/38064889966)은 해당 SHA에서 완료·성공했다. 이 문서 수정 커밋 자체의 원격 CI는 아직 검증되지 않았다.
+- [x] `uv build`는 기존 flat-layout 다중 최상위 패키지 자동 발견 오류로 실패한다. 지원 설치 방식은 source checkout이며 wheel/PyPI는 제공하지 않는다.
+- [ ] Safari WebDriver가 `Allow remote automation` 비활성화 오류로 세션을 만들지 못했다. 설정을 우회·변경하지 않았다. Safari 실제 시각·키보드·콘솔, 320px와 200% 확대, VoiceOver 핵심 흐름은 **미검증**이다.
+- [ ] 실제 사용자 acceptance와 WCAG 2.2 AA 준수 증거는 없다. 원격 CI와 자동 DOM 테스트가 이를 대체하지 않는다.
+- [ ] 이 문서 수정 커밋의 원격 CI는 push 전이므로 미검증이다. 공개 릴리스 판단 전 최종 commit SHA와 clean tree를 다시 확인한다.
+
+현재 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는 통과했다. Safari 실제 접근성 수용 테스트가 미완료이므로 **공개 릴리스 NO-GO**다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.
