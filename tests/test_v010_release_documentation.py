@@ -95,3 +95,16 @@ def test_phase10_release_evidence_separates_remote_ci_from_manual_gates():
     assert "NO-GO" in checklist
     assert "Safari 수동 검증과 원격 CI는 아직 남아" not in readme
     assert "Safari 수동 검증과 원격 CI는 공개 릴리스 전 남은 gate" not in note
+
+
+def test_phase101_voiceover_is_a_disclosed_follow_up_not_a_release_gate():
+    checklist = _text("docs/release_checklist.md")
+    note = _text("docs/releases/v0.1.0.md")
+    readiness = _text("docs/release_readiness.md")
+    assert "VoiceOver 후속 접근성 검증" in checklist
+    assert "오류 안내 읽기: NOT_TESTED" in checklist
+    assert "VoiceOver 미검증만으로 NO-GO로 판정하지 않는다" in checklist
+    assert "WCAG 2.2 AA 준수를 주장하지 않는다" in checklist + note + readiness
+    assert "Phase 10.1 로컬 릴리스 후보 접근성 수용 판정: GO" in checklist
+    assert "정확한 320 CSS px" in checklist + note + readiness
+    assert "이 문서 변경 커밋 자체의 원격 CI" in checklist

@@ -1,5 +1,7 @@
 # Repository Release Readiness
 
+> 현재 v0.1.0 로컬 릴리스 후보의 접근성 수용 판정은 [릴리스 체크리스트의 Phase 10.1 기록](release_checklist.md)에 따라 **GO**다. Safari WebDriver 주요 흐름과 사용자 수동 keyboard-only·visible focus·실제 200% 확대·가능한 최소 창 너비·콘솔 검수를 구분해 기록했다. 정확한 320 CSS px 측정과 VoiceOver의 나머지 읽기는 후속 검증이며 WCAG 2.2 AA 준수를 주장하지 않는다. 기준 기능 SHA의 원격 CI는 성공했으나 이 문서 변경 SHA의 CI는 push 전까지 미검증이므로 tag·Release 전 다시 확인해야 한다. 아래의 예전 Linux 호스트 수용 표는 현재 로컬 웹 릴리스의 GO 판정이 아니다.
+
 Historical repository/secured Linux Audit API audit only; its old test counts and frontend inventory are not the current v0.1.0 local-web release status. For the current candidate use [v0.1.0 checklist](release_checklist.md). This historical audit's production-host acceptance does not approve hosted actual-log upload.
 
 ## Decision scope

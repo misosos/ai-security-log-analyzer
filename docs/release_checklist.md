@@ -1,6 +1,6 @@
 # v0.1.0 로컬 공개 릴리스 체크리스트
 
-상태: **NO-GO**. 이 문서는 준비 증거와 공개 전 미완료 gate를 분리한다. `pyproject.toml`의 `0.1.0`은 프로젝트 버전이며 API/평가 schema version이 아니다. 태그·GitHub Release·push·PyPI 배포는 수행하지 않았다.
+상태: **Phase 10.1 로컬 릴리스 후보 접근성 수용 GO, 공개 배포 미실행**. 이 문서는 준비 증거와 공개 전 미완료 gate를 분리한다. `pyproject.toml`의 `0.1.0`은 프로젝트 버전이며 API/평가 schema version이 아니다. 태그·GitHub Release·push·PyPI 배포는 수행하지 않았다.
 
 표시 규칙: `[x]`는 실제 수행한 자동/저장소 검증만 뜻한다. `[ ]`는 미수행, 확인 불가 또는 의사결정 대기다. 이 문서를 작성하는 커밋 자체의 최종 SHA와 CI 원격 실행은 나중에 기록한다.
 
@@ -75,4 +75,24 @@ Phase 8 추가 검증 gate:
 - [ ] 실제 사용자 acceptance와 WCAG 2.2 AA 준수 증거는 없다. 원격 CI와 자동 DOM 테스트가 이를 대체하지 않는다.
 - [ ] 이 문서 수정 커밋의 원격 CI는 push 전이므로 미검증이다. 공개 릴리스 판단 전 최종 commit SHA와 clean tree를 다시 확인한다.
 
-현재 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는 통과했다. Safari 실제 접근성 수용 테스트가 미완료이므로 **공개 릴리스 NO-GO**다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.
+Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는 통과했다. 당시 Safari 실제 접근성 수용 테스트가 미완료였으므로 **공개 릴리스 NO-GO**였다. 아래 Phase 10.1 기록이 최신 수용 판정이다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.
+
+## Phase 10.1 Safari 자동화와 수동 수용 — 2026-10-11
+
+시작 기준은 `536a73561b8df9fc3eff2e176708cb95d0ca06b9`, clean tree, `origin/main` 일치다. 해당 SHA의 [원격 CI 38066159704](https://github.com/misosos/ai-security-log-analyzer/actions/runs/38066159704)는 성공했다. Safari 18.6 WebDriver 세션은 사용자가 Remote Automation을 활성화한 뒤 **CONNECTED**였다. 아래 자동화는 실제 Safari에서 수행했지만 사람이 직접 확인하는 접근성 수용을 대신하지 않는다.
+
+- [x] Loopback launcher readiness 후 Safari에서 root의 한국어 title·`lang=ko`·header/main/footer·skip link·sample/3파일/Linux 영역을 확인했다. 이 페이지에는 별도 nav landmark가 없다.
+- [x] WebDriver element Enter로 sample 요청을 한 번 실행해 사례 2·독립 관찰 4·탐지 5, HIGH 기본 펼침·LOW 접힘, details 토글, KST/UTC, 계정 별칭 안내, 보고서 버튼을 확인했다. 실제 다운로드 저장은 수행하지 않았다.
+- [x] 합성 3파일 업로드와 Linux Audit 업로드를 실제 Safari에서 수행했다. 두 결과는 분리됐고 Linux 합성 입력은 eligible 1·분류 1·범주 관찰 2였다. 누락 파일, 빈 Linux 파일, 비지원 형식의 고정 오류·요약 focus·필드 연결·복구 문구도 확인했다.
+- [x] Safari resource timing에는 고정 CSS/JS와 각 요청의 예상 API 경로만 나타났다. HTTP CSP·보안 헤더를 확인했다. WebDriver의 console log 명령은 지원되지 않았고, 콘솔 자체는 아래 사용자 수동 검수로 확인했다.
+- [ ] WebDriver pointer click과 전역 Tab action은 이 세션에서 DOM 이벤트·focus 이동을 일으키지 않았다. Element-targeted Enter는 동작했으나 이것만으로 실제 Tab/Shift+Tab 순서·focus ring·keyboard trap 부재를 입증하지 않는다.
+- [x] 사용자 수동 키보드 확인: `조사 사례 1`에서 `조사 사례 2`로 일반 Tab 이동이 가능했다. 그 다음 일반 Tab은 Safari 주소창으로 이동했지만, `조사 사례 2`에서 `Option+Tab`을 누르면 `HTML 보고서 다운로드` 버튼에 도달했고 Enter로 다운로드가 시작됐다. Safari 키보드 탐색 방식에 따른 차이로 기록한다. 사용자는 다운로드 버튼의 초점 표시가 보였다고 확인했다.
+- [x] 사용자는 마우스 없이 skip link → 샘플 실행 → 사례 disclosure → 3파일 입력·제출 → Linux Audit 입력·제출의 주요 흐름에서 막히는 곳이 없다고 확인했다. 모든 focus ring의 대비를 계측하거나 WCAG 준수를 판정한 것은 아니다.
+- [ ] WebDriver의 `window/rect` 요청 320에서 실제 CSS viewport는 426px였고 이 너비에서만 `scrollWidth == clientWidth`를 확인했다. **320 CSS px는 미검증**이다. 실제 Safari 200% page zoom도 제어하지 않았으므로 미검증이다.
+- [ ] Safari의 실제 보고서 다운로드 파일명·MIME·저장 결과와 정확한 320 CSS px 검증은 미완료다. 사용자는 다운로드 동작과 해당 버튼의 visible focus, Safari 실제 200% 확대와 가능한 최소 창 너비에서 가로 넘침·잘림·겹침 없음은 확인했다. 최소 너비의 실제 CSS px 수치와 확대·최소 너비 조합은 별도 측정하지 않았다.
+- [x] 사용자가 Safari JavaScript 콘솔을 직접 열어 샘플·3파일·Linux Audit 흐름에서 JavaScript 오류와 CSP 차단 메시지가 없음을 확인했다고 보고했다. WebDriver에는 console log 명령이 없어 이 항목은 사용자 수동 검수 증거다.
+- [x] 사용자는 샘플·3파일·Linux Audit 결과의 시각적 구분과 파일 누락 오류 복구에 문제가 없다고 확인했다. Safari 자동화에서도 고정 오류·field 연결·재제출 성공을 별도로 확인했다.
+- [x] 사용자 VoiceOver 확인: 페이지 제목·주요 heading 구분, header/main/footer landmark, 네 파일 입력의 label·필수 상태는 PASS였다.
+- [ ] **VoiceOver 후속 접근성 검증:** 오류 안내 읽기: NOT_TESTED. Disclosure·Timeline·동적 상태 등 나머지 screen-reader 흐름도 NOT_TESTED다. 사용자 승인에 따라 v0.1.0의 필수 GO gate가 아니라 후속 검증으로 분리한다. VoiceOver 미검증만으로 NO-GO로 판정하지 않는다.
+
+**Phase 10.1 로컬 릴리스 후보 접근성 수용 판정: GO.** Safari WebDriver 주요 흐름, 사용자 수동 keyboard-only 주요 흐름·visible focus, 실제 200% 확대·가능한 최소 창 너비, 콘솔 오류 부재, 시각적 구분·오류 복구 및 전체 회귀가 확인됐다. 사용자의 변경된 수용 기준에 따라 VoiceOver 나머지 읽기와 정확한 320 CSS px 측정은 후속 검증이며 이번 GO의 근거로 삼지 않는다. 다운로드 파일 속성의 Safari 직접 확인도 미완료이나 서버·브라우저 자동 계약 검증과 사용자 Enter 시작 확인을 구분한다. WCAG 2.2 AA 준수를 주장하지 않는다. 기준 기능 SHA의 원격 CI는 성공했지만 이 문서 변경 커밋 자체의 원격 CI는 push 전에는 확인할 수 없으므로 실제 tag·Release 전 최종 SHA의 CI를 다시 확인해야 한다. GO는 공개 배포 실행 승인이나 hosted upload 승인이 아니다.
