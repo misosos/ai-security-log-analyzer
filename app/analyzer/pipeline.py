@@ -6,7 +6,7 @@ from app.detector.brute_force import (
     detect_brute_force,
 )
 from app.detector.password_spray import detect_password_spray
-from app.detector.web_attack import detect_path_traversal
+from app.detector.web_attack import detect_path_traversal, detect_web_observations
 from app.correlation.attack_chain import (
     correlate_authentication_transition,
     correlate_post_authentication_activity,
@@ -104,6 +104,10 @@ def create_empty_detections():
         "brute_force": create_empty_detection(),
         "password_spray": create_empty_detection(),
         "path_traversal": create_empty_detection(),
+        "sql_injection_like": create_empty_detection(),
+        "xss_like": create_empty_detection(),
+        "sensitive_resource_probing_like": create_empty_detection(),
+        "web_scanning_like": create_empty_detection(),
     }
 
 
@@ -201,6 +205,11 @@ def detect_attacks(logs):
             result["detections"]["path_traversal"] = (
                 path_result
             )
+
+    for ip, result in results.items():
+        result["detections"].update(
+            detect_web_observations(grouped_logs[ip])
+        )
 
     return results
 

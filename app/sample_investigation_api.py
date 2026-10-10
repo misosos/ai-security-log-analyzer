@@ -44,7 +44,7 @@ _RATE_CAPACITY = 12
 _RATE_WINDOW_SECONDS = 60.0
 _CONCURRENT_CAPACITY = 2
 _TIMEOUT_SECONDS = 10.0
-_MAX_REPORT_BYTES = 32768  # verified labeled synthetic report: 25,000 UTF-8 bytes
+_MAX_REPORT_BYTES = 32768  # Phase 8 synthetic report: 25,551 UTF-8 bytes
 _ACCOUNT_MESSAGE = (
     "계정 별칭을 표시할 수 없음. "
     "원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다."
@@ -382,6 +382,8 @@ def _independent(item) -> IndependentObservation:
         timestamp_state=item.timestamp_state,
         evidence=_evidence(item.evidence),
         reason=item.reason_text,
+        limitation=item.limitation,
+        next_step=item.next_step,
         account_alias_state="unavailable",
         account_alias_message=_ACCOUNT_MESSAGE,
     )

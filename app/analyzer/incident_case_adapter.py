@@ -17,6 +17,9 @@ from app.analyzer.incident_case_projection import (
     build_investigation_case_projection,
 )
 from app.models.schemas import DetectionResult, Evidence
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WebObservationProjectionError, project_web_observation,
+)
 
 
 _MAX_INTEGER = (1 << 63) - 1
@@ -43,6 +46,10 @@ _DETECTION_TYPES = MappingProxyType({
     "brute_force": "brute_force",
     "password_spray": "password_spraying_like",
     "path_traversal": "path_traversal",
+    "sql_injection_like": "sql_injection_like",
+    "xss_like": "xss_like",
+    "sensitive_resource_probing_like": "sensitive_resource_probing_like",
+    "web_scanning_like": "web_scanning_like",
 })
 _CORRELATION_TYPES = MappingProxyType({
     "authentication": "failed_to_successful_login",
@@ -410,6 +417,8 @@ def _detection_input(
             _fail("invalid_detection_contract")
         expected_type = _DETECTION_TYPES[slot]
         if raw_detection.detection_type != expected_type:
+            if slot in WEB_TYPES:
+                _fail("invalid_detection_contract")
             if type(raw_detection.evidence) is not list:
                 _fail("invalid_detection_contract")
             detection = DetectionResult(True, "unsupported_detection", [])
@@ -420,8 +429,27 @@ def _detection_input(
                 features,
                 target_accounts,
             )
-        else:
+        elif slot == "path_traversal":
             detection = _path_detection(raw_detection)
+        elif slot in WEB_TYPES:
+            try:
+                approved = project_web_observation(slot, raw_detection)
+            except WebObservationProjectionError:
+                _fail("invalid_detection_contract")
+            evidence = [
+                Evidence("pattern_id", approved.pattern_id, "web_observation_detector",
+                         time_range=(approved.start_utc, approved.end_utc)),
+                Evidence("request_count", approved.request_count, "web_observation_detector"),
+            ]
+            if slot == "web_scanning_like":
+                evidence.extend((
+                    Evidence("distinct_target_count", approved.distinct_target_count, "web_observation_detector"),
+                    Evidence("client_error_count", approved.client_error_count, "web_observation_detector"),
+                    Evidence("time_window_seconds", approved.time_window_seconds, "web_observation_detector"),
+                ))
+            detection = DetectionResult(True, slot, evidence)
+        else:
+            _fail("invalid_detection_contract")
     return IncidentCaseDetectionInput(slot=slot, detection=detection)
 
 

@@ -275,9 +275,9 @@ def test_real_default_html_report_preserves_text_and_is_standalone(
     assert parser.remote_references == []
     assert "<dt>분석 대상 수</dt>\n<dd>10</dd>" in html
     assert "<dt>HIGH 위험도</dt>\n<dd>4</dd>" in html
-    assert "<dt>MEDIUM 위험도</dt>\n<dd>1</dd>" in html
-    assert "<dt>LOW 위험도</dt>\n<dd>5</dd>" in html
-    assert "<dt>지원 탐지 관찰 수</dt>\n<dd>4</dd>" in html
+    assert "<dt>MEDIUM 위험도</dt>\n<dd>2</dd>" in html
+    assert "<dt>LOW 위험도</dt>\n<dd>4</dd>" in html
+    assert "<dt>지원 탐지 관찰 수</dt>\n<dd>5</dd>" in html
     assert "<dt>지원 상관관계 관찰 수</dt>\n<dd>3</dd>" in html
     ordered_subjects = (
         "조사 순서 1 — 분석 대상 IP 10.0.0.5",

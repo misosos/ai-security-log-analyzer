@@ -10,6 +10,11 @@ from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
 from app.models.schemas import DetectionResult, Evidence
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_DISPLAY, WEB_LIMITATION, WEB_NEXT_STEP,
+    WebObservationEvidence, WebObservationProjectionError,
+    project_web_observation,
+)
 
 
 _PROJECTION_ERROR_MESSAGE = "Investigation report projection failed."
@@ -21,11 +26,13 @@ _DETECTION_SLOTS = MappingProxyType({
     "brute_force": "brute_force",
     "password_spray": "password_spraying_like",
     "path_traversal": "path_traversal",
+    **{kind: kind for kind in WEB_TYPES},
 })
 _DETECTION_DISPLAY_NAMES = MappingProxyType({
     "brute_force": "Brute Force",
     "password_spraying_like": "Password Spraying-like",
     "path_traversal": "Path Traversal",
+    **WEB_DISPLAY,
 })
 _CORRELATION_DISPLAY_NAMES = MappingProxyType({
     "failed_to_successful_login": "Failed Login → Successful Login",
@@ -71,6 +78,14 @@ _STATIC_RATIONALES = frozenset({
     "정상적인 사용자 활동일 가능성을 배제할 수 없어 공격 행위 자체를 확정할 수는 없음",
     "짧은 시간 내 반복적인 인증 실패가 확인됨",
     "판단을 뒷받침할 충분한 공격 증거가 확인되지 않음",
+    "SQL 삽입과 유사한 요청 패턴이 관찰됨",
+    "스크립트 삽입과 유사한 요청 패턴이 관찰됨",
+    "민감할 수 있는 리소스 탐색과 유사한 요청이 관찰됨",
+    "짧은 시간 동안 여러 웹 리소스 탐색이 관찰됨",
+    "요청 패턴만으로 공격 성공이나 악의적 목적을 판단할 수 없음",
+    "웹 요청 기록만으로 데이터 접근·실행·노출의 영향을 확인할 수 없음",
+    "승인된 웹 요청 패턴 또는 반복 탐색 수치가 로그에서 확인됨",
+    "실제 취약점 악용이나 공격 성공 여부는 확인되지 않음",
 })
 _RATIONALE_PATTERNS = tuple(
     re.compile(pattern).fullmatch
@@ -110,6 +125,8 @@ _LIMITATION_CATALOG = (
         "상관관계는 인과관계나 침해의 증거를 의미하지 않습니다.",
         frozenset(_CORRELATION_DISPLAY_NAMES),
     ),
+    *((f"{kind}_not_success", WEB_LIMITATION[kind], frozenset({kind}))
+      for kind in WEB_TYPES),
     (
         "successful_login_not_account_compromise",
         "로그인 성공만으로 계정 침해가 발생했다고 판단할 수 없습니다.",
@@ -150,6 +167,8 @@ _NEXT_STEP_CATALOG = (
             "검토하고, 예상된 로그인인지 확인하십시오."
         ),
     ),
+    *((kind, f"review_{kind}_context", WEB_NEXT_STEP[kind])
+      for kind in WEB_TYPES),
     (
         "brute_force_to_successful_login",
         "review_brute_force_login_transition",
@@ -205,6 +224,7 @@ SupportedEvidenceProjection = (
     BruteForceEvidenceProjection
     | PasswordSprayingLikeEvidenceProjection
     | PathTraversalEvidenceProjection
+    | WebObservationEvidence
 )
 
 
@@ -515,6 +535,8 @@ def _project_detections(detections):
         if type(detection.detection_type) is not str:
             _fail()
         if detection.detection_type != expected_type:
+            if slot in WEB_TYPES:
+                _fail()
             unsupported = True
             continue
 
@@ -522,6 +544,11 @@ def _project_detections(detections):
             evidence = _authentication_evidence(detection)
         elif detection.detection_type == "path_traversal":
             evidence = _path_traversal_evidence(detection)
+        elif detection.detection_type in WEB_TYPES:
+            try:
+                evidence = project_web_observation(slot, detection)
+            except WebObservationProjectionError:
+                _fail()
         else:
             _fail()
         projected.append(DetectionDisplayItem(

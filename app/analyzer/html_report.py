@@ -18,6 +18,10 @@ from app.analyzer.report_projection import (
     ReportSummaryProjection,
     RiskAssessmentProjection,
 )
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_PATTERN_LABELS, WebObservationEvidence,
+    WebObservationProjectionError, validate_web_evidence,
+)
 
 
 _RENDERER_ERROR_MESSAGE = "Investigation report rendering failed."
@@ -114,7 +118,7 @@ _REPORT_LEVEL_LIMITATION_IDS = frozenset({
 _SUBJECT_LIMITATION_IDS = frozenset({
     "spraying_like_not_credential_reuse",
     "path_traversal_not_file_disclosure",
-})
+}) | frozenset(f"{kind}_not_success" for kind in WEB_TYPES)
 _NEXT_STEP_PURPOSES = (
     ("authentication_failure", ("review_authentication_failures",)),
     (
@@ -129,6 +133,7 @@ _NEXT_STEP_PURPOSES = (
         ),
     ),
     ("traversal_response", ("review_traversal_response_context",)),
+    *((kind, (f"review_{kind}_context",)) for kind in WEB_TYPES),
 )
 _NEXT_STEP_IDS = frozenset(
     next_step_id
@@ -216,6 +221,22 @@ def _dimension_lines(title, dimension):
 
 
 def _evidence_lines(evidence, *, local_upload=False):
+    if type(evidence) is WebObservationEvidence:
+        try:
+            validate_web_evidence(evidence)
+        except WebObservationProjectionError:
+            _fail()
+        lines = [
+            ("패턴 분류", _text(WEB_PATTERN_LABELS[evidence.pattern_id])),
+            ("관찰 요청 수", _non_negative_int(evidence.request_count)),
+        ]
+        if evidence.detection_type == "web_scanning_like":
+            lines.extend((
+                ("서로 다른 대상 수", _non_negative_int(evidence.distinct_target_count)),
+                ("클라이언트 오류 수", _non_negative_int(evidence.client_error_count)),
+                ("시간 범위", f"{_non_negative_number(evidence.time_window_seconds)}초"),
+            ))
+        return tuple(lines)
     if type(evidence) is BruteForceEvidenceProjection:
         return (
             ("실패 횟수", _non_negative_int(evidence.failed_attempt_count)),
@@ -386,7 +407,7 @@ def _next_step_lines(items):
                 break
     return _fixed_item_lines(
         "다음 조사 단계",
-        tuple(selected[:3]),
+        tuple(selected),
         FixedNextStepItem,
         "표시할 고정 조사 단계가 없습니다.",
     )

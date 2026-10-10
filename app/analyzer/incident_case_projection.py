@@ -16,6 +16,10 @@ from app.analyzer.incident_case import (
     IndependentObservation,
     UnsupportedCaseRule,
 )
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_DISPLAY, WEB_PATTERN_IDS, WEB_PATTERN_LABELS,
+    WEB_LIMITATION, WEB_NEXT_STEP,
+)
 
 
 RiskLevel = Literal["HIGH", "MEDIUM", "LOW"]
@@ -59,6 +63,7 @@ _OBSERVATION_DISPLAY_NAMES = MappingProxyType({
     "brute_force": "Brute Force",
     "password_spraying_like": "Password Spraying-like",
     "path_traversal": "Path Traversal",
+    **WEB_DISPLAY,
     "unsupported_detection": "지원되지 않는 탐지 관찰",
     "brute_force_invalid_contract": "Brute Force 계약 미검증 관찰",
     "brute_force_invalid_timestamp": "Brute Force 시간 미검증 관찰",
@@ -92,6 +97,7 @@ _PHASE_ONE_DISPLAY_NAMES = MappingProxyType({
     "brute_force": "Brute Force",
     "password_spraying_like": "Password Spraying-like",
     "path_traversal": "Path Traversal",
+    **WEB_DISPLAY,
     "unsupported_detection": "Unsupported detection",
     "brute_force_invalid_contract": "Brute Force",
     "brute_force_invalid_timestamp": "Brute Force",
@@ -264,9 +270,11 @@ class InvestigationEvidenceProjection:
         "target_account_count",
         "time_window_seconds",
         "relation_time_delta_seconds",
+        "pattern_category", "request_count", "distinct_target_count",
+        "client_error_count",
     ]
     label: str
-    value: int | float
+    value: int | float | str
     unit: str | None
 
 
@@ -381,6 +389,8 @@ class IndependentObservationProjection:
     evidence_state: Literal["AVAILABLE", "APPROVED_EVIDENCE_UNAVAILABLE"]
     reason_id: str
     reason_text: str
+    limitation: str | None = None
+    next_step: str | None = None
 
 
 @dataclass(frozen=True)
@@ -497,6 +507,45 @@ def _project_evidence(
 ) -> tuple[InvestigationEvidenceProjection, ...]:
     if type(evidence) is not tuple:
         _fail()
+    if observation_type in WEB_TYPES:
+        expected = (
+            ("pattern_id", "request_count", "distinct_target_count",
+             "client_error_count", "time_window_seconds")
+            if observation_type == "web_scanning_like"
+            else ("pattern_id", "request_count")
+        )
+        if len(evidence) != len(expected) or any(
+            type(item) is not IncidentCaseEvidenceScalar
+            or item.evidence_type != key
+            for item, key in zip(evidence, expected)
+        ):
+            _fail()
+        pattern = evidence[0].value
+        count = evidence[1].value
+        if type(pattern) is not str or pattern not in WEB_PATTERN_IDS[observation_type]:
+            _fail()
+        if type(count) is not int or not 1 <= count <= 4096:
+            _fail()
+        projected = [
+            InvestigationEvidenceProjection(
+                "pattern_category", "패턴 분류", WEB_PATTERN_LABELS[pattern], None,
+            ),
+            InvestigationEvidenceProjection("request_count", "관찰 요청 수", count, "건"),
+        ]
+        if observation_type == "web_scanning_like":
+            distinct, errors, window = (item.value for item in evidence[2:])
+            if (
+                type(distinct) is not int or not 6 <= distinct <= count
+                or type(errors) is not int or not 3 <= errors <= count
+                or _number(window) > 60
+            ):
+                _fail()
+            projected.extend((
+                InvestigationEvidenceProjection("distinct_target_count", "서로 다른 대상 수", distinct, "개"),
+                InvestigationEvidenceProjection("client_error_count", "클라이언트 오류 수", errors, "건"),
+                InvestigationEvidenceProjection("time_window_seconds", "시간 범위", window, "초"),
+            ))
+        return tuple(projected)
     if observation_type not in {"brute_force", "password_spraying_like"}:
         if evidence:
             _fail()
@@ -938,6 +987,8 @@ def _independent_reason(item: IndependentObservation) -> str:
     observation_type = item.observation.observation_type
     if observation_type == "path_traversal":
         return "Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다."
+    if observation_type in WEB_TYPES:
+        return "웹 요청 관찰은 인증 사례나 다른 웹 관찰과 자동 결합하지 않습니다."
     if observation_type in {
         "password_spraying_like",
         "password_spray_to_successful_login",
@@ -1000,6 +1051,10 @@ def _project_independent(
         evidence_state=("AVAILABLE" if evidence else "APPROVED_EVIDENCE_UNAVAILABLE"),
         reason_id=item.reason,
         reason_text=_independent_reason(item),
+        limitation=(WEB_LIMITATION[observation.observation_type]
+                    if observation.observation_type in WEB_TYPES else None),
+        next_step=(WEB_NEXT_STEP[observation.observation_type]
+                   if observation.observation_type in WEB_TYPES else None),
     )
 
 

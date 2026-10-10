@@ -238,6 +238,10 @@ def _subject_result(
             "brute_force": brute or _empty_detection(),
             "password_spray": spray or _empty_detection(),
             "path_traversal": path or _empty_detection(),
+            "sql_injection_like": _empty_detection(),
+            "xss_like": _empty_detection(),
+            "sensitive_resource_probing_like": _empty_detection(),
+            "web_scanning_like": _empty_detection(),
         },
         "correlation": {
             "authentication": authentication or _no_correlation(),

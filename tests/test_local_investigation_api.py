@@ -47,7 +47,7 @@ def test_local_sample_fixture_is_analyzed_without_sample_label():
     body = response.json()
     assert body["local_context"]["label"] == "로컬 실제 로그 분석 결과"
     assert body["case_summary"]["case_count"] == 2
-    assert body["case_summary"]["independent_observation_count"] == 3
+    assert body["case_summary"]["independent_observation_count"] == 4
     assert "합성 샘플" not in response.text
     assert body["report_export"]["byte_count"] == len(body["report_export"]["html"].encode("utf-8"))
     assert body["report_export"]["html"].startswith("<!doctype html>\n<html lang=\"ko\">")

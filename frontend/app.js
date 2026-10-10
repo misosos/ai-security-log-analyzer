@@ -20,6 +20,7 @@
   const RELATION_NAMES = new Set(["Brute Force → Successful Login", "Failed Login → Successful Login"]);
   const INDEPENDENT_NAMES = new Set([
     "Brute Force", "Password Spraying-like", "Path Traversal", "인증 실패 관찰",
+    "SQL Injection-like", "XSS-like", "Sensitive Resource Probing-like", "Web Scanning-like",
     "인증 성공 관찰", "지원되지 않는 탐지 관찰", "지원되지 않는 관계 관찰",
     "Brute Force 계약 미검증 관찰", "Brute Force 시간 미검증 관찰",
     "Password Spraying-like 계약 미검증 관찰", "Password Spraying-like 시간 미검증 관찰",
@@ -31,6 +32,31 @@
   const DETECTION_EVIDENCE = Object.freeze([
     ["실패 횟수", "회", true], ["대상 계정 수", "개", true], ["시간 범위", "초", false]
   ]);
+  const WEB_PATTERN_LABELS = new Set([
+    "SQL 논리 비교 구문", "SQL 결합 조회 구문", "SQL 주석 결합 구문",
+    "스크립트 요소 구문", "이벤트 핸들러 구문", "스크립트 스킴 구문",
+    "환경 설정 파일 탐색", "버전 관리 메타데이터 탐색",
+    "백업·설정 파일 탐색", "여러 대상·클라이언트 오류 관찰"
+  ]);
+  const WEB_EVIDENCE = Object.freeze([
+    ["패턴 분류", null, false], ["관찰 요청 수", "건", true]
+  ]);
+  const SCAN_EVIDENCE = Object.freeze([
+    ...WEB_EVIDENCE, ["서로 다른 대상 수", "개", true],
+    ["클라이언트 오류 수", "건", true], ["시간 범위", "초", false]
+  ]);
+  const WEB_LIMITATIONS = Object.freeze({
+    "SQL Injection-like": "요청 패턴만으로 데이터베이스 명령 실행이나 데이터 접근 성공을 판단할 수 없습니다.",
+    "XSS-like": "요청 패턴만으로 스크립트가 저장되거나 사용자 브라우저에서 실행되었다고 판단할 수 없습니다.",
+    "Sensitive Resource Probing-like": "요청과 HTTP 상태만으로 민감한 리소스가 존재하거나 내용이 노출되었다고 판단할 수 없습니다.",
+    "Web Scanning-like": "여러 경로 요청만으로 자동화 도구 사용이나 악의적 목적을 판단할 수 없습니다."
+  });
+  const WEB_NEXT_STEPS = Object.freeze({
+    "SQL Injection-like": "같은 시간대의 애플리케이션 오류·데이터베이스 감사·프록시 응답 기록을 확인하십시오.",
+    "XSS-like": "응답 본문·출력 인코딩·CSP 위반·브라우저 보안 기록을 확인하십시오.",
+    "Sensitive Resource Probing-like": "애플리케이션·프록시·파일 접근 기록에서 실제 리소스 접근 여부를 확인하십시오.",
+    "Web Scanning-like": "같은 출발지의 요청 빈도·응답 상태·사용자 에이전트 변화와 승인된 점검 활동 여부를 확인하십시오."
+  });
   const RELATION_EVIDENCE = Object.freeze([["시간 차이", "초", false]]);
   const NEXT_STEP_SEQUENCES = Object.freeze([
     [
@@ -61,6 +87,7 @@
     "V1 조사 사례 지원 범위 밖의 관찰이라 독립적으로 유지되었습니다.",
     "Password Spraying-like 관찰은 유지되었지만 성공 로그인 계정이 탐지 대상에 포함됨을 형식이 보장된 내부 계약으로 입증하지 못해 자동 사례 결합을 수행하지 않았습니다.",
     "Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다.",
+    "웹 요청 관찰은 인증 사례나 다른 웹 관찰과 자동 결합하지 않습니다.",
     "모호한 관계라 자동 사례 결합을 수행하지 않았습니다."
   ]);
   const SAMPLE_ERRORS = Object.freeze({
@@ -211,6 +238,11 @@
     value.forEach((item, index) => {
       closedRecord(item, ["label", "value", "unit"]);
       const [label, unit, integer] = expected[index];
+      if (label === "패턴 분류") {
+        if (item.label !== label || item.unit !== null ||
+            !WEB_PATTERN_LABELS.has(item.value)) failContract();
+        return;
+      }
       if (item.label !== label || item.unit !== unit ||
           typeof item.value !== "number" || !Number.isFinite(item.value) ||
           item.value < 0 || item.value > MAX_EVIDENCE_VALUE ||
@@ -315,7 +347,8 @@
     closedRecord(item, [
       "review_order", "label", "category_label", "display_type", "subject",
       "existing_risk_level", "existing_confidence", "start_time", "end_time",
-      "timestamp_state", "evidence", "reason", "account_alias_state", "account_alias_message"
+      "timestamp_state", "evidence", "reason", "limitation", "next_step",
+      "account_alias_state", "account_alias_message"
     ]);
     if (item.review_order !== index + 1 || item.label !== "독립 관찰") failContract();
     ["category_label", "display_type", "subject", "reason"].forEach((key) => boundedText(item[key]));
@@ -329,7 +362,15 @@
     if (item.timestamp_state !== "TIMESTAMPED" && item.timestamp_state !== "NO_TIME") failContract();
     if (item.timestamp_state === "NO_TIME" ?
         item.start_time !== null || item.end_time !== null : item.start_time === null) failContract();
-    evidence(item.evidence, DETECTION_NAMES.has(item.display_type) ? DETECTION_EVIDENCE : []);
+    const web = Object.hasOwn(WEB_LIMITATIONS, item.display_type);
+    if (web) {
+      if (item.limitation !== WEB_LIMITATIONS[item.display_type] ||
+          item.next_step !== WEB_NEXT_STEPS[item.display_type]) failContract();
+      evidence(item.evidence, item.display_type === "Web Scanning-like" ? SCAN_EVIDENCE : WEB_EVIDENCE);
+    } else {
+      if (item.limitation !== null || item.next_step !== null) failContract();
+      evidence(item.evidence, DETECTION_NAMES.has(item.display_type) ? DETECTION_EVIDENCE : []);
+    }
     account(item);
   }
 
@@ -693,6 +734,8 @@
       time.className = "independent-time";
       appendTime(time, item.start_time, item.end_time);
       card.append(time, element("p", item.reason));
+      if (item.limitation !== null) card.append(element("p", `해석 한계: ${item.limitation}`));
+      if (item.next_step !== null) card.append(element("p", `다음 조사 단계: ${item.next_step}`));
       if (item.evidence.length > 0) {
         const evidenceSection = document.createElement("section");
         evidenceSection.className = "independent-evidence";

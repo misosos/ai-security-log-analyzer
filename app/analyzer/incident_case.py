@@ -7,6 +7,10 @@ import unicodedata
 from typing import Literal
 
 from app.models.schemas import DetectionResult, Evidence
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_DISPLAY, WebObservationProjectionError,
+    project_web_observation,
+)
 
 
 CaseRuleId = Literal[
@@ -50,11 +54,16 @@ _DETECTION_TYPES = MappingProxyType({
     "brute_force": "brute_force",
     "password_spray": "password_spraying_like",
     "path_traversal": "path_traversal",
+    "sql_injection_like": "sql_injection_like",
+    "xss_like": "xss_like",
+    "sensitive_resource_probing_like": "sensitive_resource_probing_like",
+    "web_scanning_like": "web_scanning_like",
 })
 _DETECTION_NAMES = MappingProxyType({
     "brute_force": "Brute Force",
     "password_spraying_like": "Password Spraying-like",
     "path_traversal": "Path Traversal",
+    **WEB_DISPLAY,
     "unsupported_detection": "Unsupported detection",
 })
 _CORRELATION_TYPES = MappingProxyType({
@@ -104,7 +113,11 @@ class IncidentCaseAssemblyError(ValueError):
 
 @dataclass(frozen=True)
 class IncidentCaseDetectionInput:
-    slot: Literal["brute_force", "password_spray", "path_traversal"]
+    slot: Literal[
+        "brute_force", "password_spray", "path_traversal",
+        "sql_injection_like", "xss_like", "sensitive_resource_probing_like",
+        "web_scanning_like",
+    ]
     detection: DetectionResult = field(repr=False)
 
 
@@ -140,8 +153,10 @@ class IncidentCaseEvidenceScalar:
         "failed_attempt_count",
         "target_account_count",
         "time_window_seconds",
+        "pattern_id", "request_count", "distinct_target_count",
+        "client_error_count",
     ]
-    value: int | float
+    value: int | float | str
 
 
 @dataclass(frozen=True)
@@ -468,12 +483,49 @@ def _path_or_unsupported_detection_candidate(
         existing_confidence=confidence,
     )
     return _DetectionCandidate(
-        key=(
-            subject_ip,
-            detection_input.slot,
-            observation_type,
-            timestamp,
-        ),
+        key=(subject_ip, detection_input.slot, observation_type, timestamp),
+        observation=observation,
+        slot=detection_input.slot,
+    )
+
+
+def _web_detection_candidate(
+    subject_ip: str,
+    detection_input: IncidentCaseDetectionInput,
+    risk: RiskLevel,
+    confidence: RiskLevel,
+) -> _DetectionCandidate:
+    try:
+        approved = project_web_observation(
+            detection_input.slot, detection_input.detection,
+        )
+    except WebObservationProjectionError:
+        _fail()
+    evidence = [
+        IncidentCaseEvidenceScalar("pattern_id", approved.pattern_id),
+        IncidentCaseEvidenceScalar("request_count", approved.request_count),
+    ]
+    if detection_input.slot == "web_scanning_like":
+        evidence.extend((
+            IncidentCaseEvidenceScalar("distinct_target_count", approved.distinct_target_count),
+            IncidentCaseEvidenceScalar("client_error_count", approved.client_error_count),
+            IncidentCaseEvidenceScalar("time_window_seconds", approved.time_window_seconds),
+        ))
+    observation = IncidentCaseObservation(
+        observation_kind="supported_detection_observation",
+        observation_type=detection_input.slot,
+        display_name=WEB_DISPLAY[detection_input.slot],
+        subject_ip=subject_ip,
+        start_time_utc=approved.start_utc,
+        end_time_utc=approved.end_utc,
+        source_category="analysis_rule",
+        evidence=tuple(evidence),
+        existing_risk_level=risk,
+        existing_confidence=confidence,
+    )
+    return _DetectionCandidate(
+        key=(subject_ip, detection_input.slot, approved.start_utc,
+             approved.end_utc, tuple(evidence)),
         observation=observation,
         slot=detection_input.slot,
     )
@@ -513,6 +565,10 @@ def _detection_candidates(
                 target_accounts,
                 risk,
                 confidence,
+            )
+        elif item.slot in WEB_TYPES and detection.detection_type == item.slot:
+            candidate = _web_detection_candidate(
+                subject_ip, item, risk, confidence,
             )
         else:
             candidate = _path_or_unsupported_detection_candidate(
@@ -953,7 +1009,7 @@ def _assemble_subject(
             "invalid_timestamp" in detection.observation.observation_type
         ):
             reason = "invalid_timestamp"
-        elif detection.slot in {"password_spray", "path_traversal"}:
+        elif detection.slot in {"password_spray", "path_traversal", *WEB_TYPES}:
             reason = "unsupported_for_case_assembly"
         else:
             reason = "no_supported_relation"

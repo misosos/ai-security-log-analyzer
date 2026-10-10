@@ -161,6 +161,10 @@ class LegacyDetectionProjection(BaseModel):
     http_method: str | None = None
     response_status: int | None = None
     response_size_bytes: int | None = None
+    pattern_category: str | None = None
+    request_count: int | None = None
+    distinct_target_count: int | None = None
+    client_error_count: int | None = None
 
 
 class LegacyRelationProjection(BaseModel):

@@ -115,3 +115,21 @@ Parser-only 9개는 production `analyze()`를 호출하지 않는다. SSH unsupp
 외부 근거: [NIST SP 800-92의 rule-based event correlation 정의](https://csrc.nist.gov/glossary/term/Rule_Based_Event_Correlation)는 timestamp, IP, event type 등 관찰 가능한 필드의 결합을 설명하지만 특정 closest-success 정책이나 60초를 지정하지 않는다. [OpenSSH 공식 매뉴얼](https://www.openssh.org/manual.html)과 [sshd_config의 인증·로그 설정](https://man.openbsd.org/sshd_config)은 password/publickey 및 logging 설정의 배경이다. 실제 `Failed`/`Accepted` 줄 해석은 저장소의 SSH parser regex에 한정한다. 두 자료를 이 프로젝트 임계값의 권위로 사용하지 않는다.
 
 남은 공백: 실제 운영 로그·승인 활동 ground truth, 여러 source의 동시각 distinct event identity, parser 이전의 invalid UTF-8/업로드 검증, 모든 parser 오류 형태, cross-worker·live 순서, 성공·실패 시각이 동률인 일부 데이터 품질 문제. 합성 수치의 운영 일반화는 금지한다.
+
+## Phase 8 — 웹 요청 관찰 확장 (2026-10-10)
+
+기존 43개 ID·라벨·계산 의미를 유지하고 36개 작은 NCSA fixture를 추가해 **79/79** 시나리오다. 새 fixture는 SQLi-like·XSS-like·민감 리소스 요청의 명확한 category와 일반 단어/문서/asset/단독 quote·주석/잘못된 percent encoding의 음성 경계를 분리한다. Scanning 양성은 임계값 정확 충족(`web_scan_exact`), 초과(`web_scan_above`), 60초 정확 경계(`web_scan_boundary`)를 독립 라벨로 평가한다. request 수 부족, 중복 대상, 정상 asset burst는 음성 라벨이다. 파일 parser는 초 단위이므로 60초+1µs·입력 permutation·같은 요청 반복 및 복합 유형은 별도 normalized-event 불변식 테스트이며 support에 포함하지 않는다. 이 수치는 포함 라벨에만 유효하고 실제 운영환경 precision/recall이 아니다. 상세 관찰 계약과 공식 자료는 [웹 요청 설계](web_attack_observation_design.md)에 있다.
+
+Parser: 200줄 중 parsed 195, ignored 2, rejected 3, 예상 밖 parse/rejection 0. Risk·case는 각각 70/70. Ambiguous operational 1개는 기존과 같이 confusion matrix에서 제외한다. 기존 인증 관계 TP는 6/3/1, FP/FN 0으로 유지됐다.
+
+| Detection | TP | FP | FN | TN | precision | recall | F1 | support |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Brute Force | 11 | 0 | 0 | 58 | 1.000000 | 1.000000 | 1.000000 | 11 |
+| Password Spraying-like | 2 | 0 | 0 | 67 | 1.000000 | 1.000000 | 1.000000 | 2 |
+| Path Traversal | 2 | 0 | 0 | 67 | 1.000000 | 1.000000 | 1.000000 | 2 |
+| SQL Injection-like | 5 | 0 | 0 | 64 | 1.000000 | 1.000000 | 1.000000 | 5 |
+| XSS-like | 5 | 0 | 0 | 64 | 1.000000 | 1.000000 | 1.000000 | 5 |
+| Sensitive Resource Probing-like | 4 | 0 | 0 | 65 | 1.000000 | 1.000000 | 1.000000 | 4 |
+| Web Scanning-like | 3 | 0 | 0 | 66 | 1.000000 | 1.000000 | 1.000000 | 3 |
+
+특히 Scanning support=3도 작은 합성 표본이므로 이 1.0 수치를 일반화할 수 없다. `request_count`는 선택된 60초 창의 실제 eligible request event 수로 반복 target·동일 raw line도 각각 세며, `distinct_target_count`만 canonical target identity 수다. stable ingestion ID가 없어 원본 event는 중복 제거하지 않는다. 가장 이른 적격 시작점의 최대 60초 창에서 최종 observation 하나만 생성한다. 승인된 스캐너와 NAT/proxy, 운영 로그 누락, Unicode/encoding 변형 및 실제 악성/정상 ground truth는 평가 공백이다.

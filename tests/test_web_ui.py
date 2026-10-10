@@ -235,7 +235,7 @@ def test_only_explicit_sample_post_runs_analysis(monkeypatch):
     assert len(calls) == 1
     data = result.json()
     assert data["case_summary"]["case_count"] == 2
-    assert data["case_summary"]["independent_observation_count"] == 3
+    assert data["case_summary"]["independent_observation_count"] == 4
 
 
 def test_protected_linux_audit_factory_does_not_gain_public_ui_routes():

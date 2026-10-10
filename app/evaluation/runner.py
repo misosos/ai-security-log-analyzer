@@ -15,6 +15,10 @@ from app.evaluation.corpus import (
 from app.main import analyze
 from app.parser.registry import get_parser, get_timezone
 from app.parser.time_utils import normalize_to_utc
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_PATTERN_IDS, WebObservationProjectionError,
+    project_web_observation,
+)
 
 
 NOTICES = (
@@ -32,6 +36,7 @@ _DETECTION_SLOTS = (
     ("brute_force", "brute_force"),
     ("password_spray", "password_spraying_like"),
     ("path_traversal", "path_traversal"),
+    *((kind, kind) for kind in WEB_TYPES),
 )
 
 
@@ -195,7 +200,14 @@ def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
             or d.start.tzinfo is not timezone.utc or d.end.tzinfo is not timezone.utc
             or d.start > d.end
             or (
-                d.detection_type != "path_traversal"
+                d.detection_type in WEB_TYPES
+                and (
+                    d.pattern_id not in WEB_PATTERN_IDS[d.detection_type]
+                    or type(d.request_count) is not int or d.request_count < 1
+                )
+            )
+            or (
+                d.detection_type not in ("path_traversal", *WEB_TYPES)
                 and (
                     type(d.failure_count) is not int or d.failure_count < 0
                     or type(d.target_count) is not int or d.target_count < 0
@@ -326,6 +338,22 @@ def _detection_match(item: EvaluationScenario, results: dict) -> tuple[bool, dic
                 labels = [d for d in item.detections if d.detection_type == kind and d.subject == subject]
                 if len(labels) != 1 or detected.detection_type != kind:
                     exact = False
+                elif kind in WEB_TYPES:
+                    label = labels[0]
+                    try:
+                        approved = project_web_observation(kind, detected)
+                    except WebObservationProjectionError:
+                        exact = False
+                    else:
+                        exact &= (
+                            approved.start_utc == label.start
+                            and approved.end_utc == label.end
+                            and approved.pattern_id == label.pattern_id
+                            and approved.request_count == label.request_count
+                            and approved.distinct_target_count == label.distinct_target_count
+                            and approved.client_error_count == label.client_error_count
+                            and approved.time_window_seconds == label.window_seconds
+                        )
                 elif kind != "path_traversal":
                     label = labels[0]
                     evidence = {e.type: e for e in detected.evidence}

@@ -12,6 +12,10 @@ from app.analyzer.report_projection import (
     InvestigationReportProjectionError,
     _validate_rationale,
 )
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_PATTERN_LABELS, WebObservationProjectionError,
+    project_web_observation,
+)
 
 
 _INVALID_EVIDENCE_MESSAGE = (
@@ -21,6 +25,7 @@ _SUPPORTED_DETECTION_TYPES = (
     "brute_force",
     "password_spraying_like",
     "path_traversal",
+    *WEB_TYPES,
 )
 _SUPPORTED_RELATION_TYPES = frozenset({
     "failed_to_successful_login",
@@ -186,6 +191,22 @@ def _path_traversal_evidence_lines(detection):
 
 
 def _detection_evidence_lines(detection):
+    if detection.detection_type in WEB_TYPES:
+        try:
+            approved = project_web_observation(detection.detection_type, detection)
+        except WebObservationProjectionError:
+            return None
+        lines = [
+            ("Pattern category", WEB_PATTERN_LABELS[approved.pattern_id]),
+            ("Observed requests", str(approved.request_count)),
+        ]
+        if approved.detection_type == "web_scanning_like":
+            lines.extend((
+                ("Distinct targets", str(approved.distinct_target_count)),
+                ("Client errors", str(approved.client_error_count)),
+                ("Time window", f"{approved.time_window_seconds} seconds"),
+            ))
+        return tuple(lines)
     if detection.detection_type in {
         "brute_force",
         "password_spraying_like",

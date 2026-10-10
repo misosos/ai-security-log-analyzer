@@ -42,7 +42,7 @@ class Timestamp(_ClosedModel):
 
 class Evidence(_ClosedModel):
     label: str
-    value: int | float
+    value: int | float | str
     unit: str | None
 
 
@@ -104,6 +104,8 @@ class IndependentObservation(_ClosedModel):
     timestamp_state: Literal["TIMESTAMPED", "NO_TIME"]
     evidence: tuple[Evidence, ...]
     reason: str
+    limitation: str | None
+    next_step: str | None
     account_alias_state: Literal["unavailable"]
     account_alias_message: str
 

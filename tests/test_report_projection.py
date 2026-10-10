@@ -176,6 +176,10 @@ def subject_result(
             "brute_force": brute or empty_detection(),
             "password_spray": spray or empty_detection(),
             "path_traversal": path or empty_detection(),
+            "sql_injection_like": empty_detection(),
+            "xss_like": empty_detection(),
+            "sensitive_resource_probing_like": empty_detection(),
+            "web_scanning_like": empty_detection(),
         },
         "correlation": {
             "authentication": authentication or no_correlation(),

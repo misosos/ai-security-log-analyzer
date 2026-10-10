@@ -78,7 +78,11 @@ def test_legacy_api_nested_values_are_privacy_safe():
     assert response.results
     assert response.global_correlation.multi_ip_authentication_count >= 0
     for row in response.results:
-        assert set(row.detections) == {"brute_force", "password_spray", "path_traversal"}
+        assert set(row.detections) == {
+            "brute_force", "password_spray", "path_traversal",
+            "sql_injection_like", "xss_like", "sensitive_resource_probing_like",
+            "web_scanning_like",
+        }
         assert row.risk_factors.rationale_id == "existing_assessment"
         assert all(relation.account_reference_available is False for relation in row.correlation)
 

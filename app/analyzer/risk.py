@@ -1,12 +1,45 @@
 import json
 from pathlib import Path
 
+from app.models.schemas import DetectionResult
+
 
 _ACCOUNT_METADATA_PATH = (
     Path(__file__).resolve().parents[2]
     / "data"
     / "account_metadata.json"
 )
+
+_WEB_OBSERVATION_TYPES = (
+    "sql_injection_like", "xss_like", "sensitive_resource_probing_like",
+    "web_scanning_like",
+)
+_WEB_RATIONALE = {
+    "sql_injection_like": "SQL 삽입과 유사한 요청 패턴이 관찰됨",
+    "xss_like": "스크립트 삽입과 유사한 요청 패턴이 관찰됨",
+    "sensitive_resource_probing_like": "민감할 수 있는 리소스 탐색과 유사한 요청이 관찰됨",
+    "web_scanning_like": "짧은 시간 동안 여러 웹 리소스 탐색이 관찰됨",
+}
+
+
+def _web_types(detections):
+    approved_slots = frozenset({
+        "brute_force", "password_spray", "path_traversal", *_WEB_OBSERVATION_TYPES,
+    })
+    for slot, value in detections.items():
+        if slot not in approved_slots:
+            raise ValueError("Unsupported detection contract.") from None
+        if slot in _WEB_OBSERVATION_TYPES and (
+            type(value) is not DetectionResult
+            or (value.is_detected and value.detection_type != slot)
+        ):
+            raise ValueError("Unsupported detection contract.") from None
+    return tuple(
+        kind for kind in _WEB_OBSERVATION_TYPES
+        if detections.get(kind) is not None
+        and detections[kind].is_detected
+        and detections[kind].detection_type == kind
+    )
 
 
 def load_account_metadata():
@@ -38,6 +71,8 @@ def build_risk_context(result):
 
 
 def build_risk_factors(features, account_privilege_risk):
+
+    _web_types(features["detections"])
 
     likelihood = evaluate_likelihood(features)
 
@@ -331,6 +366,18 @@ def evaluate_likelihood(features):
             "rationale": rationale,
         }
 
+    # Independent web request observations; no success inference.
+    web_types = _web_types(detections)
+    if web_types:
+        return {
+            "level": "MEDIUM" if any(
+                kind != "web_scanning_like" for kind in web_types
+            ) else "LOW",
+            "rationale": [
+                _WEB_RATIONALE[kind] for kind in web_types
+            ] + ["요청 패턴만으로 공격 성공이나 악의적 목적을 판단할 수 없음"],
+        }
+
     # 6. 반복 실패 + Failed → Successful Login
     if (
         failure_count >= 3
@@ -450,10 +497,14 @@ def evaluate_detection_signal(features):
             path_traversal.detection_type
         )
 
+    detection_types.extend(_web_types(detections))
+
     if detection_types:
 
         return {
-            "level": "HIGH",
+            "level": "HIGH" if any(
+                kind not in _WEB_OBSERVATION_TYPES for kind in detection_types
+            ) else "MEDIUM",
             "types": detection_types,
         }
 
@@ -582,6 +633,21 @@ def evaluate_impact(features, account_privilege_risk):
             "basis": {
                 "attack_type": attack_type,
                 "privileged_account_targeted": False,
+            },
+        }
+
+    # Request-only telemetry cannot establish exploitation impact.
+    web_types = _web_types(detections)
+    if web_types:
+        return {
+            "level": "LOW",
+            "rationale": [
+                "웹 요청 기록만으로 데이터 접근·실행·노출의 영향을 확인할 수 없음"
+            ],
+            "basis": {
+                "attack_type": web_types[0],
+                "impact_status": "insufficient_evidence",
+                "exploit_success_confirmed": False,
             },
         }
 
@@ -791,6 +857,17 @@ def evaluate_confidence(features):
             "rationale": [
                 "로그인 성공 이후 동일 계정의 후속 파일 접근 행위가 확인됨",
                 "정상적인 사용자 활동일 가능성을 배제할 수 없어 공격 행위 자체를 확정할 수는 없음",
+            ],
+        }
+
+    # Confidence in the observed request pattern, not compromise likelihood.
+    web_types = _web_types(detections)
+    if web_types:
+        return {
+            "level": "MEDIUM",
+            "rationale": [
+                "승인된 웹 요청 패턴 또는 반복 탐색 수치가 로그에서 확인됨",
+                "실제 취약점 악용이나 공격 성공 여부는 확인되지 않음",
             ],
         }
 

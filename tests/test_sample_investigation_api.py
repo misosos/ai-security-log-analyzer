@@ -24,7 +24,7 @@ EXPECTED_TOP_LEVEL = {
 }
 EXPECTED_CASE_SUMMARY = {
     "case_count": 2,
-    "independent_observation_count": 3,
+    "independent_observation_count": 4,
     "high_case_count": 1,
     "medium_case_count": 0,
     "low_case_count": 1,
@@ -33,7 +33,7 @@ EXPECTED_CASE_SUMMARY = {
 }
 EXPECTED_ANALYSIS_SUMMARY = {
     "analyzed_subject_count": 10,
-    "supported_detection_count": 4,
+    "supported_detection_count": 5,
     "supported_relation_count": 3,
 }
 
@@ -66,7 +66,7 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
         "Brute Force → Successful Login", "Failed Login → Successful Login"
     ]
     assert [item["display_type"] for item in body["independent_observations"]] == [
-        "Brute Force", "Password Spraying-like", "Path Traversal"
+        "Brute Force", "Password Spraying-like", "Path Traversal", "SQL Injection-like"
     ]
     assert "형식이 보장된 내부 계약" in body["independent_observations"][1]["reason"]
     assert [entry["category"] for entry in body["cases"][0]["timeline"]] == [
@@ -94,7 +94,7 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
     assert report["format"] == "standalone_html"
     assert report["filename"] == "investigation-report.html"
     assert report["media_type"] == "text/html;charset=utf-8"
-    assert report["byte_count"] == 25000
+    assert report["byte_count"] == 25551
     assert report["byte_count"] == len(report["html"].encode("utf-8"))
     assert report["html"].startswith("<!doctype html>\n<html lang=\"ko\">")
     assert report["html"].endswith("</html>\n")

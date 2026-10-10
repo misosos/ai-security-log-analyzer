@@ -37,24 +37,28 @@ def test_hand_calculated_confusion_and_ratios():
 def test_fixed_corpus_baseline_and_layers():
     result = evaluate()
     assert result.corpus_kind == "synthetic_boundary_corpus"
-    assert (result.scenario_count, result.passed_scenarios, result.failed_scenarios) == (43, 43, 0)
-    assert (result.parser_summary.input_lines, result.parser_summary.parsed) == (134, 129)
+    assert (result.scenario_count, result.passed_scenarios, result.failed_scenarios) == (79, 79, 0)
+    assert (result.parser_summary.input_lines, result.parser_summary.parsed) == (200, 195)
     assert (result.parser_summary.ignored, result.parser_summary.failed) == (2, 3)
     assert (result.parser_summary.unexpected_parse_count, result.parser_summary.unexpected_rejection_count) == (0, 0)
     assert (result.ssh_scenario_count, result.excluded_ambiguous_scenarios) == (13, 1)
     assert result.excluded_reasons == ("automation_ambiguous:authorization_context_unavailable",)
     assert [(m.detection_type, m.tp, m.fp, m.fn, m.tn, m.support) for m in result.detection_metrics] == [
-        ("brute_force", 11, 0, 0, 22, 11),
-        ("password_spraying_like", 2, 0, 0, 31, 2),
-        ("path_traversal", 2, 0, 0, 31, 2),
+        ("brute_force", 11, 0, 0, 58, 11),
+        ("password_spraying_like", 2, 0, 0, 67, 2),
+        ("path_traversal", 2, 0, 0, 67, 2),
+        ("sql_injection_like", 5, 0, 0, 64, 5),
+        ("xss_like", 5, 0, 0, 64, 5),
+        ("sensitive_resource_probing_like", 4, 0, 0, 65, 4),
+        ("web_scanning_like", 3, 0, 0, 66, 3),
     ]
     assert [(m.relation_type, m.tp, m.fp, m.fn) for m in result.correlation_metrics] == [
         ("failed_to_successful_login", 6, 0, 0),
         ("brute_force_to_successful_login", 3, 0, 0),
         ("password_spray_to_successful_login", 1, 0, 0),
     ]
-    assert (result.risk_summary.matched_scenarios, result.risk_summary.applicable_scenarios) == (34, 34)
-    assert (result.case_summary.matched_scenarios, result.case_summary.applicable_scenarios) == (34, 34)
+    assert (result.risk_summary.matched_scenarios, result.risk_summary.applicable_scenarios) == (70, 70)
+    assert (result.case_summary.matched_scenarios, result.case_summary.applicable_scenarios) == (70, 70)
     assert [item.id for item in SCENARIOS[:21]] == [
         "login_only", "brute_below", "brute_exact", "brute_over_window",
         "brute_success", "brute_other_account", "brute_success_late",
@@ -66,13 +70,28 @@ def test_fixed_corpus_baseline_and_layers():
     ]
 
 
+def test_scanning_positive_labels_are_independent_boundary_scenarios():
+    labeled = [item for item in SCENARIOS if any(
+        detection.detection_type == "web_scanning_like" for detection in item.detections
+    )]
+    assert [item.id for item in labeled] == [
+        "web_scan_exact", "web_scan_above", "web_scan_boundary",
+    ]
+    assert [(
+        item.detections[0].request_count,
+        item.detections[0].distinct_target_count,
+        item.detections[0].client_error_count,
+        item.detections[0].window_seconds,
+    ) for item in labeled] == [(6, 6, 3, 5), (7, 7, 4, 6), (6, 6, 3, 60)]
+
+
 def test_cli_stability_filter_and_bounded_error():
     one = _cli("--format", "json")
     two = _cli("--format", "json", tz="Pacific/Honolulu")
     assert one.returncode == two.returncode == 0
     assert one.stdout == two.stdout
     parsed = json.loads(one.stdout)
-    assert parsed["scenario_count"] == 43
+    assert parsed["scenario_count"] == 79
     assert not parsed["invariant_failures"]
     filtered = _cli("--format", "json", "--scenario", "brute_success")
     assert filtered.returncode == 0
@@ -89,7 +108,7 @@ def test_text_and_json_metrics_report_the_same_counts():
     assert text_result.returncode == json_result.returncode == 0
     lines = text_result.stdout.splitlines()
     summary = json.loads(json_result.stdout)
-    assert lines[0] == "synthetic_boundary_corpus: 43/43 scenarios passed"
+    assert lines[0] == "synthetic_boundary_corpus: 79/79 scenarios passed"
     for metric in summary["detection_metrics"]:
         line = next(line for line in lines if line.startswith(f"detection {metric['detection_type']}:"))
         for key, label in (("tp", "TP"), ("fp", "FP"), ("fn", "FN"),

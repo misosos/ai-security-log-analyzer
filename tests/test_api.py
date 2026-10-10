@@ -125,7 +125,7 @@ def test_build_analysis_response_uses_canonical_contract():
 
     assert response.summary.total_sources == 3
     assert response.summary.total_ips == 10
-    assert response.summary.detected_ips == 4
+    assert response.summary.detected_ips == 5
     assert response.summary.high_risk_ips == 4
     assert response.global_correlation.multi_ip_authentication_count == 2
     assert response.global_correlation.distributed_authentication_to_success_count == 1

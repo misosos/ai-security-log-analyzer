@@ -176,9 +176,9 @@ def test_documented_html_report_is_private_standalone_and_no_overwrite(tmp_path)
     assert "보안 로그 조사 보고서" in html
     assert "<dt>분석 대상 수</dt>\n<dd>10</dd>" in html
     assert "<dt>HIGH 위험도</dt>\n<dd>4</dd>" in html
-    assert "<dt>MEDIUM 위험도</dt>\n<dd>1</dd>" in html
-    assert "<dt>LOW 위험도</dt>\n<dd>5</dd>" in html
-    assert "<dt>지원 탐지 관찰 수</dt>\n<dd>4</dd>" in html
+    assert "<dt>MEDIUM 위험도</dt>\n<dd>2</dd>" in html
+    assert "<dt>LOW 위험도</dt>\n<dd>4</dd>" in html
+    assert "<dt>지원 탐지 관찰 수</dt>\n<dd>5</dd>" in html
     assert "<dt>지원 상관관계 관찰 수</dt>\n<dd>3</dd>" in html
     ordered_subjects = (
         "조사 순서 1 — 분석 대상 IP 10.0.0.5",
@@ -248,7 +248,7 @@ def test_default_api_health_analyze_and_route_boundaries(monkeypatch):
     assert body["summary"] == {
         "total_sources": 3,
         "total_ips": 10,
-        "detected_ips": 4,
+        "detected_ips": 5,
         "high_risk_ips": 4,
     }
     assert body["ai_summary"] is None

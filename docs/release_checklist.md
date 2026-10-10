@@ -20,16 +20,22 @@
 
 - [x] macOS Apple Silicon에서 uv가 CPython 3.12.7을 사용했다.
 - [x] 기준선 전체 pytest `1,514 passed, 2 existing warnings`; 라이선스·릴리스 문서 추가 뒤 후보 작업 트리는 `1,518 passed, 2 existing warnings`다. 샌드박스 UNIX socket 제한은 허용 환경에서 재검증했다.
-- [x] 평가 `43/43`, parser `129/134` (ignored 2, rejected 3), risk·case `34/34`를 확인했다.
+- [x] Phase 7 기준선 평가 `43/43`, parser `129/134` (ignored 2, rejected 3), risk·case `34/34`를 확인했다.
 - [x] 반복 JSON SHA-256이 UTC/KST에서 `78584ce961096279ffe76974bfce57e2c0b0932270a7d53e75d8620c717ebe0c`로 같았다.
 - [x] 변경 Python 테스트 compile, Node `--check`, documentation/first-user/privacy/API·CLI·HTML tests를 실행했다.
 - [x] OpenAPI deprecation, privacy canary, standalone HTML CSP hash와 download byte count는 자동 테스트 범위다.
-- [x] Clean checkout의 loopback launcher `--no-browser`에서 health·root·CSS·JS·sample·로컬 3종 분석이 200, 사례 2·독립 관찰 3이었다.
+- [x] Phase 7 clean checkout의 loopback launcher `--no-browser`에서 health·root·CSS·JS·sample·로컬 3종 분석이 200, 사례 2·독립 관찰 3이었다. Phase 8 sample은 독립 관찰 4로 달라진다.
 - [x] Ctrl+C 종료 뒤 8000번 port listener 없음, 알려진 staging directory 0건.
 - [x] 최종 준비 커밋을 별도 clean checkout하여 `uv sync --locked --dev`, 전체 `1,518 passed, 2 existing warnings`, loopback health·웹 자산·sample·실제 로그 API·보고서 smoke를 다시 확인했다. 종료 후 port listener와 알려진 staging directory는 0건이었다.
 - [x] 변경 Python 테스트 `py_compile`, `node --check frontend/app.js`, Node behavior test syntax, `git diff --check`, secret/private-path scan이 통과했다. Node behavior는 기존 pytest harness가 stdin fixture를 제공할 때 검증된다.
 
 ## 수동 접근성·사용성
+
+Phase 8 추가 검증 gate:
+
+- [x] 현재 작업 트리의 합성 평가 `79/79`, parser `195/200`, risk·case `70/70`을 확인했다. 이 표시는 기존 43개 ID의 의미를 바꾸지 않는다.
+- [ ] Phase 8 기능 커밋 이후 새 clean checkout에서 locked 설치, 전체 pytest, launcher·sample/local API·HTML smoke, CSP·privacy canary를 다시 실행한다.
+- [ ] Phase 8의 새 네 독립 관찰을 Safari에서 시각·키보드·320px·200% 확대와 함께 검증한다.
 
 아래는 실제 Safari 검증이 끝나기 전까지 모두 미체크다. 자동 DOM/source 검사로 WCAG 2.2 AA를 주장하지 않는다.
 

@@ -8,7 +8,11 @@ from pathlib import Path
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "sample_logs" / "evaluation"
 SUBJECT = "192.0.2.10"
 WEB_SUBJECT = "198.51.100.10"
-DETECTION_TYPES = ("brute_force", "password_spraying_like", "path_traversal")
+DETECTION_TYPES = (
+    "brute_force", "password_spraying_like", "path_traversal",
+    "sql_injection_like", "xss_like", "sensitive_resource_probing_like",
+    "web_scanning_like",
+)
 RELATION_TYPES = (
     "failed_to_successful_login",
     "brute_force_to_successful_login",
@@ -47,6 +51,10 @@ class ExpectedDetection:
     failure_count: int | None = None
     target_count: int | None = None
     window_seconds: int | None = None
+    pattern_id: str | None = None
+    request_count: int | None = None
+    distinct_target_count: int | None = None
+    client_error_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +127,45 @@ def _spray(end: int = 60) -> tuple[ExpectedDetection, ...]:
 
 def _relation(kind: str, failure: int, success: int) -> ExpectedRelation:
     return ExpectedRelation(kind, SUBJECT, utc(failure), utc(success))
+
+
+def _web_scenario(
+    scenario_id: str,
+    kind: str | None,
+    pattern: str | None,
+    *,
+    statuses: tuple[int, ...] = (200,),
+    request_count: int = 1,
+    distinct_count: int | None = None,
+    error_count: int | None = None,
+    end: int = 0,
+) -> EvaluationScenario:
+    # Independently reviewed labels: fixture names and explicit category
+    # expectations are authored here, never copied from analyzer output.
+    line_count = len(statuses)
+    parser = ExpectedParser(
+        line_count, line_count, 0, 0, ("http_request",) * line_count,
+        WEB_SUBJECT, utc(0), utc(end), (False,) * line_count,
+        ("GET",) * line_count, statuses, ("parsed",) * line_count,
+    )
+    detections = () if kind is None else (
+        ExpectedDetection(
+            kind, WEB_SUBJECT, utc(0), utc(end),
+            window_seconds=end if kind == "web_scanning_like" else None,
+            pattern_id=pattern, request_count=request_count,
+            distinct_target_count=distinct_count,
+            client_error_count=error_count,
+        ),
+    )
+    risk = "LOW" if kind in (None, "web_scanning_like") else "MEDIUM"
+    confidence = "LOW" if kind is None else "MEDIUM"
+    return EvaluationScenario(
+        scenario_id, "승인된 웹 요청 패턴 및 정상 활동 경계", scenario_id + ".log",
+        "access", parser, detections, (),
+        (ExpectedRisk(WEB_SUBJECT, risk, confidence),), (),
+        len(detections), "고정 합성 요청에 대한 사전 지정된 관찰 라벨",
+        "요청과 HTTP 상태는 공격 성공이나 악의적 목적을 입증하지 않음",
+    )
 
 
 SCENARIOS: tuple[EvaluationScenario, ...] = (
@@ -336,4 +383,49 @@ SCENARIOS: tuple[EvaluationScenario, ...] = (
                        (), (), (), (), 0,
                        "현재 parser는 IP 형식을 검증하지 않음", "후속 adapter는 malformed subject를 거부",
                        "parser_only"),
+    _web_scenario("web_sqli_boolean", "sql_injection_like", "SQLI_BOOLEAN_EXPRESSION"),
+    _web_scenario("web_sqli_union", "sql_injection_like", "SQLI_UNION_SELECT"),
+    _web_scenario("web_sqli_comment", "sql_injection_like", "SQLI_COMMENT_SEQUENCE"),
+    _web_scenario("web_sqli_upper", "sql_injection_like", "SQLI_BOOLEAN_EXPRESSION"),
+    _web_scenario("web_sqli_double_encoded", "sql_injection_like", "SQLI_BOOLEAN_EXPRESSION"),
+    _web_scenario("web_sql_word_select", None, None),
+    _web_scenario("web_sql_word_union", None, None),
+    _web_scenario("web_sql_education", None, None),
+    _web_scenario("web_sql_quote_only", None, None),
+    _web_scenario("web_sql_comment_only", None, None),
+    _web_scenario("web_sql_malformed_percent", None, None),
+    _web_scenario("web_xss_script", "xss_like", "XSS_SCRIPT_ELEMENT"),
+    _web_scenario("web_xss_event", "xss_like", "XSS_EVENT_HANDLER"),
+    _web_scenario("web_xss_scheme", "xss_like", "XSS_SCRIPT_SCHEME"),
+    _web_scenario("web_xss_upper", "xss_like", "XSS_SCRIPT_ELEMENT"),
+    _web_scenario("web_xss_double_encoded", "xss_like", "XSS_SCRIPT_ELEMENT"),
+    _web_scenario("web_xss_docs", None, None),
+    _web_scenario("web_xss_asset", None, None),
+    _web_scenario("web_xss_escaped", None, None),
+    _web_scenario("web_xss_bracket", None, None),
+    _web_scenario("web_xss_word", None, None),
+    _web_scenario("web_sensitive_env", "sensitive_resource_probing_like", "SENSITIVE_ENV_FILE"),
+    _web_scenario("web_sensitive_git", "sensitive_resource_probing_like", "SENSITIVE_VCS_METADATA"),
+    _web_scenario("web_sensitive_backup", "sensitive_resource_probing_like", "SENSITIVE_CONFIG_FILE"),
+    _web_scenario("web_sensitive_encoded", "sensitive_resource_probing_like", "SENSITIVE_ENV_FILE"),
+    _web_scenario("web_sensitive_admin", None, None),
+    _web_scenario("web_sensitive_docs", None, None),
+    _web_scenario("web_sensitive_env_docs", None, None),
+    _web_scenario("web_sensitive_git_docs", None, None),
+    _web_scenario("web_sensitive_backup_docs", None, None),
+    _web_scenario("web_scan_exact", "web_scanning_like", "WEB_SCAN_DISTINCT_TARGETS",
+                  statuses=(404, 404, 404, 200, 200, 200),
+                  request_count=6, distinct_count=6, error_count=3, end=5),
+    _web_scenario("web_scan_above", "web_scanning_like", "WEB_SCAN_DISTINCT_TARGETS",
+                  statuses=(404, 404, 404, 404, 200, 200, 200),
+                  request_count=7, distinct_count=7, error_count=4, end=6),
+    _web_scenario("web_scan_boundary", "web_scanning_like", "WEB_SCAN_DISTINCT_TARGETS",
+                  statuses=(404, 404, 404, 200, 200, 200),
+                  request_count=6, distinct_count=6, error_count=3, end=60),
+    _web_scenario("web_scan_below", None, None,
+                  statuses=(404, 404, 404, 200, 200), end=4),
+    _web_scenario("web_scan_duplicate", None, None,
+                  statuses=(404, 404, 404, 200, 200, 200), end=5),
+    _web_scenario("web_scan_normal", None, None,
+                  statuses=(200, 200, 200, 200, 200, 200), end=5),
 )

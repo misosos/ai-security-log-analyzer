@@ -19,6 +19,10 @@ from app.models.schemas import (
     LegacyRelationProjection,
     LegacyRiskProjection,
 )
+from app.analyzer.web_observation_projection import (
+    WEB_TYPES, WEB_PATTERN_LABELS, WebObservationEvidence,
+    WebObservationProjectionError, validate_web_evidence,
+)
 
 
 _ACCOUNT_NOTICE = "원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다."
@@ -37,7 +41,9 @@ _GLOBAL_TYPES = {
     "linux_audit_session_lifecycle": "linux_audit_session_lifecycle",
     "linux_audit_login_start_co_observation": "linux_audit_login_start_co_observation",
 }
-_DETECTION_SLOTS = ("brute_force", "password_spray", "path_traversal")
+_DETECTION_SLOTS = (
+    "brute_force", "password_spray", "path_traversal", *WEB_TYPES,
+)
 
 
 class LegacyAnalysisProjectionError(ValueError):
@@ -127,6 +133,21 @@ def _detections(row) -> dict[str, LegacyDetectionProjection]:
                 http_method=evidence.http_method,
                 response_status=evidence.response_status,
                 response_size_bytes=evidence.response_size_bytes,
+            )
+        elif type(evidence) is WebObservationEvidence:
+            try:
+                validate_web_evidence(evidence)
+            except WebObservationProjectionError:
+                _fail()
+            slot = evidence.detection_type
+            if slot not in WEB_TYPES or evidence.pattern_id not in WEB_PATTERN_LABELS:
+                _fail()
+            values = dict(
+                pattern_category=WEB_PATTERN_LABELS[evidence.pattern_id],
+                request_count=evidence.request_count,
+                distinct_target_count=evidence.distinct_target_count,
+                client_error_count=evidence.client_error_count,
+                time_window_seconds=evidence.time_window_seconds,
             )
         else:
             _fail()

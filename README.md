@@ -4,7 +4,7 @@
 
 AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로그, 웹 접근 로그와 선택적인 Linux Audit 레코드를 정규화한 뒤, 결정적인 규칙으로 탐지·상관관계·IP별 위험도를 계산하는 방어 목적의 배치 분석 프로젝트입니다. 보안 로그 조사 흐름을 학습하거나 소규모 환경에서 초기 검토하는 데 사용할 수 있습니다.
 
-현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·자동 대응 또는 사고 판정 시스템이 아닙니다.
+현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
 
 처리 흐름은 다음과 같습니다.
 
@@ -231,7 +231,7 @@ uv run python -m app.evaluation --format json
 uv run python -m app.evaluation --scenario brute_success
 ```
 
-결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 현재 SSH·parser-only·정상 활동 및 모호한 자동화 시나리오를 포함합니다. 모호한 운영 활동은 일반 TP/FP/TN 계산에서 제외합니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 기존 탐지 임계값과 시간 범위는 유지하며, 여러 로그인 성공 후보의 관계는 가장 가까운 유일한 후속 endpoint를 입력 순서와 무관하게 선택합니다.
+결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 현재 SSH·parser-only·정상 활동 및 모호한 자동화 시나리오를 포함합니다. 모호한 운영 활동은 일반 TP/FP/TN 계산에서 제외합니다. Web Scanning-like의 support는 양성 라벨 시나리오 수로, 현재 정확 임계값·초과·60초 경계 3개다. 요청 순열과 반복 요청 검증은 별도 불변식이며 support에 포함하지 않습니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 기존 탐지 임계값과 시간 범위는 유지하며, 여러 로그인 성공 후보의 관계는 가장 가까운 유일한 후속 endpoint를 입력 순서와 무관하게 선택합니다.
 
 ## 안전한 정리
 

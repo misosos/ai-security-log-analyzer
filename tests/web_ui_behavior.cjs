@@ -144,7 +144,7 @@ async function main() {
   assert.equal(nodes.results.hidden, false);
   assert.equal(nodes["error-summary"].hidden, true);
   assert.equal(nodes["case-list"].children.length, 2);
-  assert.equal(nodes["independent-list"].children.length, 3);
+  assert.equal(nodes["independent-list"].children.length, 4);
   assert.equal(nodes["report-download"].hidden, false);
   assert.equal(app.downloads.length, 0, "no automatic download");
   const callsBeforeDownload = app.fetchCount();
@@ -200,6 +200,9 @@ async function main() {
   assert.equal(high.textContent.includes("ACCOUNT_REFERENCE_UNAVAILABLE"), false);
   assert.equal(nodes["independent-list"].textContent.includes("Password Spraying-like"), true);
   assert.equal(nodes["independent-list"].textContent.includes("Path Traversal"), true);
+  assert.equal(nodes["independent-list"].textContent.includes("SQL Injection-like"), true);
+  assert.equal(nodes["independent-list"].textContent.includes("SQL 결합 조회 구문"), true);
+  assert.equal(nodes["independent-list"].textContent.includes("UNION SELECT"), false);
   assert.equal(nodesOf(nodes["independent-list"], "dt").some((item) => item.textContent === "실패 횟수"), true);
 
   const medium = copy();
@@ -242,6 +245,8 @@ async function main() {
     (value) => { value.cases[0].next_steps[0].text = "IP를 차단하십시오."; },
     (value) => { value.cases[0].included_highest_confidence = "UNKNOWN"; },
     (value) => { value.cases[0].account_alias_state = "ACCOUNT_REFERENCE_UNAVAILABLE"; },
+    (value) => { value.independent_observations.at(-1).evidence[0].value = "PRIVATE-CANARY-raw-target"; },
+    (value) => { value.independent_observations.at(-1).next_step = "파일을 삭제하십시오."; },
     (value) => { value.report_export.byte_count += 1; },
     (value) => { value.report_export.html = "x".repeat(32769); },
     (value) => { value.report_export.html = "<script>bad</script>"; },
@@ -286,7 +291,7 @@ async function main() {
     assert.equal(local.nodes["results-heading"].textContent, "로컬 실제 로그 분석 결과");
     assert.equal(local.nodes["result-context"].textContent.includes("합성 샘플"), false);
     assert.equal(local.nodes["case-list"].children.length, 2);
-    assert.equal(local.nodes["independent-list"].children.length, 3);
+    assert.equal(local.nodes["independent-list"].children.length, 4);
     assert.equal(local.fetchCalls.length, 1);
     assert.equal(local.fetchCalls[0].url, "/api/v1/investigations");
     assert.equal(local.fetchCalls[0].options.method, "POST");
