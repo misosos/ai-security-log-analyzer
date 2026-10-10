@@ -677,3 +677,11 @@ Status: available/unavailable capability with reason
 Error: generation failed; whether projection remains valid
 A11y: no auto-open, descriptive filename text, native button and status
 ```
+
+### Phase 9.1 — Linux Audit 로컬 조사 후보 (2026-10-10)
+
+현재 구현: 기본 `app.local_web`의 loopback 화면에 인증·웹 3파일 분석과 분리된 단일 파일 영역이 있다. `POST /api/v1/investigations/linux-audit`는 정확한 `audit_file` multipart 한 개만 받는다. 서버는 client IP의 loopback 판정에 더해 Host/Origin 및 forwarding header 경계를 검사한다. 기존 `/api/analyze-linux-audit`는 선택적 별도 보안 API이며 계약을 변경하지 않았다. 일반/hosted Linux 업로드는 제공하지 않는다.
+
+공개 응답은 `schema_version=1`, `source_context`, `summary`, 고정 네 `observations` 범주, 해석 안내, bounded warning, capability만 허용한다. 실행별 원문 목록은 반환하지 않는다. 범주 합계는 하나의 실행이 둘 이상의 범주에 속할 수 있어 분류 실행 수보다 클 수 있다. `SUCCESS`는 syscall outcome이고 후속 작업 성공이 아니다. 분류는 기존 Phase 9의 typed classifier를 한 번 호출하며 일반 `analyze()`, 인증·웹 detector, case adapter, HTML renderer, LLM을 호출하지 않는다. 원본 파일은 요청별 private staging에서만 처리하고 결과를 서버에 영구 저장하지 않는다. 강제 종료 뒤 임시 파일 잔존 가능성과 ASGI/proxy 사전 allocation의 한계는 [Linux Audit 계약](linux_audit_process_execution.md)에 적었다.
+
+웹은 strict schema·count invariant 검증 후 `createElement`/`textContent`로만 출력한다. `Linux Audit 프로세스 실행 확인`은 `조사 사례`라는 용어를 사용하지 않으며 인증·웹 Timeline과 결합하지 않는다. native 파일 입력·label·fieldset/legend·오류 focus·field 연결·visible status를 유지한다. 브라우저 hostname은 영역 표시의 편의 조건일 뿐 권한 검사가 아니며 서버 loopback 검사가 필수다. 실제 Safari·스크린리더·320px·200% 확대 수동 검증은 릴리스 gate로 남는다. 합성 79개 인증·웹 및 Linux 21개 분류 평가는 운영환경 탐지율을 뜻하지 않는다.

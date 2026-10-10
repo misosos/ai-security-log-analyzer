@@ -590,12 +590,14 @@ def test_failed_orchestration_still_cleans_staging_directory():
 
 def test_existing_api_routes_openapi_and_new_helper_isolation():
     assert set(app.openapi()["paths"]) == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"
     }
     assert "/api/analyze-linux-audit" not in app.openapi()["paths"]
 
     schemas = app.openapi().get("components", {}).get("schemas", {})
-    assert not any("LinuxAudit" in name for name in schemas)
+    assert "LinuxAuditInvestigationResponse" in schemas
+    assert "LinuxAuditAnalysisResponse" not in schemas
+    assert "LinuxAuditApiErrorResponse" not in schemas
     assert "linux_audit_api" not in Path("app/main.py").read_text(
         encoding="utf-8"
     )

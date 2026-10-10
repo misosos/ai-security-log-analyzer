@@ -779,13 +779,12 @@ def test_existing_openapi_health_api_cli_and_llm_boundaries(monkeypatch):
 
     schema = app.openapi()
     assert set(schema["paths"]) == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"
     }
     assert "/api/analyze-linux-audit" not in schema["paths"]
-    assert not any(
-        "LinuxAudit" in name
-        for name in schema.get("components", {}).get("schemas", {})
-    )
+    assert "LinuxAuditInvestigationResponse" in schema.get("components", {}).get("schemas", {})
+    assert "LinuxAuditAnalysisResponse" not in schema.get("components", {}).get("schemas", {})
+    assert "LinuxAuditApiErrorResponse" not in schema.get("components", {}).get("schemas", {})
     health = TestClient(app).get("/api/health")
     assert health.status_code == 200
     assert health.json() == {"status": "ok"}

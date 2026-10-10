@@ -6,6 +6,7 @@
   <title>보안 로그 조사 | AI Security Log Analyzer</title>
   <link rel="stylesheet" href="/assets/style.css">
   <script src="/assets/app.js" defer></script>
+  <script src="/assets/linux-audit.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
@@ -66,6 +67,44 @@
         <button id="local-button" type="submit">실제 로그 분석하기</button>
       </form>
       <p id="local-status" class="status" aria-live="polite">로컬 서버에서 파일을 선택해 분석할 수 있습니다.</p>
+    </section>
+
+    <section id="linux-audit-upload" class="local-upload" aria-labelledby="linux-audit-heading" hidden>
+      <h2 id="linux-audit-heading">Linux Audit 프로세스 실행 확인</h2>
+      <p>Linux Audit 로그에서 검토할 프로세스 실행 관찰을 분류합니다. 악성 행위, 침해 성공 또는 행위자 식별을 의미하지 않으며 인증·웹 조사 사례와 자동으로 결합하지 않습니다.</p>
+      <p class="local-warning">직접 실행한 로컬 서버에서만 사용하세요. 공개 서버에는 민감한 Linux Audit 로그를 업로드하지 마세요.</p>
+      <p>UTF-8 Linux Audit 텍스트를 지원합니다. 실행 파일·인자·계정·경로 원문은 결과에 표시하지 않으며 외부 LLM도 호출하지 않습니다. 서버에 영구 저장하지 않지만 비정상 종료 후 임시 파일은 남을 수 있습니다.</p>
+      <form id="linux-audit-form" novalidate>
+        <fieldset>
+          <legend>Linux Audit 로그 선택 — 파일 한 개 필수</legend>
+          <div class="file-field">
+            <label for="linux-audit-file">Linux Audit 로그 (필수)</label>
+            <p id="linux-audit-help">SYSCALL·EXECVE 등이 기록된 UTF-8 텍스트를 선택하세요. 압축·보관 파일은 지원하지 않습니다.</p>
+            <input id="linux-audit-file" name="audit_file" type="file" required aria-describedby="linux-audit-help linux-audit-field-error">
+            <p id="linux-audit-field-error" class="field-error" hidden></p>
+          </div>
+        </fieldset>
+        <p>파일 64 KiB, 요청 전체 72 KiB, 한 줄 1024바이트, 최대 512줄입니다.</p>
+        <button id="linux-audit-button" type="submit">Linux Audit 로그 확인</button>
+      </form>
+      <p id="linux-audit-status" class="status" aria-live="polite">Linux Audit 파일을 선택해 확인할 수 있습니다.</p>
+      <div id="linux-audit-error" class="error-summary" tabindex="-1" hidden>
+        <h3>Linux Audit 로그를 확인하지 못했습니다</h3>
+        <p id="linux-audit-error-message"></p>
+        <p id="linux-audit-error-recovery"></p>
+      </div>
+    </section>
+
+    <section id="linux-audit-results" class="results" aria-labelledby="linux-audit-results-heading" hidden>
+      <h2 id="linux-audit-results-heading">로컬 Linux Audit 분석 결과</h2>
+      <p>이 결과는 Linux Audit 로그에서 검토할 프로세스 실행 관찰을 분류한 것입니다. 악성 행위나 침해 성공을 확정하지 않으며, 실행 목적과 승인 여부는 별도로 확인해야 합니다.</p>
+      <div id="linux-audit-summary" class="summary-grid"></div>
+      <h3>범주별 조사 후보</h3>
+      <div id="linux-audit-categories" class="card-stack"></div>
+      <h3>실행 결과와 해석 한계</h3>
+      <p id="linux-audit-outcomes"></p>
+      <p>성공은 실행 syscall의 기록된 결과를 뜻합니다. 파일 전송, 권한 변경 또는 공격 목적이 성공했다는 의미가 아닙니다.</p>
+      <div id="linux-audit-warnings"></div>
     </section>
 
     <section class="info-grid" aria-label="체험 안내">

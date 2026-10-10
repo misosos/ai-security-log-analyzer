@@ -146,10 +146,11 @@ Session lifecycle과 process observation의 bounded 공동 관찰 및 CLI count
 | 경계 | Aggregate | Detailed evidence | 정책 |
 |---|---|---|---|
 | CLI | 기존 고정 count aggregate와 Phase 9 조사 후보 category count | 없음 | 명시적 allowlist field만 표시 |
-| 기본 API·웹 | 없음 | 없음 | 기존 계약 유지 |
+| 기본 인증·웹 API | 없음 | 없음 | 기존 3파일·sample 계약 유지 |
+| 로컬 Linux Audit 웹 | Phase 9.1 category별 count-only 응답 | 없음 | loopback 단일 파일, 별도 versioned route |
 | 선택적 보안 Linux Audit API | 기존 count-only 응답 | 없음 | 별도 인증·인가·audit sink가 필요한 현재 route는 유지하고 Phase 9 category를 추가하지 않음 |
 | LLM | 없음 | 없음 | per-IP 및 overall input에서 제외 |
-| Frontend | 없음 | 없음 | API에 없는 정보를 재구성하지 않음 |
+| Frontend | 고정 category 집계만 | 없음 | API에 없는 실행별 정보를 재구성하지 않음 |
 | Detection | CLI fixed review count만 | 내부 observation | IP results에는 포함하지 않음 |
 | Correlation | 사용하지 않음 | 내부 event만 존재 | process correlation 없음 |
 | Risk | 사용하지 않음 | 내부 event만 존재 | risk factor에 반영하지 않음 |
@@ -214,7 +215,7 @@ authorization 및 access auditing, explicit data classification/redaction,
 
 ## 14. Phase 9 — Linux 프로세스 실행 조사 후보 (2026-10-10)
 
-`classify_process_execution_observations()`는 parser를 재실행하지 않고 정확한 `tuple[NormalizedEvent]`의 `process_execution_attempt`만 받는다. frozen dataclass와 tuple로 category 관찰·건수·고정 한계·read-only 다음 단계를 반환한다. 내부 raw event/context 참조는 반환하지 않는다. CLI는 기존 count-only aggregate 다음에 별도 **Linux 프로세스 실행 조사 후보** 섹션을 표시한다. 이는 탐지·risk·인증/웹 조사 사례·Timeline과 결합하지 않으며 기본 API, 보안 Linux Audit API, 웹, HTML, LLM에 연결하지 않는다.
+`classify_process_execution_observations()`는 parser를 재실행하지 않고 정확한 `tuple[NormalizedEvent]`의 `process_execution_attempt`만 받는다. frozen dataclass와 tuple로 category 관찰·건수·고정 한계·read-only 다음 단계를 반환한다. 내부 raw event/context 참조는 반환하지 않는다. CLI는 기존 count-only aggregate 다음에 별도 **Linux 프로세스 실행 조사 후보** 섹션을 표시한다. 이는 탐지·risk·인증/웹 조사 사례·Timeline과 결합하지 않는다. Phase 9.1에서는 별도 loopback 전용 웹 경계에 범주별 집계만 연결하며 기존 인증·웹 API, 선택적 보안 Linux Audit API, HTML, LLM에는 연결하지 않는다.
 
 | Category ID | 정확 일치 allowlist·조건 | 고정 검토 우선순위 |
 | --- | --- | --- |
@@ -229,7 +230,15 @@ authorization 및 access auditing, explicit data classification/redaction,
 
 같은 `(source_instance, node, event_id)`의 정확한 normalized execution 중복만 하나로 세며, 동일 identity에 상충하는 context는 고정 오류로 실패한다. 하나의 `/tmp/curl`은 network-transfer와 temp 두 category에 모두 남지만 실행 건수는 하나다. 공개 `observation_id`는 정렬된 결과의 순번일 뿐 audit serial·node·PID를 담지 않는다. 출력에는 실행 파일명·경로, argv, URL, CWD, PATH, PROCTITLE, 계정과 raw record가 없다. 내부 trusted parser event에는 원문이 남아 직접 출력·범용 직렬화하면 노출될 수 있다. 메모리 안전 삭제를 보장하지 않는다.
 
-분류되지 않은 실행은 안전·정상 판정이 아니다. 실행 도구만으로 악성 여부, 공격자 의도, 네트워크 전송·권한 변경 성공을 판정하지 않는다. 합성 평가에는 별도 Linux category section을 두고 기존 79개 IP 기반 confusion matrix와 합치지 않는다. 기본 CLI에서 Linux Audit 파일이 없을 때 출력은 이전과 같다. 웹 연결은 별도 업로드·privacy·권한 설계 전까지 no-go다.
+분류되지 않은 실행은 안전·정상 판정이 아니다. 실행 도구만으로 악성 여부, 공격자 의도, 네트워크 전송·권한 변경 성공을 판정하지 않는다. 합성 평가에는 별도 Linux category section을 두고 기존 79개 IP 기반 confusion matrix와 합치지 않는다. 기본 CLI에서 Linux Audit 파일이 없을 때 출력은 이전과 같다. 일반/hosted 웹 업로드와 인증·웹 사례 자동 결합은 여전히 no-go다.
+
+## 15. Phase 9.1 — 별도 로컬 웹 연결
+
+`POST /api/v1/investigations/linux-audit`는 **정확히 하나의 `audit_file`** multipart 파일을 loopback에서만 받는다. 기존 `/api/v1/investigations`의 세 파일 및 `/api/analyze-linux-audit` 계약은 변경하지 않는다. 전체 multipart envelope는 72 KiB, decoded 파일은 64 KiB, 한 줄은 1024바이트, 파일은 최대 512줄이다. 문서화된 가장 큰 합성 Audit fixture의 15,742바이트·68줄·최장 363바이트와 서로 다른 세 fixture 합계 27,602바이트·125줄을 측정해 작은 로컬 학습 한계로 선정했다. 기존 3파일 로컬 업로드가 사용하는 별도 subprocess 격리 방식과 upload timeout 10초·분석 timeout 10초·process-local 동시 요청 1개·60초당 6회를 Linux 전용 limiter에서도 채택했다. 분석 worker는 완료·실패·timeout에 종료한 뒤 staging을 정리한다. 이러한 수치는 외부 보안 표준이 아닌 프로젝트 자원 보호 정책이다.
+
+ASGI stream의 bytes를 제한한 뒤 multipart parser가 파일을 spool한다. 파일은 4096바이트 chunk로 strict UTF-8·NUL/binary·archive signature·크기·줄 길이/수를 검사한다. 요청별 `0700` 디렉터리에 고정 내부 이름의 `0600` 파일을 `O_EXCL|O_NOFOLLOW`로 만들고 parser·classifier를 실행한 후 정상/오류/timeout/cancellation에서 정리한다. 강제 프로세스 종료 후 orphan 삭제는 보장하지 않는다. ASGI/proxy가 애플리케이션보다 앞서 할당한 자원과 여러 worker 전체의 rate limit도 보장하지 않는다.
+
+공개 Pydantic 응답은 전체·분류·미분류 실행 수, syscall outcome, 네 고정 범주의 건수·LOW/MEDIUM 우선순위·최저 관찰 신뢰도·고정 한계·다음 단계만 담는다. 다중 범주 때문에 범주 관찰 합계는 분류 실행 수를 넘을 수 있다. 원래 executable/basename·argv·계정·Audit serial/node·CWD/PATH/PROCTITLE·파일명·임시 경로를 반환하지 않는다. UI는 응답 전체를 검증한 뒤 고정 문자열과 `textContent`만 표시한다. 결과는 현재 브라우저 탭 메모리에서만 유지하고 새 요청·실패 시 지운다. 실제 브라우저/스크린리더 검증 전에는 WCAG 준수를 주장하지 않는다. 이 경계는 인증·인가·hosted 배포의 대체물이 아니다.
 
 공식 근거 확인일: 2026-10-10. [Red Hat Audit log 설명](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sec-understanding_audit_log_files)은 `SYSCALL success/exit`, `comm/exe`, `PATH`가 서로 다른 관찰 필드임을 보여준다. [Linux Audit field dictionary](https://github.com/linux-audit/audit-documentation/blob/main/specs/fields/field-dictionary.csv)는 필드 계약 확인에 사용했다. [MITRE ATT&CK Process Creation](https://attack.mitre.org/datacomponents/DC0032/)은 실행 telemetry의 조사 가치를 설명하지만 이 프로젝트의 allowlist·우선순위의 근거는 아니다. [NIST SP 800-92](https://csrc.nist.gov/pubs/sp/800/92/final)는 로그 보호·분석 운영의 일반 원칙을 제공하며 악성 판정이나 category 조건을 지정하지 않는다. 네 allowlist와 LOW/MEDIUM은 저장소 평가를 위한 프로젝트 정책이다.
 

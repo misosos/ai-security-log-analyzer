@@ -79,7 +79,7 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "legend" for tag, _ in nodes)
     assert any(attrs.get("id") == "local-upload" and "hidden" in attrs for _, attrs in nodes)
     assert {attrs.get("name") for tag, attrs in nodes if tag == "input"} == {
-        "application_file", "ssh_file", "access_file"
+        "application_file", "ssh_file", "access_file", "audit_file"
     }
     assert all("required" in attrs and attrs.get("type") == "file"
                for tag, attrs in nodes if tag == "input")
@@ -186,7 +186,7 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
     assert client.get("/api/health").json() == {"status": "ok"}
     assert client.get("/docs").status_code == 200
     schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"}
+    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"}
     assert client.post("/api/analyze").status_code == 422
 
 

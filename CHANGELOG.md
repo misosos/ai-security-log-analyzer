@@ -10,7 +10,8 @@
 - Brute Force, Password Spraying-like, Path Traversal 및 SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like 웹 요청 관찰, 인증 실패·성공 상관분석, 가장 가까운 후속 성공의 결정적 선택.
 - 기존 위험도·신뢰도·근거·한계, 조사 사례·시간순 조사 흐름·독립 관찰, 대상별 standalone HTML 보고서 다운로드.
 - 오프라인 합성·경계 평가 79개 시나리오(기존 43개 ID 유지), 선택적 CLI Linux Audit 집계. 기존 LLM 설명 코드는 핵심 실행 경로와 분리된다.
-- Linux Audit의 실행 파일 basename·위치에 근거한 네 가지 **프로세스 실행 조사 후보**를 CLI에만 추가하고 별도 합성 평가 21개 시나리오로 검증한다. 기존 IP 기반 조사 사례·risk·API·웹·HTML·LLM과 결합하지 않는다.
+- Linux Audit의 실행 파일 basename·위치에 근거한 네 가지 **프로세스 실행 조사 후보**를 먼저 CLI에 추가하고 별도 합성 평가 21개 시나리오로 검증한다. 기존 IP 기반 조사 사례·risk·HTML·LLM과 결합하지 않는다.
+- 네 범주의 집계만 확인하는 loopback 전용 Linux Audit 로컬 웹 업로드를 별도 endpoint와 화면에 추가했다. 기존 인증·웹 조사 사례와 결합하지 않고 원래 Audit 세부정보를 공개 응답에서 제외한다.
 
 ### 보안
 

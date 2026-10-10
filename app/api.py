@@ -32,7 +32,14 @@ from app.models.investigation_sample_api import (
 )
 from app.sample_investigation_api import create_sample_endpoint
 from app.local_investigation_api import create_local_endpoint
-from app.web_ui import serve_demo_index, serve_demo_script, serve_demo_styles
+from app.linux_audit_investigation_api import create_linux_audit_local_endpoint
+from app.models.linux_audit_investigation import (
+    LinuxAuditInvestigationError, LinuxAuditInvestigationResponse,
+)
+from app.web_ui import (
+    serve_demo_index, serve_demo_script, serve_demo_styles,
+    serve_linux_audit_script,
+)
 from app.models.linux_audit_api import (
     LinuxAuditAnalysisResponse,
     LinuxAuditApiErrorResponse,
@@ -401,6 +408,10 @@ def create_app(
             "/assets/app.js", serve_demo_script, methods=["GET"],
             include_in_schema=False,
         )
+        configured_app.add_api_route(
+            "/assets/linux-audit.js", serve_linux_audit_script, methods=["GET"],
+            include_in_schema=False,
+        )
     configured_app.add_api_route(
         "/api/health",
         health_check,
@@ -431,6 +442,16 @@ def create_app(
         },
     )
     if not enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/api/v1/investigations/linux-audit",
+            create_linux_audit_local_endpoint(),
+            methods=["POST"],
+            response_model=LinuxAuditInvestigationResponse,
+            responses={
+                code: {"model": LinuxAuditInvestigationError}
+                for code in (400, 403, 413, 415, 422, 429, 500, 503)
+            },
+        )
         configured_app.add_api_route(
             "/api/v1/investigations",
             create_local_endpoint(

@@ -72,3 +72,7 @@ def serve_demo_styles() -> Response:
 
 def serve_demo_script() -> Response:
     return _fixed_asset("app.js", "text/javascript")
+
+
+def serve_linux_audit_script() -> Response:
+    return _fixed_asset("linux-audit.js", "text/javascript")

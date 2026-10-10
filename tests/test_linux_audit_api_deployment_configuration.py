@@ -287,7 +287,7 @@ def test_default_application_routes_and_openapi_remain_unchanged():
     schema = app.openapi()
 
     assert route_paths == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"
     }
     assert set(schema["paths"]) == route_paths
     assert API_PATH not in schema["paths"]

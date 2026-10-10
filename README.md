@@ -161,7 +161,10 @@ uv run python -m app.main \
 
 - **CLI 텍스트**: IP별 탐지, 위험도, 평가 근거와 상관관계를 출력합니다. Linux Audit 프로세스 관련 출력은 승인된 집계 위주이지만, 일반 인증 상관관계에는 계정 등 조사 필드가 나타날 수 있으므로 CLI도 민감하게 취급하십시오.
 - **HTML 조사 보고서**: 한국어 UI, 결정적인 검토 순서, 타입이 지정된 증거, 보고서 로컬 `Account N` 별칭, 해석 한계와 고정 조사 단계를 포함하는 독립형 파일입니다. 원본 로그와 전체 HTTP query는 projection에 포함하지 않습니다.
-- **Linux Audit 집계·조사 후보**: 별도 입력이 있을 때 기존 count-only 요약 다음에 셸·전송 도구·권한 변경 도구·임시 위치 실행의 고정 category와 건수·한계·다음 단계를 CLI에 표시합니다. 이는 악성 탐지나 공격 성공 판정이 아닙니다. 실행 파일명·상세 argv·PATH record·command line·`PROCTITLE`·raw record·세션 컨텍스트는 새 섹션에 표시하지 않습니다. 기본·선택적 보안 Linux Audit API, 웹, HTML, LLM에는 이 category를 추가하지 않았습니다.
+- **Linux Audit 집계·조사 후보**: 별도 입력이 있을 때 기존 count-only 요약 다음에 셸·전송 도구·권한 변경 도구·임시 위치 실행의 고정 category와 건수·한계·다음 단계를 CLI에 표시합니다. 이는 악성 탐지나 공격 성공 판정이 아닙니다. 실행 파일명·상세 argv·PATH record·command line·`PROCTITLE`·raw record·세션 컨텍스트는 새 섹션에 표시하지 않습니다. 기존 선택적 보안 Linux Audit API, 인증·웹 조사 API, HTML, LLM의 계약은 변경하지 않았습니다.
+- **Linux Audit 로컬 웹 조사 후보**: `uv run python -m app.local_web`로 직접 실행한 loopback 웹 화면의 별도 `Linux Audit 프로세스 실행 확인` 영역에서 UTF-8 Audit 파일 한 개를 선택할 수 있습니다. `POST /api/v1/investigations/linux-audit`는 기존 인증·웹 3파일 분석과 분리된 범주별 건수·우선순위·한계·다음 단계만 반환합니다. 실행 파일명·경로·인자·계정·Audit ID는 반환하지 않고 LLM·HTML 보고서·인증/웹 사례와 연결하지 않습니다. 이 기능은 공개 서버 업로드가 아닙니다.
+
+Linux Audit 로컬 웹 입력 한계는 파일 64 KiB, multipart 요청 72 KiB, 한 줄 1024바이트, 최대 512줄입니다. 가장 큰 문서화된 합성 Audit fixture는 15,742바이트·68줄·최장 363바이트이고, 서로 다른 세 fixture 합계는 27,602바이트·125줄입니다. 이를 수용하는 소규모 로컬 학습 한계입니다. 요청별 private 임시 디렉터리(0700)와 파일(0600)은 정상·오류·취소·timeout 후 정리하지만 프로세스 강제 종료 뒤 잔존은 보장하지 않습니다. 이 제한은 ASGI 서버·프록시의 사전 할당이나 여러 worker 전체를 통합하는 rate limit이 아닙니다.
 - **기본 API 응답**: `/api/analyze`는 기존 per-IP 결과, global correlation과 `ai_summary: null`을 반환합니다. 별도 보고서 route는 없으며 sample 및 loopback-only 조사 API의 같은 응답에 bounded `report_export`가 포함됩니다.
 - **선택적 LLM 설명**: 개발자가 명시적으로 직접 호출할 때만 결정적 분석 결과를 설명합니다. 탐지·상관관계·위험도를 만들거나 변경하는 분석 권한은 없습니다.
 

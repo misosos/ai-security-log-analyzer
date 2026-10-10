@@ -533,13 +533,11 @@ def test_existing_api_routes_and_openapi_are_not_changed():
     }
 
     assert route_paths == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"
     }
     assert openapi_paths == route_paths
     assert callable(api_module.stage_linux_audit_uploads)
-    assert not any(
-        "LinuxAudit" in name
-        for name in api_module.app.openapi()
-        .get("components", {})
-        .get("schemas", {})
-    )
+    schemas = api_module.app.openapi().get("components", {}).get("schemas", {})
+    assert "LinuxAuditInvestigationResponse" in schemas
+    assert "LinuxAuditAnalysisResponse" not in schemas
+    assert "LinuxAuditApiErrorResponse" not in schemas
