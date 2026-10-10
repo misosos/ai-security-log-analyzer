@@ -161,7 +161,7 @@ uv run python -m app.main \
 
 - **CLI 텍스트**: IP별 탐지, 위험도, 평가 근거와 상관관계를 출력합니다. Linux Audit 프로세스 관련 출력은 승인된 집계 위주이지만, 일반 인증 상관관계에는 계정 등 조사 필드가 나타날 수 있으므로 CLI도 민감하게 취급하십시오.
 - **HTML 조사 보고서**: 한국어 UI, 결정적인 검토 순서, 타입이 지정된 증거, 보고서 로컬 `Account N` 별칭, 해석 한계와 고정 조사 단계를 포함하는 독립형 파일입니다. 원본 로그와 전체 HTTP query는 projection에 포함하지 않습니다.
-- **Linux Audit 집계**: 별도 입력이 있을 때 프로세스 관찰, shared-memory 검토 관찰, session/process 동시 관찰 등의 count-only 요약을 제공합니다. 상세 argv·PATH record·command line·`PROCTITLE`·raw record·세션 컨텍스트는 HTML과 공용 API 경계에 내보내지 않습니다.
+- **Linux Audit 집계·조사 후보**: 별도 입력이 있을 때 기존 count-only 요약 다음에 셸·전송 도구·권한 변경 도구·임시 위치 실행의 고정 category와 건수·한계·다음 단계를 CLI에 표시합니다. 이는 악성 탐지나 공격 성공 판정이 아닙니다. 실행 파일명·상세 argv·PATH record·command line·`PROCTITLE`·raw record·세션 컨텍스트는 새 섹션에 표시하지 않습니다. 기본·선택적 보안 Linux Audit API, 웹, HTML, LLM에는 이 category를 추가하지 않았습니다.
 - **기본 API 응답**: `/api/analyze`는 기존 per-IP 결과, global correlation과 `ai_summary: null`을 반환합니다. 별도 보고서 route는 없으며 sample 및 loopback-only 조사 API의 같은 응답에 bounded `report_export`가 포함됩니다.
 - **선택적 LLM 설명**: 개발자가 명시적으로 직접 호출할 때만 결정적 분석 결과를 설명합니다. 탐지·상관관계·위험도를 만들거나 변경하는 분석 권한은 없습니다.
 
@@ -232,6 +232,8 @@ uv run python -m app.evaluation --scenario brute_success
 ```
 
 결과는 stdout에만 출력되며 운영 환경 탐지율이나 침해 확률이 아닙니다. 현재 SSH·parser-only·정상 활동 및 모호한 자동화 시나리오를 포함합니다. 모호한 운영 활동은 일반 TP/FP/TN 계산에서 제외합니다. Web Scanning-like의 support는 양성 라벨 시나리오 수로, 현재 정확 임계값·초과·60초 경계 3개다. 요청 순열과 반복 요청 검증은 별도 불변식이며 support에 포함하지 않습니다. 고정 라벨·metric·한계·외부 데이터셋 검토는 [평가 문서](docs/detection_evaluation.md)에 있습니다. 기존 탐지 임계값과 시간 범위는 유지하며, 여러 로그인 성공 후보의 관계는 가장 가까운 유일한 후속 endpoint를 입력 순서와 무관하게 선택합니다.
+
+Linux Audit 프로세스 실행 조사는 같은 명령의 **별도 21개 합성 시나리오 section**에서 평가하며 위 79개 IP 탐지 metric에 합치지 않습니다. CLI에서만 조사 후보를 표시하고, 합성 일치도를 실제 운영환경 악성 탐지율로 일반화하지 않습니다.
 
 ## 안전한 정리
 

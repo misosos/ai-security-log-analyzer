@@ -10,6 +10,7 @@
 - Brute Force, Password Spraying-like, Path Traversal 및 SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like 웹 요청 관찰, 인증 실패·성공 상관분석, 가장 가까운 후속 성공의 결정적 선택.
 - 기존 위험도·신뢰도·근거·한계, 조사 사례·시간순 조사 흐름·독립 관찰, 대상별 standalone HTML 보고서 다운로드.
 - 오프라인 합성·경계 평가 79개 시나리오(기존 43개 ID 유지), 선택적 CLI Linux Audit 집계. 기존 LLM 설명 코드는 핵심 실행 경로와 분리된다.
+- Linux Audit의 실행 파일 basename·위치에 근거한 네 가지 **프로세스 실행 조사 후보**를 CLI에만 추가하고 별도 합성 평가 21개 시나리오로 검증한다. 기존 IP 기반 조사 사례·risk·API·웹·HTML·LLM과 결합하지 않는다.
 
 ### 보안
 
@@ -30,5 +31,6 @@
 - 비정상 프로세스/호스트 종료 뒤 임시 파일 삭제는 보장되지 않는다. 애플리케이션이 ASGI/프록시의 사전 allocation을 완전히 제한하지 못하며, rate limit은 여러 worker를 통합하지 않는다.
 - Windows에서 `O_NOFOLLOW`가 없으면 실제 업로드를 거부한다. 합성 corpus 수치는 실제 운영환경의 탐지율이 아니다.
 - 새 웹 관찰은 요청만으로 SQL 실행·브라우저 실행·파일 노출·자동화 의도를 확인하지 못하며 WAF 대체품이 아니다. Web Scanning-like 합성 positive support는 3개뿐이며 운영환경 성능으로 일반화할 수 없다.
+- Linux Audit 도구 실행은 도구 목적·전송·권한 변경·악성 여부를 확정하지 않는다. `comm` truncation과 `argv[0]` spoofing, Audit 정책의 로그 누락은 남은 한계다.
 - HTML은 대상별 형식으로 case Timeline 전체를 포함하지 않는다. Trusted internal analysis에는 계정 원문이 남을 수 있고 Python 메모리의 secure erasure는 보장되지 않는다.
 - 라이선스는 MIT(`Copyright (c) 2026 misosos`)이며 GitHub private vulnerability reporting은 사용자 확인에 따라 활성화됐다. Safari의 키보드·확대·screen-reader 수동 검증과 원격 CI는 공개 릴리스 전 남은 gate다.

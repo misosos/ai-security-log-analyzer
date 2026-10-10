@@ -1,0 +1,2 @@
+node=synthetic-temp-shm type=EXECVE msg=audit(1790401014.000015:9015): argc=1 a0="/dev/shm/tool"
+node=synthetic-temp-shm type=SYSCALL msg=audit(1790401014.000015:9015): arch=c000003e syscall=59 success=no exit=-2 items=0 pid=1015 ppid=1000 comm="tool" exe="/dev/shm/tool"

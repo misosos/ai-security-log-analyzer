@@ -1,0 +1,3 @@
+node=synthetic-cwd-only type=CWD msg=audit(1790401017.000018:9018): cwd="/tmp"
+node=synthetic-cwd-only type=SYSCALL msg=audit(1790401017.000018:9018): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1018 ppid=1000 comm="tool" exe="/usr/bin/tool"
+node=synthetic-cwd-only type=EXECVE msg=audit(1790401017.000018:9018): argc=1 a0="/usr/bin/tool"

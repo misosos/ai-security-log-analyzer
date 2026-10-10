@@ -22,7 +22,8 @@ raw Audit records
 → app/parser/linux_audit.py:_build_process_execution_context()
 → app/parser/linux_audit.py:parse_linux_audit_events()
 → NormalizedEvent(event_type="process_execution_attempt")
-→ app/analyzer/process_execution.py:aggregate_process_execution_observations()
+├→ app/analyzer/process_execution.py:aggregate_process_execution_observations()
+└→ app/analyzer/process_execution_classification.py:classify_process_execution_observations()
 → app/main.py:main()
 → app/analyzer/report.py:print_analysis_result()
 ```
@@ -106,7 +107,7 @@ confidence 또는 safety가 아니다.
 
 ## 7. CLI 출력
 
-CLI는 개별 process event가 아닌 고정 크기 aggregate만 표시한다.
+CLI는 기존 개별 process event 대신 고정 크기 aggregate를 표시한다. Phase 9에서는 그 다음에 고정 category별 조사 후보 건수·한계·다음 단계를 표시하지만 원문 실행 identity는 표시하지 않는다.
 
 ```text
 ===== Process Execution Telemetry =====
@@ -144,8 +145,9 @@ Session lifecycle과 process observation의 bounded 공동 관찰 및 CLI count
 
 | 경계 | Aggregate | Detailed evidence | 정책 |
 |---|---|---|---|
-| CLI | 고정 count aggregate만 | 없음 | 명시적 allowlist field만 표시 |
-| API | 없음 | 없음 | 기존 `AnalysisResponse` 유지 |
+| CLI | 기존 고정 count aggregate와 Phase 9 조사 후보 category count | 없음 | 명시적 allowlist field만 표시 |
+| 기본 API·웹 | 없음 | 없음 | 기존 계약 유지 |
+| 선택적 보안 Linux Audit API | 기존 count-only 응답 | 없음 | 별도 인증·인가·audit sink가 필요한 현재 route는 유지하고 Phase 9 category를 추가하지 않음 |
 | LLM | 없음 | 없음 | per-IP 및 overall input에서 제외 |
 | Frontend | 없음 | 없음 | API에 없는 정보를 재구성하지 않음 |
 | Detection | CLI fixed review count만 | 내부 observation | IP results에는 포함하지 않음 |
@@ -209,6 +211,27 @@ aggregate 불변조건, consumer 격리 및 민감 evidence 비노출을 검증�
 authorization 및 access auditing, explicit data classification/redaction,
 추가 process detection, process/session correlation을 검토할 수 있다.
 이 항목들은 현재 구현되거나 승인된 기능이 아니다.
+
+## 14. Phase 9 — Linux 프로세스 실행 조사 후보 (2026-10-10)
+
+`classify_process_execution_observations()`는 parser를 재실행하지 않고 정확한 `tuple[NormalizedEvent]`의 `process_execution_attempt`만 받는다. frozen dataclass와 tuple로 category 관찰·건수·고정 한계·read-only 다음 단계를 반환한다. 내부 raw event/context 참조는 반환하지 않는다. CLI는 기존 count-only aggregate 다음에 별도 **Linux 프로세스 실행 조사 후보** 섹션을 표시한다. 이는 탐지·risk·인증/웹 조사 사례·Timeline과 결합하지 않으며 기본 API, 보안 Linux Audit API, 웹, HTML, LLM에 연결하지 않는다.
+
+| Category ID | 정확 일치 allowlist·조건 | 고정 검토 우선순위 |
+| --- | --- | --- |
+| `LINUX_SHELL_INTERPRETER_EXECUTION` | `sh`, `bash`, `dash`, `zsh`, `ksh` | LOW |
+| `LINUX_NETWORK_TRANSFER_UTILITY_EXECUTION` | `curl`, `wget` | LOW |
+| `LINUX_PERMISSION_CHANGE_UTILITY_EXECUTION` | `chmod`, `chown` | LOW |
+| `LINUX_TEMP_DIRECTORY_EXECUTION` | 신뢰 가능한 `exe` 절대 경로가 `/tmp`, `/var/tmp`, `/dev/shm` 자체 또는 하위 경로 | MEDIUM |
+
+검증된 `SYSCALL exe` 절대 경로의 basename을 우선 사용하고, 없으면 `comm`, 그마저 없으면 `EXECVE argv[0]`로만 fallback한다. 제공된 source의 basename이 충돌하거나 경로가 비정상이면 추측하지 않고 unclassified로 센다. `PATH` record에는 실행 파일 외의 다른 항목도 들어가므로 현재 parser만으로 특정 item을 실행 identity라고 확정하지 않는다. CWD가 임시 디렉터리인 것만으로 temp category를 만들지 않는다. 경로는 filesystem resolve·symlink follow 없이 POSIX segment 단위로 확인한다. substring·대소문자 변환을 하지 않는다. Python·Perl·Ruby, `scp`·`sftp`, package manager, `setfacl`·`chgrp`는 초기 allowlist 밖이다.
+
+신뢰도는 식별 근거의 완전성을 뜻한다. `exe`와 argv/PATH completeness가 모두 완전하면 HIGH, `exe`가 있으나 불완전하거나 `comm` fallback이면 MEDIUM, `argv[0]`만 있으면 LOW다. `comm`은 잘릴 수 있고 `argv[0]`은 호출자가 지정할 수 있다는 한계를 함께 표시한다. `SUCCESS`/`FAILURE`/`UNKNOWN`은 기존 syscall outcome의 표현이며 전송·권한 변경·프로그램 목적 달성 여부가 아니다. 우선순위는 고정 조사 순서이며 위험 점수나 침해 확률이 아니다.
+
+같은 `(source_instance, node, event_id)`의 정확한 normalized execution 중복만 하나로 세며, 동일 identity에 상충하는 context는 고정 오류로 실패한다. 하나의 `/tmp/curl`은 network-transfer와 temp 두 category에 모두 남지만 실행 건수는 하나다. 공개 `observation_id`는 정렬된 결과의 순번일 뿐 audit serial·node·PID를 담지 않는다. 출력에는 실행 파일명·경로, argv, URL, CWD, PATH, PROCTITLE, 계정과 raw record가 없다. 내부 trusted parser event에는 원문이 남아 직접 출력·범용 직렬화하면 노출될 수 있다. 메모리 안전 삭제를 보장하지 않는다.
+
+분류되지 않은 실행은 안전·정상 판정이 아니다. 실행 도구만으로 악성 여부, 공격자 의도, 네트워크 전송·권한 변경 성공을 판정하지 않는다. 합성 평가에는 별도 Linux category section을 두고 기존 79개 IP 기반 confusion matrix와 합치지 않는다. 기본 CLI에서 Linux Audit 파일이 없을 때 출력은 이전과 같다. 웹 연결은 별도 업로드·privacy·권한 설계 전까지 no-go다.
+
+공식 근거 확인일: 2026-10-10. [Red Hat Audit log 설명](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sec-understanding_audit_log_files)은 `SYSCALL success/exit`, `comm/exe`, `PATH`가 서로 다른 관찰 필드임을 보여준다. [Linux Audit field dictionary](https://github.com/linux-audit/audit-documentation/blob/main/specs/fields/field-dictionary.csv)는 필드 계약 확인에 사용했다. [MITRE ATT&CK Process Creation](https://attack.mitre.org/datacomponents/DC0032/)은 실행 telemetry의 조사 가치를 설명하지만 이 프로젝트의 allowlist·우선순위의 근거는 아니다. [NIST SP 800-92](https://csrc.nist.gov/pubs/sp/800/92/final)는 로그 보호·분석 운영의 일반 원칙을 제공하며 악성 판정이나 category 조건을 지정하지 않는다. 네 allowlist와 LOW/MEDIUM은 저장소 평가를 위한 프로젝트 정책이다.
 
 ## 문서 근거
 

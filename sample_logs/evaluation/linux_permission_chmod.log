@@ -1,0 +1,2 @@
+node=synthetic-permission-chmod type=SYSCALL msg=audit(1790401004.000005:9005): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1005 ppid=1000 comm="chmod" exe="/usr/bin/chmod"
+node=synthetic-permission-chmod type=EXECVE msg=audit(1790401004.000005:9005): argc=2 a0="/usr/bin/chmod" a1="SYNTHETIC_TARGET_CANARY"

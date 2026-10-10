@@ -15,6 +15,11 @@ from app.analyzer.pipeline import (
 from app.analyzer.process_execution import (
     aggregate_process_execution_observations,
 )
+from app.analyzer.process_execution_classification import (
+    ProcessExecutionClassificationError,
+    classify_process_execution_observations,
+)
+from app.models.schemas import NormalizedEvent
 from app.analyzer.html_report import (
     InvestigationReportRendererError,
     render_investigation_report_html,
@@ -267,6 +272,25 @@ def main(argv: Sequence[str] | None = None) -> None:
     process_execution_aggregate = (
         aggregate_process_execution_observations(logs)
     )
+    process_execution_classification = None
+    if linux_audit_configs:
+        try:
+            process_execution_classification = classify_process_execution_observations(
+                tuple(event for event in logs if type(event) is NormalizedEvent
+                      and event.event_type == "process_execution_attempt"
+                      and event.source == "linux_audit")
+            )
+            summary = process_execution_classification.summary
+            if (
+                summary.eligible_execution_count != process_execution_aggregate["observation_count"]
+                or summary.outcome_counts.success != process_execution_aggregate["outcome_counts"]["success"]
+                or summary.outcome_counts.failure != process_execution_aggregate["outcome_counts"]["failure"]
+                or summary.outcome_counts.unknown != process_execution_aggregate["outcome_counts"]["unknown"]
+            ):
+                raise ProcessExecutionClassificationError("invalid_input")
+        except (ProcessExecutionClassificationError, KeyError, TypeError, ValueError):
+            print("Linux 프로세스 실행 조사 후보를 구성하지 못했습니다: 내부 계약 검증 실패.", file=sys.stderr)
+            raise SystemExit(1) from None
 
     try:
         process_observations = (
@@ -308,6 +332,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             process_execution_aggregate
         ),
     }
+    if process_execution_classification is not None:
+        print_arguments["process_execution_classification"] = process_execution_classification
 
     if (
         process_detection_summary

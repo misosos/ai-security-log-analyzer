@@ -19,6 +19,10 @@ from app.analyzer.web_observation_projection import (
     WEB_TYPES, WEB_PATTERN_IDS, WebObservationProjectionError,
     project_web_observation,
 )
+from app.evaluation.linux_process import (
+    LinuxProcessEvaluationError, LinuxProcessEvaluationSummary,
+    evaluate_linux_process,
+)
 
 
 NOTICES = (
@@ -139,6 +143,7 @@ class EvaluationSummary:
     invariant_failures: tuple[str, ...]
     scenarios: tuple[ScenarioResult, ...]
     interpretation_notices: tuple[str, ...]
+    linux_process_execution_evaluation: LinuxProcessEvaluationSummary
 
 
 def _validated_corpus(scenarios: tuple[EvaluationScenario, ...]) -> None:
@@ -503,6 +508,10 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
         f"{item.id}:{item.exclusion_reason}" for item in scenarios
         if item.label_scope == "ambiguous_operational"
     )
+    try:
+        linux_evaluation = evaluate_linux_process()
+    except LinuxProcessEvaluationError:
+        raise EvaluationError("analysis_failed") from None
     return EvaluationSummary(
         "1", "synthetic_boundary_corpus", len(scenarios),
         sum(item.source == "ssh" for item in scenarios), len(exclusions), exclusions,
@@ -512,5 +521,5 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
         tuple(_metric(kind, count) for kind, count in detection_counts.items()), relation_metrics,
         LayerSummary(risk_passes, risk_applicable - risk_passes, risk_applicable),
         LayerSummary(case_passes, case_applicable - case_passes, case_applicable),
-        failures, tuple(outcomes), NOTICES,
+        failures, tuple(outcomes), NOTICES, linux_evaluation,
     )

@@ -1,0 +1,2 @@
+node=synthetic-temp-bash type=SYSCALL msg=audit(1790401020.000021:9021): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1021 ppid=1000 comm="bash" exe="/tmp/bash"
+node=synthetic-temp-bash type=EXECVE msg=audit(1790401020.000021:9021): argc=1 a0="/tmp/bash"

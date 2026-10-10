@@ -1,0 +1,2 @@
+node=synthetic-conflict type=SYSCALL msg=audit(1790401009.000010:9010): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1010 ppid=1000 comm="curl" exe="/usr/bin/bash"
+node=synthetic-conflict type=EXECVE msg=audit(1790401009.000010:9010): argc=1 a0="/usr/bin/bash"

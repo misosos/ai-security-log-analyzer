@@ -35,6 +35,7 @@ Phase 8 추가 검증 gate:
 
 - [x] 현재 작업 트리의 합성 평가 `79/79`, parser `195/200`, risk·case `70/70`을 확인했다. 이 표시는 기존 43개 ID의 의미를 바꾸지 않는다.
 - [ ] Phase 8 기능 커밋 이후 새 clean checkout에서 locked 설치, 전체 pytest, launcher·sample/local API·HTML smoke, CSP·privacy canary를 다시 실행한다.
+- [ ] Phase 9 기능 커밋 이후 clean checkout에서 Linux Audit CLI 분류·별도 합성 평가와 전체 회귀를 재검증한다. 기존 79개 IP 시나리오 metric은 그대로 유지한다.
 - [ ] Phase 8의 새 네 독립 관찰을 Safari에서 시각·키보드·320px·200% 확대와 함께 검증한다.
 
 아래는 실제 Safari 검증이 끝나기 전까지 모두 미체크다. 자동 DOM/source 검사로 WCAG 2.2 AA를 주장하지 않는다.
@@ -60,4 +61,4 @@ Phase 8 추가 검증 gate:
 - [ ] GitHub Release 생성 여부를 별도 승인한다. **이번 작업에서는 생성 금지**.
 - [ ] Tag/Release 뒤 다른 clean source checkout 설치·smoke와 rollback 기준(태그/배포 철회, 민감 artifact 회수)을 검토한다.
 
-현재 go/no-go: 라이선스와 비공개 신고 경로 결정은 완료됐다. Safari 수동 검증과 원격 CI가 미완료이므로 **공개 릴리스 NO-GO**이며, 이번 작업은 문서 준비 커밋까지만 진행한다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.
+현재 go/no-go: 라이선스와 비공개 신고 경로 결정은 완료됐다. Phase 8·9 이후 clean checkout, Safari 수동 검증과 원격 CI가 미완료이므로 **공개 릴리스 NO-GO**이며, 현재는 기능 커밋까지만 진행한다. Hosted/public 실제 로그 업로드는 별개의 더 강한 no-go다.

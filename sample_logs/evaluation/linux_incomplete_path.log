@@ -1,0 +1,2 @@
+node=synthetic-incomplete-path type=SYSCALL msg=audit(1790401019.000020:9020): arch=c000003e syscall=59 success=yes exit=0 items=1 pid=1020 ppid=1000 comm="chmod" exe="/usr/bin/chmod"
+node=synthetic-incomplete-path type=EXECVE msg=audit(1790401019.000020:9020): argc=1 a0="/usr/bin/chmod"

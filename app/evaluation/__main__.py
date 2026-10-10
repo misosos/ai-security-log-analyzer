@@ -36,11 +36,20 @@ def main(argv: list[str] | None = None) -> int:
         for reason in summary.excluded_reasons:
             print(f"excluded {reason}")
         print(f"risk: {summary.risk_summary.matched_scenarios}/{summary.risk_summary.applicable_scenarios}; case: {summary.case_summary.matched_scenarios}/{summary.case_summary.applicable_scenarios}")
+        linux = summary.linux_process_execution_evaluation
+        print(f"linux_process_execution_evaluation: {linux.passed_scenarios}/{linux.scenario_count} scenarios passed")
+        for metric in linux.category_metrics:
+            print(f"linux_category {metric.category_id}: expected={metric.expected_observation_count} actual={metric.actual_observation_count} false={metric.false_category_assignment} missed={metric.missed_category_assignment} precision={metric.precision} recall={metric.recall}")
+        print(f"linux outcome_consistency={linux.outcome_consistency_count}; aggregate_consistency={linux.aggregate_consistency_count}")
+        for failure in linux.invariant_failures:
+            print(f"FAIL linux {failure}")
+        for notice in linux.interpretation_notices:
+            print(notice)
         for failure in summary.invariant_failures:
             print(f"FAIL {failure}")
         for notice in summary.interpretation_notices:
             print(notice)
-    return 1 if summary.failed_scenarios else 0
+    return 1 if summary.failed_scenarios or summary.linux_process_execution_evaluation.failed_scenarios else 0
 
 
 if __name__ == "__main__":

@@ -35,8 +35,9 @@ def test_process_execution_documentation_preserves_security_contract():
     ):
         assert boundary in text
 
-    assert "| CLI | 고정 count aggregate만 | 없음 |" in text
-    assert "| API | 없음 | 없음 |" in text
+    assert "| CLI | 기존 고정 count aggregate와 Phase 9 조사 후보 category count | 없음 |" in text
+    assert "| 기본 API·웹 | 없음 | 없음 |" in text
+    assert "| 선택적 보안 Linux Audit API | 기존 count-only 응답 | 없음 |" in text
     assert "| LLM | 없음 | 없음 |" in text
     assert "| Frontend | 없음 | 없음 |" in text
     assert "Detailed evidence" in text

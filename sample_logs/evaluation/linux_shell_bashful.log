@@ -1,0 +1,2 @@
+node=synthetic-bashful type=SYSCALL msg=audit(1790401011.000012:9012): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1012 ppid=1000 comm="bashful" exe="/usr/bin/bashful"
+node=synthetic-bashful type=EXECVE msg=audit(1790401011.000012:9012): argc=1 a0="/usr/bin/bashful"

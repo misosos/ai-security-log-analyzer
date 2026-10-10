@@ -1,0 +1,2 @@
+node=synthetic-network-curl type=SYSCALL msg=audit(1790401002.000003:9003): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1003 ppid=1000 comm="curl" exe="/usr/bin/curl"
+node=synthetic-network-curl type=EXECVE msg=audit(1790401002.000003:9003): argc=2 a0="/usr/bin/curl" a1="https://example.invalid/SYNTHETIC_ARG_CANARY"

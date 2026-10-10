@@ -1,0 +1,2 @@
+node=synthetic-permission-chown type=EXECVE msg=audit(1790401005.000006:9006): argc=1 a0="/usr/bin/chown"
+node=synthetic-permission-chown type=SYSCALL msg=audit(1790401005.000006:9006): arch=c000003e syscall=59 success=no exit=-2 items=0 pid=1006 ppid=1000 comm="chown" exe="/usr/bin/chown"

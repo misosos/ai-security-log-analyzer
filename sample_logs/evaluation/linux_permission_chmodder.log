@@ -1,0 +1,2 @@
+node=synthetic-chmodder type=SYSCALL msg=audit(1790401013.000014:9014): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1014 ppid=1000 comm="chmodder" exe="/usr/bin/chmodder"
+node=synthetic-chmodder type=EXECVE msg=audit(1790401013.000014:9014): argc=1 a0="/usr/bin/chmodder"

@@ -1,0 +1,2 @@
+node=synthetic-temp-curl type=EXECVE msg=audit(1790401007.000008:9008): argc=1 a0="/var/tmp/curl"
+node=synthetic-temp-curl type=SYSCALL msg=audit(1790401007.000008:9008): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1008 ppid=1000 comm="curl" exe="/var/tmp/curl"

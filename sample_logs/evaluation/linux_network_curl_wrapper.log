@@ -1,0 +1,2 @@
+node=synthetic-curl-wrapper type=SYSCALL msg=audit(1790401012.000013:9013): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1013 ppid=1000 comm="curl-wrapper" exe="/usr/bin/curl-wrapper"
+node=synthetic-curl-wrapper type=EXECVE msg=audit(1790401012.000013:9013): argc=1 a0="/usr/bin/curl-wrapper"

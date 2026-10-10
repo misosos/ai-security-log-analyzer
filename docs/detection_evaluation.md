@@ -133,3 +133,9 @@ Parser: 200줄 중 parsed 195, ignored 2, rejected 3, 예상 밖 parse/rejection
 | Web Scanning-like | 3 | 0 | 0 | 66 | 1.000000 | 1.000000 | 1.000000 | 3 |
 
 특히 Scanning support=3도 작은 합성 표본이므로 이 1.0 수치를 일반화할 수 없다. `request_count`는 선택된 60초 창의 실제 eligible request event 수로 반복 target·동일 raw line도 각각 세며, `distinct_target_count`만 canonical target identity 수다. stable ingestion ID가 없어 원본 event는 중복 제거하지 않는다. 가장 이른 적격 시작점의 최대 60초 창에서 최종 observation 하나만 생성한다. 승인된 스캐너와 NAT/proxy, 운영 로그 누락, Unicode/encoding 변형 및 실제 악성/정상 ground truth는 평가 공백이다.
+
+## Phase 9 — 별도 Linux 프로세스 실행 분류 평가 (2026-10-10)
+
+기존 **79/79** IP 기반 parser·detection·correlation·risk·case 시나리오와 위 confusion matrix는 변경하지 않는다. `linux_process_execution_evaluation`은 별도 합성 Linux Audit fixture **21/21**개를 parser → normalized process event → 기존 count-only aggregate와 새 typed classifier 순서로 확인한다. 셸 4건, 네트워크 전송 도구 4건, 권한·소유권 변경 도구 3건, 임시 디렉터리 실행 4건의 category 관찰이 라벨과 일치한다. `linux_temp_curl`과 `linux_temp_bash`는 한 실행이 두 category에 속하므로 category 합계 15는 classified unique execution 수와 같은 의미가 아니다. 이름 유사·경로 sibling·CWD-only·식별 불일치 등 non-match는 별도 unclassified로 남는다. Outcome·aggregate consistency는 각각 21/21이다.
+
+Linux category metric은 expected/actual observation 수, false/missed category assignment, expected unique execution 수를 별도로 제시한다. Category assignment의 precision·recall은 포함된 라벨에서만 계산하고 분모가 0이면 `not_applicable`이다. TN universe가 정의되지 않아 IP 탐지의 TN·accuracy를 재사용하지 않는다. CLI text와 JSON은 같은 고정 수치를 담고 JSON은 정렬된 key와 결정적 순서로 출력한다. `--scenario`는 기존 79개 IP 시나리오만 필터링하며 Linux 21개 section은 독립적으로 유지된다. 평가 fixture 안의 argv·path·node·serial 원문은 결과에 복사하지 않는다. 같은 fixture에서 만든 합성 라벨은 운영환경 악성 탐지율이 아니며 정상 관리·자동화 사용, Audit 정책의 누락, `comm` truncation, `argv[0]` spoofing은 남은 평가 공백이다. 분류·보호 경계는 [Linux Audit 프로세스 실행 문서](linux_audit_process_execution.md)를 참고한다.

@@ -1,0 +1,2 @@
+node=synthetic-temp-sibling type=SYSCALL msg=audit(1790401015.000016:9016): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1016 ppid=1000 comm="tool" exe="/tmpfile/tool"
+node=synthetic-temp-sibling type=EXECVE msg=audit(1790401015.000016:9016): argc=1 a0="/tmpfile/tool"

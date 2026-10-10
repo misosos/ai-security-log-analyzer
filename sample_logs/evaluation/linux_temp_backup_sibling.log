@@ -1,0 +1,2 @@
+node=synthetic-temp-backup type=SYSCALL msg=audit(1790401016.000017:9017): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1017 ppid=1000 comm="tool" exe="/var/tmp-backup/tool"
+node=synthetic-temp-backup type=EXECVE msg=audit(1790401016.000017:9017): argc=1 a0="/var/tmp-backup/tool"

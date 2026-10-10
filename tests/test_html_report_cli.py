@@ -31,7 +31,9 @@ class _StructureParser(HTMLParser):
 def _install_single_pass_spies(monkeypatch, calls):
     logs = []
     analysis = {"results": {}, "global_correlation": {}}
-    aggregate = {"observation_count": 0}
+    aggregate = {"observation_count": 0, "outcome_counts": {
+        "success": 0, "failure": 0, "unknown": 0,
+    }}
     observations = (object(),)
     relations = (object(),)
     process_summary = SimpleNamespace(
@@ -183,6 +185,7 @@ def test_html_option_uses_one_single_pass_and_same_objects(
     assert calls[8][1] is values["projection"]
     assert calls[9][1] is values["rendered"]
     assert calls[10][1] is values["analysis"]
+    assert calls[10][2]["process_execution_classification"].summary.eligible_execution_count == 0
     assert capsys.readouterr().out == "HTML investigation report created.\n"
 
 

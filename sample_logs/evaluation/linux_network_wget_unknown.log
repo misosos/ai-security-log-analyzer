@@ -1,0 +1,2 @@
+node=synthetic-network-wget type=EXECVE msg=audit(1790401003.000004:9004): argc=1 a0="/usr/bin/wget"
+node=synthetic-network-wget type=SYSCALL msg=audit(1790401003.000004:9004): arch=c000003e syscall=59 items=0 pid=1004 ppid=1000 comm="wget" exe="/usr/bin/wget"

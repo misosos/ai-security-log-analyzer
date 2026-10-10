@@ -1,0 +1,2 @@
+node=synthetic-shell-bash type=SYSCALL msg=audit(1790401000.000001:9001): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1001 ppid=1000 comm="bash" exe="/usr/bin/bash"
+node=synthetic-shell-bash type=EXECVE msg=audit(1790401000.000001:9001): argc=1 a0="/usr/bin/bash"

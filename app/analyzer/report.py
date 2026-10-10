@@ -16,6 +16,11 @@ from app.analyzer.web_observation_projection import (
     WEB_TYPES, WEB_PATTERN_LABELS, WebObservationProjectionError,
     project_web_observation,
 )
+from app.analyzer.process_execution_classification import (
+    CATEGORY_IDS, DISPLAY_NAMES, PRIORITIES, LIMITATIONS, NEXT_STEPS,
+    NOTICES, IDENTITY_WARNING, COMM_LIMITATION, ARGV_LIMITATION,
+    ProcessExecutionObservationAssembly,
+)
 
 
 _INVALID_EVIDENCE_MESSAGE = (
@@ -747,12 +752,79 @@ def _print_session_process_review_summary(counts):
     )
 
 
+def _print_process_execution_classification(assembly):
+    if type(assembly) is not ProcessExecutionObservationAssembly:
+        raise ValueError("invalid_process_execution_classification")
+    summary = assembly.summary
+    if (
+        type(summary.eligible_execution_count) is not int
+        or type(summary.classified_execution_count) is not int
+        or type(summary.category_observation_count) is not int
+        or min(summary.eligible_execution_count, summary.classified_execution_count,
+               summary.category_observation_count) < 0
+        or summary.classified_execution_count > summary.eligible_execution_count
+        or type(summary.categories) is not tuple
+        or type(assembly.observations) is not tuple
+        or summary.category_observation_count != len(assembly.observations)
+        or tuple(category.category_id for category in summary.categories) != CATEGORY_IDS
+        or tuple(category.display_name for category in summary.categories) != DISPLAY_NAMES
+        or tuple(category.review_priority for category in summary.categories) != PRIORITIES
+        or assembly.interpretation_notices != NOTICES
+        or assembly.bounded_warnings not in ((), (IDENTITY_WARNING,))
+        or any(item.category_id not in CATEGORY_IDS for item in assembly.observations)
+        or any(type(item.confidence) is not str or item.confidence not in {"HIGH", "MEDIUM", "LOW"}
+               for item in assembly.observations)
+        or any(item.display_name != DISPLAY_NAMES[CATEGORY_IDS.index(item.category_id)]
+               or item.limitations not in (
+                   (LIMITATIONS[CATEGORY_IDS.index(item.category_id)],),
+                   (LIMITATIONS[CATEGORY_IDS.index(item.category_id)], COMM_LIMITATION),
+                   (LIMITATIONS[CATEGORY_IDS.index(item.category_id)], ARGV_LIMITATION),
+               )
+               or item.next_steps != (NEXT_STEPS[CATEGORY_IDS.index(item.category_id)],)
+               for item in assembly.observations)
+    ):
+        raise ValueError("invalid_process_execution_classification")
+    print("\nLinux 프로세스 실행 조사 후보")
+    if not assembly.observations:
+        print("정해진 Linux 프로세스 실행 조사 후보가 없습니다.")
+        print("이는 안전하거나 정상임을 의미하지 않으며 현재 분류 범위에서 추가 후보가 없다는 뜻입니다.")
+    for category in summary.categories:
+        if category.observation_count == 0:
+            continue
+        counts = category.outcome_counts
+        print(f"- {category.display_name}: {category.observation_count}건")
+        print(f"  - 성공 {counts.success} / 실패 {counts.failure} / 미상 {counts.unknown}")
+        print(f"  - 검토 우선순위: {category.review_priority}")
+        confidences = tuple(item.confidence for item in assembly.observations
+                            if item.category_id == category.category_id)
+        print(f"  - 신뢰도: {min(confidences, key={'LOW': 0, 'MEDIUM': 1, 'HIGH': 2}.get)}")
+    for notice in assembly.interpretation_notices:
+        print(f"  ※ {notice}")
+    for warning in assembly.bounded_warnings:
+        print(f"  ※ {warning}")
+    if assembly.observations:
+        print("  해석 한계·다음 조사 단계:")
+        for category in summary.categories:
+            if category.observation_count:
+                observation = next(item for item in assembly.observations
+                                   if item.category_id == category.category_id)
+                print(f"  - {category.display_name}: {observation.limitations[0]}")
+                if any(COMM_LIMITATION in item.limitations for item in assembly.observations
+                       if item.category_id == category.category_id):
+                    print(f"    {COMM_LIMITATION}")
+                if any(ARGV_LIMITATION in item.limitations for item in assembly.observations
+                       if item.category_id == category.category_id):
+                    print(f"    {ARGV_LIMITATION}")
+                print(f"    다음 단계: {observation.next_steps[0]}")
+
+
 def print_analysis_result(
     analysis,
     *,
     process_execution_aggregate=None,
     process_detection_summary=None,
     session_process_review_summary=None,
+    process_execution_classification=None,
 ):
 
     session_process_counts = _validated_session_process_review_counts(
@@ -807,6 +879,9 @@ def print_analysis_result(
         process_execution_aggregate,
         process_detection_summary,
     )
+
+    if process_execution_classification is not None:
+        _print_process_execution_classification(process_execution_classification)
 
     _print_session_process_review_summary(session_process_counts)
 

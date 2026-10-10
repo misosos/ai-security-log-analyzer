@@ -1,0 +1,2 @@
+node=synthetic-temp-tool type=SYSCALL msg=audit(1790401006.000007:9007): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1007 ppid=1000 comm="tool" exe="/tmp/tool"
+node=synthetic-temp-tool type=EXECVE msg=audit(1790401006.000007:9007): argc=1 a0="/tmp/tool"

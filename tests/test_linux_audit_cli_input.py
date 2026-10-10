@@ -22,7 +22,9 @@ def _install_main_spies(monkeypatch):
         "results": {},
         "global_correlation": {},
     }
-    aggregate = {"observation_count": 0}
+    aggregate = {"observation_count": 0, "outcome_counts": {
+        "success": 0, "failure": 0, "unknown": 0,
+    }}
     calls = []
 
     def fake_load(sources):
@@ -37,7 +39,8 @@ def _install_main_spies(monkeypatch):
         calls.append(("aggregate", received_logs))
         return aggregate
 
-    def fake_print(received_analysis, *, process_execution_aggregate=None):
+    def fake_print(received_analysis, *, process_execution_aggregate=None,
+                   process_execution_classification=None):
         calls.append((
             "print",
             received_analysis,

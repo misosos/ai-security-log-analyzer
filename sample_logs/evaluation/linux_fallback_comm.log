@@ -1,0 +1,2 @@
+node=synthetic-fallback type=EXECVE msg=audit(1790401010.000011:9011): argc=1 a0="bash"
+node=synthetic-fallback type=SYSCALL msg=audit(1790401010.000011:9011): arch=c000003e syscall=59 success=yes exit=0 items=0 pid=1011 ppid=1000 comm="bash"
