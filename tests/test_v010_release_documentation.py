@@ -108,3 +108,43 @@ def test_phase101_voiceover_is_a_disclosed_follow_up_not_a_release_gate():
     assert "Phase 10.1 로컬 릴리스 후보 접근성 수용 판정: GO" in checklist
     assert "정확한 320 CSS px" in checklist + note + readiness
     assert "이 문서 변경 커밋 자체의 원격 CI" in checklist
+
+
+def test_final_release_notes_do_not_depend_on_publication_time():
+    note = _text("docs/releases/v0.1.0.md")
+    assert note.startswith("# v0.1.0 로컬 릴리스 노트\n")
+    for temporary_claim in (
+        "초안", "태그·GitHub Release는 아직 없다", "push 전까지 확인할 수 없다",
+        "실제 tag·Release 전", "536a735",
+    ):
+        assert temporary_claim not in note
+    for durable_claim in (
+        "로컬 보안 로그 조사 도구", "[MIT]", "source checkout",
+        "릴리스 후보의 원격 CI", "Safari WebDriver 주요 흐름",
+        "정확한 320 CSS px", "VoiceOver의 나머지 읽기",
+        "WCAG 2.2 AA 준수를 주장하지 않는다", "wheel/PyPI 설치는 지원하지 않는다",
+    ):
+        assert durable_claim in note
+
+
+def test_readme_release_guidance_is_durable_and_checklist_is_historical():
+    readme = _text("README.md")
+    readiness = _text("docs/release_readiness.md")
+    checklist = _text("docs/release_checklist.md")
+    for temporary_claim in (
+        "릴리스 노트 초안", "공개 전 검토 초안", "아직 tag",
+        "GitHub Release는 아직", "원격 CI는 미검증",
+        "Safari 수동 키보드/확대/screen-reader 검증은 미완료",
+    ):
+        assert temporary_claim not in readme
+    for verified_or_limited in (
+        "[릴리스 노트](docs/releases/v0.1.0.md)",
+        "keyboard-only 주요 흐름", "visible focus", "실제 200% 확대",
+        "가능한 최소 창 너비", "콘솔 오류 부재", "정확한 320 CSS px",
+        "VoiceOver 읽기는 미검증", "실제 운영환경 탐지율",
+        "WCAG 2.2 AA 준수", "hosted 배포",
+    ):
+        assert verified_or_limited in readme
+    assert "push 전까지 미검증" not in readiness.split("Historical repository", 1)[0]
+    assert "역사적 기록" in checklist
+    assert "공개 배포 여부의 현재 상태를 나타내지 않는다" in checklist

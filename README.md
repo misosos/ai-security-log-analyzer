@@ -46,19 +46,19 @@ uv run python -m app.local_web
 
 입력 한계는 파일당 32 KiB, 합계 80 KiB, multipart 요청 전체 96 KiB, 한 줄 2048바이트, 파일당 512줄입니다. 압축 파일은 지원하지 않습니다. 분석은 외부 LLM을 호출하지 않습니다. 로그·결과·보고서를 서버에 영구 저장하지 않으며 정상·오류·취소·timeout 종료 때 요청별 임시 파일을 정리합니다. 프로세스나 호스트의 비정상 종료 뒤에는 임시 파일 잔존 가능성이 있습니다. 다운로드한 보고서는 민감한 조사 자료이므로 안전하게 저장·공유·삭제하십시오. 이 경로는 공개 인터넷 업로드나 실시간 수집 기능이 아닙니다. 포트 포워딩 및 `0.0.0.0` 바인딩을 하지 마십시오.
 
-첫 실행이 막히면 `uv sync --locked --dev` 완료 여부를 확인하고, 포트 충돌 메시지가 나오면 해당 로컬 서버를 종료하거나 다른 허용 포트를 지정하십시오. 브라우저가 열리지 않으면 출력된 주소를 직접 여십시오. 분석 오류가 나오면 세 입력칸의 파일 종류, UTF-8, 크기·줄 한계를 확인하고 화면의 필드별 오류와 복구 행동을 따르십시오. 결과가 비어 보인다고 안전하다는 뜻은 아닙니다. 실제 Safari·키보드·확대 검증은 사용자 환경에서 별도로 확인해야 합니다.
+첫 실행이 막히면 `uv sync --locked --dev` 완료 여부를 확인하고, 포트 충돌 메시지가 나오면 해당 로컬 서버를 종료하거나 다른 허용 포트를 지정하십시오. 브라우저가 열리지 않으면 출력된 주소를 직접 여십시오. 분석 오류가 나오면 세 입력칸의 파일 종류, UTF-8, 크기·줄 한계를 확인하고 화면의 필드별 오류와 복구 행동을 따르십시오. 결과가 비어 보인다고 안전하다는 뜻은 아닙니다. Safari·키보드·확대 동작은 사용자 환경에서도 확인하십시오. 릴리스 후보에서 확인한 범위와 미검증 범위는 아래 표를 참고하십시오.
 
-### 지원 환경과 공개 릴리스 상태
+### 지원 환경과 검증 범위
 
 | 환경 | 현재 상태 | 근거·남은 확인 |
 | --- | --- | --- |
-| macOS Apple Silicon | 로컬 자동 검증됨 | Python 3.12 locked 설치, launcher·loopback API·전체 테스트. Safari 수동 키보드/확대/screen-reader 검증은 미완료 |
+| macOS Apple Silicon | 로컬 자동·일부 Safari 수동 검증됨 | Python 3.12 locked 설치, launcher·loopback API·전체 테스트. Safari keyboard-only 주요 흐름·visible focus·실제 200% 확대·가능한 최소 창 너비·콘솔 오류 부재는 사용자 수동 확인. 정확한 320 CSS px 측정과 일부 VoiceOver 읽기는 미검증 |
 | Linux | CI 자동 테스트 범위 | Ubuntu 24.04/Python 3.12 workflow. 실제 호스트·브라우저 수동 검증은 별도 |
 | Windows | 제한적 | `O_NOFOLLOW` 미지원 시 실제 업로드 거부; 전체 업로드 흐름 미검증 |
 | Hosted server | 지원 안 함 | 인증·인가·tenant isolation 없음 |
 | Public internet | 노출 금지 | 실제 로그 업로드 보안 gate 미충족 |
 
-`v0.1.0`은 [변경 이력](CHANGELOG.md), [릴리스 노트 초안](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)로 준비 중이며 아직 tag·GitHub Release가 아니다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 기준 기능 커밋의 원격 CI는 통과했지만 Safari 수동 키보드·확대·스크린리더 검증은 남아 있어 공개 릴리스 승인을 뜻하지 않는다. 실제 운영환경 탐지율·WCAG 2.2 AA·hosted 배포를 주장하지 않는다.
+`v0.1.0`의 범위와 제한은 [변경 이력](CHANGELOG.md), [릴리스 노트](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)에 기록했다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 릴리스 후보의 원격 CI와 Safari WebDriver 주요 흐름을 확인했다. 실제 운영환경 탐지율·WCAG 2.2 AA 준수·hosted 배포를 주장하지 않는다.
 
 ### 업데이트와 삭제
 
