@@ -166,12 +166,13 @@ def test_post_commit_worker_aggregate_failure_is_terminal(tmp_path, monkeypatch)
     try:
         with pytest.raises(LiveWorkerError) as raised:
             worker.step()
-        assert raised.value.code == "DETECTION_COMMIT_FAILED_AFTER_ACK"
+        assert raised.value.code == "WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION"
         assert session.snapshot().acknowledged_record_count == 1
-        assert accumulator.snapshot().revision == 0
+        assert accumulator.snapshot().revision == 1
         assert worker.snapshot().successful_step_count == 0
         assert worker.snapshot().total_acknowledged == 0
-        assert worker.snapshot().uncommitted_after_ack_record_count == 1
+        assert worker.snapshot().uncommitted_after_ack_record_count == 0
+        assert worker.snapshot().post_publication_aggregate_failure_count == 1
     finally:
         worker.close()
 

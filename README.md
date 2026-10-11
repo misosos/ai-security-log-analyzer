@@ -6,6 +6,8 @@ AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로
 
 v0.2.0 준비 단계에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core·parser adapter·단일 record lease·명시적 worker step·detection accumulator](docs/live_log_monitoring_design.md)가 있습니다. `app.live_monitoring`의 명시적 poll·개인정보 안전 snapshot과 application·SSH·access의 기존 batch parser/전처리/UTC 정책을 재사용하는 `PARSED`·`IGNORED`·`REJECTED` 결과는 trusted 내부 Python 계약입니다. Worker는 최대 한 lease를 parse한 뒤 기존 detector의 상태 후보를 사전 검증하고, queue ack 성공 후에만 후보를 commit합니다. Ack가 되돌릴 수 없는 경계이며 뒤따르는 commit 실패는 terminal integrity failure로 기록합니다. 이는 원자적 transaction이나 exactly-once가 아닙니다. 전체 PARSED session prefix는 명시된 item·byte 상한 안에 보존하며 오래된 event를 조용히 제거하지 않습니다. Session-local observation ID에는 개인정보나 그 hash가 들어가지 않지만, parser 결과·lease record·accumulator history·내부 detector 결과에는 원문 계정·path/query가 남을 수 있어 공개 응답이 아닙니다. 자동 loop·retry·process crash 복구는 없고, 사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지 공개/사례도 **아직 구현되지 않았습니다**. 현재 공개된 v0.1.0의 업로드와 배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
 
+Phase 14에서는 확정된 detection change만 받는 process-local·memory-only publication/replay buffer가 추가됐습니다. 안전한 고정 event와 snapshot만 보관하고 32개 event·16KiB JSON byte 개발 상한을 넘으면 오래된 event를 제거하며 replay gap을 명시합니다. 이 buffer는 SSE endpoint나 브라우저 live 기능이 아니며, 무유실·재시작 후 복구·여러 process 간 일관성을 보장하지 않습니다. Detection commit 이후 publication 실패는 되돌리지 않고 terminal 무결성 오류로 기록합니다.
+
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
 
 처리 흐름은 다음과 같습니다.

@@ -31,6 +31,15 @@ from app.live_monitoring.detection_accumulator import (
     LiveDetectionSnapshot,
     LiveDetectionSummary,
 )
+from app.live_monitoring.publication import (
+    LivePublicationBuffer,
+    LivePublicationEvent,
+    LivePublicationError,
+    LivePublicationSnapshot,
+    LiveReplayResult,
+    serialize_live_publication_event,
+    serialize_live_publication_snapshot,
+)
 
 __all__ = (
     "LiveMonitorConfig",
@@ -57,4 +66,11 @@ __all__ = (
     "LiveDetectionProposal",
     "LiveDetectionSnapshot",
     "LiveDetectionSummary",
+    "LivePublicationBuffer",
+    "LivePublicationEvent",
+    "LivePublicationError",
+    "LivePublicationSnapshot",
+    "LiveReplayResult",
+    "serialize_live_publication_event",
+    "serialize_live_publication_snapshot",
 )

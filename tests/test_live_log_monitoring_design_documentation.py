@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator, Phase 13.1 worker·ack·commit 연결",
+        "Phase 12~13.1 내부 live tail·parse·detection·worker와 Phase 14 bounded publication/replay buffer 구현",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -120,6 +120,22 @@ def test_phase_13_1_ack_identity_and_terminal_boundary_documented():
         "진정한 원자적 transaction은 없으며 exactly-once",
     ):
         assert phrase in text
+
+
+def test_phase_14_publication_replay_is_bounded_and_internal():
+    text = _design()
+    for phrase in (
+        "LivePublicationBuffer(accumulator, max_items=32, max_bytes=16384)",
+        "committed", "32 item·16,384 serialized bytes", "41,067 bytes",
+        "420 bytes", "replay_after(None)", "EVICTED_EVENT_ID",
+        "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT",
+        "WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION", "process-local·memory-only",
+        "exactly-once", "SSE endpoint", "Process crash/restart 후 replay 복구는 없고",
+    ):
+        assert phrase in text
+    readme = README.read_text(encoding="utf-8")
+    assert "Phase 14에서는 확정된 detection change만 받는" in readme
+    assert "SSE endpoint나 브라우저 live 기능이 아니며" in readme
 
 
 def test_detection_accumulator_contract_and_publication_gap_are_documented():

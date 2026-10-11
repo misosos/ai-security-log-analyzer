@@ -1,6 +1,6 @@
 """Single-caller, explicit-step orchestration of trusted live records."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 
 from app.live_monitoring.core import (
@@ -13,6 +13,7 @@ from app.live_monitoring.parser_adapter import (
 from app.live_monitoring.detection_accumulator import (
     LiveDetectionAccumulator, LiveDetectionSnapshot,
 )
+from app.live_monitoring.publication import LivePublicationBuffer, LivePublicationSnapshot
 
 
 class LiveWorkerState(str, Enum):
@@ -52,6 +53,8 @@ _MESSAGES = {
     "ACK_FAILURE": "queue acknowledgement를 확인할 수 없습니다. 종료하십시오.",
     "PROPOSAL_ABORT_FAILURE": "detection proposal 정산을 확인할 수 없습니다. 종료하십시오.",
     "DETECTION_COMMIT_FAILED_AFTER_ACK": "일부 로그가 탐지 상태에 반영되지 않았을 수 있습니다. 종료하십시오.",
+    "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT": "확정된 탐지 변경이 게시되지 않았을 수 있습니다. 종료하십시오.",
+    "WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION": "게시 후 worker 집계를 확인할 수 없습니다. 종료하십시오.",
 }
 
 
@@ -94,6 +97,7 @@ class LiveWorkerStepResult:
     updated_count: int = 0
     no_longer_matches_count: int = 0
     active_observation_count: int = 0
+    publication_event_id: str | None = None
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.polled_record_count, self.leased_record_count,
@@ -109,6 +113,9 @@ class LiveWorkerStepResult:
             or (self.status == "NO_DATA" and (self.polled_record_count or self.leased_record_count))
             or (self.status == "PROCESSED" and not self.leased_record_count)
             or type(self.fixed_warning_codes) is not tuple or self.fixed_warning_codes
+            or self.publication_event_id is not None and (
+                type(self.publication_event_id) is not str
+                or not self.publication_event_id.startswith("LIVE-EVENT-"))
             or self.fixed_error_code is not None):
             raise LiveWorkerError("INVARIANT_FAILURE")
 
@@ -133,16 +140,22 @@ class LiveWorkerSnapshot:
     accumulator: LiveDetectionSnapshot | None = None
     post_ack_commit_failure_count: int = 0
     uncommitted_after_ack_record_count: int = 0
+    publication: LivePublicationSnapshot | None = None
+    potentially_unpublished_revision_count: int = 0
+    post_publication_aggregate_failure_count: int = 0
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.successful_step_count, self.no_data_step_count,
                   self.degraded_step_count, self.failed_step_count, self.total_parsed,
                   self.total_ignored, self.total_rejected, self.total_acknowledged,
                   self.total_released, self.post_ack_commit_failure_count,
-                  self.uncommitted_after_ack_record_count)
+                  self.uncommitted_after_ack_record_count,
+                  self.potentially_unpublished_revision_count,
+                  self.post_publication_aggregate_failure_count)
         if (self.schema_version != "1" or type(self.state) is not LiveWorkerState
             or type(self.session) is not LiveTailSnapshot
             or type(self.accumulator) is not LiveDetectionSnapshot
+            or type(self.publication) is not LivePublicationSnapshot
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.total_parsed + self.total_ignored + self.total_rejected != self.total_acknowledged
             or type(self.fixed_warning_codes) is not tuple
@@ -172,7 +185,8 @@ class LiveProcessingWorker:
                  "_successful", "_no_data", "_degraded", "_failed", "_parsed",
                  "_ignored", "_rejected", "_acknowledged", "_released", "_error_code",
                  "_accumulator", "_post_ack_failures", "_uncommitted_after_ack",
-                 "_last_acc_snapshot")
+                 "_last_acc_snapshot", "_publication", "_potentially_unpublished",
+                 "_post_publication_aggregate_failures")
 
     def __init__(self, session: LiveTailSession, detection_accumulator: LiveDetectionAccumulator,
                  max_lease_records: int, max_lease_bytes: int):
@@ -196,10 +210,12 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_ACCUMULATOR")
         if detection_accumulator._worker_bound:
             raise LiveWorkerError("ACCUMULATOR_ALREADY_OWNED")
+        publication = LivePublicationBuffer(detection_accumulator)
         session._worker_bound = True
         detection_accumulator._worker_bound = True
         self._session = session
         self._accumulator = detection_accumulator
+        self._publication = publication
         self._max_records = max_lease_records
         self._max_bytes = max_lease_bytes
         self._state = LiveWorkerState.READY
@@ -209,7 +225,12 @@ class LiveProcessingWorker:
         self._acknowledged = self._released = 0
         self._error_code: str | None = None
         self._post_ack_failures = self._uncommitted_after_ack = 0
+        self._potentially_unpublished = self._post_publication_aggregate_failures = 0
         self._last_acc_snapshot = accumulator_snapshot
+
+    @property
+    def publication_buffer(self) -> LivePublicationBuffer:
+        return self._publication
 
     def __repr__(self) -> str:
         return f"LiveProcessingWorker(state={self._state.value!r}, step_revision={self._revision})"
@@ -336,9 +357,19 @@ class LiveProcessingWorker:
             self._post_ack_failures = _add(self._post_ack_failures, 1)
             self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
             self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+        try:
+            change_set = self._accumulator.latest_change_set()
+            event = self._publication.publish(change_set)
+        except Exception:
+            # Detection and queue are committed. Never release, roll back or retry.
+            self._last_acc_snapshot = proposal._committed_snapshot
+            self._potentially_unpublished = _add(self._potentially_unpublished, 1)
+            self._fail("PUBLICATION_FAILED_AFTER_DETECTION_COMMIT")
         previous_counters = (self._successful, self._parsed, self._ignored,
                              self._rejected, self._acknowledged)
         try:
+            if event is not None:
+                result = replace(result, publication_event_id=event.event_id)
             self._successful, self._parsed, self._ignored = next_successful, next_parsed, next_ignored
             self._rejected, self._acknowledged = next_rejected, next_acknowledged
             self._transition(LiveWorkerState.READY)
@@ -346,10 +377,9 @@ class LiveProcessingWorker:
         except Exception:
             (self._successful, self._parsed, self._ignored,
              self._rejected, self._acknowledged) = previous_counters
-            self._accumulator._fail_after_ack(last_confirmed_detection)
-            self._post_ack_failures = _add(self._post_ack_failures, 1)
-            self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
-            self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+            self._last_acc_snapshot = proposal._committed_snapshot
+            self._post_publication_aggregate_failures = _add(self._post_publication_aggregate_failures, 1)
+            self._fail("WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION")
         return result
 
     def resume_after_degraded(self) -> None:
@@ -375,7 +405,9 @@ class LiveProcessingWorker:
                                   self._released, self._session.snapshot(),
                                   (self._error_code,) if self._error_code else (), self._error_code,
                                   self._last_acc_snapshot, self._post_ack_failures,
-                                  self._uncommitted_after_ack)
+                                  self._uncommitted_after_ack, self._publication.snapshot(),
+                                  self._potentially_unpublished,
+                                  self._post_publication_aggregate_failures)
 
     def close(self) -> None:
         if self._state == LiveWorkerState.STOPPED:
@@ -385,6 +417,7 @@ class LiveProcessingWorker:
         self._transition(LiveWorkerState.STOPPING)
         try:
             self._session.close()
+            self._publication.close()
             self._accumulator.close()
             self._last_acc_snapshot = self._accumulator.snapshot()
         except Exception:

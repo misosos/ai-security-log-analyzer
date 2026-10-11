@@ -441,7 +441,7 @@ class LiveDetectionAccumulator:
 
     __slots__ = ("_source_role", "_max_records", "_max_bytes", "_committed", "_owner_token",
                  "_next_proposal_id", "_active", "_last_settled_id",
-                 "_worker_bound", "_closed", "_validated_proposal_id")
+                 "_worker_bound", "_publication_bound", "_closed", "_validated_proposal_id")
 
     def __init__(self, source_role: str, max_history_records: int, max_history_bytes: int):
         if type(source_role) is not str or source_role not in ROLES:
@@ -459,6 +459,7 @@ class LiveDetectionAccumulator:
         self._active: LiveDetectionProposal | None = None
         self._last_settled_id = 0
         self._worker_bound = False
+        self._publication_bound = False
         self._closed = False
         self._validated_proposal_id = 0
 
