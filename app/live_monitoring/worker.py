@@ -10,6 +10,9 @@ from app.live_monitoring.core import (
 from app.live_monitoring.parser_adapter import (
     LiveParseBatch, LiveParseOutcome, parse_live_records,
 )
+from app.live_monitoring.detection_accumulator import (
+    LiveDetectionAccumulator, LiveDetectionSnapshot,
+)
 
 
 class LiveWorkerState(str, Enum):
@@ -22,7 +25,8 @@ class LiveWorkerState(str, Enum):
 
 
 _TRANSITIONS = {
-    LiveWorkerState.READY: frozenset((LiveWorkerState.RUNNING_STEP, LiveWorkerState.STOPPING)),
+    LiveWorkerState.READY: frozenset((LiveWorkerState.RUNNING_STEP, LiveWorkerState.STOPPING,
+                                    LiveWorkerState.FAILED)),
     LiveWorkerState.RUNNING_STEP: frozenset((LiveWorkerState.READY, LiveWorkerState.DEGRADED, LiveWorkerState.FAILED)),
     LiveWorkerState.DEGRADED: frozenset((LiveWorkerState.READY, LiveWorkerState.STOPPING, LiveWorkerState.FAILED)),
     LiveWorkerState.FAILED: frozenset((LiveWorkerState.STOPPING,)),
@@ -43,6 +47,11 @@ _MESSAGES = {
     "INVARIANT_FAILURE": "worker 결과의 일관성을 확인할 수 없습니다.",
     "COUNTER_LIMIT": "worker 집계 상한에 도달했습니다.",
     "CLOSE_FAILURE": "worker 종료를 확인할 수 없습니다.",
+    "INVALID_ACCUMULATOR": "detection accumulator 형식을 확인하십시오.",
+    "ACCUMULATOR_ALREADY_OWNED": "accumulator는 이미 worker에 연결됐습니다.",
+    "ACK_FAILURE": "queue acknowledgement를 확인할 수 없습니다. 종료하십시오.",
+    "PROPOSAL_ABORT_FAILURE": "detection proposal 정산을 확인할 수 없습니다. 종료하십시오.",
+    "DETECTION_COMMIT_FAILED_AFTER_ACK": "일부 로그가 탐지 상태에 반영되지 않았을 수 있습니다. 종료하십시오.",
 }
 
 
@@ -80,11 +89,18 @@ class LiveWorkerStepResult:
     queue_remaining_count: int
     fixed_warning_codes: tuple[str, ...]
     fixed_error_code: str | None
+    accumulator_revision: int = 0
+    created_count: int = 0
+    updated_count: int = 0
+    no_longer_matches_count: int = 0
+    active_observation_count: int = 0
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.polled_record_count, self.leased_record_count,
                   self.parsed_count, self.ignored_count, self.rejected_count,
-                  self.acknowledged_count, self.released_count, self.queue_remaining_count)
+                  self.acknowledged_count, self.released_count, self.queue_remaining_count,
+                  self.accumulator_revision, self.created_count, self.updated_count,
+                  self.no_longer_matches_count, self.active_observation_count)
         if (self.schema_version != "1" or self.status not in ("NO_DATA", "PROCESSED")
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.step_revision < 1 or self.queue_remaining_count > MAX_QUEUE_ITEMS
@@ -114,14 +130,19 @@ class LiveWorkerSnapshot:
     session: LiveTailSnapshot
     fixed_warning_codes: tuple[str, ...]
     fixed_error_code: str | None
+    accumulator: LiveDetectionSnapshot | None = None
+    post_ack_commit_failure_count: int = 0
+    uncommitted_after_ack_record_count: int = 0
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.successful_step_count, self.no_data_step_count,
                   self.degraded_step_count, self.failed_step_count, self.total_parsed,
                   self.total_ignored, self.total_rejected, self.total_acknowledged,
-                  self.total_released)
+                  self.total_released, self.post_ack_commit_failure_count,
+                  self.uncommitted_after_ack_record_count)
         if (self.schema_version != "1" or type(self.state) is not LiveWorkerState
             or type(self.session) is not LiveTailSnapshot
+            or type(self.accumulator) is not LiveDetectionSnapshot
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.total_parsed + self.total_ignored + self.total_rejected != self.total_acknowledged
             or type(self.fixed_warning_codes) is not tuple
@@ -149,11 +170,16 @@ class LiveProcessingWorker:
 
     __slots__ = ("_session", "_max_records", "_max_bytes", "_state", "_revision",
                  "_successful", "_no_data", "_degraded", "_failed", "_parsed",
-                 "_ignored", "_rejected", "_acknowledged", "_released", "_error_code")
+                 "_ignored", "_rejected", "_acknowledged", "_released", "_error_code",
+                 "_accumulator", "_post_ack_failures", "_uncommitted_after_ack",
+                 "_last_acc_snapshot")
 
-    def __init__(self, session: LiveTailSession, max_lease_records: int, max_lease_bytes: int):
+    def __init__(self, session: LiveTailSession, detection_accumulator: LiveDetectionAccumulator,
+                 max_lease_records: int, max_lease_bytes: int):
         if type(session) is not LiveTailSession:
             raise LiveWorkerError("INVALID_SESSION")
+        if type(detection_accumulator) is not LiveDetectionAccumulator:
+            raise LiveWorkerError("INVALID_ACCUMULATOR")
         if (type(max_lease_records) is not int or not 1 <= max_lease_records <= MAX_QUEUE_ITEMS
             or type(max_lease_bytes) is not int or not 1 <= max_lease_bytes <= MAX_QUEUE_BYTES):
             raise LiveWorkerError("INVALID_LIMIT")
@@ -163,8 +189,17 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_SESSION")
         if session._worker_bound:
             raise LiveWorkerError("SESSION_ALREADY_OWNED")
+        accumulator_snapshot = detection_accumulator.snapshot()
+        if (detection_accumulator.source_role != session.source_role
+            or accumulator_snapshot.closed or accumulator_snapshot.active_proposal
+            or accumulator_snapshot.revision or accumulator_snapshot.history_record_count):
+            raise LiveWorkerError("INVALID_ACCUMULATOR")
+        if detection_accumulator._worker_bound:
+            raise LiveWorkerError("ACCUMULATOR_ALREADY_OWNED")
         session._worker_bound = True
+        detection_accumulator._worker_bound = True
         self._session = session
+        self._accumulator = detection_accumulator
         self._max_records = max_lease_records
         self._max_bytes = max_lease_bytes
         self._state = LiveWorkerState.READY
@@ -173,6 +208,8 @@ class LiveProcessingWorker:
         self._parsed = self._ignored = self._rejected = 0
         self._acknowledged = self._released = 0
         self._error_code: str | None = None
+        self._post_ack_failures = self._uncommitted_after_ack = 0
+        self._last_acc_snapshot = accumulator_snapshot
 
     def __repr__(self) -> str:
         return f"LiveProcessingWorker(state={self._state.value!r}, step_revision={self._revision})"
@@ -214,7 +251,9 @@ class LiveProcessingWorker:
             self._fail("POLL_FAILURE")
         if not available:
             self._no_data = _add(self._no_data, 1)
-            result = LiveWorkerStepResult("1", revision, "NO_DATA", polled, 0, 0, 0, 0, 0, 0, 0, (), None)
+            result = LiveWorkerStepResult("1", revision, "NO_DATA", polled, 0, 0, 0, 0, 0, 0, 0, (), None,
+                                          self._last_acc_snapshot.revision, 0, 0, 0,
+                                          self._last_acc_snapshot.active_observation_count)
             self._transition(LiveWorkerState.READY)
             return result
         try:
@@ -223,23 +262,37 @@ class LiveProcessingWorker:
             self._fail("LEASE_FAILURE")
         if lease is None:
             self._fail("LEASE_FAILURE")
+        proposal = None
         try:
             batch = parse_live_records(self._session.source_role, lease.records)
             _validate_batch(batch, self._session.source_role, lease.records)
+            proposal = self._accumulator.prepare(batch)
+            self._accumulator.prevalidate(proposal)
             next_successful = _add(self._successful, 1)
             next_parsed = _add(self._parsed, batch.parsed_count)
             next_ignored = _add(self._ignored, batch.ignored_count)
             next_rejected = _add(self._rejected, batch.rejected_count)
             next_acknowledged = _add(self._acknowledged, lease.item_count)
+            next_released = _add(self._released, lease.item_count)
+            next_degraded = _add(self._degraded, 1)
             resident = self._session.snapshot()
             if not resident.active_lease or resident.leased_item_count != lease.item_count:
                 raise LiveWorkerError("INVARIANT_FAILURE")
+            changes = proposal._change_set.changes
             result = LiveWorkerStepResult("1", revision, "PROCESSED", polled, lease.item_count,
                                           batch.parsed_count, batch.ignored_count, batch.rejected_count,
-                                          lease.item_count, 0, resident.available_item_count, (), None)
-            next_released = _add(self._released, lease.item_count)
-            next_degraded = _add(self._degraded, 1)
+                                          lease.item_count, 0, resident.available_item_count, (), None,
+                                          proposal.proposal_revision,
+                                          sum(change.change_type == "CREATED" for change in changes),
+                                          sum(change.change_type == "UPDATED" for change in changes),
+                                          sum(change.change_type == "NO_LONGER_MATCHES" for change in changes),
+                                          proposal._active_observation_count)
         except Exception:
+            if proposal is not None:
+                try:
+                    self._accumulator.abort(proposal)
+                except Exception:
+                    self._fail("PROPOSAL_ABORT_FAILURE")
             try:
                 self._session.release_lease(lease)
             except Exception:
@@ -249,13 +302,54 @@ class LiveProcessingWorker:
             self._error_code = "PROCESSING_FAILURE"
             self._transition(LiveWorkerState.DEGRADED)
             raise LiveWorkerError("PROCESSING_FAILURE") from None
+        last_confirmed_detection = self._accumulator._committed
         try:
             self._session.acknowledge_lease(lease)
         except Exception:
-            self._fail_ownership()
-        self._successful, self._parsed, self._ignored = next_successful, next_parsed, next_ignored
-        self._rejected, self._acknowledged = next_rejected, next_acknowledged
-        self._transition(LiveWorkerState.READY)
+            # A fault injected after the queue settled may raise from this call.
+            # Never release in either case; classify an observable settled ack
+            # as a terminal post-ack integrity gap.
+            try:
+                settled = (self._session.snapshot().acknowledged_record_count
+                           == resident.acknowledged_record_count + lease.item_count)
+            except Exception:
+                settled = False
+            if settled:
+                self._accumulator._fail_after_ack(last_confirmed_detection)
+                self._post_ack_failures = _add(self._post_ack_failures, 1)
+                self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
+                self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+            try:
+                self._accumulator.abort(proposal)
+            except Exception:
+                self._fail("PROPOSAL_ABORT_FAILURE")
+            try:
+                if self._session.snapshot().state == "RUNNING":
+                    self._session._fail("INTERNAL_OWNERSHIP_FAILURE")
+            except Exception:
+                pass
+            self._fail("ACK_FAILURE")
+        try:
+            self._accumulator.commit_prepared(proposal)
+        except Exception:
+            self._accumulator._fail_after_ack(last_confirmed_detection)
+            self._post_ack_failures = _add(self._post_ack_failures, 1)
+            self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
+            self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+        previous_counters = (self._successful, self._parsed, self._ignored,
+                             self._rejected, self._acknowledged)
+        try:
+            self._successful, self._parsed, self._ignored = next_successful, next_parsed, next_ignored
+            self._rejected, self._acknowledged = next_rejected, next_acknowledged
+            self._transition(LiveWorkerState.READY)
+            self._last_acc_snapshot = proposal._committed_snapshot
+        except Exception:
+            (self._successful, self._parsed, self._ignored,
+             self._rejected, self._acknowledged) = previous_counters
+            self._accumulator._fail_after_ack(last_confirmed_detection)
+            self._post_ack_failures = _add(self._post_ack_failures, 1)
+            self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
+            self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
         return result
 
     def resume_after_degraded(self) -> None:
@@ -263,7 +357,9 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_STATE")
         try:
             session = self._session.snapshot()
-            if session.state != "RUNNING" or session.active_lease or session.leased_item_count:
+            accumulator = self._accumulator.snapshot()
+            if (session.state != "RUNNING" or session.active_lease or session.leased_item_count
+                or accumulator.active_proposal or accumulator.closed):
                 self._fail("OWNERSHIP_FAILURE")
         except LiveWorkerError:
             raise
@@ -277,7 +373,9 @@ class LiveProcessingWorker:
                                   self._no_data, self._degraded, self._failed, self._parsed,
                                   self._ignored, self._rejected, self._acknowledged,
                                   self._released, self._session.snapshot(),
-                                  (self._error_code,) if self._error_code else (), self._error_code)
+                                  (self._error_code,) if self._error_code else (), self._error_code,
+                                  self._last_acc_snapshot, self._post_ack_failures,
+                                  self._uncommitted_after_ack)
 
     def close(self) -> None:
         if self._state == LiveWorkerState.STOPPED:
@@ -287,6 +385,8 @@ class LiveProcessingWorker:
         self._transition(LiveWorkerState.STOPPING)
         try:
             self._session.close()
+            self._accumulator.close()
+            self._last_acc_snapshot = self._accumulator.snapshot()
         except Exception:
             self._error_code = "CLOSE_FAILURE"
             self._transition(LiveWorkerState.FAILED)

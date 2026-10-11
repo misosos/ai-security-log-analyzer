@@ -1,6 +1,6 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
-상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator 구현; launcher·API·SSE·UI·탐지 공개는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
+상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator, Phase 13.1 worker·ack·commit 연결과 내부 observation identity 구현; launcher·API·SSE·UI·탐지 공개는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
 
 ## 0. Phase 12에서 실제 구현된 내부 core
 
@@ -31,7 +31,9 @@ Phase 12.1의 별도 내부 함수 `parse_live_records(source_role, tuple[LiveTa
 
 기존 합성 fixture 측정: application 17줄·973바이트·최장 64바이트, SSH 6줄·459바이트·최장 67바이트, access 4줄·569바이트·최장 155바이트. 기존 업로드 API는 파일당 최대 512줄·한 줄 2048바이트다. 개발 환경 Python 3.12에서 155바이트 synthetic 줄 1600건을 100회 append/poll/drain한 1회 측정은 약 0.286초·tracemalloc peak 7849바이트였고, 2048바이트 경계 줄 800건은 약 1.131초·peak 22519바이트였다. 이는 작은 단일 실행 관찰이며 운영 처리량·peak RSS·p95/p99 지연 보장이 아니다. Queue의 16KiB는 payload 합계이며 Python 객체 overhead는 포함하지 않으므로 향후 운영 한도는 별도 benchmark가 필요하다.
 
-### Phase 12.3 단일 caller worker 계약
+### Phase 12.3 단일 caller worker 계약 (당시 계약)
+
+이 절은 Phase 12.3의 parser-only 기준을 기록한다. **현재 정상 경로는 아래 Phase 13.1의 detection-aware worker**이며 이 생성자와 detector 미연결 설명은 현재 실행 계약이 아니다.
 
 `LiveProcessingWorker(session, max_lease_records, max_lease_bytes)`는 정확한 `LiveTailSession` 한 개에 한 번만 연결된다. `step()`은 한 번의 `poll_once()` 후 available prefix를 최대 한 번 lease하고, 기존 adapter로 parse한 전체 batch의 role·outcome 수·sequence 순서·상태별 count를 확인한 뒤에만 전체 ack한다. `REJECTED`도 예상된 완료 결과라 ack하고 집계한다. Queue가 비어 있으면 parser/lease/ack 없이 `NO_DATA`이며 partial byte가 있어도 안전 판정을 뜻하지 않는다. 반환되는 frozen `LiveWorkerStepResult`와 `snapshot()`은 고정 상태·count·오류 code만 보유한다. Parsed event나 lease를 보관·반환하지 않는다. Trusted worker-local event는 step 안에만 있고 detector·case에 전달하지 않는다. 한 step의 work는 lease 상한과 기존 poll 상한으로 제한된다.
 
@@ -39,7 +41,9 @@ Worker 상태는 `READY → RUNNING_STEP → READY`(정상), `RUNNING_STEP → D
 
 단일 worker binding은 두 번째 worker 생성만 runtime에서 거부한다. 신뢰된 내부 caller가 session 메서드를 직접 혼용하거나 여러 thread에서 동시에 호출하는 것을 완전하게 차단하는 동시성 장치는 없다. 호출자는 worker에 session을 넘긴 뒤 직접 조작하지 않아야 하며, 향후 async loop는 직렬화해야 한다. Worker는 명시적 step만 제공하고 sleep·timer·background thread/task·자동 polling·CLI·SSE·UI·LLM·detector·상관분석·risk·case·HTML을 실행하지 않는다. Process memory 밖 persistence와 crash recovery는 없고 exactly-once도 보장하지 않는다.
 
-### Phase 13 bounded detection accumulator
+### Phase 13 bounded detection accumulator (당시 독립 계약)
+
+이 절은 Phase 13의 worker 미연결 기준을 기록한다. **현재 ack/commit 순서는 아래 Phase 13.1 계약**을 따른다.
 
 `LiveDetectionAccumulator(source_role, max_history_records, max_history_bytes)`는 application·SSH·access 중 한 역할의 **내부 단일 caller** 계약이다. `prepare(LiveParseBatch)`는 exact batch·역할·sequence·outcome 수를 재검증하고 PARSED event 전부를 기존 committed tuple 뒤에 같은 입력 순서로 붙인다. IGNORED/REJECTED는 history에 넣지 않고 안전한 count만 후보에 반영한다. Event raw의 strict UTF-8 byte 길이를 합해 두 상한을 동시에 검사한다. 상한은 caller가 명시하며 이 단계에서 운영 기본값을 정하지 않는다. 초과 시 전체 proposal을 고정 `HISTORY_LIMIT_EXCEEDED`로 거부하고 committed state를 바꾸지 않는다. 과거 event의 rolling eviction이나 일부 new event만 commit하는 방식은 없다. **오래된 실패 1건+최근 실패 5건**에서 기존 batch detector가 전체 min/max를 보므로 최근 60초만 남기면 의미가 바뀔 수 있다.
 
@@ -48,6 +52,18 @@ Worker 상태는 `READY → RUNNING_STEP → READY`(정상), `RUNNING_STEP → D
 `prepare()`는 committed history·detection·revision을 변경하지 않고 active proposal 하나만 예약한다. PARSED가 0건인 batch는 detector를 재실행하지 않는 유효 proposal이며 ignored/rejected 누적만 commit한다. `abort()`는 committed snapshot을 그대로 유지하고 같은 batch의 명시적 재시도를 허용한다. `commit()`은 exact active owner/proposal ID·revision·role·history byte/count·detection invariant를 재검증한 뒤 history·raw detection·집계를 함께 적용하고 revision을 정확히 1 올린다. Foreign/stale/forged/double settlement는 고정 오류다. 내부 `NormalizedEvent`와 detector dictionary는 mutable Python 객체이므로 악성 내부 코드의 직접 변조나 Python 메모리 secure erase는 이 계약의 보호 범위가 아니다. 단일 caller가 trusted proposal을 공유·변조하지 않는 것이 전제다. Process crash 후 복구나 exactly-once 보장은 없다.
 
 각 prefix에서 같은 ordered event list를 batch `detect_attacks()`에 전달했을 때 전체 subject·feature·detection/evidence 구조가 동일해야 한다. 기존 batch의 입력 순서 민감성(예: Path Traversal 단일 slot의 마지막 일치)은 live가 임의로 고치지 않고 같은 순서를 보존한다. 이번 단계는 탐지를 publish하지 않는다. 같은 탐지가 각 prefix에서 반복 계산됨 → publication identity와 revision 계약 필요 → **Phase 13.1에서 설계**한다. Accumulator는 `LiveProcessingWorker`, lease ack/release, correlation, risk, case, CLI, API, SSE, UI, LLM, HTML에 연결되지 않는다. 후속 통합의 open decision은 `detection prepare 성공 → queue ack 성공 → detection commit` 사이에서 ack 후 commit 실패가 발생하면 소유권을 어떻게 terminal 처리할지다. 이번 단계에서 worker의 ack 순서를 바꾸거나 이를 해결했다고 주장하지 않는다.
+
+### Phase 13.1 현재 내부 처리 계약
+
+`LiveProcessingWorker(session, detection_accumulator, max_lease_records, max_lease_bytes)`는 정확히 한 source role의 새 session과 빈 `LiveDetectionAccumulator`를 각 하나씩 소유한다. 둘의 role이 다르거나 accumulator에 이전 committed history·active proposal이 있으면 거부한다. 둘 이상의 worker가 같은 session/accumulator를 공유할 수 없다. 신뢰된 caller의 직접 settlement 혼용이나 동시 thread 호출까지 막는 lock은 없으므로 단일 caller 계약이다. Parser-only worker 우회 경로는 없다. CLI·API·SSE·UI·correlation·risk·case·HTML·LLM은 호출하지 않는다.
+
+한 `step()`은 `poll → lease → parse → batch invariant → detection prepare → proposal prevalidate → queue ack → commit_prepared → 안전 집계` 순서다. `prepare()`에서 whole-prefix detector 실행, observation diff·ID 할당, safe summary, 다음 frozen committed state와 snapshot을 모두 만든다. `prevalidate()`는 ack 전에 exact active proposal과 count·byte·detection·observation 계약을 검사한다. `commit_prepared()`에는 detector·정렬·raw byte 계산·ID 생성·publication diff·깊은 validation이 없고 사전 준비한 state 참조를 교체한다. Ack가 **point of no return**이다. Queue와 accumulator 사이에 진정한 원자적 transaction은 없으며 exactly-once, process crash recovery, Python secure memory erasure를 보장하지 않는다.
+
+Ack 이전 실패는 active proposal이 있으면 abort한 다음 lease를 release하여 원래 FIFO 순서를 복구하고 worker를 `DEGRADED`로 둔다. 자동 retry는 없고 명시적 `resume_after_degraded()`가 필요하다. Abort/release 자체가 실패하면 `FAILED`이며 ownership을 추측해 ack하지 않는다. Ack 실패는 proposal만 abort하고 release를 추측하지 않으며 고정 `ACK_FAILURE`로 terminal `FAILED`다. Ack 호출에서 이미 정산된 것이 확인된 뒤 예외가 발생하거나, ack 후 commit이 실패하면 ack를 되돌리거나 release·재시도하지 않는다. 마지막으로 확인된 accumulator 참조를 유지하고 terminal로 봉쇄하되 queue record를 복구했다고 주장하지 않는다. `DETECTION_COMMIT_FAILED_AFTER_ACK`, `post_ack_commit_failure_count`, `uncommitted_after_ack_record_count`를 안전 snapshot에 기록하고 close만 허용한다. 이 상태는 **일부 로그가 탐지 상태에 반영되지 않았을 수 있는 terminal integrity failure**다. 기대된 `REJECTED`는 처리 완료이므로 정상 ack되고, PARSED가 0건이어도 완료 proposal revision은 1 증가한다.
+
+Observation의 내부 key는 trusted subject와 승인된 detection slot이고, 공개 가능한 ID는 session-local 단조 정수 `LIVE-OBS-000001` 형태다. IP·account·hash·clock·UUID를 ID에 넣지 않는다. 최초 활성화는 `CREATED`, canonical `DetectionResult`(활성 여부·type·evidence 순서/type/value/source/UTC time/range) 변화는 같은 ID의 `UPDATED`, 현재 prefix에서 조건이 사라지면 `NO_LONGER_MATCHES_CURRENT_RESULT` 상태와 `NO_LONGER_MATCHES` change를 기록한다. 이는 공격 해결·안전 판정이 아니다. 같은 session에서 재등장하면 기존 ID의 revision을 올려 `UPDATED`로 표시한다. Process 재시작 뒤 ID 지속성·공격자 identity는 주장하지 않는다. Proposal에서 생성한 change set은 frozen 안전 scalar만 담고 최신 committed 1개만 보관한다. Bounded replay journal과 SSE publication은 후속 단계다.
+
+Worker step result는 accumulator revision, created/updated/no-longer-matches 건수와 active observation 건수만 더한다. IP·account·HTTP path/query·raw evidence는 trusted history·detection·subject slot key에만 있을 수 있으며 step result/snapshot/오류/repr로 넘기지 않는다. `NO_DATA`는 revision·observation count를 바꾸지 않는다. `close()`는 session FD와 accumulator의 보유 raw 참조를 정리하고 active proposal을 commit하지 않는다. Safe worker count는 남지만 이는 서버 영구 저장이나 secure erase가 아니다.
 
 ## 1. 현재 계약, 목표와 관찰 가능한 근거
 

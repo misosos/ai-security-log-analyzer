@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator 구현",
+        "Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator, Phase 13.1 worker·ack·commit 연결",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -29,7 +29,7 @@ def test_scope_and_user_flow_are_explicit():
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
     assert "[bounded 내부 tail core·parser adapter·단일 record lease·명시적 worker step·detection accumulator](docs/live_log_monitoring_design.md)" in readme
-    assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지 공개/사례는 **아직 구현되지 않았습니다**" in readme
+    assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지 공개/사례도 **아직 구현되지 않았습니다**" in readme
     assert "uv run python -m app.local_web --monitor-config" not in readme
 
 
@@ -101,6 +101,23 @@ def test_worker_failure_and_deferred_integration_are_documented():
         "단일 worker binding은 두 번째 worker 생성만 runtime에서 거부",
         "Process memory 밖 persistence",
         "CLI·SSE·UI·LLM·detector·상관분석·risk·case·HTML을 실행하지 않는다",
+    ):
+        assert phrase in text
+
+
+def test_phase_13_1_ack_identity_and_terminal_boundary_documented():
+    text = _design()
+    for phrase in (
+        "Phase 13.1 현재 내부 처리 계약",
+        "point of no return",
+        "commit_prepared()",
+        "DETECTION_COMMIT_FAILED_AFTER_ACK",
+        "uncommitted_after_ack_record_count",
+        "NO_LONGER_MATCHES_CURRENT_RESULT",
+        "LIVE-OBS-000001",
+        "같은 session에서 재등장하면 기존 ID",
+        "최신 committed 1개만 보관",
+        "진정한 원자적 transaction은 없으며 exactly-once",
     ):
         assert phrase in text
 

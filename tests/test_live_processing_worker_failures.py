@@ -3,7 +3,7 @@
 import pytest
 
 from app.live_monitoring import (
-    LiveMonitorConfig, LiveParseBatch, LiveParseOutcome, LiveProcessingWorker,
+    LiveDetectionAccumulator, LiveMonitorConfig, LiveParseBatch, LiveParseOutcome, LiveProcessingWorker,
     LiveWorkerError, LiveWorkerState,
     open_live_tail_session,
 )
@@ -17,7 +17,7 @@ def make_worker(tmp_path):
     path = tmp_path / "source.log"
     path.write_bytes(b"")
     session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))
-    return path, session, LiveProcessingWorker(session, 8, 4096)
+    return path, session, LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 8, 4096)
 
 
 def append(path, *lines):
@@ -97,7 +97,7 @@ def test_ack_failure_never_releases(tmp_path, monkeypatch):
     try:
         with pytest.raises(LiveWorkerError) as error:
             worker.step()
-        assert error.value.code == "OWNERSHIP_FAILURE"
+        assert error.value.code == "ACK_FAILURE"
         assert worker.snapshot().state is LiveWorkerState.FAILED
         assert worker.snapshot().session.state == "FAILED"
         assert worker.snapshot().session.active_lease

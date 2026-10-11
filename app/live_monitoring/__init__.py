@@ -1,4 +1,4 @@
-"""Trusted, single-source local tail core; no web or detector integration."""
+"""Trusted, single-source local tail and detection core; no web integration."""
 
 from app.live_monitoring.config import LiveMonitorConfig, load_live_monitor_config
 from app.live_monitoring.core import (
@@ -24,6 +24,8 @@ from app.live_monitoring.worker import (
 )
 from app.live_monitoring.detection_accumulator import (
     LiveDetectionAccumulator,
+    LiveDetectionChange,
+    LiveDetectionChangeSet,
     LiveDetectionError,
     LiveDetectionProposal,
     LiveDetectionSnapshot,
@@ -49,6 +51,8 @@ __all__ = (
     "LiveWorkerState",
     "LiveWorkerStepResult",
     "LiveDetectionAccumulator",
+    "LiveDetectionChange",
+    "LiveDetectionChangeSet",
     "LiveDetectionError",
     "LiveDetectionProposal",
     "LiveDetectionSnapshot",

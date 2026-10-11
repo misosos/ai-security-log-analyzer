@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.live_monitoring import (
-    LiveMonitorConfig, LiveProcessingWorker, LiveWorkerError, LiveWorkerState,
+    LiveDetectionAccumulator, LiveMonitorConfig, LiveProcessingWorker, LiveWorkerError, LiveWorkerState,
     open_live_tail_session,
 )
 
@@ -17,7 +17,7 @@ def make_worker(tmp_path: Path, *, max_records: int = 8):
     path = tmp_path / "source.log"
     path.write_bytes((GOOD + "\n").encode())
     session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))
-    worker = LiveProcessingWorker(session, max_records, 4096)
+    worker = LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), max_records, 4096)
     return path, session, worker
 
 
@@ -87,12 +87,12 @@ def test_one_bounded_lease_per_step(tmp_path):
 def test_exact_session_single_worker_and_close(tmp_path):
     path, session, worker = make_worker(tmp_path)
     with pytest.raises(LiveWorkerError) as error:
-        LiveProcessingWorker(session, 1, 1024)
+        LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 1, 1024)
     assert error.value.code == "SESSION_ALREADY_OWNED"
     with pytest.raises(LiveWorkerError):
-        LiveProcessingWorker(object(), 1, 1024)
+        LiveProcessingWorker(object(), LiveDetectionAccumulator("application", 64, 65536), 1, 1024)
     with pytest.raises(LiveWorkerError):
-        LiveProcessingWorker(session, True, 1024)
+        LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), True, 1024)
     worker.close()
     worker.close()
     assert session.snapshot().state == "STOPPED"

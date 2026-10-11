@@ -6,7 +6,7 @@ import logging
 import pytest
 
 from app.live_monitoring import (
-    LiveMonitorConfig, LiveProcessingWorker, LiveWorkerError, open_live_tail_session,
+    LiveDetectionAccumulator, LiveMonitorConfig, LiveProcessingWorker, LiveWorkerError, open_live_tail_session,
 )
 from app.live_monitoring import worker as worker_module
 
@@ -21,7 +21,7 @@ def test_canaries_absent_from_result_snapshot_errors_and_logs(tmp_path, monkeypa
     path = folder / "private-file-amber-21.log"
     path.write_bytes(b"")
     session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))
-    worker = LiveProcessingWorker(session, 1, 4096)
+    worker = LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 1, 4096)
     raw = f"2026-01-02 03:04:05 INFO user_login user={canaries[0]} ip={canaries[1]} detail={canaries[2]}?{canaries[3]} {canaries[4]}"
     with path.open("ab") as stream:
         stream.write((raw + "\n").encode())
@@ -42,7 +42,7 @@ def test_private_internal_exception_is_not_chained(tmp_path, monkeypatch):
     path = tmp_path / "source.log"
     path.write_bytes(b"")
     session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))
-    worker = LiveProcessingWorker(session, 1, 4096)
+    worker = LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 1, 4096)
     with path.open("ab") as stream:
         stream.write(b"malformed private-canary-725\n")
     monkeypatch.setattr(worker_module, "parse_live_records", lambda *_: (_ for _ in ()).throw(RuntimeError("private-canary-725")))

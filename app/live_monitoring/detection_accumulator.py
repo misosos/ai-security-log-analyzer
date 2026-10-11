@@ -54,8 +54,12 @@ _MESSAGES = {
     "REVISION_MISMATCH": "proposal revision이 일치하지 않습니다.",
     "COUNTER_OVERFLOW": "집계 상한에 도달했습니다.",
     "UNEXPECTED_DETECTOR_FAILURE": "detector 처리가 중단됐습니다.",
+    "OPERATION_AFTER_CLOSE": "닫힌 accumulator는 처리할 수 없습니다.",
+    "ALREADY_OWNED": "accumulator는 이미 worker에 연결됐습니다.",
 }
 _NEXT_OWNER_TOKEN = 0
+_CHANGE_TYPES = frozenset(("CREATED", "UPDATED", "NO_LONGER_MATCHES"))
+_STATES = frozenset(("ACTIVE", "NO_LONGER_MATCHES_CURRENT_RESULT"))
 
 
 class LiveDetectionError(ValueError):
@@ -263,6 +267,8 @@ class LiveDetectionSnapshot:
     total_ignored: int
     total_rejected: int
     active_proposal: bool
+    active_observation_count: int = 0
+    closed: bool = False
 
     def __post_init__(self) -> None:
         counts = (self.revision, self.history_record_count, self.history_byte_count,
@@ -272,12 +278,137 @@ class LiveDetectionSnapshot:
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.history_record_count != self.total_parsed
             or type(self.active_proposal) is not bool
+            or type(self.closed) is not bool
+            or type(self.active_observation_count) is not int
+            or not 0 <= self.active_observation_count <= MAX_COUNTER
             or type(self.detected_type_counts) is not tuple
             or any(type(pair) is not tuple or len(pair) != 2 for pair in self.detected_type_counts)
             or tuple(kind for kind, _ in self.detected_type_counts) != tuple(kind for _, kind in _SLOTS)
             or any(type(value) is not int or not 0 <= value <= self.subject_count
                    for _, value in self.detected_type_counts)):
             raise LiveDetectionError("DETECTION_INVARIANT_FAILURE")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveDetectionChange:
+    observation_id: str
+    observation_revision: int
+    change_type: str
+    state: str
+    detection_type: str
+    accumulator_revision: int
+
+    def __post_init__(self) -> None:
+        suffix = self.observation_id[9:] if type(self.observation_id) is str else ""
+        if (type(self.observation_id) is not str
+            or not self.observation_id.startswith("LIVE-OBS-")
+            or not 6 <= len(suffix) <= 19 or any(char not in "0123456789" for char in suffix)
+            or int(suffix) == 0
+            or type(self.observation_revision) is not int or not 1 <= self.observation_revision <= MAX_COUNTER
+            or type(self.accumulator_revision) is not int or not 1 <= self.accumulator_revision <= MAX_COUNTER
+            or type(self.change_type) is not str or self.change_type not in _CHANGE_TYPES
+            or type(self.state) is not str or self.state not in _STATES
+            or type(self.detection_type) is not str
+            or self.detection_type not in {kind for _, kind in _SLOTS}
+            or (self.change_type == "NO_LONGER_MATCHES") != (
+                self.state == "NO_LONGER_MATCHES_CURRENT_RESULT")):
+            raise LiveDetectionError("DETECTION_INVARIANT_FAILURE")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveDetectionChangeSet:
+    accumulator_revision: int
+    changes: tuple[LiveDetectionChange, ...]
+    safe_summary: LiveDetectionSummary
+
+    def __post_init__(self) -> None:
+        if (type(self.accumulator_revision) is not int
+            or type(self.safe_summary) is not LiveDetectionSummary
+            or self.accumulator_revision != self.safe_summary.proposal_revision
+            or type(self.changes) is not tuple
+            or any(type(change) is not LiveDetectionChange
+                   or change.accumulator_revision != self.accumulator_revision
+                   for change in self.changes)
+            or len({change.observation_id for change in self.changes}) != len(self.changes)):
+            raise LiveDetectionError("DETECTION_INVARIANT_FAILURE")
+
+
+@dataclass(frozen=True, slots=True)
+class _Observation:
+    observation_id: str
+    revision: int
+    first_revision: int
+    latest_revision: int
+    state: str
+    _subject: str = field(repr=False)
+    _slot: str = field(repr=False)
+    _detection: DetectionResult = field(repr=False)
+
+
+def _canonical_detection(detection: DetectionResult) -> tuple:
+    return (
+        detection.is_detected, detection.detection_type,
+        tuple((e.type, e.value, e.source, e.timestamp, e.time_range)
+              for e in detection.evidence),
+    )
+
+
+def _prepare_observations(previous: tuple[_Observation, ...], result: dict,
+                          next_id: int, revision: int,
+                          summary: LiveDetectionSummary) -> tuple[tuple[_Observation, ...], int, LiveDetectionChangeSet, int]:
+    old = {(item._subject, item._slot): item for item in previous}
+    updated = dict(old)
+    changes = []
+    for subject, entry in result.items():
+        for slot, kind in _SLOTS:
+            detection = entry["detections"][slot]
+            prior = old.get((subject, slot))
+            if detection.is_detected:
+                if prior is None:
+                    next_id = _bounded_add(next_id, 1)
+                    obs_id = f"LIVE-OBS-{next_id:06d}"
+                    item = _Observation(obs_id, 1, revision, revision, "ACTIVE", subject, slot, detection)
+                    change_type = "CREATED"
+                elif (prior.state != "ACTIVE"
+                      or _canonical_detection(prior._detection) != _canonical_detection(detection)):
+                    item = _Observation(prior.observation_id, _bounded_add(prior.revision, 1),
+                                        prior.first_revision, revision, "ACTIVE", subject, slot, detection)
+                    change_type = "UPDATED"
+                else:
+                    continue
+                updated[(subject, slot)] = item
+            elif prior is not None and prior.state == "ACTIVE":
+                item = _Observation(prior.observation_id, _bounded_add(prior.revision, 1),
+                                    prior.first_revision, revision, "NO_LONGER_MATCHES_CURRENT_RESULT",
+                                    subject, slot, prior._detection)
+                updated[(subject, slot)] = item
+                change_type = "NO_LONGER_MATCHES"
+            else:
+                continue
+            changes.append(LiveDetectionChange(item.observation_id, item.revision, change_type,
+                                               item.state, kind, revision))
+    # Preserve first-allocation order; inactive slots remain available for reactivation.
+    observations = tuple(sorted(updated.values(), key=lambda item: int(item.observation_id[9:])))
+    active_count = sum(item.state == "ACTIVE" for item in observations)
+    return observations, next_id, LiveDetectionChangeSet(revision, tuple(changes), summary), active_count
+
+
+@dataclass(frozen=True, slots=True)
+class _CommittedState:
+    history: tuple[NormalizedEvent, ...] = field(repr=False)
+    history_bytes: int
+    detection: dict = field(repr=False)
+    subject_count: int
+    type_counts: tuple[tuple[str, int], ...]
+    revision: int
+    parsed: int
+    ignored: int
+    rejected: int
+    last_sequence: int
+    observations: tuple[_Observation, ...] = field(repr=False)
+    next_observation_id: int
+    last_change_set: LiveDetectionChangeSet | None
+    active_observation_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +425,12 @@ class LiveDetectionProposal:
     _total_parsed: int = field(repr=False)
     _total_ignored: int = field(repr=False)
     _total_rejected: int = field(repr=False)
+    _observations: tuple[_Observation, ...] = field(repr=False, default=())
+    _next_observation_id: int = field(repr=False, default=0)
+    _change_set: LiveDetectionChangeSet | None = field(repr=False, default=None)
+    _active_observation_count: int = field(repr=False, default=0)
+    _committed_snapshot: LiveDetectionSnapshot | None = field(repr=False, default=None)
+    _committed_state: _CommittedState | None = field(repr=False, default=None)
 
     def safe_summary(self) -> LiveDetectionSummary:
         return self._summary
@@ -302,10 +439,9 @@ class LiveDetectionProposal:
 class LiveDetectionAccumulator:
     """Single-caller, whole-session prefix state; not a public serializer input."""
 
-    __slots__ = ("_source_role", "_max_records", "_max_bytes", "_history", "_history_bytes",
-                 "_detection", "_subject_count", "_type_counts", "_revision", "_parsed",
-                 "_ignored", "_rejected", "_last_sequence", "_owner_token",
-                 "_next_proposal_id", "_active", "_last_settled_id")
+    __slots__ = ("_source_role", "_max_records", "_max_bytes", "_committed", "_owner_token",
+                 "_next_proposal_id", "_active", "_last_settled_id",
+                 "_worker_bound", "_closed", "_validated_proposal_id")
 
     def __init__(self, source_role: str, max_history_records: int, max_history_bytes: int):
         if type(source_role) is not str or source_role not in ROLES:
@@ -316,17 +452,71 @@ class LiveDetectionAccumulator:
         self._source_role = source_role
         self._max_records = max_history_records
         self._max_bytes = max_history_bytes
-        self._history: tuple[NormalizedEvent, ...] = ()
-        self._history_bytes = 0
-        self._detection: dict = {}
-        self._subject_count = 0
-        self._type_counts = tuple((kind, 0) for _, kind in _SLOTS)
-        self._revision = self._parsed = self._ignored = self._rejected = 0
-        self._last_sequence = 0
+        self._committed = _CommittedState((), 0, {}, 0, tuple((kind, 0) for _, kind in _SLOTS),
+                                          0, 0, 0, 0, 0, (), 0, None, 0)
         self._owner_token = _owner_token()
         self._next_proposal_id = 1
         self._active: LiveDetectionProposal | None = None
         self._last_settled_id = 0
+        self._worker_bound = False
+        self._closed = False
+        self._validated_proposal_id = 0
+
+    @property
+    def _history(self) -> tuple[NormalizedEvent, ...]:
+        return self._committed.history
+
+    @property
+    def _history_bytes(self) -> int:
+        return self._committed.history_bytes
+
+    @property
+    def _detection(self) -> dict:
+        return self._committed.detection
+
+    @property
+    def _subject_count(self) -> int:
+        return self._committed.subject_count
+
+    @property
+    def _type_counts(self) -> tuple[tuple[str, int], ...]:
+        return self._committed.type_counts
+
+    @property
+    def _revision(self) -> int:
+        return self._committed.revision
+
+    @property
+    def _parsed(self) -> int:
+        return self._committed.parsed
+
+    @property
+    def _ignored(self) -> int:
+        return self._committed.ignored
+
+    @property
+    def _rejected(self) -> int:
+        return self._committed.rejected
+
+    @property
+    def _last_sequence(self) -> int:
+        return self._committed.last_sequence
+
+    @property
+    def _observations(self) -> tuple[_Observation, ...]:
+        return self._committed.observations
+
+    @property
+    def _next_observation_id(self) -> int:
+        return self._committed.next_observation_id
+
+    @property
+    def _last_change_set(self) -> LiveDetectionChangeSet | None:
+        return self._committed.last_change_set
+
+    @property
+    def _active_observation_count(self) -> int:
+        return self._committed.active_observation_count
 
     def __repr__(self) -> str:
         return ("LiveDetectionAccumulator("
@@ -340,11 +530,21 @@ class LiveDetectionAccumulator:
             "1", self._source_role, self._revision, len(self._history), self._history_bytes,
             self._subject_count, self._type_counts, self._parsed, self._ignored,
             self._rejected, self._active is not None,
+            self._active_observation_count, self._closed,
         )
+
+    @property
+    def source_role(self) -> str:
+        return self._source_role
+
+    def latest_change_set(self) -> LiveDetectionChangeSet | None:
+        return self._last_change_set
 
     def prepare(self, batch: LiveParseBatch) -> LiveDetectionProposal:
         if type(self) is not LiveDetectionAccumulator:
             raise LiveDetectionError("INVALID_ARGUMENT")
+        if self._closed:
+            raise LiveDetectionError("OPERATION_AFTER_CLOSE")
         if self._active is not None:
             raise LiveDetectionError("ACTIVE_PROPOSAL_EXISTS")
         parsed = _validate_batch(batch, self._source_role, self._last_sequence)
@@ -378,14 +578,35 @@ class LiveDetectionAccumulator:
             subject_count, type_counts, batch.parsed_count, batch.ignored_count,
             batch.rejected_count,
         )
+        try:
+            observations, next_observation_id, change_set, active_count = _prepare_observations(
+                self._observations, candidate_detection, self._next_observation_id, next_revision, summary,
+            ) if parsed else (
+                self._observations, self._next_observation_id,
+                LiveDetectionChangeSet(next_revision, (), summary), self._active_observation_count,
+            )
+        except LiveDetectionError:
+            raise
+        except Exception:
+            raise LiveDetectionError("DETECTION_INVARIANT_FAILURE") from None
         proposal = LiveDetectionProposal(
             next_revision, self._source_role, self._next_proposal_id, self._owner_token,
             candidate_history, candidate_bytes, candidate_detection, summary,
             batch.outcomes[-1].sequence if batch.outcomes else self._last_sequence,
             next_parsed, next_ignored, next_rejected,
+            observations, next_observation_id, change_set, active_count,
+            LiveDetectionSnapshot("1", self._source_role, next_revision, candidate_count,
+                                  candidate_bytes, subject_count, type_counts, next_parsed,
+                                  next_ignored, next_rejected, False, active_count, False),
+            _CommittedState(candidate_history, candidate_bytes, candidate_detection,
+                            subject_count, type_counts, next_revision, next_parsed,
+                            next_ignored, next_rejected,
+                            batch.outcomes[-1].sequence, observations,
+                            next_observation_id, change_set, active_count),
         )
         self._next_proposal_id = _bounded_add(self._next_proposal_id, 1)
         self._active = proposal
+        self._validated_proposal_id = 0
         return proposal
 
     def _validate_proposal(self, proposal: LiveDetectionProposal) -> None:
@@ -434,28 +655,54 @@ class LiveDetectionAccumulator:
                 proposal._total_ignored, proposal._total_rejected, proposal._last_sequence))):
             raise LiveDetectionError("DETECTION_INVARIANT_FAILURE")
 
-    def commit(self, proposal: LiveDetectionProposal) -> LiveDetectionSnapshot:
-        if type(self) is not LiveDetectionAccumulator:
-            raise LiveDetectionError("INVALID_ARGUMENT")
+    def prevalidate(self, proposal: LiveDetectionProposal) -> None:
+        if self._closed:
+            raise LiveDetectionError("OPERATION_AFTER_CLOSE")
         try:
             self._validate_proposal(proposal)
+            if (proposal is not self._active or proposal._change_set is None
+                or proposal._change_set.accumulator_revision != proposal.proposal_revision
+                or proposal._change_set.safe_summary != proposal._summary
+                or type(proposal._committed_snapshot) is not LiveDetectionSnapshot
+                or type(proposal._committed_state) is not _CommittedState
+                or proposal._committed_state.revision != proposal.proposal_revision
+                or proposal._committed_state.history is not proposal._history
+                or proposal._committed_state.detection is not proposal._detection
+                or proposal._committed_state.history_bytes != proposal._history_bytes
+                or proposal._committed_state.last_change_set is not proposal._change_set
+                or proposal._committed_state.observations is not proposal._observations
+                or proposal._committed_snapshot.revision != proposal.proposal_revision
+                or proposal._active_observation_count != sum(
+                    item.state == "ACTIVE" for item in proposal._observations)
+                or len({item.observation_id for item in proposal._observations}) != len(proposal._observations)
+                or any(change.change_type not in _CHANGE_TYPES or change.state not in _STATES
+                       for change in proposal._change_set.changes)):
+                raise LiveDetectionError("FORGED_PROPOSAL")
         except LiveDetectionError:
             raise
         except Exception:
             raise LiveDetectionError("FORGED_PROPOSAL") from None
-        self._history = proposal._history
-        self._history_bytes = proposal._history_bytes
-        self._detection = proposal._detection
-        self._subject_count = proposal._summary.subject_count
-        self._type_counts = proposal._summary.detected_type_counts
-        self._parsed = proposal._total_parsed
-        self._ignored = proposal._total_ignored
-        self._rejected = proposal._total_rejected
-        self._last_sequence = proposal._last_sequence
-        self._revision = proposal.proposal_revision
+        self._validated_proposal_id = proposal._proposal_id
+
+    def commit_prepared(self, proposal: LiveDetectionProposal) -> LiveDetectionSnapshot:
+        if self._closed:
+            raise LiveDetectionError("OPERATION_AFTER_CLOSE")
+        if (type(proposal) is not LiveDetectionProposal or proposal is not self._active
+            or self._validated_proposal_id != proposal._proposal_id
+            or proposal.proposal_revision != self._revision + 1):
+            raise LiveDetectionError("FORGED_PROPOSAL")
+        # No detector, raw byte accounting, ID allocation, diff, or deep validation here.
+        self._committed = proposal._committed_state
         self._active = None
+        self._validated_proposal_id = 0
         self._last_settled_id = proposal._proposal_id
-        return self.snapshot()
+        return proposal._committed_snapshot
+
+    def commit(self, proposal: LiveDetectionProposal) -> LiveDetectionSnapshot:
+        if type(self) is not LiveDetectionAccumulator:
+            raise LiveDetectionError("INVALID_ARGUMENT")
+        self.prevalidate(proposal)
+        return self.commit_prepared(proposal)
 
     def abort(self, proposal: LiveDetectionProposal) -> None:
         if type(self) is not LiveDetectionAccumulator:
@@ -467,4 +714,25 @@ class LiveDetectionAccumulator:
         except Exception:
             raise LiveDetectionError("FORGED_PROPOSAL") from None
         self._active = None
+        self._validated_proposal_id = 0
         self._last_settled_id = proposal._proposal_id
+
+    def close(self) -> None:
+        if self._closed and not self._history and not self._detection:
+            return
+        self._active = None
+        self._committed = _CommittedState((), 0, {}, 0, tuple((kind, 0) for _, kind in _SLOTS),
+                                          self._revision, 0, 0, 0, self._last_sequence,
+                                          (), self._next_observation_id, None, 0)
+        self._validated_proposal_id = 0
+        self._closed = True
+
+    def _fail_after_ack(self, last_confirmed: _CommittedState) -> None:
+        """Terminalize without claiming a possibly partial commit succeeded.
+
+        This does not restore acknowledged queue records or make retry safe.
+        """
+        self._committed = last_confirmed
+        self._active = None
+        self._validated_proposal_id = 0
+        self._closed = True
