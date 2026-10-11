@@ -25,7 +25,8 @@ def test_record_and_session_repr_and_public_snapshot_do_not_expose_canaries(tmp_
         target.write(private_line.encode() + b"\nPARTIAL_CANARY")
     try:
         assert session.poll_once() == 1
-        record = session.take_records()[0]
+        lease = session.lease_records(1, 2048)
+        record = lease.records[0]
         assert record.payload == private_line  # trusted parser access only
         outputs = (
             repr(record), str(record), repr((record,)), repr([record]),
@@ -48,6 +49,7 @@ def test_record_and_session_repr_and_public_snapshot_do_not_expose_canaries(tmp_
         with pytest.raises(ValueError) as encoder_failure:
             jsonable_encoder(record)
         assert private_line not in repr(encoder_failure.value)
+        session.acknowledge_lease(lease)
     finally:
         session.close()
 

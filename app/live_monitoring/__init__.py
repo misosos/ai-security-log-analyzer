@@ -3,6 +3,7 @@
 from app.live_monitoring.config import LiveMonitorConfig, load_live_monitor_config
 from app.live_monitoring.core import (
     LiveMonitorError,
+    LiveRecordLease,
     LiveTailRecord,
     LiveTailSession,
     LiveTailSnapshot,
@@ -18,6 +19,7 @@ from app.live_monitoring.parser_adapter import (
 __all__ = (
     "LiveMonitorConfig",
     "LiveMonitorError",
+    "LiveRecordLease",
     "LiveTailRecord",
     "LiveTailSession",
     "LiveTailSnapshot",

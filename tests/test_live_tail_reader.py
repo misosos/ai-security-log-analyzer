@@ -21,12 +21,21 @@ def _append(path: Path, data: bytes) -> None:
         target.write(data)
 
 
+def _ack_records(session, max_items=MAX_QUEUE_ITEMS):
+    lease = session.lease_records(max_items, MAX_QUEUE_BYTES)
+    if lease is None:
+        return ()
+    records = lease.records
+    session.acknowledge_lease(lease)
+    return records
+
+
 def test_from_end_skips_existing_and_catches_append_before_first_poll(tmp_path):
     path, session = _open(tmp_path, b"old private line\n")
     try:
         _append(path, b"new line\n")
         assert session.poll_once() == 1
-        assert [(r.sequence, r.payload) for r in session.take_records()] == [(1, "new line")]
+        assert [(r.sequence, r.payload) for r in _ack_records(session)] == [(1, "new line")]
         assert session.poll_once() == 0
     finally:
         session.close()
@@ -39,7 +48,7 @@ def test_empty_file_multiple_chunks_and_poll_record_cap(tmp_path):
         assert session.poll_once() == MAX_RECORDS_PER_POLL
         assert session.snapshot().queue_item_count == MAX_RECORDS_PER_POLL
         assert session.poll_once() == 2
-        records = session.take_records()
+        records = _ack_records(session)
         assert tuple(item.sequence for item in records) == tuple(range(1, 19))
         assert session.snapshot().queue_byte_count == 0
         assert MAX_CHUNK_BYTES < MAX_POLL_BYTES
@@ -55,14 +64,14 @@ def test_partial_utf8_lf_crlf_and_close_does_not_invent_line(tmp_path):
         assert session.snapshot().partial_buffer_byte_count == 2
         _append(path, "가".encode()[2:] + b"\nlast partial")
         assert session.poll_once() == 1
-        assert tuple(item.payload for item in session.take_records()) == (
+        assert tuple(item.payload for item in _ack_records(session)) == (
             "first", "second", "가",
         )
         assert session.snapshot().partial_buffer_byte_count == len(b"last partial")
     finally:
         session.close()
     assert session.snapshot().partial_buffer_byte_count == 0
-    assert session.take_records() == ()
+    assert session.snapshot().queue_item_count == 0
 
 
 @pytest.mark.parametrize(("data", "code"), (
@@ -88,7 +97,7 @@ def test_line_limit_exact_and_one_over(tmp_path):
     try:
         while session.snapshot().queue_item_count == 0:
             session.poll_once()
-        assert session.take_records()[0].byte_count == MAX_LINE_BYTES
+        assert _ack_records(session)[0].byte_count == MAX_LINE_BYTES
     finally:
         session.close()
     path, session = _open(tmp_path)
@@ -129,7 +138,7 @@ def test_queue_item_limit_exact_then_visible_overflow(tmp_path):
         assert (snapshot.queue_item_count, snapshot.queue_byte_count) == (MAX_QUEUE_ITEMS, MAX_QUEUE_ITEMS)
         assert snapshot.overflow_count == 1
         assert snapshot.processed_complete_line_count == MAX_QUEUE_ITEMS
-        assert tuple(r.sequence for r in session.take_records()) == tuple(range(1, MAX_QUEUE_ITEMS + 1))
+        assert session.snapshot().available_item_count == MAX_QUEUE_ITEMS
     finally:
         session.close()
 
@@ -137,6 +146,7 @@ def test_queue_item_limit_exact_then_visible_overflow(tmp_path):
 def test_counter_limit_does_not_enqueue_unaccounted_record(tmp_path):
     path, session = _open(tmp_path)
     session._processed = MAX_COUNTER
+    session._acknowledged = MAX_COUNTER  # Keep the new ownership ledger consistent.
     _append(path, b"not accepted\n")
     try:
         with pytest.raises(LiveMonitorError) as raised:
@@ -161,8 +171,8 @@ def test_queue_byte_limit_exact_then_visible_overflow(tmp_path):
             session.poll_once()
         assert raised.value.code == "QUEUE_OVERFLOW"
         assert session.snapshot().queue_byte_count == MAX_QUEUE_BYTES
-        session.take_records(1)
-        assert session.snapshot().queue_byte_count == MAX_QUEUE_BYTES - MAX_LINE_BYTES
+        # FAILED sessions cannot lease; close accounts for unprocessed resident records.
+        assert session.snapshot().queue_byte_count == MAX_QUEUE_BYTES
     finally:
         session.close()
 
@@ -191,7 +201,7 @@ def test_source_changes_stop_instead_of_merging(tmp_path, change):
         }
         assert session.snapshot().state == "FAILED"
         assert session.snapshot().warning_codes == (raised.value.code,)
-        assert session.take_records()[0].payload == "new"
+        assert session.snapshot().queue_item_count == 1
     finally:
         session.close()
 
@@ -244,7 +254,7 @@ def test_poll_read_budget_and_repeatability(tmp_path, monkeypatch):
         session.close()
 
 
-def test_close_keeps_accepted_queue_but_never_reopens_path(tmp_path, monkeypatch):
+def test_close_abandons_accepted_queue_and_never_reopens_path(tmp_path, monkeypatch):
     import app.live_monitoring.core as module
 
     path, session = _open(tmp_path)
@@ -258,7 +268,8 @@ def test_close_keeps_accepted_queue_but_never_reopens_path(tmp_path, monkeypatch
     monkeypatch.setattr(module, "_open_regular", forbidden_reopen)
     assert session.snapshot().state == "STOPPED"
     assert session.snapshot().partial_buffer_byte_count == 0
-    assert session.take_records()[0].payload == "accepted"
+    assert session.snapshot().queue_item_count == 0
+    assert session.snapshot().abandoned_on_close_count == 1
     with pytest.raises(LiveMonitorError) as raised:
         session.poll_once()
     assert raised.value.code == "POLL_AFTER_CLOSE"

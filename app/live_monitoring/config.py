@@ -37,6 +37,21 @@ _MESSAGES = {
     "POLL_AFTER_CLOSE": "닫힌 세션을 다시 열어 시작하십시오.",
     "INTERNAL_FAILURE": "모니터링을 중단하고 다시 시작하십시오.",
     "COUNTER_LIMIT": "세션을 종료하고 다시 시작하십시오.",
+    "INVALID_LEASE_LIMIT": "한 번에 처리할 기록 한도를 확인하십시오.",
+    "LEASE_LIMIT_TOO_SMALL": "첫 대기 기록을 담을 수 있는 byte 한도를 지정하십시오.",
+    "LEASE_UNAVAILABLE": "처리할 대기 기록이 없습니다.",
+    "ACTIVE_LEASE_EXISTS": "현재 처리 중인 기록을 먼저 완료하십시오.",
+    "FOREIGN_LEASE": "다른 세션의 처리 권한은 사용할 수 없습니다.",
+    "STALE_LEASE": "만료된 처리 권한은 사용할 수 없습니다.",
+    "FORGED_LEASE": "처리 권한 식별자를 확인하십시오.",
+    "LEASE_INVARIANT_MISMATCH": "처리 권한의 기록 구성을 확인하십시오.",
+    "ACK_AFTER_ACK": "이미 완료된 처리 권한입니다.",
+    "RELEASE_AFTER_RELEASE": "이미 반환된 처리 권한입니다.",
+    "ACK_AFTER_RELEASE": "반환된 처리 권한은 완료할 수 없습니다.",
+    "RELEASE_AFTER_ACK": "완료된 처리 권한은 반환할 수 없습니다.",
+    "OPERATION_AFTER_CLOSE": "닫힌 세션의 처리 권한은 사용할 수 없습니다.",
+    "INTERNAL_OWNERSHIP_FAILURE": "기록 처리를 중단하고 세션을 다시 시작하십시오.",
+    "CLOSE_INVALID_OWNERSHIP": "미완료 기록 상태를 확인한 뒤 세션을 다시 시작하십시오.",
 }
 
 
