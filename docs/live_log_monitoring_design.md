@@ -1,6 +1,25 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
-상태: **설계 전용, 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 숫자 미확정 항목은 `TO_BE_BENCHMARKED`이며 구현 기본값으로 간주하지 않는다.
+상태: **Phase 12 내부 core 구현, launcher·API·SSE·UI·탐지는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
+
+## 0. Phase 12에서 실제 구현된 내부 core
+
+`app.live_monitoring`의 `load_live_monitor_config(Path) -> LiveMonitorConfig`, `open_live_tail_session(LiveMonitorConfig) -> LiveTailSession`, `poll_once() -> int`, `take_records(max_items) -> tuple[LiveTailRecord, ...]`, `snapshot() -> LiveTailSnapshot`, `close() -> None`만 제공한다. 동기식 단일 source·명시적 poll step이며 clock/sleep·background task/thread·parser/detector·CLI flag·HTTP route·SSE·frontend·LLM을 사용하지 않는다. `close()`는 반복 호출 가능하고 열린 FD를 닫으며 partial을 폐기한다. 이미 승인된 queue record는 내부 consumer가 terminal 상태에서도 명시적으로 drain할 수 있지만 서버 영구 저장은 없다. `LiveTailRecord.payload`에는 trusted parser용 원문 한 줄이 존재할 수 있으나 `repr`/`str`에는 나오지 않고 일반 JSON/FastAPI encoder는 안전하게 거부한다. `LiveTailSnapshot`에는 고정 역할·상태·signed-64 count/queue/오류 code만 있으며 path·account·IP·request·offset/inode·payload는 없다.
+
+실제 JSON config는 top-level exact `schema_version`, `source`, `start_policy`다. `source`는 exact `role`, `path`이며 **정확히 한 source**만 받는다. Role은 `application`·`ssh`·`access`; `FROM_END` 외 정책과 Linux Audit는 거부한다. Config는 4096바이트 이하 strict UTF-8 JSON, 중복·unknown key와 NaN/Infinity 거부, 실행 사용자 소유의 owner-only regular file이다. Config와 source 경로의 각 성분을 `O_NOFOLLOW` 가능한 플랫폼에서 no-follow dir-fd로 열고, 최종 FD를 `fstat`해 regular file인지 확인한다. Source는 읽기 가능하고 group/world writable이면 거부한다. 플랫폼이 `O_NOFOLLOW` 등 필요한 경계를 제공하지 않으면 `UNSAFE_PLATFORM`으로 fail closed한다. 원본 파일의 권한은 바꾸지 않는다.
+
+세션 open 시 열린 FD를 EOF로 이동한다. open **이후** 첫 poll 전 append는 읽지만 기존 줄은 읽지 않는다. LF로 끝난 줄만 queue에 넣고 CRLF의 마지막 CR과 LF는 제거한다. 멀티바이트 UTF-8은 byte로 모았다가 완성 줄을 strict decode한다. NUL·control/binary·invalid UTF-8과 초과 길이는 고정 오류로 `FAILED`에 들어간다. Queue overflow, truncation, replacement/rotation, 경로 소실·symlink swap·권한 상실도 자동 병합 없이 `FAILED`이며, 수락된 record 수와 fixed warning을 snapshot에 남긴다. **읽었지만 enqueue하지 못한 줄은 성공 count에 넣지 않는다.** Overflow 뒤에는 offset 재시도를 추측하지 않고 세션 종료·재시작을 요구하며, 재시작은 `FROM_END`라 gap이 있을 수 있다. 크기만으로 판별할 수 없는 빠른 copytruncate·inode 재사용 등은 남은 위험이다.
+
+| 개발 상한 | 값 | 선정 근거 |
+|---|---:|---|
+| config 전체 | 4096 bytes | 한 source·닫힌 JSON schema만 허용; 경계 테스트 고정 |
+| 한 번의 read chunk | 1024 bytes | 최대 줄 2048보다 작은 고정 chunk로 partial/multibyte 경계를 시험 |
+| 한 poll의 read / record | 4096 bytes / 16건 | 명시적 호출마다 처리량 제한; 실제 반복 loop는 없음 |
+| 한 줄 / partial | 각각 2048 bytes | 기존 로컬 업로드의 줄 상한과 동일한 보수적 입력 범위; LF 전 raw byte 기준(마지막 CR 포함) |
+| queue | 32건 + UTF-8 payload 합계 16384 bytes | 작은 로컬 실험용; item과 byte 제한을 각각 독립 테스트 |
+| 모든 count/revision/sequence | signed 64-bit nonnegative | bool-as-int 거부, 넘치면 fixed `COUNTER_LIMIT` |
+
+기존 합성 fixture 측정: application 17줄·973바이트·최장 64바이트, SSH 6줄·459바이트·최장 67바이트, access 4줄·569바이트·최장 155바이트. 기존 업로드 API는 파일당 최대 512줄·한 줄 2048바이트다. 개발 환경 Python 3.12에서 155바이트 synthetic 줄 1600건을 100회 append/poll/drain한 1회 측정은 약 0.286초·tracemalloc peak 7849바이트였고, 2048바이트 경계 줄 800건은 약 1.131초·peak 22519바이트였다. 이는 작은 단일 실행 관찰이며 운영 처리량·peak RSS·p95/p99 지연 보장이 아니다. Queue의 16KiB는 payload 합계이며 Python 객체 overhead는 포함하지 않으므로 향후 운영 한도는 별도 benchmark가 필요하다.
 
 ## 1. 현재 계약, 목표와 관찰 가능한 근거
 
@@ -13,27 +32,25 @@
 | NCSA access | offset 있는 timestamp, method, 분리된 path/query, status | request target은 내부에서만 사용; 200은 공격 성공 증거 아님 |
 | Linux Audit | 다중 record grouping, execution context | 별도 역할; 1차 live 구현에서 보류하며 IP 사례와 결합 금지 |
 
-이 설계가 목표로 하는 흐름은 `명시적 로컬 설정 → 파일 identity 검증 → bounded tail → 완전한 줄 framing → typed parser → bounded queue → 결정적 micro-batch → privacy-safe projection → bounded 메모리 replay → SSE → 접근 가능한 UI`다. 탐지는 관찰 후보, correlation은 인과관계가 아니며 Linux 분류는 인증·웹 사례와 합치지 않는다. LLM은 live 경로에서 **호출하지 않는다**. 파일 내용·분석 결과·checkpoint의 서버 영구 저장도 없다.
+전체 설계가 목표로 하는 흐름은 `명시적 로컬 설정 → 파일 identity 검증 → bounded tail → 완전한 줄 framing → typed parser → bounded queue → 결정적 micro-batch → privacy-safe projection → bounded 메모리 replay → SSE → 접근 가능한 UI`다. Phase 12는 이 중 파일 검증·tail·완전 줄 queue·안전 snapshot까지만 구현한다. 탐지는 관찰 후보, correlation은 인과관계가 아니며 Linux 분류는 인증·웹 사례와 합치지 않는다. LLM은 live 경로에서 **호출하지 않는다**. 파일 내용·분석 결과·checkpoint의 서버 영구 저장도 없다.
 
 ## 2. 사용자 흐름과 구성 계약
 
-설계할 명령은 `uv run python -m app.local_web --monitor-config /absolute/local/config.json`이다. **현재는 동작하지 않는다.** 기본 실행은 계속 기존 UI만 제공한다. config 없는 상태에서는 `모니터링 비활성`과 시작 방법을 보인다. config를 검증한 실행에서는 서버가 준비된 뒤 tail을 시작하며 브라우저는 모니터링 경로를 지정하거나 config를 수정할 수 없다. 앱은 계속 `127.0.0.1` 한 process·한 worker 전경 실행이고 `Ctrl+C`가 수집까지 중지한다. 브라우저를 닫아도 수집은 계속된다. 브라우저 file input으로 장기 tail path를 선택하지 않는다. 다운로드·업로드 UI는 기존 기능으로 남는다.
+후속 launcher에 설계할 명령은 `uv run python -m app.local_web --monitor-config /absolute/local/config.json`이다. **현재는 동작하지 않는다.** 기본 실행은 계속 기존 UI만 제공한다. 후속 UI는 config 없는 상태에서 `모니터링 비활성`과 시작 방법을 보이고, 브라우저에서 모니터링 경로를 지정하거나 config를 수정하지 않는다. 전경 서버는 계속 `127.0.0.1` 한 process·한 worker로 두고 `Ctrl+C`로 수집까지 중지하도록 설계한다. 브라우저 file input으로 장기 tail path를 선택하지 않는다. 다운로드·업로드 UI는 기존 기능으로 남는다.
 
-Config는 UTF-8 JSON 단일 local regular file, exact-key typed schema다. 후보 계약은 아래와 같고 구현 전에 security test로 확정한다.
+Phase 12 내부 core의 Config는 UTF-8 JSON 단일 local regular file, exact-key typed schema다. 실제 계약은 다음과 같다.
 
 ```json
 {
   "schema_version": "1",
   "start_policy": "FROM_END",
-  "sources": [
-    {"role": "application", "path": "/absolute/example/auth.log"}
-  ]
+  "source": {"role": "application", "path": "/absolute/example/auth.log"}
 }
 ```
 
-예시 경로는 형식 설명일 뿐 실제 소스나 권장 위치가 아니다. Poll 간격은 config에서 조정할 수 없는 고정 프로젝트 정책으로 시작하며 값은 benchmark 뒤 결정한다. `sources`는 1~3개, role은 `application`·`ssh`·`access` 각 1회만 허용한다. `linux_audit`는 typed role로 예약하지만 Phase 12에서는 **거부**한다. `source_id`는 중복·유출 위험 때문에 V1에 두지 않는다. UI 표시명은 역할별 고정 한국어 이름만 사용하며 path, basename, path hash, inode/offset을 공개하지 않는다. Unknown key, 중복 JSON key, 중복 role, 동일 `(device,inode)`를 두 role에 연결, 상대 경로, `..` 경로 성분, symlink, FIFO/device/socket/directory, 불가한 소유·권한은 고정 오류로 fail closed한다. 설정 파일은 실행 사용자 소유·group/world 접근 금지(0600 또는 그보다 제한적)로 하고, 소스는 읽기 가능하면서 group/world writable이 아니어야 한다. 소스 소유자는 실행 사용자 또는 OS 관리 계정일 수 있으므로 일률적 0600을 강제하지 않는다. 권한 상승·`sudo`·임의 경로 자동 검색은 없다. Parent symlink도 승인 없이 경로 밖으로 이동하지 않도록 dir-fd 기반 단계별 no-follow open 및 `fstat()` 검증을 설계한다. OS가 필요한 no-follow 검증을 제공하지 않으면 모니터링을 거부한다. 경로는 API/UI/일반 오류·로그에 넣지 않는다. CLI argument의 config 경로가 OS process list·shell history에 보일 수 있음은 범위 밖 잔여 위험으로 고지한다.
+예시 경로는 형식 설명일 뿐 실제 소스나 권장 위치가 아니다. Phase 12는 `source` 한 개만 받으며 role은 `application`·`ssh`·`access` 중 하나다. `linux_audit`와 여러 source는 **거부**한다. 후속 단계의 1~3개 source 확장은 별도 schema migration 및 identity 중복 테스트가 필요하다. Poll 간격과 `source_id`는 config에 없으며 현재는 자동 polling loop도 없다. 후속 UI 표시명은 역할별 고정 한국어 이름만 사용하며 path, basename, path hash, inode/offset을 공개하지 않는다. Unknown/누락 key, 중복 JSON key, 상대 경로, `..` 경로 성분, symlink, FIFO/device/socket/directory, 불가한 소유·권한은 고정 오류로 fail closed한다. 설정 파일은 실행 사용자 소유·group/world 접근 금지(0600 또는 그보다 제한적)로 하고, 소스는 읽기 가능하면서 group/world writable이 아니어야 한다. 소스 소유자는 실행 사용자 또는 OS 관리 계정일 수 있으므로 일률적 0600을 강제하지 않는다. 권한 상승·`sudo`·임의 경로 자동 검색은 없다. Parent symlink도 dir-fd 기반 단계별 no-follow open 및 `fstat()` 검증으로 거부한다. OS가 필요한 no-follow 검증을 제공하지 않으면 모니터링을 거부한다. 경로는 API/UI/일반 오류·로그에 넣지 않는다. CLI argument의 config 경로가 OS process list·shell history에 보일 수 있음은 **후속 CLI**의 잔여 위험으로 고지한다.
 
-`FROM_END`만 V1에서 허용한다. 검증·open한 파일의 시작 시점 `fstat().st_size`를 offset으로 잡고 **그 뒤 append된 완전한 줄만** 처리한다. `FROM_START`와 persistent checkpoint는 보류한다. 재시작 시 다시 끝에서 시작하므로 중단 동안의 append는 놓칠 수 있고, UI에 `재시작 이후 추가분만 관찰`을 표시한다. 시스템 시각은 상태·지연 측정에만 쓰고 event timestamp를 바꾸지 않는다. 초기 세션에는 `STARTING → RUNNING`까지의 준비 상태와 고정 역할명이 보인다.
+`FROM_END`만 V1에서 허용한다. 검증·open한 파일의 시작 시점 EOF를 offset으로 잡고 **그 뒤 append된 완전한 줄만** 처리한다. `FROM_START`와 persistent checkpoint는 보류한다. 재시작 시 다시 끝에서 시작하므로 중단 동안의 append는 놓칠 수 있고, 후속 UI에는 `재시작 이후 추가분만 관찰`을 표시해야 한다. Core는 clock을 읽지 않으며 event timestamp도 생성하지 않는다. 내부 상태는 `STARTING → RUNNING`으로 시작한다.
 
 화면 상태는 `모니터링 비활성 / 시작 준비 / 실행 중 / 일시 중지 / 입력 지연 / 일부 입력 오류 / queue pressure / 관찰 유실 가능성 / 중지 완료 / 복구 필요`를 구분한다. 마지막 처리 시각(없으면 `아직 없음`), 처리한 줄 수, 새 조사 후보 수, queue 깊이/상태, 완전성 경고, 규칙 기반·LLM 비호출, 저장 정책과 `Ctrl+C` 중지 방법을 표시한다. 상태가 좋아 보인다고 안전을 뜻하지 않는다.
 
@@ -52,25 +69,25 @@ Config는 UTF-8 JSON 단일 local regular file, exact-key typed schema다. 후�
 | 감지 상황 | reader 전이와 bounded 동작 | 완전성 안내 |
 |---|---|---|
 | 같은 identity, size 증가 | offset부터 chunk를 읽되 완전한 줄만 queue에 확정 | poll 지연 가능 |
-| 같은 identity, size < offset (`copytruncate` 등) | partial 폐기·카운트, offset 0으로 재설정 후 새 내용은 한도 내에서 처리 | truncate 전 미읽은 byte 유실 가능 |
-| path가 새 identity로 교체/rename 후 재생성 | 옛 FD의 현재 남은 완전한 줄을 bounded drain; 새 FD를 안전하게 열어 offset 0부터 bounded 처리 | swap 사이 append의 중복·유실 가능 |
-| path 소실/권한 변경/symlink swap | 기존 FD를 무한 추적하지 않고 source를 `DEGRADED`로 pause, 제한된 재검증 후 명시적 복구 | missed interval과 재개 기준 표시 |
-| rotation 시 partial line | old partial은 parser에 전달하지 않고 폐기 수만 기록 | partial 유실 가능 |
+| 같은 identity, size < offset (`copytruncate` 등) | `SOURCE_TRUNCATED`로 `FAILED`, 자동 seek/replay 없음 | truncate 전 미읽은 byte 유실 가능 |
+| path가 새 identity로 교체/rename 후 재생성 | `SOURCE_REPLACED`로 `FAILED`, 새 파일 자동 병합 없음 | swap 사이 append의 중복·유실 가능 |
+| path 소실/권한 변경/symlink swap | fixed code로 `FAILED`, descriptor 닫기 | 재시작 시 gap 가능 |
+| rotation 시 partial line | `FAILED` 상태에서 parser에 전달하지 않음; 명시적 `close()`에서 폐기 | partial 유실 가능 |
 | 동일 timestamp 또는 내용 재등장 | 줄마다 별도 물리 기록으로 처리; raw 동등성만으로 dedup하지 않음 | rotation 중복 가능성 표시 |
 
-새 파일은 길이·줄·backlog budget 초과 시 무조건 `DEGRADED`/복구 필요로 멈춘다. rotate된 파일의 과거 전체를 무한 재처리하지 않는다. 파일 identity 재사용, 크기가 offset과 같아질 때의 copytruncate, 두 poll 사이 여러 rotation은 탐지 불가능할 수 있으므로 **exactly-once / no-loss 보장 없음**. source별 독립 오류는 다른 source를 멈추지 않되 전체 세션은 `DEGRADED`로 보인다.
+Phase 12는 다른 source가 없는 단일 세션이다. 열린 FD와 path의 `(device,inode)` identity를 내부에서만 비교하며 새 파일을 자동 열지 않는다. 파일 identity 재사용, 크기가 offset과 같아질 때의 copytruncate, 두 poll 사이 여러 rotation은 탐지 불가능할 수 있으므로 **exactly-once / no-loss 보장 없음**. 자동 재개와 multi-source 격리는 후속 설계다.
 
-줄 framing은 raw byte chunk를 source-local bounded partial buffer에 넣고 LF(`\n`)가 끝난 줄만 처리한다. CRLF는 마지막 CR 하나만 제거한다. EOF의 미완성 줄은 다음 poll까지 보존한다. UTF-8 multibyte가 chunk 경계에서 갈려도 **완성 byte line을 strict decode**하므로 깨지지 않는다. 최대 chunk·줄·partial byte는 기존 업로드 상한을 그대로 복사하지 않고 benchmark 후 확정한다. invalid UTF-8, NUL, 명백한 binary, 너무 긴 줄은 source를 `DEGRADED`로 멈추고 fixed code/복구 행동만 전한다. parser 실패와 의도적 무시는 별도 count다. 잘못된 줄을 조용히 버리고 `정상 0건`으로 표시하지 않는다. partial은 repr/log/error/SSE에 포함하지 않는다.
+줄 framing은 raw byte chunk를 source-local bounded partial buffer에 넣고 LF(`\n`)가 끝난 줄만 처리한다. CRLF는 마지막 CR 하나만 제거한다. EOF의 미완성 줄은 다음 poll까지 보존한다. UTF-8 multibyte가 chunk 경계에서 갈려도 **완성 byte line을 strict decode**하므로 깨지지 않는다. 현재 byte 상한은 Section 0과 같다. invalid UTF-8, NUL, 명백한 binary, 너무 긴 줄은 `FAILED`와 fixed code로 멈춘다. Phase 12에는 parser가 없으므로 parser 실패/의도적 무시 수치를 아직 만들지 않는다. 잘못된 줄을 조용히 버리고 `정상 0건`으로 표시하지 않는다. partial은 repr/log/error에 포함하지 않으며 SSE 자체가 없다.
 
 ## 4. 3단계 backpressure와 분석 의미
 
-| 구간 | bounded 한도 (Phase 12 측정 후 결정) | 꽉 찼을 때 / 복구 |
+| 구간 | bounded 한도 | 꽉 찼을 때 / 복구 |
 |---|---|---|
-| reader → normalized-event queue | item cap + estimated/serialized byte cap `TO_BE_BENCHMARKED`; nonzero `maxsize`, enqueue timeout | reader는 마지막 완전한 줄을 source-local bounded pending으로 잡고 offset을 **enqueue 확정 뒤** commit. Timeout이면 읽기 pause·`queue pressure`/`DEGRADED`; 재시도는 같은 pending fact. 회전·truncate로 복구 불가면 gap 경고/카운트. 무음 drop 금지 |
+| Phase 12 reader → trusted complete-line queue | 32 item + 16384 UTF-8 payload bytes, 한 chunk의 미처리 잔여도 최대 1024 bytes | 원자적 enqueue 실패 시 `QUEUE_OVERFLOW`·`FAILED`; 받아들인 sequence만 processed count. FD는 닫고 자동 offset 재시도는 **하지 않음**. 이미 읽은 초과 줄은 유실 가능성이 고정 경고로 보임 |
 | analysis → live projection replay | event count + 총 UTF-8 byte cap `TO_BE_BENCHMARKED` | 오래된 공개 frame을 퇴출하되 수집 사실은 버리지 않음. 이어지는 browser는 replay gap + 최신 snapshot. 버퍼 압력이 지속되면 새 publication을 pause하고 `DEGRADED`; 결과를 정상 0건으로 표시하지 않음 |
 | SSE → browser | 연결 수 + 각 연결의 frame/item/byte cap + send timeout `TO_BE_BENCHMARKED` | 느린 연결만 종료; server-side session은 계속. 재접속하면 replay 또는 gap/snapshot. storm은 접속 거부/고정 warning; producer를 무한 대기시키지 않음 |
 
-모든 count는 bool 제외 nonnegative signed 64-bit 범위이며 포화 시 고정 `COUNTER_LIMIT`와 fail-closed 상태로 전환한다. queue memory는 항목 수만 제한해서는 부족하다. byte budget에는 Python 객체 overhead도 benchmark해서 여유를 포함해야 한다. `asyncio.Queue(maxsize=0)`은 무한 queue이므로 금지한다. `put()` timeout, cancellation, `task_done()`/join, FD close와 slot 해제를 각각 테스트한다. overflow count는 실제 버려진 공개 replay frame과 놓친 원본 line을 구분하고 후자는 추정치이면 `unknown`으로 표시한다.
+모든 count는 bool 제외 nonnegative signed 64-bit 범위이며 초과는 고정 `COUNTER_LIMIT`로 거부한다. Phase 12 queue는 동기식이며 비동기 `put()` timeout이나 worker slot은 없다. Queue memory는 항목 수와 payload byte 수로 제한하지만 Python 객체 overhead를 포함하지 않는다. 후속 async 경로에서도 `asyncio.Queue(maxsize=0)`은 금지한다. 공개 replay frame과 놓친 원본 line의 count는 향후 서로 구분하고 후자가 추정치이면 `unknown`으로 표시한다.
 
 기존 detector는 batch 전체의 min/max와 per-IP 단일 slot을 사용한다. 따라서 단순히 60초 rolling deque를 넘기면 batch의 범위 선택이 달라질 수 있다. `detect_web_observations()`의 subject 요청 상한 4096, legacy traversal의 반복 decode, raw account/target이 남는 `NormalizedEvent`도 별도 gate다. 세 대안을 비교한다.
 
@@ -82,7 +99,7 @@ Config는 UTF-8 JSON 단일 local regular file, exact-key typed schema다. 후�
 
 분석 worker는 source별 reader sequence와 canonical UTC event time으로 bounded reorder buffer를 만들고, watermark/allowed lateness는 `TO_BE_BENCHMARKED`로 남긴다. 시스템 clock은 watermark와 혼합하지 않는다. 동일 timestamp는 source role·source-local sequence로 안정 정렬하되 이 순서가 endpoint 선택 의미를 바꾸면 relation을 내지 않는다. 재전송 ID는 `(internal file generation, byte span, role)`을 내부에서만 사용하고 **같은 로그 줄 내용/시각만으로는 중복 제거하지 않는다**. late/out-of-order/far-future/past event가 허용된 버퍼를 넘으면 `DEGRADED`, gap/late count와 재검토 요구를 표시한다. Brute/Spray/Web Scanning 60초와 기존 auth 관계 60초, Path Traversal/개별 웹 관찰의 event-local 필요 history를 일람표로 테스트하되 threshold/window를 바꾸지 않는다. 위험도·case는 원래 pipeline과 같은 bounded fact set에서만 만든다. closest-success 정책, Spray case no-go, 웹 독립 관찰, Linux 분리 유지. raw global correlation은 live case에 적용하지 않는다. 현재 pipeline의 global 범위를 보존할 수 없으면 그 output을 **미지원**으로 표시한다.
 
-한 번 공개한 관찰을 자동으로 다른 사실로 덮어쓰지 않는다. 비교 가능한 fact key와 증가 revision을 가진 `case_revision`으로 변경·철회를 명시하며 client는 revision 단조 증가와 전체 snapshot을 검증한다. session 종료 시 pending complete line과 queue를 deadline 내 drain하고 최종 revision/완전성 상태를 공개한다. Deadline을 넘기면 `STOPPED_WITH_GAP` 성격의 terminal warning을 남기며 성공 완료로 표시하지 않는다. Analysis timeout 뒤 실제 worker가 살아 있으면 slot을 먼저 풀지 않는다. **Phase 12 첫 구현은 아래처럼 tail/status/snapshot까지로 좁힌다**; detector·case publication은 배치 동등성, bounded memory, privacy test가 통과한 다음 하위 단계에서 켠다. 이 단계의 UI를 `탐지 동작 중`으로 표현하지 않는다.
+후속 단계에서는 한 번 공개한 관찰을 자동으로 다른 사실로 덮어쓰지 않고, 비교 가능한 fact key와 증가 revision의 `case_revision`으로 변경·철회를 명시한다. Phase 12는 이 publication을 하지 않는다. 종료 때 미완성 줄은 추측해 전달하지 않고, queue에 승인된 record만 내부 consumer가 drain할 수 있다. Detector·case publication은 배치 동등성, bounded memory, privacy test가 통과한 다음 단계에서만 켠다. 현재 UI에는 live 상태 자체가 없다.
 
 ## 5. process-local session 및 SSE 계약
 
@@ -174,7 +191,7 @@ Canary 계획: 서로 다른 합성 account, HTTP path/query, credential, exe/ar
 | 전달: SSE | 공개 DTO만(P), ID/revision D·replay L 필요; 조용한 UI(A) 적합; C·O 중간 |
 | 전달: WebSocket | 양방향 입력 공격면(P), message order D·replay L 별도; UI(A) 이점 제한, C·O 높음 |
 
-Phase 12 첫 구현의 정확한 최소 범위: application/SSH/access 중 **명시된 1개 source**만 활성화(여러 source는 후속 배치 동등성 검증 뒤), Linux Audit는 보류. Portable polling, FROM_END, 단일 session, regular-file/identity gate, chunk+complete-line reader, bounded parser/queue, count-only privacy-safe status와 SSE `snapshot/status/warning/heartbeat`, 합성 append simulation, browser의 조용한 상태 count와 표시 pause/resume, Ctrl+C shutdown. 이 시점에는 `observation/case_revision`을 생성하지 않으며 화면에 `탐지 동작 중`이라고 쓰지 않는다. 별도 Phase 12 후속 gate에서 bounded micro-batch가 기존 detector·correlation·risk·case 결과와 순열별로 일치함을 보인 다음 관찰 publication을 켠다. 이것은 v0.2.0의 궁극적 사용자 목표를 아직 완성하지 않는 의도적인 안전 단계다. Linux live parsing은 다중 record framing·privacy 한도를 별도 설계한 후에만 추가한다.
+Phase 12의 **실제 구현 범위**는 application/SSH/access 중 명시된 **1개 source**, `FROM_END`, 단일 동기식 session, regular-file/identity gate, 명시적 `poll_once()`, chunk·완전 줄 framing, bounded trusted-record queue와 개인정보 안전 snapshot이다. Parser와 detector는 호출하지 않는다. CLI flag·자동 polling loop·status API·SSE·browser UI·Ctrl+C 연결도 아직 없다. 다음 통합 단계에서 먼저 bounded parser/micro-batch의 배치 동등성과 개인정보 경계를 검증하고, 그 뒤에야 공개 status·SSE와 조용한 UI 갱신을 구현한다. `observation/case_revision`은 별도 gate가 필요하며 화면에 `탐지 동작 중`이라고 표시하지 않는다. Linux live parsing은 다중 record framing·privacy 한도를 별도 설계한 후에만 추가한다.
 
 No-go: unbounded queue/list/history, raw event SSE, browser arbitrary path, recursive watch, silent overflow, rotation 추측 병합, 기존 threshold·risk·case 변경, input-order dependence, canary 노출, shutdown 후 task/thread/FD 잔존, 실제 sleep에 의존하는 test, hosted/public collector, event별 LLM. 기존 Path Traversal 반복 decoding을 live에서 bounded하게 실행할 수 있는지 입증 전에는 web 관찰 publication도 no-go다.
 

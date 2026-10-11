@@ -1,4 +1,4 @@
-"""Phase 11 design-only contract; no live production route is enabled here."""
+"""Phase 11 design and Phase 12 internal-core documentation contract."""
 
 from pathlib import Path
 import re
@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "설계 전용, 미구현",
+        "Phase 12 내부 core 구현",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -28,8 +28,29 @@ def test_scope_and_user_flow_are_explicit():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "[bounded 로컬 로그 모니터링 설계](docs/live_log_monitoring_design.md)" in readme
-    assert "collector·SSE·`--monitor-config`가 **구현되지 않았으며**" in readme
+    assert "[bounded 내부 tail core](docs/live_log_monitoring_design.md)" in readme
+    assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지/사례는 **아직 구현되지 않았습니다**" in readme
+    assert "uv run python -m app.local_web --monitor-config" not in readme
+
+
+def test_implemented_core_limits_and_unimplemented_boundaries_are_explicit():
+    text = _design()
+    for phrase in (
+        "load_live_monitor_config(Path)",
+        "open_live_tail_session(LiveMonitorConfig)",
+        "poll_once()",
+        "take_records(max_items)",
+        "snapshot()",
+        "close()",
+        "1024",
+        "4096",
+        "2048",
+        "32 item",
+        "16384",
+        "Parser와 detector는 호출하지 않는다",
+        "CLI flag·자동 polling loop·status API·SSE·browser UI·Ctrl+C 연결도 아직 없다",
+    ):
+        assert phrase in text
 
 
 def test_config_is_local_exact_and_from_end_only():
@@ -38,12 +59,12 @@ def test_config_is_local_exact_and_from_end_only():
         '"schema_version": "1"',
         '"start_policy": "FROM_END"',
         '"role": "application"',
-        "Unknown key",
+        "unknown key",
         "중복 JSON key",
         "상대 경로",
         "symlink",
         "FIFO/device/socket/directory",
-        "동일 `(device,inode)`",
+        "`(device,inode)`",
         "`FROM_START`와 persistent checkpoint는 보류",
         "재시작 이후 추가분만 관찰",
         "Linux Audit",
@@ -64,14 +85,15 @@ def test_line_identity_rotation_and_overflow_are_bounded_and_visible():
         "TOCTOU",
         "exactly-once / no-loss 보장 없음",
         "nonzero `maxsize`",
-        "item cap + estimated/serialized byte cap",
-        "enqueue 확정 뒤",
+        "32 item + 16384 UTF-8 payload bytes",
+        "원자적 enqueue 실패",
         "replay gap",
-        "무음 drop 금지",
+        "silent overflow",
         "정상 0건",
     ):
         assert phrase in text
-    assert text.count("TO_BE_BENCHMARKED") >= 5
+    # Implemented tail limits have numbers; only future analysis/SSE limits remain open.
+    assert text.count("TO_BE_BENCHMARKED") >= 4
 
 
 def test_analysis_preserves_existing_semantics_and_blocks_unsafe_publication():
@@ -86,8 +108,8 @@ def test_analysis_preserves_existing_semantics_and_blocks_unsafe_publication():
         "raw global correlation은 live case에 적용하지 않는다",
         "batch 동등성",
         "이벤트마다 전체 pipeline 재실행",
-        "Linux Audit는 보류",
-        "관찰 publication은 parity·privacy·성능 gate까지 보류",
+        "Linux Audit는 거부",
+        "별도 gate가 필요",
     ):
         assert phrase in text
 
