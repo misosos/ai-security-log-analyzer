@@ -1,6 +1,6 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
-상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease 구현; launcher·API·SSE·UI·탐지는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
+상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step 구현; launcher·API·SSE·UI·탐지는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
 
 ## 0. Phase 12에서 실제 구현된 내부 core
 
@@ -30,6 +30,14 @@ Phase 12.1의 별도 내부 함수 `parse_live_records(source_role, tuple[LiveTa
 | 모든 count/revision/sequence | signed 64-bit nonnegative | bool-as-int 거부, 넘치면 fixed `COUNTER_LIMIT` |
 
 기존 합성 fixture 측정: application 17줄·973바이트·최장 64바이트, SSH 6줄·459바이트·최장 67바이트, access 4줄·569바이트·최장 155바이트. 기존 업로드 API는 파일당 최대 512줄·한 줄 2048바이트다. 개발 환경 Python 3.12에서 155바이트 synthetic 줄 1600건을 100회 append/poll/drain한 1회 측정은 약 0.286초·tracemalloc peak 7849바이트였고, 2048바이트 경계 줄 800건은 약 1.131초·peak 22519바이트였다. 이는 작은 단일 실행 관찰이며 운영 처리량·peak RSS·p95/p99 지연 보장이 아니다. Queue의 16KiB는 payload 합계이며 Python 객체 overhead는 포함하지 않으므로 향후 운영 한도는 별도 benchmark가 필요하다.
+
+### Phase 12.3 단일 caller worker 계약
+
+`LiveProcessingWorker(session, max_lease_records, max_lease_bytes)`는 정확한 `LiveTailSession` 한 개에 한 번만 연결된다. `step()`은 한 번의 `poll_once()` 후 available prefix를 최대 한 번 lease하고, 기존 adapter로 parse한 전체 batch의 role·outcome 수·sequence 순서·상태별 count를 확인한 뒤에만 전체 ack한다. `REJECTED`도 예상된 완료 결과라 ack하고 집계한다. Queue가 비어 있으면 parser/lease/ack 없이 `NO_DATA`이며 partial byte가 있어도 안전 판정을 뜻하지 않는다. 반환되는 frozen `LiveWorkerStepResult`와 `snapshot()`은 고정 상태·count·오류 code만 보유한다. Parsed event나 lease를 보관·반환하지 않는다. Trusted worker-local event는 step 안에만 있고 detector·case에 전달하지 않는다. 한 step의 work는 lease 상한과 기존 poll 상한으로 제한된다.
+
+Worker 상태는 `READY → RUNNING_STEP → READY`(정상), `RUNNING_STEP → DEGRADED`(parse·batch 불변식 실패 후 release 성공), `RUNNING_STEP → FAILED`(poll·lease·ack·release 실패), `DEGRADED → READY`(명시적 `resume_after_degraded()`), `READY/DEGRADED/FAILED → STOPPING → STOPPED`(close)다. `DEGRADED`에서 자동 step·retry는 없고 resume 전에 active lease가 없고 session이 RUNNING임을 확인한다. FAILED에서는 close만 허용한다. Poll의 truncation·rotation/replacement·source unavailable·symlink/permission·UTF-8/NUL/줄 길이·queue overflow와 기타 tail 오류는 기존 session이 terminal FAILED로 전환하므로 모두 worker 고정 `POLL_FAILURE → FAILED`로 매핑한다. 이 과정에서 원래 tail code는 privacy-safe session snapshot에 남는다. Ack/release 실패는 가능한 경우 session도 terminal FAILED로 전환하고 FD를 닫되 lease를 자동 정산하지 않는다. Ack 실패에는 release를 시도하지 않고, release 실패에도 재시도·queue 추측 복구를 하지 않는다. Close는 ack가 아니며 남은 resident 기록은 session의 abandoned count에만 반영된다. Worker가 session을 닫고 FD를 정리한다.
+
+단일 worker binding은 두 번째 worker 생성만 runtime에서 거부한다. 신뢰된 내부 caller가 session 메서드를 직접 혼용하거나 여러 thread에서 동시에 호출하는 것을 완전하게 차단하는 동시성 장치는 없다. 호출자는 worker에 session을 넘긴 뒤 직접 조작하지 않아야 하며, 향후 async loop는 직렬화해야 한다. Worker는 명시적 step만 제공하고 sleep·timer·background thread/task·자동 polling·CLI·SSE·UI·LLM·detector·상관분석·risk·case·HTML을 실행하지 않는다. Process memory 밖 persistence와 crash recovery는 없고 exactly-once도 보장하지 않는다.
 
 ## 1. 현재 계약, 목표와 관찰 가능한 근거
 

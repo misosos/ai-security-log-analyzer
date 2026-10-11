@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease 구현",
+        "Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step 구현",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -28,7 +28,7 @@ def test_scope_and_user_flow_are_explicit():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "[bounded 내부 tail core·parser adapter·단일 record lease](docs/live_log_monitoring_design.md)" in readme
+    assert "[bounded 내부 tail core·parser adapter·단일 record lease·명시적 worker step](docs/live_log_monitoring_design.md)" in readme
     assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지/사례는 **아직 구현되지 않았습니다**" in readme
     assert "uv run python -m app.local_web --monitor-config" not in readme
 
@@ -85,6 +85,22 @@ def test_lease_ownership_and_no_public_integration_are_documented():
         "Python 메모리의 secure erase까지 보장하지 않는다",
         "single-threaded explicit-step",
         "v0.1 public API·CLI에는 영향이 없다",
+    ):
+        assert phrase in text
+
+
+def test_worker_failure_and_deferred_integration_are_documented():
+    text = _design()
+    for phrase in (
+        "LiveProcessingWorker(session, max_lease_records, max_lease_bytes)",
+        "전체 ack",
+        "REJECTED`도 예상된 완료 결과",
+        "명시적 `resume_after_degraded()`",
+        "POLL_FAILURE → FAILED",
+        "Ack 실패에는 release를 시도하지 않고",
+        "단일 worker binding은 두 번째 worker 생성만 runtime에서 거부",
+        "Process memory 밖 persistence",
+        "CLI·SSE·UI·LLM·detector·상관분석·risk·case·HTML을 실행하지 않는다",
     ):
         assert phrase in text
 

@@ -15,6 +15,13 @@ from app.live_monitoring.parser_adapter import (
     LiveParseOutcome,
     parse_live_records,
 )
+from app.live_monitoring.worker import (
+    LiveProcessingWorker,
+    LiveWorkerError,
+    LiveWorkerSnapshot,
+    LiveWorkerState,
+    LiveWorkerStepResult,
+)
 
 __all__ = (
     "LiveMonitorConfig",
@@ -29,4 +36,9 @@ __all__ = (
     "load_live_monitor_config",
     "open_live_tail_session",
     "parse_live_records",
+    "LiveProcessingWorker",
+    "LiveWorkerError",
+    "LiveWorkerSnapshot",
+    "LiveWorkerState",
+    "LiveWorkerStepResult",
 )

@@ -255,6 +255,7 @@ class LiveTailSession:
         "_owner_token", "_next_lease_id", "_active_lease", "_attempts",
         "_acknowledged", "_released", "_abandoned", "_max_attempt",
         "_last_settled_id", "_last_settlement",
+        "_worker_bound",
     )
 
     def __init__(self, config: LiveMonitorConfig, descriptor: int, metadata: os.stat_result):
@@ -283,6 +284,7 @@ class LiveTailSession:
         self._max_attempt = 0
         self._last_settled_id = 0
         self._last_settlement: str | None = None
+        self._worker_bound = False
         self._transition("RUNNING")
 
     @property
