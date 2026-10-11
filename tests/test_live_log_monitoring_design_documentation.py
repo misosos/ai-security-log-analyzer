@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 12 내부 core 구현",
+        "Phase 12 bounded 내부 core와 Phase 12.1 내부 parser adapter 구현",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -28,7 +28,7 @@ def test_scope_and_user_flow_are_explicit():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "[bounded 내부 tail core](docs/live_log_monitoring_design.md)" in readme
+    assert "[bounded 내부 tail core와 parser adapter](docs/live_log_monitoring_design.md)" in readme
     assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지/사례는 **아직 구현되지 않았습니다**" in readme
     assert "uv run python -m app.local_web --monitor-config" not in readme
 
@@ -49,6 +49,25 @@ def test_implemented_core_limits_and_unimplemented_boundaries_are_explicit():
         "16384",
         "Parser와 detector는 호출하지 않는다",
         "CLI flag·자동 polling loop·status API·SSE·browser UI·Ctrl+C 연결도 아직 없다",
+    ):
+        assert phrase in text
+
+
+def test_live_parser_adapter_is_internal_and_preserves_batch_meaning():
+    text = _design()
+    for phrase in (
+        "parse_live_records(source_role, tuple[LiveTailRecord, ...])",
+        "preprocess_log_line()",
+        "기존 parser registry와 timezone",
+        "normalize_to_utc()",
+        "`IGNORED`",
+        "`PARSED`",
+        "`REJECTED`",
+        "Batch pipeline은 일부 malformed",
+        "엄격히 증가하는 sequence",
+        "Gap은 허용",
+        "재처리·ack/retry는 보장하지 않으며",
+        "운영 실시간 기능으로 사용할 수 없다",
     ):
         assert phrase in text
 

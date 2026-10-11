@@ -4,7 +4,7 @@
 
 AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로그, 웹 접근 로그와 선택적인 Linux Audit 레코드를 정규화한 뒤, 결정적인 규칙으로 탐지·상관관계·IP별 위험도를 계산하는 방어 목적의 배치 분석 프로젝트입니다. 보안 로그 조사 흐름을 학습하거나 소규모 환경에서 초기 검토하는 데 사용할 수 있습니다.
 
-v0.2.0 준비 단계에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core](docs/live_log_monitoring_design.md)가 있습니다. `app.live_monitoring`의 명시적 poll 호출과 개인정보 안전 snapshot은 내부 Python 계약이며, 사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지/사례는 **아직 구현되지 않았습니다**. 현재 공개된 v0.1.0의 업로드와 배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
+v0.2.0 준비 단계에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core와 parser adapter](docs/live_log_monitoring_design.md)가 있습니다. `app.live_monitoring`의 명시적 poll·개인정보 안전 snapshot, 그리고 application·SSH·access의 기존 batch parser/전처리/UTC 정책을 재사용하는 `PARSED`·`IGNORED`·`REJECTED` 결과는 trusted 내부 Python 계약입니다. Parser 결과에는 원문 계정·path/query가 남을 수 있어 공개 응답이 아닙니다. 사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지/사례는 **아직 구현되지 않았습니다**. Queue 소비 후 예상 밖 오류의 retry/ack도 미구현입니다. 현재 공개된 v0.1.0의 업로드와 배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
 
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
 

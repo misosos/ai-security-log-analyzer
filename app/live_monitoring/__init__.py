@@ -8,6 +8,12 @@ from app.live_monitoring.core import (
     LiveTailSnapshot,
     open_live_tail_session,
 )
+from app.live_monitoring.parser_adapter import (
+    LiveParseBatch,
+    LiveParseError,
+    LiveParseOutcome,
+    parse_live_records,
+)
 
 __all__ = (
     "LiveMonitorConfig",
@@ -15,6 +21,10 @@ __all__ = (
     "LiveTailRecord",
     "LiveTailSession",
     "LiveTailSnapshot",
+    "LiveParseBatch",
+    "LiveParseError",
+    "LiveParseOutcome",
     "load_live_monitor_config",
     "open_live_tail_session",
+    "parse_live_records",
 )
