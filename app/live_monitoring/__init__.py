@@ -22,6 +22,13 @@ from app.live_monitoring.worker import (
     LiveWorkerState,
     LiveWorkerStepResult,
 )
+from app.live_monitoring.detection_accumulator import (
+    LiveDetectionAccumulator,
+    LiveDetectionError,
+    LiveDetectionProposal,
+    LiveDetectionSnapshot,
+    LiveDetectionSummary,
+)
 
 __all__ = (
     "LiveMonitorConfig",
@@ -41,4 +48,9 @@ __all__ = (
     "LiveWorkerSnapshot",
     "LiveWorkerState",
     "LiveWorkerStepResult",
+    "LiveDetectionAccumulator",
+    "LiveDetectionError",
+    "LiveDetectionProposal",
+    "LiveDetectionSnapshot",
+    "LiveDetectionSummary",
 )

@@ -1,6 +1,6 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
-상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step 구현; launcher·API·SSE·UI·탐지는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
+상태: **Phase 12 bounded 내부 core, Phase 12.1 parser adapter, Phase 12.2 단일 active lease, Phase 12.3 명시적 worker step, Phase 13 bounded detection accumulator 구현; launcher·API·SSE·UI·탐지 공개는 미구현** (2026-10-11). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서에서 후속 SSE·분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
 
 ## 0. Phase 12에서 실제 구현된 내부 core
 
@@ -38,6 +38,16 @@ Phase 12.1의 별도 내부 함수 `parse_live_records(source_role, tuple[LiveTa
 Worker 상태는 `READY → RUNNING_STEP → READY`(정상), `RUNNING_STEP → DEGRADED`(parse·batch 불변식 실패 후 release 성공), `RUNNING_STEP → FAILED`(poll·lease·ack·release 실패), `DEGRADED → READY`(명시적 `resume_after_degraded()`), `READY/DEGRADED/FAILED → STOPPING → STOPPED`(close)다. `DEGRADED`에서 자동 step·retry는 없고 resume 전에 active lease가 없고 session이 RUNNING임을 확인한다. FAILED에서는 close만 허용한다. Poll의 truncation·rotation/replacement·source unavailable·symlink/permission·UTF-8/NUL/줄 길이·queue overflow와 기타 tail 오류는 기존 session이 terminal FAILED로 전환하므로 모두 worker 고정 `POLL_FAILURE → FAILED`로 매핑한다. 이 과정에서 원래 tail code는 privacy-safe session snapshot에 남는다. Ack/release 실패는 가능한 경우 session도 terminal FAILED로 전환하고 FD를 닫되 lease를 자동 정산하지 않는다. Ack 실패에는 release를 시도하지 않고, release 실패에도 재시도·queue 추측 복구를 하지 않는다. Close는 ack가 아니며 남은 resident 기록은 session의 abandoned count에만 반영된다. Worker가 session을 닫고 FD를 정리한다.
 
 단일 worker binding은 두 번째 worker 생성만 runtime에서 거부한다. 신뢰된 내부 caller가 session 메서드를 직접 혼용하거나 여러 thread에서 동시에 호출하는 것을 완전하게 차단하는 동시성 장치는 없다. 호출자는 worker에 session을 넘긴 뒤 직접 조작하지 않아야 하며, 향후 async loop는 직렬화해야 한다. Worker는 명시적 step만 제공하고 sleep·timer·background thread/task·자동 polling·CLI·SSE·UI·LLM·detector·상관분석·risk·case·HTML을 실행하지 않는다. Process memory 밖 persistence와 crash recovery는 없고 exactly-once도 보장하지 않는다.
+
+### Phase 13 bounded detection accumulator
+
+`LiveDetectionAccumulator(source_role, max_history_records, max_history_bytes)`는 application·SSH·access 중 한 역할의 **내부 단일 caller** 계약이다. `prepare(LiveParseBatch)`는 exact batch·역할·sequence·outcome 수를 재검증하고 PARSED event 전부를 기존 committed tuple 뒤에 같은 입력 순서로 붙인다. IGNORED/REJECTED는 history에 넣지 않고 안전한 count만 후보에 반영한다. Event raw의 strict UTF-8 byte 길이를 합해 두 상한을 동시에 검사한다. 상한은 caller가 명시하며 이 단계에서 운영 기본값을 정하지 않는다. 초과 시 전체 proposal을 고정 `HISTORY_LIMIT_EXCEEDED`로 거부하고 committed state를 바꾸지 않는다. 과거 event의 rolling eviction이나 일부 new event만 commit하는 방식은 없다. **오래된 실패 1건+최근 실패 5건**에서 기존 batch detector가 전체 min/max를 보므로 최근 60초만 남기면 의미가 바뀔 수 있다.
+
+상한을 통과한 candidate history는 기존 `detect_attacks(list(history))` 한 번으로 평가한다. 기존 `summarize_ip_failures`, Brute Force, Password Spray-like, Path Traversal 및 네 웹 관찰 함수의 threshold·ordering·evidence를 복제하거나 수정하지 않는다. Result의 subject set, feature/detection slot, `DetectionResult`/`Evidence` typed 구조를 검증한다. Frozen `LiveDetectionProposal`에는 trusted raw history/result가 `repr`에서 제외되어 있지만 명시적으로 접근하면 account·IP·HTTP path/query·raw가 존재할 수 있다. `safe_summary()`와 `snapshot()`만 고정 type별 detection count·subject count·history count/byte·입력 outcome count를 제공하며 raw subject·evidence·timestamp 목록을 포함하지 않는다. 일반 JSON/FastAPI encoder에 내부 proposal이나 accumulator를 전달하지 않는다.
+
+`prepare()`는 committed history·detection·revision을 변경하지 않고 active proposal 하나만 예약한다. PARSED가 0건인 batch는 detector를 재실행하지 않는 유효 proposal이며 ignored/rejected 누적만 commit한다. `abort()`는 committed snapshot을 그대로 유지하고 같은 batch의 명시적 재시도를 허용한다. `commit()`은 exact active owner/proposal ID·revision·role·history byte/count·detection invariant를 재검증한 뒤 history·raw detection·집계를 함께 적용하고 revision을 정확히 1 올린다. Foreign/stale/forged/double settlement는 고정 오류다. 내부 `NormalizedEvent`와 detector dictionary는 mutable Python 객체이므로 악성 내부 코드의 직접 변조나 Python 메모리 secure erase는 이 계약의 보호 범위가 아니다. 단일 caller가 trusted proposal을 공유·변조하지 않는 것이 전제다. Process crash 후 복구나 exactly-once 보장은 없다.
+
+각 prefix에서 같은 ordered event list를 batch `detect_attacks()`에 전달했을 때 전체 subject·feature·detection/evidence 구조가 동일해야 한다. 기존 batch의 입력 순서 민감성(예: Path Traversal 단일 slot의 마지막 일치)은 live가 임의로 고치지 않고 같은 순서를 보존한다. 이번 단계는 탐지를 publish하지 않는다. 같은 탐지가 각 prefix에서 반복 계산됨 → publication identity와 revision 계약 필요 → **Phase 13.1에서 설계**한다. Accumulator는 `LiveProcessingWorker`, lease ack/release, correlation, risk, case, CLI, API, SSE, UI, LLM, HTML에 연결되지 않는다. 후속 통합의 open decision은 `detection prepare 성공 → queue ack 성공 → detection commit` 사이에서 ack 후 commit 실패가 발생하면 소유권을 어떻게 terminal 처리할지다. 이번 단계에서 worker의 ack 순서를 바꾸거나 이를 해결했다고 주장하지 않는다.
 
 ## 1. 현재 계약, 목표와 관찰 가능한 근거
 
