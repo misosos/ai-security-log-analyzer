@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/assets/style.css">
   <script src="/assets/app.js" defer></script>
   <script src="/assets/linux-audit.js" defer></script>
+  <script src="/assets/live-monitoring.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
@@ -34,6 +35,32 @@
         <p id="error-recovery"></p>
         <p id="error-retry"></p>
       </div>
+    </section>
+
+    <section id="live-monitoring" class="live-monitoring" aria-labelledby="live-heading" hidden>
+      <h2 id="live-heading">실시간 로그 모니터링</h2>
+      <p>설정에서 승인한 로그 파일에 새로 추가되는 줄만 확인합니다. 서버 시작 전에 존재하던 로그 줄은 읽지 않습니다.</p>
+      <p>탐지 관찰은 침해나 공격 성공을 확정하지 않습니다. 프로세스를 종료하면 현재 세션과 재연결 기록은 사라집니다.</p>
+      <h3>현재 상태와 감시 범위</h3>
+      <p id="live-service-state">상태를 확인하고 있습니다.</p>
+      <p id="live-connection-state" role="status" aria-live="polite">연결 확인 중</p>
+      <p id="live-processing-state"></p>
+      <p id="live-source-role"></p>
+      <p id="live-summary"></p>
+      <h3>새 결과 알림</h3>
+      <p>화면 표시를 멈춰도 서버의 로그 수집은 계속될 수 있습니다.</p>
+      <div class="action-row">
+        <button id="live-show-pending" type="button" hidden>새 결과 보기</button>
+        <button id="live-pause" type="button">화면 업데이트 일시 정지</button>
+        <button id="live-reconnect" type="button" hidden>다시 연결</button>
+      </div>
+      <p id="live-pending-status" role="status" aria-live="polite">현재 표시할 관찰 변경 없음</p>
+      <div id="live-error" class="error-summary" role="alert" hidden></div>
+      <h3>최근 변경 목록</h3>
+      <p>‘현재 탐지 결과에는 더 이상 일치하지 않음’은 현재 누적 탐지 결과의 상태만 뜻하며, 과거 관찰의 해소나 시스템의 안전을 의미하지 않습니다.</p>
+      <p id="live-empty">아직 새 로그 줄이 없습니다. 관찰이 없다는 것은 안전하다는 뜻이 아닙니다.</p>
+      <ol id="live-observations" class="live-observations" aria-label="현재 표시 중인 탐지 관찰"></ol>
+      <p id="live-stale" class="local-warning" hidden>이전 목록은 최신 상태가 아닐 수 있습니다. 현재 요약을 기준으로 다시 확인해 주세요.</p>
     </section>
 
     <section id="local-upload" class="local-upload" aria-labelledby="local-heading" hidden>

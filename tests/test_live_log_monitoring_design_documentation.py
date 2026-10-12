@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 14.2 단일 source CLI·bounded 자동 polling 구현",
+        "Phase 14.2 단일 source CLI·bounded 자동 polling",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "Phase 14.2에서 `uv run python -m app.local_web --monitor-config",
@@ -30,7 +30,8 @@ def test_scope_and_user_flow_are_explicit():
     readme = README.read_text(encoding="utf-8")
     assert "[bounded 내부 tail core·parser adapter·단일 record lease·worker·detection accumulator](docs/live_log_monitoring_design.md)" in readme
     assert "uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json" in readme
-    assert "브라우저 live UI는 아직" in readme
+    assert "새 결과 N건 보기" in readme
+    assert "화면 업데이트 일시 정지" in readme
 
 
 def test_implemented_core_limits_and_unimplemented_boundaries_are_explicit():
@@ -134,8 +135,8 @@ def test_phase_14_publication_replay_is_bounded_and_internal():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "Phase 14~14.2에서는 확정된 detection change만 받는" in readme
-    assert "`--monitor-config` 자동 polling이 연결됐습니다" in readme
+    assert "Phase 14~15에서는 확정된 detection change만 받는" in readme
+    assert "`--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다" in readme
 
 
 def test_phase_14_1_http_boundary_is_not_a_user_collector():
@@ -145,7 +146,19 @@ def test_phase_14_1_http_boundary_is_not_a_user_collector():
         "GET /api/v1/live/events", "loopback", "Forwarded", "X-Real-IP",
         "Last-Event-ID", "replay_gap", "최대 동시 SSE 연결은 개발용 2개",
         "notify_change()", "stream_end", "LIVE_STREAM_FAILED",
-        "자동 polling loop", "브라우저 `EventSource`", "여러 worker/process 간 일관성",
+        "자동 polling loop", "native `EventSource`", "여러 worker/process 간 일관성",
+    ):
+        assert phrase in text
+
+
+def test_phase_15_accessible_bounded_browser_contract():
+    text = _design()
+    for phrase in (
+        "Phase 15 현재 브라우저 표시 계약", "native `EventSource`",
+        "404 LIVE_MONITORING_NOT_ENABLED", "32 pending event·16,384 serialized bytes",
+        "새 결과 N건 보기", "화면 일시 정지는 DOM 반영만",
+        "현재 탐지 결과에는 더 이상 일치하지 않음", "Replay gap",
+        "Focus·scroll 자동 이동", "local/session storage", "3회", "실제 Safari",
     ):
         assert phrase in text
 

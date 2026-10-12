@@ -44,7 +44,7 @@ from app.models.linux_audit_investigation import (
     LinuxAuditInvestigationError, LinuxAuditInvestigationResponse,
 )
 from app.web_ui import (
-    serve_demo_index, serve_demo_script, serve_demo_styles,
+    serve_demo_index, serve_demo_script, serve_demo_styles, serve_live_monitoring_script,
     serve_linux_audit_script,
 )
 from app.models.linux_audit_api import (
@@ -445,6 +445,10 @@ def create_app(
         )
         configured_app.add_api_route(
             "/assets/linux-audit.js", serve_linux_audit_script, methods=["GET"],
+            include_in_schema=False,
+        )
+        configured_app.add_api_route(
+            "/assets/live-monitoring.js", serve_live_monitoring_script, methods=["GET"],
             include_in_schema=False,
         )
     configured_app.add_api_route(

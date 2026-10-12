@@ -76,3 +76,7 @@ def serve_demo_script() -> Response:
 
 def serve_linux_audit_script() -> Response:
     return _fixed_asset("linux-audit.js", "text/javascript")
+
+
+def serve_live_monitoring_script() -> Response:
+    return _fixed_asset("live-monitoring.js", "text/javascript")
