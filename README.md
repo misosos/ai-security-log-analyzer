@@ -8,6 +8,8 @@ v0.2.0 준비 단계에는 명시적으로 승인한 단일 파일의 실행 이
 
 Phase 14~15에서는 확정된 detection change만 받는 process-local·memory-only bounded publication/replay buffer, 읽기 전용 loopback status/SSE, `--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다. 기본 `uv run python -m app.local_web`에서는 live endpoint와 화면 영역이 비활성입니다. Detection commit 이후 publication 실패는 되돌리지 않고 terminal 무결성 오류로 기록합니다. SSE는 무유실·재시작 후 복구·여러 process 간 일관성을 보장하지 않습니다.
 
+Phase 16의 [live correlation·risk·조사 사례 설계](docs/live_analysis_correlation_case_design.md)는 현재 단일-source history에서 기존 batch 의미를 보존할 수 있는 최소 범위와 개인정보 경계를 정리합니다. **설계만 완료**한 상태로 live correlation·risk·case는 아직 worker, API, SSE 또는 화면에 연결되지 않았습니다.
+
 로컬 모니터링 사용 순서: (1) 읽을 수 있는 로그 파일 하나를 준비합니다. (2) 개인 경로가 없는 [예시 설정](docs/examples/live-monitor.json)을 복사해 설정 파일과 source의 절대 경로를 자신의 로컬 경로로 바꾸고 설정 권한을 소유자만 읽을 수 있게 합니다. (3) `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`으로 실행합니다. `--port 8123`과 `--no-browser`도 함께 사용할 수 있습니다. (4) 브라우저의 **실시간 로그 모니터링** 영역에서 상태와 로그 역할을 확인합니다. (5) 실행 뒤 새 로그 줄이 추가되어 탐지 관찰이 생기면 **새 결과 N건 보기**를 눌러 목록에 반영합니다. (6) `Ctrl+C`로 종료합니다. 시작 전 파일 내용은 읽지 않습니다. **화면 업데이트 일시 정지**는 서버 수집을 멈추지 않습니다. 기존 3파일 분석과 Linux Audit 단일 업로드는 별도 흐름입니다. 원본 로그·결과를 서버에 영구 저장하지 않지만 process 재시작 중의 추가분 복구는 없습니다. `/api/health`의 200은 웹 서버 준비만 뜻하고 live 상태는 `/api/v1/live/status`에서 확인합니다. 단일 source·memory-only이며 replay eviction/gap, crash gap, 중복 가능성이 있어 exactly-once가 아닙니다. 탐지 관찰은 침해 확정이 아니고 hosted 용도가 아닙니다.
 
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
