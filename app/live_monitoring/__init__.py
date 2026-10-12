@@ -31,6 +31,17 @@ from app.live_monitoring.detection_accumulator import (
     LiveDetectionSnapshot,
     LiveDetectionSummary,
 )
+from app.live_monitoring.analysis_accumulator import (
+    LiveAnalysisAccumulator,
+    LiveAnalysisChange,
+    LiveAnalysisChangeSet,
+    LiveAnalysisError,
+    LiveAnalysisProposal,
+    LiveAnalysisSnapshot,
+    LiveCaseSummary,
+    LiveRelationSummary,
+    LiveRiskSummary,
+)
 from app.live_monitoring.publication import (
     LivePublicationBuffer,
     LivePublicationEvent,
@@ -69,6 +80,15 @@ __all__ = (
     "LiveDetectionProposal",
     "LiveDetectionSnapshot",
     "LiveDetectionSummary",
+    "LiveAnalysisAccumulator",
+    "LiveAnalysisChange",
+    "LiveAnalysisChangeSet",
+    "LiveAnalysisError",
+    "LiveAnalysisProposal",
+    "LiveAnalysisSnapshot",
+    "LiveCaseSummary",
+    "LiveRelationSummary",
+    "LiveRiskSummary",
     "LivePublicationBuffer",
     "LivePublicationEvent",
     "LivePublicationError",

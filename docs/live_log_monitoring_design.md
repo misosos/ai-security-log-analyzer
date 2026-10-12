@@ -2,6 +2,10 @@
 
 상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 읽기 전용 status/SSE, Phase 14.2 단일 source CLI·bounded 자동 polling, Phase 15 사용자 live UI 구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰이며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 현재 개발용 기본값이 아니다.
 
+### Phase 16.1 내부 분석 상태 (현재 사용자 기능 아님)
+
+단일 `application` source의 `LiveAnalysisAccumulator`는 Phase 16의 [상세 계약](live_analysis_correlation_case_design.md)에 따라 detection proposal의 전체 bounded prefix를 참조해 기존 correlation·risk·typed case assembly/projection을 재사용한다. History는 **256 PARSED event / 256 KiB**에서 fail closed하며 축약하지 않는다. Relation/risk/case ID는 session-local ordinal이고 안전 snapshot에는 원래 IP·계정·case projection의 `subject_ip`가 없다. 계정 메타데이터는 호출자가 승인한 고정 snapshot으로 주입되어 prepare 중 파일 I/O가 없다. 이 상태는 worker·ack·publication·SSE·API·UI에 연결되지 않았고 SSH·access·cross-source·Linux Audit은 보류한다. Crash recovery·exactly-once도 없다.
+
 ### Phase 15 현재 브라우저 표시 계약
 
 기본 화면은 `GET /api/v1/live/status`를 최초 한 번 요청한다. 고정 `404 LIVE_MONITORING_NOT_ENABLED`는 비활성으로 취급하고 live 영역을 숨긴다. 활성일 때만 native `EventSource`를 `/api/v1/live/events`에 하나 연결한다. Status·snapshot·observation change는 닫힌 필드·enum·정수·ID·revision 계약을 검증한 후 안전한 텍스트 노드로 표시한다. 실제 event ID는 `LIVE-EVENT-<session 번호>-<event 번호>`이며 query cursor는 만들지 않는다. 브라우저는 서버의 개인정보 안전 projection만 보유하고 raw 로그·evidence를 가져오지 않는다. 기존 샘플·3파일·Linux Audit 화면은 별도이다.

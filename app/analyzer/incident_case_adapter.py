@@ -644,6 +644,16 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
     results = analysis["results"]
     if type(results) is not dict or type(analysis["global_correlation"]) is not dict:
         _fail("unsupported_result_shape")
+    return build_incident_case_subject_inputs(results)
+
+
+def build_incident_case_subject_inputs(results: dict) -> tuple[
+    IncidentCaseSubjectInput,
+    ...,
+]:
+    """Validate trusted per-subject results into the typed assembler contract."""
+    if type(results) is not dict:
+        _fail("unsupported_result_shape")
     prepared = []
     canonical_subjects = set()
     for subject_ip, result in results.items():

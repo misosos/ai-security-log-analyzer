@@ -296,9 +296,13 @@ def correlate_attacks(logs, results):
 
 def assess_risk(analysis):
 
-    results = analysis["results"]
+    return assess_risk_with_metadata(analysis, load_account_metadata())
 
-    account_metadata = load_account_metadata()
+
+def assess_risk_with_metadata(analysis, account_metadata):
+    """The existing risk calculation with an already approved metadata snapshot."""
+
+    results = analysis["results"]
 
     for ip, result in results.items():
 

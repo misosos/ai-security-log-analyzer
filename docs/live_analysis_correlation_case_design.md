@@ -1,6 +1,32 @@
 # v0.2.0 Phase 16 — live correlation·risk·조사 사례 의미 보존 설계
 
-상태: **설계·계약 검증만 완료**. 현재 production은 Phase 12~15의 단일-source tail→parse→detection→publication→SSE/UI만 수행한다. 이 문서는 correlation·risk·case, API/SSE schema 또는 화면에 새 기능을 연결하지 않는다. 판정은 기존 코드의 **각 committed event prefix**와 같은 결과를 만들 수 있는 범위에 한정한다. 관계는 인과관계가 아니고 탐지·높은 위험도·로그인 성공은 침해 확정이 아니다.
+상태: **Phase 16 설계·계약 검증 완료, Phase 16.1 내부 구현 추가**. 사용자에게 제공되는 production flow는 여전히 Phase 12~15의 단일-source tail→parse→detection→publication→SSE/UI뿐이다. 내부 correlation·risk·case state는 아래처럼 구현됐으나 API/SSE schema 또는 화면에 연결되지 않는다. 판정은 기존 코드의 **각 committed event prefix**와 같은 결과를 만들 수 있는 범위에 한정한다. 관계는 인과관계가 아니고 탐지·높은 위험도·로그인 성공은 침해 확정이 아니다.
+
+> Phase 16.1 구현 갱신 (2026-10-13): `app/live_monitoring/analysis_accumulator.py`에 **application-only 내부** proposal/commit/abort 계층을 추가했다. 아래 Phase 16의 설계 판정은 유지한다. 새 계층은 worker·queue ack·publication·API·SSE·UI에 **미연결**이며 현재 사용자 화면에 live correlation·risk·case를 제공하지 않는다.
+
+### Phase 16.1 내부 계약
+
+`LiveAnalysisAccumulator(detection_accumulator, account_metadata)`는 exact `LiveDetectionAccumulator` 한 개와 `tuple[(account, privilege), ...]` 형태의 호출자가 승인한 고정 메타데이터 snapshot을 받는다. 생성 시 detection revision은 0이다. 기존 batch `assess_risk()`는 계정 메타데이터 JSON을 매번 읽으므로 동일한 계산 본문을 `assess_risk_with_metadata()`로 최소 분리했다. Batch는 종전처럼 파일을 읽고, analysis prepare는 파일을 열지 않는다. **같은 메타데이터 snapshot**을 사용해야 batch risk parity가 성립하며 메타데이터 변경 중의 결과 동등성은 주장하지 않는다.
+
+`prepare(exact active LiveDetectionProposal)`는 detection accumulator의 사전 검증을 거친 **동일 candidate 전체 prefix**를 참조한다. Detector를 다시 실행하거나 raw event history를 별도로 영구 보관하지 않는다. 기존 네 per-IP correlation 함수, 기존 risk 계산, adapter의 검증된 typed `IncidentCaseSubjectInput` bridge, `assemble_incident_cases()`, `build_investigation_case_projection()`을 재사용한다. Global correlation은 호출하지 않는다. Application에 실제 `file_access` event가 있을 때 post-auth relation을 독립적으로 보존하지만 case anchor로 쓰지 않는다. Unknown positive relation과 모호한 case anchor는 fail closed한다. 기존 case projection의 원래 `subject_ip`는 trusted parity 객체에만 있고 안전 snapshot에는 없다.
+
+Prepare·abort는 committed state를 바꾸지 않는다. Commit은 detection이 **바로 그 proposal의 사전 준비 state**를 먼저 확정했는지 exact identity와 연속 revision으로 확인한 뒤, 사전 계산된 analysis state 참조만 교체한다. 같은 revision의 다른 detection proposal을 대신 확정해도 거부한다. Detection이 이미 commit된 뒤 analysis를 abort하려는 호출은 조용한 불일치가 되므로 terminal `LIVE_ANALYSIS_COMMIT_FAILED`로 거부하고 close만 허용한다. 이 둘은 아직 worker에 결합되지 않았으며 원자적 transaction·exactly-once가 아니다. 단일 caller가 명시적으로 순서를 지켜야 한다.
+
+History hard cap은 **256 PARSED event / 256 KiB**이다. 초과는 전체 prepare를 고정 `LIVE_ANALYSIS_HISTORY_LIMIT`로 거부하고 committed state를 유지한다. Partial prefix 계산·rolling eviction은 없다. Derived relation/risk/case identity는 각각 최대 4,096개로 제한하고, 변경 집합은 최신 committed 한 개만 보관한다. Empty-change batch도 detection/analysis revision을 함께 1 올리지만 change tuple은 비어 있고 아직 publication은 없다. Close는 후보와 trusted 결과 참조를 버리고 안전 snapshot만 보존한다. Python 메모리 secure erase나 process crash recovery는 주장하지 않는다.
+
+Session-local ordinal `LIVE-REL-*`, `LIVE-RISK-*`, `LIVE-CASE-*`는 IP/account/time/hash에서 파생하지 않는다. 동일 relation endpoint anchor는 ID 유지, nearest endpoint가 바뀌면 옛 관계 `NO_LONGER_MATCHES`와 새 관계 `CREATED`; 동일 subject risk의 level·confidence·기존 factor 의미가 변하면 같은 ID `UPDATED`; case는 rule+anchor relation을 기준으로 review order와 ID를 분리한다. 기존 case assembler의 Spray case no-go와 단일 membership을 유지한다. Frozen proposal/safe snapshot/change set은 승인된 ordinal ID·enum·숫자·집계만 보관하고 raw event·계정·IP·rationale을 보관하지 않는다. Trusted accumulator 내부 state에 직접 접근하면 민감 값이 있으므로 공개 projection이 아니다.
+
+작은 합성 개발 microbenchmark (Python 3.12, 단일 실행, 동일 IP/계정의 1/16/64/128/256 event; prepare만 `tracemalloc` 측정):
+
+| Prefix | prepare ms | 추적 peak allocation B | 전체 raw history B | relation/risk/case | commit µs | abort µs |
+| ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| 1 | 0.773 | 14,805 | 60 | 0/1/0 | 10.04 | 6.21 |
+| 16 | 2.360 | 36,688 | 976 | 2/1/1 | 11.17 | 16.00 |
+| 64 | 10.778 | 96,192 | 3,904 | 2/1/1 | 14.92 | 18.63 |
+| 128 | 16.080 | 112,056 | 7,808 | 1/1/1 | 14.92 | 13.71 |
+| 256 | 55.367 | 62,808 | 15,616 | 1/1/1 | 15.92 | 12.33 |
+
+`tracemalloc`은 전체 process RSS가 아니며 allocator 재사용으로 peak가 단조 증가하지 않는다. 이 값은 운영 SLA·polling 지연 상한이 아니다. 0.5초 runner에 연결하기 전에 다양한 입력의 p95/p99 event-loop stall을 별도 측정해야 한다. SSH·access·cross-source·Linux Audit, worker/ack/publication 연결, crash recovery는 보류한다.
 
 ## 1. 현재 production 계약과 관찰 가능한 입력
 
