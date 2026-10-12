@@ -290,6 +290,11 @@
         if (!["LIVE_STREAM_ENDED", "LIVE_STREAM_FAILED"].includes(value.code)) fail();
         closeSource(); connection("연결 종료");
         if (value.code === "LIVE_STREAM_FAILED") terminal("실시간 연결 오류가 발생했습니다.", "최신 상태로 다시 연결해 주세요.");
+        else {
+          error("실시간 연결이 종료되었습니다.", "서버 상태를 확인하고 필요하면 최신 상태로 다시 연결해 주세요.");
+          dom["live-reconnect"].textContent = "최신 상태로 다시 연결";
+          dom["live-reconnect"].hidden = false;
+        }
         return;
       }
       fail();

@@ -86,7 +86,8 @@ def test_readme_states_evidence_and_privacy_limits():
         "LLM을 호출하지 않으며",
         "전체 HTTP query",
         "고유 프로세스, 공격자 또는 사고 수가 아닙니다",
-        "실시간·streaming 수집",
+        "bounded 로컬 실시간 모니터링",
+        "원격·다중 source 수집",
     ):
         assert value in text
 

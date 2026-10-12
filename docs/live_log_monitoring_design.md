@@ -8,7 +8,7 @@
 
 새 change는 목록에 자동 삽입하지 않는다. 최대 **32 pending event·16,384 serialized bytes**를 탭 메모리에 잠시 쌓고 `새 결과 N건 보기`를 사용자가 선택한 경우에만 관찰 ID별 최신 revision으로 반영한다. 표시 항목은 최대 32개다. 한계를 넘으면 조용히 오래된 항목을 버리지 않고 stale·누락 안내와 최신 status 재조회·수동 재연결을 제공한다. 화면 일시 정지는 DOM 반영만 멈추며 서버의 polling·수집을 멈추지 않는다. Focus·scroll 자동 이동, 자동 Timeline 재정렬, local/session storage, remote asset은 없다. `aria-live`에는 짧은 연결·pending count만 넣고 heartbeat는 알리지 않는다. `NO_LONGER_MATCHES`는 **현재 탐지 결과에는 더 이상 일치하지 않음**으로 표시하며 해결·안전을 뜻하지 않는다.
 
-Replay gap은 EventSource를 닫고 pending과 이전 상세를 폐기한 뒤 안전한 최신 snapshot과 복구 안내를 표시한다. 수동 `최신 상태로 다시 연결`을 누르기 전 자동 복구하지 않는다. 일반 연결 오류는 native EventSource의 재연결을 최대 연속 3회 관찰하고 그 뒤 stream을 닫아 수동 재연결을 요구한다. 이 3회는 개발 UI 정책이지 보안 탐지 임계값이 아니다. 새 연결은 새 snapshot에서 시작하며 이전 세션의 상세 복원을 약속하지 않는다. 브라우저의 JavaScript 동작 테스트는 실제 Safari·키보드·확대·보조기술 수동 검수를 대체하지 않는다. Correlation·risk·case·Linux Audit live·LLM·hosted 제공은 여전히 없다.
+Replay gap은 EventSource를 닫고 pending과 이전 상세를 폐기한 뒤 안전한 최신 snapshot과 복구 안내를 표시한다. 수동 `최신 상태로 다시 연결`을 누르기 전 자동 복구하지 않는다. 일반 연결 오류는 native EventSource의 재연결을 최대 연속 3회 관찰하고 그 뒤 stream을 닫아 수동 재연결을 요구한다. 정상 `stream_end`도 연결 종료와 서버 상태 확인·수동 최신 상태 재연결 안내를 표시하며 자동으로 새 연결을 만들지 않는다. 이 3회는 개발 UI 정책이지 보안 탐지 임계값이 아니다. 새 연결은 새 snapshot에서 시작하며 이전 세션의 상세 복원을 약속하지 않는다. 브라우저의 JavaScript 동작 테스트는 실제 Safari·키보드·확대·보조기술 수동 검수를 대체하지 않는다. Phase 15.1에서 실제 확인한 범위와 미검증 항목은 [로컬 UI 수용성 기록](live_monitoring_acceptance_15_1.md)을 따른다. Correlation·risk·case·Linux Audit live·LLM·hosted 제공은 여전히 없다.
 Native EventSource는 등록하지 않은 **이름 있는** custom event type을 JavaScript에 전달하지 않는다. 따라서 브라우저는 수신 가능한 고정 allowlist 메시지와 기본 `message`를 검증하지만 알 수 없는 이름의 event를 직접 감지·오류 처리한다고 주장하지 않는다. 서버의 닫힌 event type allowlist가 이 경계의 1차 계약이다.
 
 ### Phase 14.2 현재 CLI 및 자동 polling lifecycle

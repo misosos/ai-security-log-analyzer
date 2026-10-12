@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "frontend" / "index.html"
 JS = ROOT / "frontend" / "live-monitoring.js"
 CSS = ROOT / "frontend" / "style.css"
+ACCEPTANCE = ROOT / "docs" / "live_monitoring_acceptance_15_1.md"
 
 
 class _Nodes(HTMLParser):
@@ -42,6 +43,7 @@ def test_live_area_is_separate_accessible_and_hidden_until_status():
     assert by_id["live-pending-status"][1]["aria-live"] == "polite"
     assert by_id["live-observations"][0] == "ol"
     assert "화면 표시를 멈춰도 서버의 로그 수집은 계속될 수 있습니다" in source
+    assert "실행한 터미널에서 Ctrl+C" in source
     assert "침해나 공격 성공을 확정하지 않습니다" in source
     assert 'src="/assets/live-monitoring.js"' in source
 
@@ -91,3 +93,18 @@ def test_live_ui_node_behavior():
         capture_output=True, text=True, check=False,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_phase_15_1_acceptance_record_separates_actual_and_untested_checks():
+    record = ACCEPTANCE.read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "docs/live_monitoring_acceptance_15_1.md" in readme
+    for label in ("PASS", "FAIL", "NOT_TESTED", "BLOCKED", "CONDITIONAL GO"):
+        assert label in record
+    assert "WebDriver" in record
+    assert "keyboard-only" in record
+    assert "200%" in record
+    assert "320 CSS px" in record
+    assert "콘솔" in record
+    assert "수동 재연결" in record
+    assert "WCAG 2.2 AA 준수" in record

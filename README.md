@@ -10,6 +10,8 @@ Phase 14~15에서는 확정된 detection change만 받는 process-local·memory-
 
 로컬 모니터링 사용 순서: (1) 읽을 수 있는 로그 파일 하나를 준비합니다. (2) 개인 경로가 없는 [예시 설정](docs/examples/live-monitor.json)을 복사해 설정 파일과 source의 절대 경로를 자신의 로컬 경로로 바꾸고 설정 권한을 소유자만 읽을 수 있게 합니다. (3) `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`으로 실행합니다. `--port 8123`과 `--no-browser`도 함께 사용할 수 있습니다. (4) 브라우저의 **실시간 로그 모니터링** 영역에서 상태와 로그 역할을 확인합니다. (5) 실행 뒤 새 로그 줄이 추가되어 탐지 관찰이 생기면 **새 결과 N건 보기**를 눌러 목록에 반영합니다. (6) `Ctrl+C`로 종료합니다. 시작 전 파일 내용은 읽지 않습니다. **화면 업데이트 일시 정지**는 서버 수집을 멈추지 않습니다. 기존 3파일 분석과 Linux Audit 단일 업로드는 별도 흐름입니다. 원본 로그·결과를 서버에 영구 저장하지 않지만 process 재시작 중의 추가분 복구는 없습니다. `/api/health`의 200은 웹 서버 준비만 뜻하고 live 상태는 `/api/v1/live/status`에서 확인합니다. 단일 source·memory-only이며 replay eviction/gap, crash gap, 중복 가능성이 있어 exactly-once가 아닙니다. 탐지 관찰은 침해 확정이 아니고 hosted 용도가 아닙니다.
 
+연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
+
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
 
 처리 흐름은 다음과 같습니다.
@@ -228,7 +230,7 @@ tests/                              단위·경계·통합·수용 테스트
 docs/                               설계, 배포 경계와 시연 문서
 ```
 
-`frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드를 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 실시간·streaming 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
+`frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
 ## 오프라인 탐지 평가 기준선
 

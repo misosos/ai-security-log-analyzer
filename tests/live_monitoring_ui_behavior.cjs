@@ -55,6 +55,8 @@ function event(n, changeType = "CREATED", revision = n) { return {
 
 async function app(responseStatus = 200, body = status()) {
   const nodes = Object.fromEntries(ids.map((key) => [key, new Node()]));
+  for (const key of ["live-monitoring", "live-show-pending", "live-reconnect", "live-error", "live-stale"])
+    nodes[key].hidden = true;
   const streams = [];
   const calls = [];
   let resultStatus = responseStatus;
@@ -85,7 +87,7 @@ async function main() {
     recovery_action: "명시적 로컬 설정으로 서버를 실행하십시오.", retryable: false});
   assert.equal(disabled.calls.length, 1);
   assert.equal(disabled.streams.length, 0);
-  assert.equal(disabled.nodes["live-monitoring"].hidden, false); // stub default; no page-wide error
+  assert.equal(disabled.nodes["live-monitoring"].hidden, true);
   const malformed = status(); malformed.max_event_items = true;
   const bad = await app(200, malformed);
   assert.equal(bad.streams.length, 0);
@@ -152,6 +154,14 @@ async function main() {
   assert.match(terminal.nodes["live-service-state"].textContent, /모니터링 중단/);
   assert.equal(terminal.streams[0].closed, true);
 
+  const ended = await app();
+  ended.streams[0].send("stream_end", {code: "LIVE_STREAM_ENDED"});
+  assert.equal(ended.streams[0].closed, true);
+  assert.equal(ended.nodes["live-connection-state"].textContent, "연결 종료");
+  assert.equal(ended.nodes["live-reconnect"].hidden, false, "ended stream offers manual recovery");
+  assert.match(ended.nodes["live-error"].textContent, /서버 상태를 확인/);
+  assert.equal(ended.streams.length, 1, "ended stream does not automatically reconnect");
+
   const malformedEvent = await app();
   const badPayload = event(1);
   badPayload.observations[0].detection_type = "unapproved-canary";
@@ -168,6 +178,39 @@ async function main() {
   await overflow.flush();
   assert.equal(overflow.calls.length, 2, "overflow refreshes safe status");
   assert.equal(overflow.streams.length, 1, "overflow never reconnects automatically");
+
+  const byteOverflow = await app();
+  for (let n = 1; n <= 5 && !byteOverflow.streams[0].closed; n += 1) {
+    const wide = event(n);
+    wide.observations = Array.from({length: 32}, (_, i) => ({
+      observation_id: `LIVE-OBS-${String(i + 1).padStart(6, "0")}`,
+      observation_revision: n, change_type: "CREATED", state: "ACTIVE",
+      detection_type: "brute_force", accumulator_revision: n
+    }));
+    wide.created_count = 32;
+    wide.published_observation_count = 32;
+    byteOverflow.streams[0].send("observation_changes", wide, eventId(n));
+  }
+  assert.equal(byteOverflow.streams[0].closed, true, "byte overflow closes stream");
+  assert.match(byteOverflow.nodes["live-error"].textContent, /반영하지 못한 변경/);
+  assert.equal(byteOverflow.streams.length, 1);
+
+  const degraded = await app();
+  degraded.streams[0].send("service_status", {state: "DEGRADED", code: "LIVE_RUNNER_DEGRADED",
+    recovery_action: "프로세스를 종료하고 다시 시작하십시오."});
+  assert.match(degraded.nodes["live-service-state"].textContent, /확인 필요/);
+  assert.equal(degraded.streams[0].closed, true);
+  assert.equal(degraded.nodes["live-reconnect"].hidden, true);
+
+  const stopping = await app();
+  stopping.streams[0].send("service_status", {state: "STOPPED"});
+  assert.equal(stopping.nodes["live-service-state"].textContent, "모니터링 종료");
+  stopping.streams[0].send("stream_end", {code: "LIVE_STREAM_ENDED"});
+  assert.equal(stopping.nodes["live-reconnect"].hidden, false);
+
+  const statusFailure = await app(500, {unsafe: "private-path-canary"});
+  assert.match(statusFailure.nodes["live-error"].textContent, /실시간 상태를 확인하지 못했습니다/);
+  assert.equal(statusFailure.nodes["live-error"].textContent.includes("private-path-canary"), false);
 
   const noData = await app();
   noData.streams[0].send("snapshot", snapshot(1));
