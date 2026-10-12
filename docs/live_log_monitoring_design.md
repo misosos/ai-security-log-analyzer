@@ -1,10 +1,24 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
-상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 전용 읽기 전용 status/SSE 경계 구현; 자동 polling·CLI 연결·사용자 live UI는 미구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 향후 polling 기반의 추가분 관찰을 뜻하며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 구현 기본값이 아니다.
+상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 읽기 전용 status/SSE, Phase 14.2 단일 source CLI·bounded 자동 polling 구현; 사용자 live UI는 미구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰이며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 현재 개발용 기본값이 아니다.
+
+### Phase 14.2 현재 CLI 및 자동 polling lifecycle
+
+`uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`을 실행할 수 있다. `--no-browser`와 `--port 8123`을 함께 사용할 수 있다. 설정은 기존 `load_live_monitor_config(Path)`의 닫힌 JSON(`schema_version: "1"`, `source.role: application|ssh|access`, `source.path: 절대 경로`, `start_policy: "FROM_END"`)을 그대로 사용한다. 안전한 [예시](examples/live-monitor.json)는 실제 경로가 아니므로 자신의 절대 경로로 바꾸어야 한다. 설정 파일은 실행자 소유이며 group/world 접근을 허용하지 않아야 한다. Source와 모든 parent 경로는 symlink가 아니어야 한다. 브라우저에서 source 경로를 선택하거나 설정하지 않는다. CLI 인자에 넣은 config 경로는 OS process list 또는 shell history에 노출될 수 있으므로 비밀 경로를 사용하지 않는다.
+
+런처는 서버 bind 전에 config를 정확히 한 번 읽고 regular source를 `FROM_END`로 열어 session → accumulator → publication을 소유하는 worker → service → runner → live-enabled 앱을 만든다. 실패하면 열린 FD를 닫고 브라우저·서버를 시작하지 않는다. 기본 명령은 기존과 같고 live endpoint가 비활성이다. Config 모드에서는 기존과 같이 브라우저를 열 수 있지만 첫 화면에 live 결과 UI는 아직 없으며 status/SSE는 기술 검증용이다. `/api/health`는 기존 `{"status":"ok"}`만 반환하며 live 정상 여부의 증명이 아니다.
+
+Runner는 서버 FastAPI lifespan의 asyncio loop에서 task 정확히 하나로 동작한다. 별도 worker thread·per-event task·executor job은 없으며 동기 `worker.step()`을 같은 loop에서 순차 호출한다. 기존 한 poll 최대 4,096 byte, chunk 1,024 byte, queue 32 item/16KiB, lease 최대 16 record/4,096 byte 및 이번 단계의 history 256 event/256KiB 개발 상한을 근거로 소규모 loopback 전용으로 제한한다. 이는 운영 성능 SLA가 아니다. 개발 기본 polling 간격은 0.5초이며 탐지 시간 창·threshold가 아니다. 다른 실행 주기를 CLI에서 받지 않는다. 이 선택은 lock 없이 단일 caller 계약을 유지하지만, step 중 event loop가 잠시 지연될 수 있다. Bench 결과를 운영 환경에 일반화하지 않는다.
+
+각 iteration은 안전한 `NO_DATA` 또는 `PROCESSED` 결과만 받아 다음 poll을 기다린다. Publication `published_total`이 증가했을 때만 payload 없는 `notify_change()`로 SSE를 깨운다. Event·raw detector 결과는 runner에 보관하지 않는다. 알림 실패는 이미 완료된 queue ack·detection·publication을 되돌리지 않고 live runner를 terminal `FAILED`로 봉쇄한다. Worker `DEGRADED`는 자동 resume하지 않고 `LIVE_RUNNER_DEGRADED`, `FAILED`는 `LIVE_RUNNER_FAILED` 고정 code와 재시작 안내를 status/SSE에 표시한 뒤 step을 중지한다. 일반 sample·로컬 업로드·Linux Audit API는 live 오류와 무관하게 계속 제공한다. 새로운 복구 API는 없다.
+
+Lifespan shutdown, cancellation, Ctrl+C에서는 runner stop → 최대 5초 task 대기 → 필요 시 cancel → service/worker/session close 순서로 정리한다. 런처의 서버 join 상한은 기존 7초다. Timeout은 고정 `LIVE_SHUTDOWN_TIMEOUT`으로 나타내되 강제 프로세스 종료 뒤 완전 cleanup이나 Python 메모리 secure erase는 주장하지 않는다. Rotation·truncation·source 소실·queue/history overflow와 partial line의 기존 fail-closed 의미를 유지하고 추측 병합·자동 재시도·중단 중 추가분 복구를 하지 않는다. Process crash/restart 뒤 checkpoint와 replay는 없다. Correlation·risk·case·Linux Audit live·LLM·hosted 노출 및 사용자 live UI도 아직 없다.
+
+개발 microbenchmark (2026-10-12, 이 작업 머신의 Python 3.12·합성 application 줄; 운영 SLA 아님): `tracemalloc`을 켠 빈 worker step 100회 median 1.394ms/p95 1.586ms, 16줄 한 step 26.248ms, peak traced allocation 94,894 byte였다. 16줄을 tail만 polling했을 때 resident queue는 16 item/1,040 byte로 기존 32 item/16KiB 상한 아래였다. 실제 0.5초 cadence에서 append→publication notification의 한 표본은 512.9ms였다. 활성 runner와 병행한 TestClient status 30회 p95 1.951ms/max 3.81ms, service close 한 표본은 0.647ms였다. CPU/RSS·운영 p99·지속 고속 부하는 이 작은 실험으로 보장하지 않는다. History 256 event/256KiB는 batch prefix 재계산의 event-loop stall과 메모리를 bounded하게 두기 위한 **개발용 상한**이며 초과 시 조용한 eviction 없이 runner를 중단한다.
 
 ### Phase 14.1 현재 loopback status/SSE 전송 경계
 
-기본 `create_app()`에서는 `GET /api/v1/live/status`와 `GET /api/v1/live/events`가 고정 `404 LIVE_MONITORING_NOT_ENABLED`다. 앱 생성 시 exact `LiveMonitoringService` 한 개를 명시적으로 주입해야만 읽기 전용 경계가 활성화된다. 요청으로 session·source path를 만들거나 config를 변경하지 않으며 API는 파일을 열거나 worker `step()`을 호출하지 않는다. 기존 `app.local_web` 런처는 service를 주입하지 않으므로 현재 사용자 화면에 live 기능은 없다. 새 POST/PUT/DELETE endpoint, `--monitor-config`, 자동 polling loop, 브라우저 `EventSource`도 없다.
+기본 `create_app()`에서는 `GET /api/v1/live/status`와 `GET /api/v1/live/events`가 고정 `404 LIVE_MONITORING_NOT_ENABLED`다. 앱 생성 시 exact `LiveMonitoringService` 한 개를 명시적으로 주입해야만 읽기 전용 경계가 활성화된다. 요청으로 session·source path를 만들거나 config를 변경하지 않으며 API는 파일을 열거나 worker `step()`을 호출하지 않는다. Phase 14.1 당시 런처는 service를 주입하지 않았지만 Phase 14.2에서는 명시적 `--monitor-config`를 사용한 경우에만 주입한다. 새 POST/PUT/DELETE endpoint와 브라우저 `EventSource`는 없다.
 
 공통 로컬 요청 검사는 실제 peer `127.0.0.1` 또는 `::1`, Host `127.0.0.1` 또는 `[::1]`(선택적 port), 동일 Origin만 허용한다. `Forwarded`·`X-Forwarded-For`·`X-Real-IP` 및 관련 forwarding header, cross-site 요청은 거부한다. CORS·cookie/credential 인증을 추가하지 않는다. Loopback은 다른 로컬 process나 사용자를 인증하지 못하므로 hosted/public 배포 경계가 아니다. 오류는 고정 code·한국어 안내·복구 행동·retryable만 포함한다. Status는 명시적 닫힌 Pydantic 모델의 안전한 상태·역할·session ID·revision·event/eviction/gap count·상한만 반환하며 `no-store`·`nosniff`를 적용한다.
 
@@ -104,7 +118,7 @@ Worker step result는 accumulator revision, created/updated/no-longer-matches �
 
 ## 2. 사용자 흐름과 구성 계약
 
-후속 launcher에 설계할 명령은 `uv run python -m app.local_web --monitor-config /absolute/local/config.json`이다. **현재는 동작하지 않는다.** 기본 실행은 계속 기존 UI만 제공한다. 후속 UI는 config 없는 상태에서 `모니터링 비활성`과 시작 방법을 보이고, 브라우저에서 모니터링 경로를 지정하거나 config를 수정하지 않는다. 전경 서버는 계속 `127.0.0.1` 한 process·한 worker로 두고 `Ctrl+C`로 수집까지 중지하도록 설계한다. 브라우저 file input으로 장기 tail path를 선택하지 않는다. 다운로드·업로드 UI는 기존 기능으로 남는다.
+Phase 14.2에서 `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json` 명령을 구현했다. 기본 실행은 계속 기존 UI만 제공한다. 후속 UI는 config 없는 상태에서 `모니터링 비활성`과 시작 방법을 보이고, 브라우저에서 모니터링 경로를 지정하거나 config를 수정하지 않는다. 전경 서버는 계속 `127.0.0.1` 한 process·한 worker로 두고 `Ctrl+C`로 수집까지 중지한다. 브라우저 file input으로 장기 tail path를 선택하지 않는다. 다운로드·업로드 UI는 기존 기능으로 남는다.
 
 Phase 12 내부 core의 Config는 UTF-8 JSON 단일 local regular file, exact-key typed schema다. 실제 계약은 다음과 같다.
 

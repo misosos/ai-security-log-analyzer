@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "source": {
+    "role": "access",
+    "path": "/absolute/path/to/access.log"
+  },
+  "start_policy": "FROM_END"
+}

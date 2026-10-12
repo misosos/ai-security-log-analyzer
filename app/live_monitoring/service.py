@@ -23,6 +23,11 @@ _NOTICES = (
     "지연 또는 replay gap이 있을 수 있으며 무유실·즉시 처리를 보장하지 않습니다.",
 )
 _CAPABILITIES = ("READ_ONLY_STATUS", "BOUNDED_SSE_REPLAY", "NO_AUTOMATIC_POLLING", "NO_LLM")
+_RUNNER_RECOVERY = {
+    "LIVE_RUNNER_DEGRADED": "프로세스를 종료하고 로그와 설정을 확인한 뒤 다시 시작하십시오.",
+    "LIVE_RUNNER_FAILED": "프로세스를 종료하고 로그와 설정을 확인한 뒤 다시 시작하십시오.",
+    "LIVE_SHUTDOWN_TIMEOUT": "서버 종료 상태를 확인한 뒤 다시 시작하십시오.",
+}
 
 
 class LiveServiceError(ValueError):
@@ -61,6 +66,12 @@ def encode_live_sse_event(event_type: str, payload: object = None) -> bytes:
         data = b'{"status":"CONNECTED"}'
     elif event_type == "stream_end" and payload in (None, "LIVE_STREAM_FAILED"):
         data = _json_bytes({"code": payload or "LIVE_STREAM_ENDED"})
+    elif event_type == "service_status" and type(payload) is tuple and len(payload) == 2 and (
+        type(payload[0]) is str and type(payload[1]) is str
+        and payload[0] in ("DEGRADED", "FAILED") and payload[1] in _RUNNER_RECOVERY
+    ):
+        data = _json_bytes({"state": payload[0], "code": payload[1],
+                            "recovery_action": _RUNNER_RECOVERY[payload[1]]})
     elif event_type == "service_status" and payload in ("READY", "DEGRADED", "FAILED", "STOPPED"):
         data = _json_bytes({"state": payload})
     else:
@@ -75,7 +86,8 @@ class LiveMonitoringService:
     """One worker, one bounded publication source, no automatic processing."""
 
     __slots__ = ("_worker", "_condition", "_generation", "_connections", "_closed",
-                 "_max_connections", "_heartbeat_seconds")
+                 "_max_connections", "_heartbeat_seconds", "_runner_bound", "_runner_state",
+                 "_runner_code")
 
     def __init__(self, worker: LiveProcessingWorker, *, max_connections: int = MAX_LIVE_CONNECTIONS,
                  heartbeat_seconds: float = HEARTBEAT_SECONDS):
@@ -95,6 +107,9 @@ class LiveMonitoringService:
         self._generation = 0
         self._connections = 0
         self._closed = False
+        self._runner_bound = False
+        self._runner_state = "READY"
+        self._runner_code: str | None = None
         self._max_connections = max_connections
         self._heartbeat_seconds = float(heartbeat_seconds)
 
@@ -109,9 +124,10 @@ class LiveMonitoringService:
         worker = self._worker.snapshot()
         publication = worker.publication
         state = ("STOPPED" if self._closed or worker.state is LiveWorkerState.STOPPED else
-                 "STOPPING" if worker.state is LiveWorkerState.STOPPING else
-                 "FAILED" if worker.state is LiveWorkerState.FAILED else
-                 "DEGRADED" if worker.state is LiveWorkerState.DEGRADED else
+                 "STOPPING" if self._runner_state == "STOPPING" or worker.state is LiveWorkerState.STOPPING else
+                 "FAILED" if self._runner_state == "FAILED" or worker.state is LiveWorkerState.FAILED else
+                 "DEGRADED" if self._runner_state == "DEGRADED" or worker.state is LiveWorkerState.DEGRADED else
+                 "RUNNING" if self._runner_state == "RUNNING" else
                  "RUNNING" if worker.state is LiveWorkerState.RUNNING_STEP else "READY")
         return LiveStatusResponse(
             schema_version="1", service_state=state,
@@ -126,8 +142,26 @@ class LiveMonitoringService:
             replay_gap_total=publication.replay_gap_total,
             max_event_items=publication.max_items, max_event_bytes=publication.max_bytes,
             max_connections=self._max_connections, active_connections=self._connections,
-            interpretation_notices=_NOTICES, capabilities=_CAPABILITIES,
+            fixed_error_code=self._runner_code,
+            recovery_action=_RUNNER_RECOVERY.get(self._runner_code),
+            interpretation_notices=_NOTICES,
+            capabilities=(_CAPABILITIES if not self._runner_bound else
+                          ("READ_ONLY_STATUS", "BOUNDED_SSE_REPLAY", "AUTOMATIC_POLLING", "NO_LLM")),
         )
+
+    async def set_runner_state(self, state: str, code: str | None = None) -> None:
+        if (type(state) is not str or state not in ("RUNNING", "DEGRADED", "FAILED")
+            or (state == "RUNNING" and code is not None)
+            or (state in ("DEGRADED", "FAILED") and
+                (type(code) is not str or code not in _RUNNER_RECOVERY))):
+            raise LiveServiceError("INVALID_SERVICE")
+        self._runner_state = state
+        self._runner_code = code
+        try:
+            await self.notify_change()
+        except Exception:
+            # A failed notification never rolls back a terminal status.
+            pass
 
     def open_connection(self, last_event_id: str | None) -> "LiveSSEConnection":
         if self._closed:
@@ -212,6 +246,11 @@ class LiveSSEConnection:
                 for event in replay.events:
                     yield encode_live_sse_event("observation_changes", event)
                     self._cursor = event.event_id
+                if service._runner_state in ("DEGRADED", "FAILED"):
+                    yield encode_live_sse_event("service_status", (
+                        service._runner_state, service._runner_code,
+                    ))
+                    return
                 if service._closed or service.publication_buffer.snapshot().state == "CLOSED":
                     yield encode_live_sse_event("stream_end")
                     return

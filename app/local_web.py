@@ -1,11 +1,13 @@
 """Small, loopback-only foreground launcher for the local investigation UI."""
 
 import argparse
+import asyncio
 import errno
 from http.client import HTTPConnection, HTTPException
 import json
 import socket
 import sys
+from pathlib import Path
 from threading import Thread
 import time
 import webbrowser
@@ -21,6 +23,35 @@ READINESS_ATTEMPTS = 40
 READINESS_INTERVAL = 0.1
 READINESS_DEADLINE = 5.0
 SHUTDOWN_DEADLINE = 7.0
+
+
+def _live_runtime(config_path: Path):
+    """Build exactly one trusted internal chain; close the FD on partial failure."""
+    from app.live_monitoring import (
+        LiveDetectionAccumulator, LiveProcessingWorker,
+        load_live_monitor_config, open_live_tail_session,
+    )
+    from app.live_monitoring.runner import LiveMonitoringRunner
+    from app.live_monitoring.service import LiveMonitoringService
+
+    config = load_live_monitor_config(config_path)
+    session = open_live_tail_session(config)
+    worker = None
+    service = None
+    try:
+        accumulator = LiveDetectionAccumulator(config.role, 256, 256 * 1024)
+        worker = LiveProcessingWorker(session, accumulator, 16, 4096)
+        service = LiveMonitoringService(worker)
+        runner = LiveMonitoringRunner(service)
+        return service, runner
+    except Exception:
+        if service is not None:
+            asyncio.run(service.close())
+        elif worker is not None:
+            worker.close()
+        else:
+            session.close()
+        raise
 
 
 class _ArgumentFailure(ValueError):
@@ -40,6 +71,13 @@ class _SinglePort(argparse.Action):
         setattr(namespace, self.dest, values)
 
 
+class _SingleConfig(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest) is not None:
+            parser.error("duplicate monitor config")
+        setattr(namespace, self.dest, values)
+
+
 def _port_text(value: str) -> int:
     if len(value) > 5 or not value.isascii() or not value.isdecimal():
         raise argparse.ArgumentTypeError("INVALID_PORT")
@@ -54,6 +92,9 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--port", type=_port_text, action=_SinglePort,
                         default=None, metavar="PORT", help="로컬 포트 (1024–65535, 기본 8000)")
     parser.add_argument("--no-browser", action="store_true", help="브라우저를 자동으로 열지 않음")
+    parser.add_argument("--monitor-config", action=_SingleConfig, default=None,
+                        metavar="/absolute/path/to/live-monitor.json",
+                        help="명시적으로 승인한 단일 로그의 로컬 모니터링 설정")
     result = parser.parse_args(argv)
     if result.port is None:
         result.port = DEFAULT_PORT
@@ -98,12 +139,14 @@ def run_local_web(
     port: int = DEFAULT_PORT,
     *,
     open_browser: bool = True,
+    monitor_config: Path | None = None,
     listener_factory=_listener,
     server_factory=_server,
     readiness=_healthy,
     browser_open=webbrowser.open,
     monotonic=time.monotonic,
     sleep=time.sleep,
+    runtime_factory=_live_runtime,
 ) -> int:
     """Run until interrupted; injectable boundaries keep lifecycle tests bounded."""
     if type(port) is not int or not MIN_PORT <= port <= MAX_PORT:
@@ -112,17 +155,42 @@ def run_local_web(
     if type(open_browser) is not bool:
         print("LOCAL_WEB_INVALID_ARGUMENT: 실행 옵션을 확인하십시오.", file=sys.stderr)
         return 2
+    if monitor_config is not None and not isinstance(monitor_config, Path):
+        print("LIVE_CONFIG_INVALID: 설정은 절대 경로의 로컬 파일이어야 합니다. 설정 파일을 확인하십시오.", file=sys.stderr)
+        return 2
     try:
         from app.api import app
     except Exception:
         print("LOCAL_WEB_IMPORT_FAILED: 앱을 시작할 수 없습니다.", file=sys.stderr)
         return 4
+    service = None
+    if monitor_config is not None:
+        from app.api import create_app
+        from app.live_monitoring.config import LiveMonitorError
+        try:
+            service, runner = runtime_factory(monitor_config)
+            app = create_app(live_monitoring_service=service, live_monitoring_runner=runner)
+        except LiveMonitorError as error:
+            code = "LIVE_SOURCE_UNAVAILABLE" if error.code in (
+                "SOURCE_UNAVAILABLE", "NON_REGULAR_SOURCE", "SYMLINK_REJECTED", "PERMISSION_DENIED",
+            ) else "LIVE_CONFIG_INVALID"
+            print(f"{code}: 로컬 로그 모니터링을 준비하지 못했습니다. 설정과 파일 권한을 확인하십시오.", file=sys.stderr)
+            return 4
+        except Exception:
+            if service is not None:
+                asyncio.run(service.close())
+            print("LIVE_RUNTIME_START_FAILED: 로컬 모니터링을 시작하지 못했습니다. 설정을 확인한 뒤 다시 시도하십시오.", file=sys.stderr)
+            return 4
     try:
         listener = listener_factory(port)
     except OSError as error:
         if error.errno == errno.EADDRINUSE:
+            if service is not None:
+                asyncio.run(service.close())
             print("LOCAL_WEB_PORT_IN_USE: 포트가 이미 사용 중입니다. 실행 중인 서버를 종료하거나 다른 허용 포트를 지정하세요.", file=sys.stderr)
             return 3
+        if service is not None:
+            asyncio.run(service.close())
         print("LOCAL_WEB_START_FAILED: 로컬 포트를 사용할 수 없습니다.", file=sys.stderr)
         return 5
     try:
@@ -171,6 +239,8 @@ def run_local_web(
             if ready:
                 url = f"http://{HOST}:{port}/"
                 print("로컬 보안 로그 분석기를 시작했습니다.", flush=True)
+                if service is not None:
+                    print("실시간 로그 모니터링이 활성화되었습니다.", flush=True)
                 print(f"웹 주소: {url}", flush=True)
                 print("이 서버는 현재 컴퓨터에서만 접근할 수 있습니다.", flush=True)
                 print("종료하려면 Ctrl+C를 누르세요.", flush=True)
@@ -201,6 +271,11 @@ def run_local_web(
         return exit_code
     finally:
         listener.close()
+        if service is not None:
+            try:
+                asyncio.run(service.close())
+            except Exception:
+                print("LIVE_SHUTDOWN_TIMEOUT: 모니터링 종료를 확인하십시오.", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -213,7 +288,9 @@ def main(argv: list[str] | None = None) -> int:
             print("LOCAL_WEB_INVALID_ARGUMENT: --port는 한 번만 허용하며 --host는 지원하지 않습니다.", file=sys.stderr)
         return 2
     try:
-        return run_local_web(arguments.port, open_browser=not arguments.no_browser)
+        return run_local_web(arguments.port, open_browser=not arguments.no_browser,
+                             monitor_config=(Path(arguments.monitor_config)
+                                             if arguments.monitor_config is not None else None))
     except KeyboardInterrupt:
         print("로컬 서버 시작을 중단했습니다.", file=sys.stderr)
         return 130

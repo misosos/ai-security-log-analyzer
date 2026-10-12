@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import os
 import tempfile
 import uuid
@@ -36,6 +37,7 @@ from app.live_monitoring.http import (
     create_live_events_endpoint, create_live_status_endpoint, live_error_response,
 )
 from app.live_monitoring.service import LiveMonitoringService
+from app.live_monitoring.runner import LiveMonitoringRunner, LiveRunnerError, LiveRunnerState
 from app.models.live_monitoring import LiveErrorResponse, LiveStatusResponse
 from app.linux_audit_investigation_api import create_linux_audit_local_endpoint
 from app.models.linux_audit_investigation import (
@@ -359,6 +361,7 @@ def create_app(
     linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
     linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None,
     live_monitoring_service: LiveMonitoringService | None = None,
+    live_monitoring_runner: LiveMonitoringRunner | None = None,
 ) -> FastAPI:
     if type(enable_linux_audit_api) is not bool:
         raise TypeError("enable_linux_audit_api must be a bool")
@@ -366,6 +369,12 @@ def create_app(
         and (type(live_monitoring_service) is not LiveMonitoringService
              or enable_linux_audit_api)):
         raise TypeError("invalid local live monitoring service")
+    if live_monitoring_runner is not None and (
+        type(live_monitoring_runner) is not LiveMonitoringRunner
+        or live_monitoring_service is None
+        or live_monitoring_runner._service is not live_monitoring_service
+    ):
+        raise TypeError("invalid local live monitoring runner")
 
     prepared_security = None
     authorization_dependency = None
@@ -401,10 +410,26 @@ def create_app(
     ):
         raise LinuxAuditApiSecurityConfigurationError()
 
+    @asynccontextmanager
+    async def live_lifespan(_app: FastAPI):
+        task = asyncio.create_task(live_monitoring_runner.run(), name="live-monitor-runner")
+        try:
+            await asyncio.sleep(0)
+            if live_monitoring_runner.state is not LiveRunnerState.RUNNING:
+                raise RuntimeError("LIVE_RUNTIME_START_FAILED")
+            yield
+        finally:
+            try:
+                await live_monitoring_runner.shutdown()
+            except LiveRunnerError as error:
+                raise RuntimeError("LIVE_SHUTDOWN_TIMEOUT" if error.code == "SHUTDOWN_TIMEOUT"
+                                   else "LIVE_RUNNER_FAILED") from None
+
     configured_app = FastAPI(
         title="AI Security Log Analyzer",
         description="Security log analysis API",
         version="0.1.0",
+        lifespan=live_lifespan if live_monitoring_runner is not None else None,
     )
     if not enable_linux_audit_api:
         configured_app.add_api_route(

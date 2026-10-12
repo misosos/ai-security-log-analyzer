@@ -28,6 +28,10 @@ class LiveStatusResponse(_ClosedModel):
     max_event_bytes: StrictInt
     max_connections: StrictInt
     active_connections: StrictInt
+    fixed_error_code: Literal[
+        "LIVE_RUNNER_DEGRADED", "LIVE_RUNNER_FAILED", "LIVE_SHUTDOWN_TIMEOUT",
+    ] | None = None
+    recovery_action: str | None = None
     interpretation_notices: tuple[str, ...]
     capabilities: tuple[str, ...]
 
