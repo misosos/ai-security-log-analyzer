@@ -57,14 +57,14 @@ def test_publication_failure_after_commit_is_terminal_without_release(tmp_path, 
     path, session, accumulator, worker = make_worker(tmp_path)
     append(path, *(auth(index) for index in range(5)))
 
-    def fail_publish(_self, _change_set):
+    def fail_publish(_self, _proposal):
         raise RuntimeError("SECRET_EXCEPTION_CANARY")
 
-    monkeypatch.setattr(LivePublicationBuffer, "publish", fail_publish)
+    monkeypatch.setattr(LivePublicationBuffer, "commit_prepared", fail_publish)
     try:
         with pytest.raises(LiveWorkerError) as raised:
             worker.step()
-        assert raised.value.code == "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT"
+        assert raised.value.code == "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT"
         assert "SECRET_EXCEPTION_CANARY" not in str(raised.value)
         assert session.snapshot().acknowledged_record_count == 5
         assert session.snapshot().released_lease_count == 0
@@ -101,17 +101,17 @@ def test_parse_failure_before_commit_never_publishes(tmp_path, monkeypatch):
 def test_publication_commit_then_exception_is_not_retried(tmp_path, monkeypatch):
     path, session, accumulator, worker = make_worker(tmp_path)
     append(path, *(auth(index) for index in range(5)))
-    original = LivePublicationBuffer.publish
+    original = LivePublicationBuffer.commit_prepared
 
-    def applied_then_failed(instance, change_set):
-        original(instance, change_set)
+    def applied_then_failed(instance, proposal):
+        original(instance, proposal)
         raise RuntimeError("PRIVATE_POST_PUBLISH_EXCEPTION")
 
-    monkeypatch.setattr(LivePublicationBuffer, "publish", applied_then_failed)
+    monkeypatch.setattr(LivePublicationBuffer, "commit_prepared", applied_then_failed)
     try:
         with pytest.raises(LiveWorkerError) as raised:
             worker.step()
-        assert raised.value.code == "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT"
+        assert raised.value.code == "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT"
         assert worker.publication_buffer.snapshot().published_total == 1
         assert accumulator.snapshot().revision == 1
         assert session.snapshot().acknowledged_record_count == 5

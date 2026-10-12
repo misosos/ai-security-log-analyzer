@@ -14,7 +14,7 @@ def _design() -> str:
 def test_current_scope_and_batch_prefix_contract_are_explicit():
     text = _design()
     for required in (
-        "Phase 16 설계·계약 검증 완료", "단일-source", "application", "SSH", "access",
+        "Phase 16 설계·계약 검증", "단일", "application", "SSH", "access",
         "CONDITIONAL GO", "NO-GO", "cross-source", "batch", "prefix",
         "PARSED", "IGNORED", "REJECTED", "out-of-order", "microseconds",
         "closest", "동률", "60초", "120초", "file_access",
@@ -58,7 +58,7 @@ def test_research_and_roadmap_do_not_claim_implementation():
         assert required in text
     assert "docs/live_analysis_correlation_case_design.md" in readme
     assert "설계만 완료" in readme
-    assert "아직 worker, API, SSE 또는 화면에 연결되지 않았습니다" in readme
+    assert "worker의 queue ack 이후 detection commit과 함께 확정" in readme
 
 
 def test_phase_16_1_implementation_scope_is_not_presented_as_live_ui():
@@ -73,6 +73,35 @@ def test_phase_16_1_implementation_scope_is_not_presented_as_live_ui():
         "운영 SLA", "SSH·access·cross-source",
     ):
         assert required in text
-    assert "현재 실시간 화면에는 나타나지 않습니다" in readme
+    assert "현재 실시간 화면·API·SSE에는 나타나지 않습니다" in readme
     assert "현재 사용자 기능 아님" in monitoring
     assert "case projection의 `subject_ip`" in monitoring
+
+
+def test_phase_16_2_worker_boundary_keeps_analysis_private():
+    text = _design()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for required in (
+        "Phase 16.2 worker 결합", "queue ack", "detection commit", "analysis commit",
+        "기존 detection publication", "DEGRADED", "terminal `FAILED`",
+        "256 PARSED event/256KiB", "observation_changes", "Phase 16.3",
+        "SSH·access·cross-source", "exactly-once",
+    ):
+        assert required in text
+    assert "실시간 화면·API·SSE에는 나타나지 않습니다" in readme
+
+
+def test_phase_16_2_verification_records_each_fault_and_measurement_limit():
+    record = (ROOT / "docs" / "live_analysis_16_2_verification.md").read_text(encoding="utf-8")
+    monitoring = (ROOT / "docs" / "live_log_monitoring_design.md").read_text(encoding="utf-8")
+    assert "live_analysis_16_2_verification.md" in _design()
+    assert "live_analysis_16_2_verification.md" in monitoring
+    for number in range(1, 26):
+        assert f"| {number:02d} |" in record
+    for required in (
+        "tracemalloc", "55.367ms", "1.310ms", "256 PARSED event",
+        "warm-up 2", "측정 12회", "status HTTP 40회", "p95",
+        "같은 process", "0.5초", "운영 SLA", "실제 config", "observation_changes",
+        "TestClient lifespan", "Phase 16.3", "GO", "exactly-once",
+    ):
+        assert required in record

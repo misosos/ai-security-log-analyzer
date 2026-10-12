@@ -197,7 +197,7 @@ def test_terminal_settlement_failures_do_not_resume_or_expose_detail(tmp_path, m
         monkeypatch.setattr(LiveTailSession, "acknowledge_lease", lambda *_: (_ for _ in ()).throw(
             RuntimeError("PRIVATE_ACK_EXCEPTION")))
     else:
-        monkeypatch.setattr(LivePublicationBuffer, "publish", lambda *_: (_ for _ in ()).throw(
+        monkeypatch.setattr(LivePublicationBuffer, "commit_prepared", lambda *_: (_ for _ in ()).throw(
             RuntimeError("PRIVATE_PUBLICATION_EXCEPTION")))
 
     async def scenario():

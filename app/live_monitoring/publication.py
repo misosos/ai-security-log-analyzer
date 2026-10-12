@@ -1,15 +1,17 @@
 """Bounded, privacy-safe, process-local live detection publication and replay.
 
 No SSE framing, HTTP API, filesystem, detector, or trusted raw event enters this
-module. A buffer accepts only its bound accumulator's committed change set.
+module. Direct publish accepts only a committed change set; worker prepare
+accepts only the bound accumulator's active, prevalidated proposal.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import json
 
 from app.live_monitoring.core import MAX_COUNTER
 from app.live_monitoring.detection_accumulator import (
     LiveDetectionAccumulator, LiveDetectionChange, LiveDetectionChangeSet,
+    LiveDetectionProposal,
 )
 
 
@@ -33,6 +35,8 @@ _MESSAGES = {
     "COUNTER_LIMIT": "publication 집계 상한에 도달했습니다.",
     "BUFFER_CLOSED": "닫힌 publication buffer는 게시할 수 없습니다.",
     "SERIALIZATION_FAILURE": "publication 직렬화 계약을 확인하십시오.",
+    "ACTIVE_PROPOSAL": "진행 중인 publication proposal을 정산하십시오.",
+    "PROPOSAL_MISMATCH": "publication proposal 소유권을 확인하십시오.",
 }
 _GAP_MESSAGES = {
     "BUFFER_CLOSED": "버퍼가 닫혔습니다. 새 session의 최신 snapshot부터 다시 시작하십시오.",
@@ -210,6 +214,16 @@ class _BufferState:
     closed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class LivePublicationProposal:
+    """Pre-serialized, safe candidate; only its bound buffer may settle it."""
+
+    revision: int
+    event: LivePublicationEvent | None
+    _candidate: _BufferState = field(repr=False)
+    _change_set: LiveDetectionChangeSet = field(repr=False)
+
+
 def _json_bytes(value: dict) -> bytes:
     try:
         return json.dumps(value, ensure_ascii=False, sort_keys=True,
@@ -269,7 +283,7 @@ class LivePublicationBuffer:
     """Single-caller bounded replay of committed, safe detection changes."""
 
     __slots__ = ("_accumulator", "_session_number", "_session_id", "_max_items",
-                 "_max_bytes", "_state", "_last_committed_revision")
+                 "_max_bytes", "_state", "_last_committed_revision", "_active")
 
     def __init__(self, accumulator: LiveDetectionAccumulator,
                  max_items: int = MAX_PUBLICATION_ITEMS,
@@ -293,6 +307,7 @@ class LivePublicationBuffer:
         self._max_bytes = max_bytes
         self._state = _BufferState((), 0, 0, 0, 0, 0, 0, 0, 0, (0, 0, 0), False)
         self._last_committed_revision = 0
+        self._active: LivePublicationProposal | None = None
 
     def __repr__(self) -> str:
         state = "CLOSED" if self._state.closed else "OPEN"
@@ -318,6 +333,8 @@ class LivePublicationBuffer:
         )
 
     def publish(self, change_set: LiveDetectionChangeSet) -> LivePublicationEvent | None:
+        if self._active is not None:
+            raise LivePublicationError("ACTIVE_PROPOSAL")
         state = self._state
         if state.closed:
             raise LivePublicationError("BUFFER_CLOSED")
@@ -331,6 +348,14 @@ class LivePublicationBuffer:
             raise LivePublicationError("DUPLICATE_REVISION")
         if revision != state.latest_revision + 1:
             raise LivePublicationError("REVISION_GAP")
+        candidate, event = self._build_candidate(change_set, self._accumulator.snapshot().active_observation_count)
+        self._state = candidate
+        return event
+
+    def _build_candidate(self, change_set: LiveDetectionChangeSet,
+                         active: int) -> tuple[_BufferState, LivePublicationEvent | None]:
+        state = self._state
+        revision = change_set.accumulator_revision
         changes = change_set.changes
         if type(changes) is not tuple or any(type(change) is not LiveDetectionChange for change in changes):
             raise LivePublicationError("INVALID_CHANGE_SET")
@@ -346,11 +371,9 @@ class LivePublicationBuffer:
         created = sum(c.change_type == "CREATED" for c in changes)
         updated = sum(c.change_type == "UPDATED" for c in changes)
         no_longer = sum(c.change_type == "NO_LONGER_MATCHES" for c in changes)
-        active = self._accumulator.snapshot().active_observation_count
         if not changes:
-            self._state = replace(state, latest_revision=revision,
-                                  active_observation_count=active, last_counts=(0, 0, 0))
-            return None
+            return (replace(state, latest_revision=revision,
+                            active_observation_count=active, last_counts=(0, 0, 0)), None)
         next_number = _add(state.last_event_number, 1)
         event = LivePublicationEvent(
             _event_id(self._session_number, next_number), self._session_id,
@@ -368,13 +391,52 @@ class LivePublicationBuffer:
             byte_count -= len(stored[0].encoded)
             stored = stored[1:]
             evicted += 1
-        self._state = _BufferState(
+        candidate = _BufferState(
             stored, byte_count, revision, next_number,
             _add(state.published_total, 1), _add(state.evicted_total, evicted),
             state.rejected_oversized_total, state.replay_gap_total,
             active, (created, updated, no_longer), False,
         )
-        return event
+        return candidate, event
+
+    def prepare(self, detection_proposal: LiveDetectionProposal) -> LivePublicationProposal:
+        """Complete JSON serialization and eviction calculation before queue ack."""
+        state = self._state
+        if state.closed:
+            raise LivePublicationError("BUFFER_CLOSED")
+        if self._active is not None:
+            raise LivePublicationError("ACTIVE_PROPOSAL")
+        if (type(detection_proposal) is not LiveDetectionProposal
+            or self._accumulator._active is not detection_proposal
+            or detection_proposal._change_set is None):
+            raise LivePublicationError("UNCOMMITTED_CHANGE_SET")
+        revision = detection_proposal.proposal_revision
+        if revision <= state.latest_revision:
+            raise LivePublicationError("DUPLICATE_REVISION")
+        if revision != state.latest_revision + 1:
+            raise LivePublicationError("REVISION_GAP")
+        candidate, event = self._build_candidate(
+            detection_proposal._change_set, detection_proposal._active_observation_count)
+        proposal = LivePublicationProposal(revision, event, candidate, detection_proposal._change_set)
+        self._active = proposal
+        return proposal
+
+    def abort(self, proposal: LivePublicationProposal) -> None:
+        if type(proposal) is not LivePublicationProposal or proposal is not self._active:
+            raise LivePublicationError("PROPOSAL_MISMATCH")
+        self._active = None
+
+    def commit_prepared(self, proposal: LivePublicationProposal) -> LivePublicationEvent | None:
+        if (type(proposal) is not LivePublicationProposal or proposal is not self._active
+            or self._state.closed):
+            raise LivePublicationError("PROPOSAL_MISMATCH")
+        if (proposal.revision != self._state.latest_revision + 1
+            or self._accumulator._revision != proposal.revision
+            or self._accumulator.latest_change_set() is not proposal._change_set):
+            raise LivePublicationError("PROPOSAL_MISMATCH")
+        self._state = proposal._candidate
+        self._active = None
+        return proposal.event
 
     def _gap(self, code: str) -> LiveReplayResult:
         self._state = replace(self._state, replay_gap_total=_add(self._state.replay_gap_total, 1))
@@ -406,6 +468,7 @@ class LivePublicationBuffer:
     def close(self) -> None:
         if self._state.closed:
             return
+        self._active = None
         self._last_committed_revision = self._accumulator.snapshot().revision
         self._state = replace(self._state, records=(), byte_count=0, closed=True)
         self._accumulator = None

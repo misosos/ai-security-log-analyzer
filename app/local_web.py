@@ -33,6 +33,8 @@ def _live_runtime(config_path: Path):
     )
     from app.live_monitoring.runner import LiveMonitoringRunner
     from app.live_monitoring.service import LiveMonitoringService
+    from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator
+    from app.analyzer.risk import load_account_metadata
 
     config = load_live_monitor_config(config_path)
     session = open_live_tail_session(config)
@@ -40,7 +42,14 @@ def _live_runtime(config_path: Path):
     service = None
     try:
         accumulator = LiveDetectionAccumulator(config.role, 256, 256 * 1024)
-        worker = LiveProcessingWorker(session, accumulator, 16, 4096)
+        analysis = None
+        if config.role == "application":
+            metadata = load_account_metadata()
+            analysis = LiveAnalysisAccumulator(
+                accumulator, tuple((account, value["privilege"])
+                                   for account, value in metadata.items()))
+        worker = LiveProcessingWorker(session, accumulator, 16, 4096,
+                                      analysis_accumulator=analysis)
         service = LiveMonitoringService(worker)
         runner = LiveMonitoringRunner(service)
         return service, runner

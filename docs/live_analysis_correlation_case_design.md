@@ -1,8 +1,18 @@
 # v0.2.0 Phase 16 — live correlation·risk·조사 사례 의미 보존 설계
 
-상태: **Phase 16 설계·계약 검증 완료, Phase 16.1 내부 구현 추가**. 사용자에게 제공되는 production flow는 여전히 Phase 12~15의 단일-source tail→parse→detection→publication→SSE/UI뿐이다. 내부 correlation·risk·case state는 아래처럼 구현됐으나 API/SSE schema 또는 화면에 연결되지 않는다. 판정은 기존 코드의 **각 committed event prefix**와 같은 결과를 만들 수 있는 범위에 한정한다. 관계는 인과관계가 아니고 탐지·높은 위험도·로그인 성공은 침해 확정이 아니다.
+상태: **Phase 16 설계·계약 검증, Phase 16.1 내부 구현, Phase 16.2 application worker 결합**. 사용자에게 보이는 결과는 계속 기존 detection `observation_changes`뿐이다. 내부 correlation·risk·case state는 worker에서 확정되지만 API/SSE schema 또는 화면에 연결되지 않는다. 판정은 기존 코드의 **각 committed event prefix**와 같은 결과를 만들 수 있는 범위에 한정한다. 관계는 인과관계가 아니고 탐지·높은 위험도·로그인 성공은 침해 확정이 아니다.
 
-> Phase 16.1 구현 갱신 (2026-10-13): `app/live_monitoring/analysis_accumulator.py`에 **application-only 내부** proposal/commit/abort 계층을 추가했다. 아래 Phase 16의 설계 판정은 유지한다. 새 계층은 worker·queue ack·publication·API·SSE·UI에 **미연결**이며 현재 사용자 화면에 live correlation·risk·case를 제공하지 않는다.
+> Phase 16.1 구현 갱신 (2026-10-13): `app/live_monitoring/analysis_accumulator.py`에 **application-only 내부** proposal/commit/abort 계층을 추가했다. Phase 16.2에서 worker와 queue ack에 결합했지만 analysis publication·API·SSE·UI는 **미연결**이며 현재 사용자 화면에 live correlation·risk·case를 제공하지 않는다.
+
+### Phase 16.2 worker 결합
+
+25개 독립 fault point, 동일 조건의 256-prefix worker/prepare/commit 측정, runner 중 status p95 및 단일 runtime lifecycle 검증 결과는 [Phase 16.2 보강 검증 기록](live_analysis_16_2_verification.md)에 있다. 이는 개발 환경 측정이며 운영 SLA가 아니다.
+
+Application은 `parse → detection prepare/prevalidate → analysis prepare → 기존 detection publication 사전 직렬화·상한 검증 → cross-proposal revision·candidate identity 검증 → queue ack → detection commit → analysis commit → 기존 detection publication state swap → worker 안전 요약` 순서다. SSH/access는 기존 detection-only 경로다. 런처는 application 계정 메타데이터를 startup에서 한 번 읽어 trusted snapshot으로 주입한다. 직접 만든 내부 application worker가 analysis accumulator를 생략하면 생성자에서 기존 metadata를 한 번 읽어 동일한 trusted context를 만든다. 이 로딩은 step 중에는 실행되지 않고 실패하면 고정 오류로 시작을 거부한다. 한 worker가 각 accumulator 하나만 소유하며 단일 caller가 순차 호출한다.
+
+Ack 전 실패는 analysis·detection·publication 후보를 abort하고 lease를 release한 뒤 `DEGRADED`로 멈춘다. Ack 실패는 release를 추측하지 않고 `FAILED`다. Ack 뒤 detection commit 실패, detection 이후 analysis commit 실패, analysis 이후 publication 실패, 게시 이후 worker 집계 실패는 각각 terminal `FAILED`이며 rollback·자동 재게시·재시도하지 않는다. Detection과 analysis revision이 일시적으로 어긋날 수 있어 안전 snapshot에 lag count를 기록한다. Queue/accumulator/publication은 하나의 원자적 transaction이 아니고 exactly-once가 아니다. 256 PARSED event/256KiB history 상한은 계속 fail closed이다. Analysis change set은 최신 한 개만 내부에 보관하며 현재 SSE/UI의 exact `observation_changes` 계약을 유지한다. 내부 relation·risk·case state는 계산되지만 **Phase 16.3 전까지 웹 화면에는 표시되지 않는다**. SSH·access·cross-source, process crash recovery도 보류한다.
+
+개발용 단일 실행 microbenchmark (2026-10-13, 이 머신의 Python 3.12, 합성 application 인증 실패 prefix; 단위 ms, `detection prepare / analysis prepare / 사전 검증 뒤 세 commit`): 1 event `0.284 / 0.781 / 0.084`, 16 event `0.416 / 0.940 / 0.101`, 64 event `0.578 / 0.874 / 0.147`, 128 event `0.899 / 0.934 / 0.221`, 256 event `1.690 / 1.310 / 0.392`. Parser와 file poll, JSON 직렬화, OS scheduling, p95/p99, event-loop 경쟁을 포함하지 않으므로 0.5초 polling budget이나 운영 SLA의 증명이 아니다. 256 prefix 표본의 계산만으로 연결 no-go가 발생하지 않았지만 실제 지연은 별도 측정이 필요하다.
 
 ### Phase 16.1 내부 계약
 
@@ -10,7 +20,7 @@
 
 `prepare(exact active LiveDetectionProposal)`는 detection accumulator의 사전 검증을 거친 **동일 candidate 전체 prefix**를 참조한다. Detector를 다시 실행하거나 raw event history를 별도로 영구 보관하지 않는다. 기존 네 per-IP correlation 함수, 기존 risk 계산, adapter의 검증된 typed `IncidentCaseSubjectInput` bridge, `assemble_incident_cases()`, `build_investigation_case_projection()`을 재사용한다. Global correlation은 호출하지 않는다. Application에 실제 `file_access` event가 있을 때 post-auth relation을 독립적으로 보존하지만 case anchor로 쓰지 않는다. Unknown positive relation과 모호한 case anchor는 fail closed한다. 기존 case projection의 원래 `subject_ip`는 trusted parity 객체에만 있고 안전 snapshot에는 없다.
 
-Prepare·abort는 committed state를 바꾸지 않는다. Commit은 detection이 **바로 그 proposal의 사전 준비 state**를 먼저 확정했는지 exact identity와 연속 revision으로 확인한 뒤, 사전 계산된 analysis state 참조만 교체한다. 같은 revision의 다른 detection proposal을 대신 확정해도 거부한다. Detection이 이미 commit된 뒤 analysis를 abort하려는 호출은 조용한 불일치가 되므로 terminal `LIVE_ANALYSIS_COMMIT_FAILED`로 거부하고 close만 허용한다. 이 둘은 아직 worker에 결합되지 않았으며 원자적 transaction·exactly-once가 아니다. 단일 caller가 명시적으로 순서를 지켜야 한다.
+Prepare·abort는 committed state를 바꾸지 않는다. Commit은 detection이 **바로 그 proposal의 사전 준비 state**를 먼저 확정했는지 exact identity와 연속 revision으로 확인한 뒤, 사전 계산된 analysis state 참조만 교체한다. 같은 revision의 다른 detection proposal을 대신 확정해도 거부한다. Detection이 이미 commit된 뒤 analysis를 abort하려는 호출은 조용한 불일치가 되므로 terminal `LIVE_ANALYSIS_COMMIT_FAILED`로 거부하고 close만 허용한다. 이 둘은 Phase 16.2에서 worker에 결합됐지만 원자적 transaction·exactly-once가 아니다. 단일 caller가 순서를 지켜야 한다.
 
 History hard cap은 **256 PARSED event / 256 KiB**이다. 초과는 전체 prepare를 고정 `LIVE_ANALYSIS_HISTORY_LIMIT`로 거부하고 committed state를 유지한다. Partial prefix 계산·rolling eviction은 없다. Derived relation/risk/case identity는 각각 최대 4,096개로 제한하고, 변경 집합은 최신 committed 한 개만 보관한다. Empty-change batch도 detection/analysis revision을 함께 1 올리지만 change tuple은 비어 있고 아직 publication은 없다. Close는 후보와 trusted 결과 참조를 버리고 안전 snapshot만 보존한다. Python 메모리 secure erase나 process crash recovery는 주장하지 않는다.
 
@@ -115,7 +125,7 @@ Observation 소속은 매 prefix의 기존 assembler 결과가 출처다. 하나
 
 모든 tuple은 item·serialized byte 상한이 필요하다. Public에는 raw event/detection/relation/risk/case, 원래 rationale/evidence, subject key/hash, account/IP, HTTP path/query, argv, 파일 경로, timestamp 원문, global/Linux detail이 없다. 기존의 account alias unavailable 상태와 개인정보 보호 문구는 유지하되 alias를 임의 생성하지 않는다. Trusted join·case assembly·기존 projection에는 원래 account/IP가 필요하고 내부 dataclass `repr`에도 IP가 있을 수 있으므로 **절대 public object나 log로 취급하지 않는다**.
 
-향후 전송은 한 successful worker step의 detection+analysis 안전 change를 **하나의** `analysis_changes` event로 묶는 안을 권장한다. Detection revision과 analysis revision은 같은 committed step 번호를 공유하고 event ID는 별도의 게시 순서다. Empty change revision은 snapshot watermark만 전진하며 event 없음. 이 안은 기존 `observation_changes` schema를 바꾸므로 Phase 16.2에서 기존 SSE/API/JS consumer를 한 번에 이행하고 replay item/16KiB byte 예산, 느린 client gap을 재검증해야 한다. Phase 16.1에서는 publication/SSE 변경 없음. UI는 연결 상태 → 탐지 관찰 → 지원되는 관계 → 현재 위험도 변화 → 조사 사례 변화 → 독립 관찰 → 한계/복구 순서를 권장하되 **현재 Phase 15 화면에 섞지 않는다**. 문구는 “지원되는 관계”, “포함된 최고 위험도”, “현재 결과에서 더 이상 일치하지 않음”을 사용하고 인과·공격 성공·안전·해결을 말하지 않는다.
+향후 전송은 한 successful worker step의 detection+analysis 안전 change를 **하나의** `analysis_changes` event로 묶는 안을 검토한다. Detection revision과 analysis revision은 같은 committed step 번호를 공유하고 event ID는 별도의 게시 순서다. Empty change revision은 snapshot watermark만 전진하며 event 없음. 이 안은 Phase 16.3에서 기존 SSE/API/JS consumer를 함께 이행하고 replay item/16KiB byte 예산, 느린 client gap을 재검증한 뒤에만 허용한다. Phase 16.2는 기존 `observation_changes` exact schema를 유지하며 analysis publication/SSE 변경이 없다. UI는 연결 상태 → 탐지 관찰 → 지원되는 관계 → 현재 위험도 변화 → 조사 사례 변화 → 독립 관찰 → 한계/복구 순서를 권장하되 **현재 Phase 15 화면에 섞지 않는다**. 문구는 “지원되는 관계”, “포함된 최고 위험도”, “현재 결과에서 더 이상 일치하지 않음”을 사용하고 인과·공격 성공·안전·해결을 말하지 않는다.
 
 ## 7. Phase 16.1 최소 구현 제안과 no-go
 

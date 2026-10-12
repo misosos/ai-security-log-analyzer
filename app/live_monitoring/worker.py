@@ -1,8 +1,9 @@
 """Single-caller, explicit-step orchestration of trusted live records."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 
+from app.analyzer.risk import load_account_metadata
 from app.live_monitoring.core import (
     MAX_COUNTER, MAX_QUEUE_BYTES, MAX_QUEUE_ITEMS, LiveTailSession,
     LiveTailSnapshot,
@@ -13,6 +14,7 @@ from app.live_monitoring.parser_adapter import (
 from app.live_monitoring.detection_accumulator import (
     LiveDetectionAccumulator, LiveDetectionSnapshot,
 )
+from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator, LiveAnalysisSnapshot
 from app.live_monitoring.publication import LivePublicationBuffer, LivePublicationSnapshot
 
 
@@ -55,6 +57,16 @@ _MESSAGES = {
     "DETECTION_COMMIT_FAILED_AFTER_ACK": "일부 로그가 탐지 상태에 반영되지 않았을 수 있습니다. 종료하십시오.",
     "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT": "확정된 탐지 변경이 게시되지 않았을 수 있습니다. 종료하십시오.",
     "WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION": "게시 후 worker 집계를 확인할 수 없습니다. 종료하십시오.",
+    "INVALID_ANALYSIS_ACCUMULATOR": "analysis accumulator 바인딩을 확인하십시오.",
+    "ANALYSIS_ACCUMULATOR_ALREADY_OWNED": "analysis accumulator는 이미 worker에 연결됐습니다.",
+    "ANALYSIS_PREPARE_FAILED": "내부 분석 준비가 중단됐습니다. 명시적으로 복구하거나 종료하십시오.",
+    "ANALYSIS_PROPOSAL_MISMATCH": "분석 proposal 일관성을 확인할 수 없습니다.",
+    "ANALYSIS_ABORT_FAILED": "분석 proposal 정산을 확인할 수 없습니다. 종료하십시오.",
+    "PUBLICATION_PREPARE_FAILED": "게시 준비가 중단됐습니다. 명시적으로 복구하거나 종료하십시오.",
+    "PUBLICATION_ABORT_FAILED": "게시 proposal 정산을 확인할 수 없습니다. 종료하십시오.",
+    "ANALYSIS_COMMIT_FAILED_AFTER_DETECTION_COMMIT": "탐지 확정 후 내부 분석 확정에 실패했습니다. 종료하십시오.",
+    "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT": "내부 분석 확정 후 탐지 변경 게시에 실패했습니다. 종료하십시오.",
+    "WORKER_SUMMARY_FAILED_AFTER_PUBLICATION": "게시 후 worker 요약을 확인할 수 없습니다. 종료하십시오.",
 }
 
 
@@ -98,13 +110,22 @@ class LiveWorkerStepResult:
     no_longer_matches_count: int = 0
     active_observation_count: int = 0
     publication_event_id: str | None = None
+    analysis_revision: int | None = None
+    relation_change_count: int = 0
+    risk_change_count: int = 0
+    case_change_count: int = 0
+    active_relation_count: int = 0
+    active_risk_count: int = 0
+    active_case_count: int = 0
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.polled_record_count, self.leased_record_count,
                   self.parsed_count, self.ignored_count, self.rejected_count,
                   self.acknowledged_count, self.released_count, self.queue_remaining_count,
                   self.accumulator_revision, self.created_count, self.updated_count,
-                  self.no_longer_matches_count, self.active_observation_count)
+                  self.no_longer_matches_count, self.active_observation_count,
+                  self.relation_change_count, self.risk_change_count, self.case_change_count,
+                  self.active_relation_count, self.active_risk_count, self.active_case_count)
         if (self.schema_version != "1" or self.status not in ("NO_DATA", "PROCESSED")
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.step_revision < 1 or self.queue_remaining_count > MAX_QUEUE_ITEMS
@@ -117,6 +138,9 @@ class LiveWorkerStepResult:
                 type(self.publication_event_id) is not str
                 or not self.publication_event_id.startswith("LIVE-EVENT-"))
             or self.fixed_error_code is not None):
+            raise LiveWorkerError("INVARIANT_FAILURE")
+        if self.analysis_revision is not None and (type(self.analysis_revision) is not int
+                                                   or not 0 <= self.analysis_revision <= MAX_COUNTER):
             raise LiveWorkerError("INVARIANT_FAILURE")
 
 
@@ -143,6 +167,9 @@ class LiveWorkerSnapshot:
     publication: LivePublicationSnapshot | None = None
     potentially_unpublished_revision_count: int = 0
     post_publication_aggregate_failure_count: int = 0
+    analysis: LiveAnalysisSnapshot | None = None
+    last_committed_revision: int = 0
+    potentially_uncommitted_analysis_revision_count: int = 0
 
     def __post_init__(self) -> None:
         counts = (self.step_revision, self.successful_step_count, self.no_data_step_count,
@@ -151,11 +178,14 @@ class LiveWorkerSnapshot:
                   self.total_released, self.post_ack_commit_failure_count,
                   self.uncommitted_after_ack_record_count,
                   self.potentially_unpublished_revision_count,
-                  self.post_publication_aggregate_failure_count)
+                  self.post_publication_aggregate_failure_count,
+                  self.last_committed_revision,
+                  self.potentially_uncommitted_analysis_revision_count)
         if (self.schema_version != "1" or type(self.state) is not LiveWorkerState
             or type(self.session) is not LiveTailSnapshot
             or type(self.accumulator) is not LiveDetectionSnapshot
             or type(self.publication) is not LivePublicationSnapshot
+            or (self.analysis is not None and type(self.analysis) is not LiveAnalysisSnapshot)
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or self.total_parsed + self.total_ignored + self.total_rejected != self.total_acknowledged
             or type(self.fixed_warning_codes) is not tuple
@@ -186,10 +216,12 @@ class LiveProcessingWorker:
                  "_ignored", "_rejected", "_acknowledged", "_released", "_error_code",
                  "_accumulator", "_post_ack_failures", "_uncommitted_after_ack",
                  "_last_acc_snapshot", "_publication", "_potentially_unpublished",
-                 "_post_publication_aggregate_failures", "_service_bound")
+                 "_post_publication_aggregate_failures", "_service_bound", "_analysis",
+                 "_last_analysis_snapshot", "_last_committed_revision", "_analysis_lag")
 
     def __init__(self, session: LiveTailSession, detection_accumulator: LiveDetectionAccumulator,
-                 max_lease_records: int, max_lease_bytes: int):
+                 max_lease_records: int, max_lease_bytes: int,
+                 *, analysis_accumulator: LiveAnalysisAccumulator | None = None):
         if type(session) is not LiveTailSession:
             raise LiveWorkerError("INVALID_SESSION")
         if type(detection_accumulator) is not LiveDetectionAccumulator:
@@ -210,11 +242,37 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_ACCUMULATOR")
         if detection_accumulator._worker_bound:
             raise LiveWorkerError("ACCUMULATOR_ALREADY_OWNED")
+        if session.source_role == "application":
+            if analysis_accumulator is None:
+                try:
+                    metadata = load_account_metadata()
+                    analysis_accumulator = LiveAnalysisAccumulator(
+                        detection_accumulator,
+                        tuple((account, value["privilege"])
+                              for account, value in metadata.items()))
+                except Exception:
+                    raise LiveWorkerError("INVALID_ANALYSIS_ACCUMULATOR") from None
+            if (type(analysis_accumulator) is not LiveAnalysisAccumulator
+                or analysis_accumulator._detection is not detection_accumulator
+                or analysis_accumulator.snapshot().revision != 0
+                or analysis_accumulator.snapshot().active_proposal
+                or analysis_accumulator.snapshot().closed):
+                raise LiveWorkerError("INVALID_ANALYSIS_ACCUMULATOR")
+            if analysis_accumulator._worker_bound:
+                raise LiveWorkerError("ANALYSIS_ACCUMULATOR_ALREADY_OWNED")
+        elif analysis_accumulator is not None:
+            raise LiveWorkerError("INVALID_ANALYSIS_ACCUMULATOR")
         publication = LivePublicationBuffer(detection_accumulator)
         session._worker_bound = True
         detection_accumulator._worker_bound = True
+        if analysis_accumulator is not None:
+            analysis_accumulator._worker_bound = True
         self._session = session
         self._accumulator = detection_accumulator
+        self._analysis = analysis_accumulator
+        self._last_analysis_snapshot = analysis_accumulator.snapshot() if analysis_accumulator else None
+        self._last_committed_revision = 0
+        self._analysis_lag = 0
         self._publication = publication
         self._service_bound = False
         self._max_records = max_lease_records
@@ -275,7 +333,9 @@ class LiveProcessingWorker:
             self._no_data = _add(self._no_data, 1)
             result = LiveWorkerStepResult("1", revision, "NO_DATA", polled, 0, 0, 0, 0, 0, 0, 0, (), None,
                                           self._last_acc_snapshot.revision, 0, 0, 0,
-                                          self._last_acc_snapshot.active_observation_count)
+                                          self._last_acc_snapshot.active_observation_count,
+                                          analysis_revision=(self._last_analysis_snapshot.revision
+                                                             if self._last_analysis_snapshot else None))
             self._transition(LiveWorkerState.READY)
             return result
         try:
@@ -285,11 +345,32 @@ class LiveProcessingWorker:
         if lease is None:
             self._fail("LEASE_FAILURE")
         proposal = None
+        analysis_proposal = None
+        publication_proposal = None
+        failure_code = "PROCESSING_FAILURE"
         try:
             batch = parse_live_records(self._session.source_role, lease.records)
             _validate_batch(batch, self._session.source_role, lease.records)
             proposal = self._accumulator.prepare(batch)
             self._accumulator.prevalidate(proposal)
+            if self._analysis is not None:
+                failure_code = "ANALYSIS_PREPARE_FAILED"
+                analysis_proposal = self._analysis.prepare(proposal)
+            failure_code = "PUBLICATION_PREPARE_FAILED"
+            publication_proposal = self._publication.prepare(proposal)
+            failure_code = "ANALYSIS_PROPOSAL_MISMATCH"
+            if (publication_proposal.revision != proposal.proposal_revision
+                or publication_proposal._change_set is not proposal._change_set
+                or (self._analysis is not None and (
+                    analysis_proposal is None
+                    or self._session.source_role != "application"
+                    or analysis_proposal.source_role != self._session.source_role
+                    or analysis_proposal.base_revision != self._accumulator._revision
+                    or analysis_proposal.base_revision != self._analysis.snapshot().revision
+                    or analysis_proposal.target_revision != proposal.proposal_revision
+                    or self._analysis._candidate_detection_state is not proposal._committed_state
+                    or self._analysis._active is not analysis_proposal))):
+                raise LiveWorkerError("ANALYSIS_PROPOSAL_MISMATCH")
             next_successful = _add(self._successful, 1)
             next_parsed = _add(self._parsed, batch.parsed_count)
             next_ignored = _add(self._ignored, batch.ignored_count)
@@ -301,6 +382,10 @@ class LiveProcessingWorker:
             if not resident.active_lease or resident.leased_item_count != lease.item_count:
                 raise LiveWorkerError("INVARIANT_FAILURE")
             changes = proposal._change_set.changes
+            analysis_changes = (self._analysis._candidate.change_set.changes
+                                if self._analysis is not None else ())
+            analysis_snapshot = (self._analysis._candidate.snapshot
+                                 if self._analysis is not None else None)
             result = LiveWorkerStepResult("1", revision, "PROCESSED", polled, lease.item_count,
                                           batch.parsed_count, batch.ignored_count, batch.rejected_count,
                                           lease.item_count, 0, resident.available_item_count, (), None,
@@ -308,22 +393,50 @@ class LiveProcessingWorker:
                                           sum(change.change_type == "CREATED" for change in changes),
                                           sum(change.change_type == "UPDATED" for change in changes),
                                           sum(change.change_type == "NO_LONGER_MATCHES" for change in changes),
-                                          proposal._active_observation_count)
+                                          proposal._active_observation_count,
+                                          publication_event_id=(publication_proposal.event.event_id
+                                                                if publication_proposal.event else None),
+                                          analysis_revision=(analysis_proposal.target_revision
+                                                             if analysis_proposal else None),
+                                          relation_change_count=sum(c.category.startswith("RELATION_") for c in analysis_changes),
+                                          risk_change_count=sum(c.category.startswith("RISK_") for c in analysis_changes),
+                                          case_change_count=sum(c.category.startswith("CASE_") for c in analysis_changes),
+                                          active_relation_count=analysis_snapshot.relation_count if analysis_snapshot else 0,
+                                          active_risk_count=analysis_snapshot.risk_count if analysis_snapshot else 0,
+                                          active_case_count=analysis_snapshot.case_count if analysis_snapshot else 0)
         except Exception:
+            # A trusted fault hook may raise after prepare installed its active
+            # proposal but before returning it to this frame.
+            if analysis_proposal is None and self._analysis is not None:
+                analysis_proposal = self._analysis._active
+            if proposal is None:
+                proposal = self._accumulator._active
+            if publication_proposal is None:
+                publication_proposal = self._publication._active
+            if analysis_proposal is not None:
+                try:
+                    self._analysis.abort(analysis_proposal)
+                except Exception:
+                    self._fail("ANALYSIS_ABORT_FAILED")
             if proposal is not None:
                 try:
                     self._accumulator.abort(proposal)
                 except Exception:
                     self._fail("PROPOSAL_ABORT_FAILURE")
+            if publication_proposal is not None:
+                try:
+                    self._publication.abort(publication_proposal)
+                except Exception:
+                    self._fail("PUBLICATION_ABORT_FAILED")
             try:
                 self._session.release_lease(lease)
             except Exception:
                 self._fail_ownership()
             self._released = next_released if "next_released" in locals() else _add(self._released, lease.item_count)
             self._degraded = next_degraded if "next_degraded" in locals() else _add(self._degraded, 1)
-            self._error_code = "PROCESSING_FAILURE"
+            self._error_code = failure_code
             self._transition(LiveWorkerState.DEGRADED)
-            raise LiveWorkerError("PROCESSING_FAILURE") from None
+            raise LiveWorkerError(failure_code) from None
         last_confirmed_detection = self._accumulator._committed
         try:
             self._session.acknowledge_lease(lease)
@@ -338,13 +451,24 @@ class LiveProcessingWorker:
                 settled = False
             if settled:
                 self._accumulator._fail_after_ack(last_confirmed_detection)
+                if self._analysis is not None:
+                    self._analysis.close()
                 self._post_ack_failures = _add(self._post_ack_failures, 1)
                 self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
                 self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+            if analysis_proposal is not None:
+                try:
+                    self._analysis.abort(analysis_proposal)
+                except Exception:
+                    self._fail("ANALYSIS_ABORT_FAILED")
             try:
                 self._accumulator.abort(proposal)
             except Exception:
                 self._fail("PROPOSAL_ABORT_FAILURE")
+            try:
+                self._publication.abort(publication_proposal)
+            except Exception:
+                self._fail("PUBLICATION_ABORT_FAILED")
             try:
                 if self._session.snapshot().state == "RUNNING":
                     self._session._fail("INTERNAL_OWNERSHIP_FAILURE")
@@ -355,26 +479,38 @@ class LiveProcessingWorker:
             self._accumulator.commit_prepared(proposal)
         except Exception:
             self._accumulator._fail_after_ack(last_confirmed_detection)
+            if self._analysis is not None:
+                self._analysis.close()
             self._post_ack_failures = _add(self._post_ack_failures, 1)
             self._uncommitted_after_ack = _add(self._uncommitted_after_ack, lease.item_count)
             self._fail("DETECTION_COMMIT_FAILED_AFTER_ACK")
+        if self._analysis is not None:
+            try:
+                self._analysis.commit(analysis_proposal)
+            except Exception:
+                self._last_acc_snapshot = proposal._committed_snapshot
+                self._analysis_lag = _add(self._analysis_lag, 1)
+                self._potentially_unpublished = _add(self._potentially_unpublished, 1)
+                self._fail("ANALYSIS_COMMIT_FAILED_AFTER_DETECTION_COMMIT")
         try:
-            change_set = self._accumulator.latest_change_set()
-            event = self._publication.publish(change_set)
+            self._publication.commit_prepared(publication_proposal)
         except Exception:
-            # Detection and queue are committed. Never release, roll back or retry.
+            # Queue, detection and optional analysis are committed. Never retry.
             self._last_acc_snapshot = proposal._committed_snapshot
+            if self._analysis is not None:
+                self._last_analysis_snapshot = analysis_snapshot
             self._potentially_unpublished = _add(self._potentially_unpublished, 1)
-            self._fail("PUBLICATION_FAILED_AFTER_DETECTION_COMMIT")
+            self._fail("PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT" if self._analysis is not None
+                       else "PUBLICATION_FAILED_AFTER_DETECTION_COMMIT")
         previous_counters = (self._successful, self._parsed, self._ignored,
                              self._rejected, self._acknowledged)
         try:
-            if event is not None:
-                result = replace(result, publication_event_id=event.event_id)
             self._successful, self._parsed, self._ignored = next_successful, next_parsed, next_ignored
             self._rejected, self._acknowledged = next_rejected, next_acknowledged
             self._transition(LiveWorkerState.READY)
             self._last_acc_snapshot = proposal._committed_snapshot
+            self._last_analysis_snapshot = analysis_snapshot
+            self._last_committed_revision = proposal.proposal_revision
         except Exception:
             (self._successful, self._parsed, self._ignored,
              self._rejected, self._acknowledged) = previous_counters
@@ -389,8 +525,11 @@ class LiveProcessingWorker:
         try:
             session = self._session.snapshot()
             accumulator = self._accumulator.snapshot()
+            analysis = self._analysis.snapshot() if self._analysis is not None else None
             if (session.state != "RUNNING" or session.active_lease or session.leased_item_count
-                or accumulator.active_proposal or accumulator.closed):
+                or accumulator.active_proposal or accumulator.closed
+                or (analysis is not None and (analysis.active_proposal or analysis.closed))
+                or self._publication._active is not None):
                 self._fail("OWNERSHIP_FAILURE")
         except LiveWorkerError:
             raise
@@ -408,7 +547,9 @@ class LiveProcessingWorker:
                                   self._last_acc_snapshot, self._post_ack_failures,
                                   self._uncommitted_after_ack, self._publication.snapshot(),
                                   self._potentially_unpublished,
-                                  self._post_publication_aggregate_failures)
+                                  self._post_publication_aggregate_failures,
+                                  self._last_analysis_snapshot, self._last_committed_revision,
+                                  self._analysis_lag)
 
     def close(self) -> None:
         if self._state == LiveWorkerState.STOPPED:
@@ -417,10 +558,14 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_STATE")
         self._transition(LiveWorkerState.STOPPING)
         try:
+            if self._analysis is not None:
+                self._analysis.close()
             self._session.close()
             self._publication.close()
             self._accumulator.close()
             self._last_acc_snapshot = self._accumulator.snapshot()
+            if self._analysis is not None:
+                self._last_analysis_snapshot = self._analysis.snapshot()
         except Exception:
             self._error_code = "CLOSE_FAILURE"
             self._transition(LiveWorkerState.FAILED)

@@ -358,7 +358,8 @@ class LiveAnalysisAccumulator:
     """
 
     __slots__ = ("_detection", "_metadata", "_state", "_active", "_candidate",
-                 "_candidate_detection_state", "_owner_token", "_next_proposal_id", "_closed")
+                 "_candidate_detection_state", "_owner_token", "_next_proposal_id", "_closed",
+                 "_worker_bound")
 
     def __init__(self, detection_accumulator: LiveDetectionAccumulator,
                  account_metadata: tuple[tuple[str, str], ...]):
@@ -388,6 +389,7 @@ class LiveAnalysisAccumulator:
         self._candidate: _State | None = None
         self._candidate_detection_state: object | None = None
         self._closed = False
+        self._worker_bound = False
 
     def __repr__(self) -> str:
         return f"LiveAnalysisAccumulator(revision={self._state.revision}, closed={self._closed})"

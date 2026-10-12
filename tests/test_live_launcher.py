@@ -119,3 +119,111 @@ def test_lifespan_starts_one_runner_and_preserves_other_api(tmp_path, monkeypatc
 def test_no_config_keeps_live_disabled_and_existing_cli_contract():
     assert local_web._arguments([]).monitor_config is None
     assert create_app().openapi()["paths"].get("/api/v1/live/status") is None
+
+
+def test_application_runtime_commits_analysis_without_exposing_it(tmp_path):
+    config, source = _config(tmp_path)
+    service, runner = local_web._live_runtime(config)
+    worker = service._worker
+    assert worker._analysis is not None
+    try:
+        with source.open("ab") as output:
+            for number in range(5):
+                output.write((f"2026-01-02 03:04:{number:02d} INFO login_failed "
+                              "user=synthetic ip=192.0.2.1\n").encode())
+        first = worker.step()
+        assert first.analysis_revision == first.accumulator_revision == 1
+        with source.open("ab") as output:
+            output.write(b"2026-01-02 03:04:06 INFO user_login user=synthetic ip=192.0.2.1\n")
+        second = worker.step()
+        assert second.analysis_revision == second.accumulator_revision == 2
+        assert worker._analysis.snapshot().relation_count >= 1
+        assert worker._analysis.snapshot().case_count >= 1
+        with TestClient(create_app(live_monitoring_service=service),
+                        base_url="http://127.0.0.1:8000",
+                        client=("127.0.0.1", 50000)) as client:
+            status = client.get("/api/v1/live/status")
+            assert status.status_code == 200
+            assert "analysis" not in status.text
+            assert "192.0.2.1" not in status.text
+            for event in worker.publication_buffer.replay_after(None).events:
+                assert event.event_type == "DETECTION_CHANGE"
+    finally:
+        asyncio.run(service.close())
+    assert worker._session._fd == -1
+
+
+def test_same_running_runtime_commits_cases_but_transmits_only_observations(tmp_path, monkeypatch):
+    config, source = _config(tmp_path)
+    service, runner = local_web._live_runtime(config)
+    worker = service._worker
+    gate = asyncio.Event()
+
+    async def wait_next(_self):
+        gate_task = asyncio.create_task(gate.wait())
+        stop_task = asyncio.create_task(_self._stop.wait())
+        _, pending = await asyncio.wait((gate_task, stop_task), return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        gate.clear()
+
+    monkeypatch.setattr(LiveMonitoringRunner, "_wait_next", wait_next)
+    app = create_app(live_monitoring_service=service, live_monitoring_runner=runner)
+    with TestClient(app, base_url="http://127.0.0.1:8000",
+                    client=("127.0.0.1", 50000)) as client:
+        assert worker._session.snapshot().acknowledged_record_count == 0
+        assert client.get("/api/v1/live/status").status_code == 200
+        with source.open("ab") as output:
+            for number in range(5):
+                output.write((f"2026-01-02 03:04:{number:02d} INFO login_failed "
+                              "user=ACCOUNT_PRIVATE_CANARY ip=192.0.2.123\n").encode())
+        client.portal.call(gate.set)
+        for _ in range(200):
+            if worker._analysis.snapshot().revision >= 1:
+                break
+            client.portal.call(asyncio.sleep, 0)
+        assert worker._analysis.snapshot().revision == 1
+        with source.open("ab") as output:
+            output.write(b"2026-01-02 03:04:06 INFO user_login "
+                         b"user=ACCOUNT_PRIVATE_CANARY ip=192.0.2.123\n")
+        client.portal.call(gate.set)
+        for _ in range(200):
+            if worker._analysis.snapshot().revision >= 2:
+                break
+            client.portal.call(asyncio.sleep, 0)
+        analysis = worker._analysis.snapshot()
+        detection = worker._accumulator.snapshot()
+        assert analysis.revision == detection.revision == 2
+        assert {item.relation_type for item in analysis.relations if item.state == "ACTIVE"} >= {
+            "failed_to_successful_login", "brute_force_to_successful_login"}
+        assert analysis.risk_count >= 1
+        assert any(item.rule_id == "CASE-BRUTE-SUCCESS-01"
+                   and item.supporting_relation_count == 1
+                   for item in analysis.cases if item.state == "CURRENT")
+        queue = worker._session.snapshot()
+        assert queue.queue_item_count == 0 and not queue.active_lease
+        assert not worker._accumulator.snapshot().active_proposal
+        assert not analysis.active_proposal
+        assert worker.publication_buffer._active is None
+        status = client.get("/api/v1/live/status")
+        assert status.status_code == 200
+        assert set(status.json()).isdisjoint({"analysis", "relations", "risks", "cases"})
+        assert "LiveAnalysisSnapshot" not in client.get("/openapi.json").text
+
+        async def retained_frames():
+            stream = service.open_connection(None).stream()
+            try:
+                frames = [await anext(stream)]
+                for _ in service.publication_buffer.replay_after(None).events:
+                    frames.append(await anext(stream))
+                return b"".join(frames)
+            finally:
+                await stream.aclose()
+
+        wire = client.portal.call(retained_frames)
+        assert b"event: observation_changes" in wire
+        for value in (b"ACCOUNT_PRIVATE_CANARY", b"192.0.2.123", b"synthetic.log",
+                      b"CASE-BRUTE-SUCCESS-01", b"failed_to_successful_login"):
+            assert value not in wire + status.content
+    assert runner._task.done()
+    assert worker._session._fd == -1
