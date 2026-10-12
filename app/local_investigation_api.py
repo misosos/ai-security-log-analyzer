@@ -4,7 +4,6 @@ import asyncio
 import codecs
 from collections import deque
 from datetime import datetime
-from ipaddress import ip_address
 import multiprocessing
 import os
 from pathlib import Path
@@ -27,6 +26,7 @@ from app.models.investigation_sample_api import (
     LocalInvestigationErrorResponse, LocalInvestigationResponse, ReportExport,
 )
 from app.parser.ssh_auth import AUTHENTICATION_MESSAGE
+from app.local_request_security import classify_local_request
 from app.sample_investigation_api import (
     _EMPTY_WARNINGS, _case, _independent, _report_export,
 )
@@ -54,7 +54,6 @@ _ARCHIVE_SIGNATURES = (
 _ACCESS_LINE = re.compile(
     r'^\S+\s+\S+\s+\S+\s+\[([^\]]+)\]\s+"([^"]+)"\s+\d{3}\s+(?:\d+|-)(?:\s|$)'
 )
-_HOST = re.compile(r"^(?:127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$")
 _LOCAL_NOTICES = (
     "로컬 실제 로그 분석 결과",
     "탐지는 침해 확인이 아닙니다.",
@@ -133,28 +132,7 @@ class _LocalLimit:
 
 
 def _loopback_request(request: Request) -> bool:
-    if request.client is None:
-        return False
-    try:
-        address = ip_address(request.client.host)
-    except ValueError:
-        return False
-    if not address.is_loopback or getattr(address, "ipv4_mapped", None) is not None:
-        return False
-    hosts = request.headers.getlist("host")
-    if len(hosts) != 1 or _HOST.fullmatch(hosts[0]) is None:
-        return False
-    origins = request.headers.getlist("origin")
-    if len(origins) > 1 or (origins and origins[0] != f"{request.url.scheme}://{hosts[0]}"):
-        return False
-    if request.headers.get("sec-fetch-site") == "cross-site":
-        return False
-    if any(name in request.headers for name in (
-        "forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
-        "x-real-ip", "via",
-    )):
-        return False
-    return True
+    return classify_local_request(request) is None
 
 
 async def _bounded_stream(request: Request):

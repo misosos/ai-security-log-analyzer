@@ -186,7 +186,7 @@ class LiveProcessingWorker:
                  "_ignored", "_rejected", "_acknowledged", "_released", "_error_code",
                  "_accumulator", "_post_ack_failures", "_uncommitted_after_ack",
                  "_last_acc_snapshot", "_publication", "_potentially_unpublished",
-                 "_post_publication_aggregate_failures")
+                 "_post_publication_aggregate_failures", "_service_bound")
 
     def __init__(self, session: LiveTailSession, detection_accumulator: LiveDetectionAccumulator,
                  max_lease_records: int, max_lease_bytes: int):
@@ -216,6 +216,7 @@ class LiveProcessingWorker:
         self._session = session
         self._accumulator = detection_accumulator
         self._publication = publication
+        self._service_bound = False
         self._max_records = max_lease_records
         self._max_bytes = max_lease_bytes
         self._state = LiveWorkerState.READY

@@ -32,6 +32,11 @@ from app.models.investigation_sample_api import (
 )
 from app.sample_investigation_api import create_sample_endpoint
 from app.local_investigation_api import create_local_endpoint
+from app.live_monitoring.http import (
+    create_live_events_endpoint, create_live_status_endpoint, live_error_response,
+)
+from app.live_monitoring.service import LiveMonitoringService
+from app.models.live_monitoring import LiveErrorResponse, LiveStatusResponse
 from app.linux_audit_investigation_api import create_linux_audit_local_endpoint
 from app.models.linux_audit_investigation import (
     LinuxAuditInvestigationError, LinuxAuditInvestigationResponse,
@@ -353,9 +358,14 @@ def create_app(
     enable_linux_audit_api: bool = False,
     linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
     linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None,
+    live_monitoring_service: LiveMonitoringService | None = None,
 ) -> FastAPI:
     if type(enable_linux_audit_api) is not bool:
         raise TypeError("enable_linux_audit_api must be a bool")
+    if (live_monitoring_service is not None
+        and (type(live_monitoring_service) is not LiveMonitoringService
+             or enable_linux_audit_api)):
+        raise TypeError("invalid local live monitoring service")
 
     prepared_security = None
     authorization_dependency = None
@@ -417,6 +427,29 @@ def create_app(
         health_check,
         methods=["GET"],
     )
+    if live_monitoring_service is None and not enable_linux_audit_api:
+        @configured_app.middleware("http")
+        async def live_monitoring_disabled(request: Request, call_next):
+            if request.method == "GET" and request.url.path in {
+                "/api/v1/live/status", "/api/v1/live/events",
+            }:
+                return live_error_response("LIVE_MONITORING_NOT_ENABLED")
+            return await call_next(request)
+    if live_monitoring_service is not None:
+        configured_app.add_api_route(
+            "/api/v1/live/status", create_live_status_endpoint(live_monitoring_service),
+            methods=["GET"], response_model=LiveStatusResponse,
+            responses={code: {"model": LiveErrorResponse} for code in (400, 403, 404, 503)},
+        )
+        configured_app.add_api_route(
+            "/api/v1/live/events", create_live_events_endpoint(live_monitoring_service),
+            methods=["GET"],
+            responses={
+                200: {"content": {"text/event-stream": {"schema": {"type": "string"}}},
+                      "description": "Loopback-only bounded SSE; no automatic polling"},
+                **{code: {"model": LiveErrorResponse} for code in (400, 403, 404, 429, 500, 503)},
+            },
+        )
     configured_app.add_api_route(
         "/api/analyze",
         analyze_logs,

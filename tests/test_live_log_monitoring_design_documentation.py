@@ -17,7 +17,7 @@ def test_scope_and_user_flow_are_explicit():
     text = _design()
     assert text.startswith("# v0.2.0 Phase 11")
     for phrase in (
-        "Phase 12~13.1 내부 live tail·parse·detection·worker와 Phase 14 bounded publication/replay buffer 구현",
+        "Phase 14.1 loopback 전용 읽기 전용 status/SSE 경계 구현",
         "로컬 로그 실시간 확인",
         "uv run python -m app.local_web --monitor-config",
         "현재는 동작하지 않는다",
@@ -29,7 +29,7 @@ def test_scope_and_user_flow_are_explicit():
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
     assert "[bounded 내부 tail core·parser adapter·단일 record lease·명시적 worker step·detection accumulator](docs/live_log_monitoring_design.md)" in readme
-    assert "사용자용 collector·CLI `--monitor-config`·SSE·웹 UI·live 탐지 공개/사례도 **아직 구현되지 않았습니다**" in readme
+    assert "사용자용 collector·CLI `--monitor-config`·웹 UI·live 탐지 공개/사례도 **아직 구현되지 않았습니다**" in readme
     assert "uv run python -m app.local_web --monitor-config" not in readme
 
 
@@ -49,8 +49,8 @@ def test_implemented_core_limits_and_unimplemented_boundaries_are_explicit():
         "2048",
         "32 item",
         "16384",
-        "Parser와 detector는 호출하지 않는다",
-        "CLI flag·자동 polling loop·status API·SSE·browser UI·Ctrl+C 연결도 아직 없다",
+        "Parser와 detector는 tail core에서 호출하지 않는다",
+        "당시 CLI flag·자동 polling loop·status API·SSE·browser UI·Ctrl+C 연결은 없었다",
     ):
         assert phrase in text
 
@@ -135,7 +135,19 @@ def test_phase_14_publication_replay_is_bounded_and_internal():
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
     assert "Phase 14에서는 확정된 detection change만 받는" in readme
-    assert "SSE endpoint나 브라우저 live 기능이 아니며" in readme
+    assert "명시적으로 service를 주입한 로컬 앱에서만 활성화되는" in readme
+
+
+def test_phase_14_1_http_boundary_is_not_a_user_collector():
+    text = _design()
+    for phrase in (
+        "404 LIVE_MONITORING_NOT_ENABLED", "GET /api/v1/live/status",
+        "GET /api/v1/live/events", "loopback", "Forwarded", "X-Real-IP",
+        "Last-Event-ID", "replay_gap", "최대 동시 SSE 연결은 개발용 2개",
+        "notify_change()", "stream_end", "LIVE_STREAM_FAILED",
+        "자동 polling loop", "브라우저 `EventSource`", "여러 worker/process 간 일관성",
+    ):
+        assert phrase in text
 
 
 def test_detection_accumulator_contract_and_publication_gap_are_documented():
