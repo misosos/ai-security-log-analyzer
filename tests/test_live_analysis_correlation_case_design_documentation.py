@@ -61,24 +61,24 @@ def test_research_and_roadmap_do_not_claim_implementation():
     assert "worker의 queue ack 이후 detection commit과 함께 확정" in readme
 
 
-def test_phase_16_1_implementation_scope_is_not_presented_as_live_ui():
+def test_phase_16_1_scope_and_phase_16_3_publication_are_distinguished():
     text = _design()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     monitoring = (ROOT / "docs" / "live_log_monitoring_design.md").read_text(encoding="utf-8")
     for required in (
-        "Phase 16.1 구현 갱신", "application-only 내부", "미연결",
+        "Phase 16.1 구현 갱신", "application-only 내부", "Phase 16.3",
         "assess_risk_with_metadata()", "같은 메타데이터 snapshot",
         "IncidentCaseSubjectInput", "exact identity", "256 PARSED event / 256 KiB",
         "LIVE_ANALYSIS_HISTORY_LIMIT", "Spray case no-go", "tracemalloc",
         "운영 SLA", "SSH·access·cross-source",
     ):
         assert required in text
-    assert "현재 실시간 화면·API·SSE에는 나타나지 않습니다" in readme
-    assert "현재 사용자 기능 아님" in monitoring
+    assert "`analysis_changes` SSE" in readme
+    assert "Phase 16.3 안전한 표시" in monitoring
     assert "case projection의 `subject_ip`" in monitoring
 
 
-def test_phase_16_2_worker_boundary_keeps_analysis_private():
+def test_phase_16_2_worker_boundary_and_phase_16_3_safe_projection():
     text = _design()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for required in (
@@ -88,7 +88,9 @@ def test_phase_16_2_worker_boundary_keeps_analysis_private():
         "SSH·access·cross-source", "exactly-once",
     ):
         assert required in text
-    assert "실시간 화면·API·SSE에는 나타나지 않습니다" in readme
+    assert "safe DTO" in text
+    assert "원래 subject, 계정, IP" in text
+    assert "기존 `observation_changes`는 유지" in readme
 
 
 def test_phase_16_2_verification_records_each_fault_and_measurement_limit():

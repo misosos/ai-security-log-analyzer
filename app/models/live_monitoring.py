@@ -10,7 +10,7 @@ class _ClosedModel(BaseModel):
 
 
 class LiveStatusResponse(_ClosedModel):
-    schema_version: Literal["1"]
+    schema_version: Literal["2"]
     service_state: Literal["READY", "RUNNING", "DEGRADED", "FAILED", "STOPPING", "STOPPED"]
     session_id: str
     source_role: Literal["application", "ssh", "access"]
@@ -34,6 +34,12 @@ class LiveStatusResponse(_ClosedModel):
     recovery_action: str | None = None
     interpretation_notices: tuple[str, ...]
     capabilities: tuple[str, ...]
+    analysis_available: bool
+    analysis_revision: StrictInt | None
+    active_relation_count: StrictInt
+    active_risk_count: StrictInt
+    active_case_count: StrictInt
+    analysis_state: Literal["AVAILABLE", "UNAVAILABLE", "FAILED"]
 
 
 class LiveErrorResponse(_ClosedModel):

@@ -42,10 +42,12 @@ def test_worker_publishes_after_detection_commit_and_skips_empty_changes(tmp_pat
         assert created.publication_event_id is not None
         assert session.snapshot().acknowledged_record_count == 5
         replay = worker.publication_buffer.replay_after(None)
-        assert replay.status == "INITIAL" and len(replay.events) == 1
-        assert replay.events[0].revision == accumulator.snapshot().revision == 2
-        assert replay.events[0].created_count == 1
-        assert worker.snapshot().publication.published_total == 1
+        assert replay.status == "INITIAL" and len(replay.events) == 3
+        assert [event.event_type for event in replay.events] == [
+            "ANALYSIS_CHANGE", "DETECTION_CHANGE", "ANALYSIS_CHANGE"]
+        assert replay.events[-2].revision == accumulator.snapshot().revision == 2
+        assert replay.events[-2].created_count == 1
+        assert worker.snapshot().publication.published_total == 3
         assert worker.snapshot().potentially_unpublished_revision_count == 0
     finally:
         worker.close()
@@ -112,7 +114,7 @@ def test_publication_commit_then_exception_is_not_retried(tmp_path, monkeypatch)
         with pytest.raises(LiveWorkerError) as raised:
             worker.step()
         assert raised.value.code == "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT"
-        assert worker.publication_buffer.snapshot().published_total == 1
+        assert worker.publication_buffer.snapshot().published_total == 2
         assert accumulator.snapshot().revision == 1
         assert session.snapshot().acknowledged_record_count == 5
         assert worker.snapshot().potentially_unpublished_revision_count == 1

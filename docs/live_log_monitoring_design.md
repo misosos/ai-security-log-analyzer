@@ -2,11 +2,11 @@
 
 상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 읽기 전용 status/SSE, Phase 14.2 단일 source CLI·bounded 자동 polling, Phase 15 사용자 live UI 구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰이며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 현재 개발용 기본값이 아니다.
 
-### Phase 16.2 내부 분석 worker 결합 (현재 사용자 기능 아님)
+### Phase 16.2 내부 분석 worker 결합과 Phase 16.3 안전한 표시
 
 Ack 전후 25개 fault 경계와 같은 입력의 256-prefix 지연, runner 중 status p95, 단일 runtime lifecycle 검증은 [Phase 16.2 보강 검증 기록](live_analysis_16_2_verification.md)에 분리했다. 해당 개발용 측정은 운영 SLA가 아니다.
 
-단일 `application` source의 `LiveAnalysisAccumulator`는 Phase 16의 [상세 계약](live_analysis_correlation_case_design.md)에 따라 detection proposal의 전체 bounded prefix를 참조해 기존 correlation·risk·typed case assembly/projection을 재사용한다. History는 **256 PARSED event / 256 KiB**에서 fail closed하며 축약하지 않는다. Relation/risk/case ID는 session-local ordinal이고 안전 snapshot에는 원래 IP·계정·case projection의 `subject_ip`가 없다. 계정 메타데이터는 런처 startup에서 한 번 읽어 trusted snapshot으로 주입되며 prepare 중 파일 I/O가 없다. Application worker는 analysis proposal을 기존 detection·publication proposal과 함께 ack 전에 사전 준비한다. Ack 뒤 detection→analysis→기존 detection publication을 순서대로 확정하므로 실패 지점 간 원자성·rollback·exactly-once는 없다. 내부 analysis state는 worker에만 연결되고 SSE·API·UI에는 연결되지 않는다. SSH·access·cross-source·Linux Audit은 분석 범위에서 보류한다. Crash recovery도 없다.
+단일 `application` source의 `LiveAnalysisAccumulator`는 Phase 16의 [상세 계약](live_analysis_correlation_case_design.md)에 따라 detection proposal의 전체 bounded prefix를 참조해 기존 correlation·risk·typed case assembly/projection을 재사용한다. History는 **256 PARSED event / 256 KiB**에서 fail closed하며 축약하지 않는다. Relation/risk/case ID는 session-local ordinal이고 안전 snapshot에는 원래 IP·계정·case projection의 `subject_ip`가 없다. 계정 메타데이터는 런처 startup에서 한 번 읽어 trusted snapshot으로 주입되며 prepare 중 파일 I/O가 없다. Application worker는 analysis proposal과 최대 두 개의 안전 publication event를 ack 전에 사전 준비한다. Ack 뒤 detection→analysis→publication 배치를 확정하므로 실패 지점 간 원자성·rollback·exactly-once는 없다. Phase 16.3은 기존 `observation_changes`와 별도의 `analysis_changes`를 같은 bounded replay buffer에 넣고, 사용자가 버튼을 선택한 뒤에만 탐지·관계·위험도·조사 사례를 별도 영역에 표시한다. SSH·access·cross-source·Linux Audit은 분석 범위에서 보류한다. Crash recovery도 없다.
 
 ### Phase 15 현재 브라우저 표시 계약
 

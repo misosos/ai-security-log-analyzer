@@ -107,10 +107,10 @@ def test_lifespan_starts_one_runner_and_preserves_other_api(tmp_path, monkeypatc
                               "user=synthetic ip=192.0.2.1\n").encode())
         client.portal.call(gate.set)
         for _ in range(100):
-            if service.status().published_total == 1:
+            if service.status().published_total == 2:
                 break
             client.portal.call(asyncio.sleep, 0)
-        assert service.status().published_total == 1
+        assert service.status().published_total == 2
     assert service.status().service_state == "STOPPED"
     assert service._worker._session._fd == -1
     assert runner._task.done()
@@ -121,7 +121,7 @@ def test_no_config_keeps_live_disabled_and_existing_cli_contract():
     assert create_app().openapi()["paths"].get("/api/v1/live/status") is None
 
 
-def test_application_runtime_commits_analysis_without_exposing_it(tmp_path):
+def test_application_runtime_commits_and_exposes_safe_analysis(tmp_path):
     config, source = _config(tmp_path)
     service, runner = local_web._live_runtime(config)
     worker = service._worker
@@ -144,16 +144,17 @@ def test_application_runtime_commits_analysis_without_exposing_it(tmp_path):
                         client=("127.0.0.1", 50000)) as client:
             status = client.get("/api/v1/live/status")
             assert status.status_code == 200
-            assert "analysis" not in status.text
+            assert status.json()["analysis_available"] is True
+            assert status.json()["analysis_revision"] == 2
             assert "192.0.2.1" not in status.text
-            for event in worker.publication_buffer.replay_after(None).events:
-                assert event.event_type == "DETECTION_CHANGE"
+            assert any(event.event_type == "ANALYSIS_CHANGE"
+                       for event in worker.publication_buffer.replay_after(None).events)
     finally:
         asyncio.run(service.close())
     assert worker._session._fd == -1
 
 
-def test_same_running_runtime_commits_cases_but_transmits_only_observations(tmp_path, monkeypatch):
+def test_same_running_runtime_commits_cases_and_transmits_safe_analysis(tmp_path, monkeypatch):
     config, source = _config(tmp_path)
     service, runner = local_web._live_runtime(config)
     worker = service._worker
@@ -222,8 +223,10 @@ def test_same_running_runtime_commits_cases_but_transmits_only_observations(tmp_
 
         wire = client.portal.call(retained_frames)
         assert b"event: observation_changes" in wire
-        for value in (b"ACCOUNT_PRIVATE_CANARY", b"192.0.2.123", b"synthetic.log",
-                      b"CASE-BRUTE-SUCCESS-01", b"failed_to_successful_login"):
+        assert b"event: analysis_changes" in wire
+        assert b"CASE-BRUTE-SUCCESS-01" in wire
+        assert b"failed_to_successful_login" in wire
+        for value in (b"ACCOUNT_PRIVATE_CANARY", b"192.0.2.123", b"synthetic.log"):
             assert value not in wire + status.content
     assert runner._task.done()
     assert worker._session._fd == -1

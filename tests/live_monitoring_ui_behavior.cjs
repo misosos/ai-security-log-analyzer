@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const script = fs.readFileSync("frontend/live-monitoring.js", "utf8");
 const id = "LIVE-SESSION-000001";
 const eventId = (n) => `LIVE-EVENT-000001-${String(n).padStart(6, "0")}`;
-const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-empty", "live-observations", "live-stale"];
+const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-empty", "live-observations", "live-relations", "live-risks", "live-cases", "live-relations-empty", "live-risks-empty", "live-cases-empty", "live-stale"];
 
 class Node {
   constructor(tag = "p") { this.tagName = tag; this.children = []; this._text = ""; this.hidden = false; this.listeners = {}; }
@@ -20,12 +20,14 @@ class Node {
 }
 
 function status() { return {
-  schema_version: "1", service_state: "RUNNING", session_id: id, source_role: "application",
+  schema_version: "2", service_state: "RUNNING", session_id: id, source_role: "application",
   worker_state: "READY", publication_state: "OPEN", latest_detection_revision: 0,
   available_event_count: 0, earliest_event_id: null, latest_event_id: null,
   active_observation_count: 0, published_total: 0, evicted_total: 0, replay_gap_total: 0,
   max_event_items: 32, max_event_bytes: 16384, max_connections: 2, active_connections: 0,
   fixed_error_code: null, recovery_action: null,
+  analysis_available: true, analysis_revision: 0, active_relation_count: 0,
+  active_risk_count: 0, active_case_count: 0, analysis_state: "AVAILABLE",
   interpretation_notices: [
     "규칙 기반의 로컬 관찰이며 침해나 공격 성공을 확정하지 않습니다.",
     "지연 또는 replay gap이 있을 수 있으며 무유실·즉시 처리를 보장하지 않습니다."
@@ -34,12 +36,15 @@ function status() { return {
 }; }
 
 function snapshot(revision = 0) { return {
-  schema_version: "1", state: "OPEN", session_id: id, item_count: 0, byte_count: 0,
+  schema_version: "2", state: "OPEN", session_id: id, item_count: 0, byte_count: 0,
   max_items: 32, max_bytes: 16384, earliest_available_event_id: null,
   latest_available_event_id: null, latest_committed_detection_revision: revision,
   published_total: 0, evicted_total: 0, rejected_oversized_total: 0,
   replay_gap_total: 0, active_observation_count: 0, last_created_count: 0,
-  last_updated_count: 0, last_no_longer_matches_count: 0
+  last_updated_count: 0, last_no_longer_matches_count: 0,
+  analysis: {schema_version: "1", analysis_available: true, revision,
+    relation_count: 0, risk_count: 0, case_count: 0, independent_observation_count: 0,
+    relations: [], risks: [], cases: [], bounded_warnings: []}
 }; }
 
 function event(n, changeType = "CREATED", revision = n) { return {
@@ -51,6 +56,21 @@ function event(n, changeType = "CREATED", revision = n) { return {
     state: changeType === "NO_LONGER_MATCHES" ? "NO_LONGER_MATCHES_CURRENT_RESULT" : "ACTIVE",
     detection_type: "brute_force", accumulator_revision: revision
   }]
+}; }
+
+function analysisEvent(n, revision) { return {
+  event_id: eventId(n), session_id: id, revision, event_type: "ANALYSIS_CHANGE",
+  source_role: "application", relation_changes: [{relation_id: "LIVE-REL-000001",
+    revision: 1, relation_type: "failed_to_successful_login", state: "ACTIVE",
+    delta_seconds: 2, change_type: "RELATION_CREATED"}],
+  risk_changes: [{risk_id: "LIVE-RISK-000001", revision: 1, state: "CURRENT",
+    risk_level: "HIGH", confidence: "HIGH", change_type: "RISK_CREATED"}],
+  case_changes: [{case_id: "LIVE-CASE-000001", revision: 1, state: "CURRENT",
+    rule_id: "CASE-AUTH-TRANSITION-01", included_highest_risk: "HIGH",
+    included_highest_confidence: "HIGH", relation_count: 1, observation_count: 1,
+    supporting_relation_count: 0, account_reference_status: "ACCOUNT_REFERENCE_UNAVAILABLE",
+    change_type: "CASE_CREATED"}],
+  summary: {relation_count: 1, risk_count: 1, case_count: 1}, bounded_warnings: []
 }; }
 
 async function app(responseStatus = 200, body = status()) {
@@ -123,7 +143,7 @@ async function main() {
   current.nodes["live-show-pending"].click();
   assert.match(current.nodes["live-observations"].textContent, /현재 탐지 결과에는 더 이상 일치하지 않음/);
   stream.send("heartbeat", {status: "CONNECTED"});
-  assert.equal(current.nodes["live-pending-status"].textContent, "현재 표시할 관찰 변경 없음");
+  assert.equal(current.nodes["live-pending-status"].textContent, "현재 표시할 결과 변경 없음");
   stream.send("observation_changes", event(3, "NO_LONGER_MATCHES"), eventId(3));
   assert.equal(stream.closed, false, "same event ID is ignored once");
   stream.send("observation_changes", event(2, "UPDATED"), eventId(2));
@@ -168,6 +188,37 @@ async function main() {
   malformedEvent.streams[0].send("observation_changes", badPayload, eventId(1));
   assert.equal(malformedEvent.streams[0].closed, true);
   assert.equal(malformedEvent.nodes["live-monitoring"].textContent.includes("unapproved-canary"), false);
+
+  const analysisApp = await app();
+  const analysisStream = analysisApp.streams[0];
+  analysisStream.send("snapshot", snapshot());
+  analysisStream.send("observation_changes", event(1), eventId(1));
+  analysisStream.send("analysis_changes", analysisEvent(2, 1), eventId(2));
+  assert.equal(analysisApp.nodes["live-relations"].children.length, 0, "analysis remains staged");
+  assert.equal(analysisApp.nodes["live-show-pending"].textContent, "새 결과 2건 보기");
+  analysisApp.nodes["live-show-pending"].click();
+  assert.match(analysisApp.nodes["live-relations"].textContent, /인증 실패 후 로그인 성공 관계/);
+  assert.match(analysisApp.nodes["live-risks"].textContent, /HIGH/);
+  assert.match(analysisApp.nodes["live-cases"].textContent, /계정 별칭을 표시할 수 없음/);
+  const malformedAnalysis = await app();
+  const privatePayload = analysisEvent(1, 1);
+  privatePayload.case_changes[0].subject_ip = "PRIVATE_IP_CANARY";
+  malformedAnalysis.streams[0].send("analysis_changes", privatePayload, eventId(1));
+  assert.equal(malformedAnalysis.streams[0].closed, true);
+  assert.equal(malformedAnalysis.nodes["live-cases"].children.length, 0);
+  assert.equal(malformedAnalysis.nodes["live-monitoring"].textContent.includes("PRIVATE_IP_CANARY"), false);
+
+  const sshStatus = status();
+  sshStatus.source_role = "ssh";
+  sshStatus.analysis_available = false;
+  sshStatus.analysis_revision = null;
+  sshStatus.analysis_state = "UNAVAILABLE";
+  const sshApp = await app(200, sshStatus);
+  const sshSnapshot = snapshot();
+  sshSnapshot.analysis.analysis_available = false;
+  sshSnapshot.analysis.revision = null;
+  sshApp.streams[0].send("snapshot", sshSnapshot);
+  assert.match(sshApp.nodes["live-relations-empty"].textContent, /지원하지 않습니다/);
 
   const overflow = await app();
   for (let n = 1; n <= 33 && !overflow.streams[0].closed; n += 1)
@@ -215,6 +266,25 @@ async function main() {
   const noData = await app();
   noData.streams[0].send("snapshot", snapshot(1));
   assert.match(noData.nodes["live-empty"].textContent, /새 로그 줄은 처리됐지만/);
+
+  if (process.env.LIVE_UI_BENCHMARK === "1") {
+    const timings = [];
+    for (let sample = 0; sample < 12; sample += 1) {
+      const measured = await app();
+      const source = measured.streams[0];
+      source.send("snapshot", snapshot());
+      for (let n = 1; n <= 32; n += 1)
+        source.send("observation_changes", event(n), eventId(n));
+      assert.equal(source.closed, false);
+      const start = process.hrtime.bigint();
+      measured.nodes["live-show-pending"].click();
+      timings.push(Number(process.hrtime.bigint() - start) / 1e6);
+    }
+    timings.sort((a, b) => a - b);
+    process.stdout.write(JSON.stringify({samples: timings.length,
+      median_ms: (timings[5] + timings[6]) / 2,
+      p95_ms: timings[11], max_ms: timings[11]}) + "\n");
+  }
 }
 
 main().catch((error) => { process.stderr.write(`${error.stack}\n`); process.exitCode = 1; });

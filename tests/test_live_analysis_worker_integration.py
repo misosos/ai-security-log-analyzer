@@ -67,8 +67,9 @@ def test_application_prefix_matches_batch_and_preserves_sse_shape(tmp_path):
         assert analysis.snapshot().relation_count >= 1
         assert analysis.snapshot().case_count >= 1
         published = worker.publication_buffer.replay_after(None).events
-        assert all(event.event_type == "DETECTION_CHANGE" for event in published)
-        assert "analysis" not in repr(published)
+        assert all(event.event_type in {"DETECTION_CHANGE", "ANALYSIS_CHANGE"} for event in published)
+        assert any(event.event_type == "ANALYSIS_CHANGE" for event in published)
+        assert "192.0.2." not in repr(published)
     finally:
         worker.close()
     assert session._fd == -1
@@ -154,16 +155,16 @@ def test_non_application_rejects_analysis_binding(tmp_path):
 def test_cross_proposal_mismatch_releases_before_ack(tmp_path, monkeypatch):
     path, session, detection, analysis, worker = setup(tmp_path)
     append(path, line(1))
-    original = LivePublicationBuffer.prepare
+    original = LivePublicationBuffer.prepare_batch
 
-    def mismatched(instance, proposal):
-        prepared = original(instance, proposal)
+    def mismatched(instance, proposal, analysis_proposal):
+        prepared = original(instance, proposal, analysis_proposal)
         from dataclasses import replace
         wrong = replace(prepared, revision=prepared.revision + 1)
         instance._active = wrong
         return wrong
 
-    monkeypatch.setattr(LivePublicationBuffer, "prepare", mismatched)
+    monkeypatch.setattr(LivePublicationBuffer, "prepare_batch", mismatched)
     try:
         with pytest.raises(LiveWorkerError):
             worker.step()
@@ -196,7 +197,7 @@ def test_pre_ack_failure_aborts_and_releases(tmp_path, monkeypatch, stage, expec
     path, session, detection, analysis, worker = setup(tmp_path)
     append(path, line(1))
     target = LiveAnalysisAccumulator if stage == "analysis" else LivePublicationBuffer
-    monkeypatch.setattr(target, "prepare", fail)
+    monkeypatch.setattr(target, "prepare" if stage == "analysis" else "prepare_batch", fail)
     try:
         with pytest.raises(LiveWorkerError) as caught:
             worker.step()
@@ -236,13 +237,14 @@ def test_prepare_return_boundary_does_not_leave_active_proposal(tmp_path, monkey
     path, session, detection, analysis, worker = setup(tmp_path)
     append(path, line(1))
     klass = LiveAnalysisAccumulator if target == "analysis" else LivePublicationBuffer
-    original = klass.prepare
+    method = "prepare" if target == "analysis" else "prepare_batch"
+    original = getattr(klass, method)
 
-    def installed_then_failed(instance, candidate):
-        original(instance, candidate)
+    def installed_then_failed(instance, candidate, *extra):
+        original(instance, candidate, *extra)
         fail()
 
-    monkeypatch.setattr(klass, "prepare", installed_then_failed)
+    monkeypatch.setattr(klass, method, installed_then_failed)
     try:
         with pytest.raises(LiveWorkerError):
             worker.step()
@@ -312,7 +314,7 @@ def test_ack_failure_aborts_analysis_without_guessing_release(tmp_path, monkeypa
 def test_analysis_abort_failure_is_terminal_and_does_not_ack(tmp_path, monkeypatch):
     path, session, detection, analysis, worker = setup(tmp_path)
     append(path, line(1))
-    monkeypatch.setattr(LivePublicationBuffer, "prepare", fail)
+    monkeypatch.setattr(LivePublicationBuffer, "prepare_batch", fail)
     monkeypatch.setattr(LiveAnalysisAccumulator, "abort", fail)
     try:
         with pytest.raises(LiveWorkerError) as caught:
@@ -402,21 +404,21 @@ def test_individual_fault_boundary(tmp_path, monkeypatch, point):
     elif point == "09_analysis_safe_projection":
         monkeypatch.setattr(analysis_module, "build_investigation_case_projection", fail)
     elif point in ("10_publication_prepare", "12_detection_abort", "13_analysis_abort"):
-        monkeypatch.setattr(LivePublicationBuffer, "prepare", fail)
+        monkeypatch.setattr(LivePublicationBuffer, "prepare_batch", fail)
         if point == "12_detection_abort":
             monkeypatch.setattr(DetectionType, "abort", fail)
         if point == "13_analysis_abort":
             monkeypatch.setattr(LiveAnalysisAccumulator, "abort", fail)
     elif point == "11_cross_proposal_validation":
-        original = LivePublicationBuffer.prepare
+        original = LivePublicationBuffer.prepare_batch
 
-        def mismatch(instance, proposal):
-            prepared = original(instance, proposal)
+        def mismatch(instance, proposal, analysis_proposal):
+            prepared = original(instance, proposal, analysis_proposal)
             wrong = replace(prepared, revision=prepared.revision + 1)
             instance._active = wrong
             return wrong
 
-        monkeypatch.setattr(LivePublicationBuffer, "prepare", mismatch)
+        monkeypatch.setattr(LivePublicationBuffer, "prepare_batch", mismatch)
     elif point in ("17_detection_state_swap", "18_after_detection_commit"):
         original = DetectionType.commit_prepared
 

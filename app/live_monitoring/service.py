@@ -5,8 +5,10 @@ import json
 from collections.abc import AsyncIterator
 
 from app.live_monitoring.publication import (
-    LivePublicationEvent, LivePublicationSnapshot, LiveReplayResult,
-    serialize_live_publication_event, serialize_live_publication_snapshot,
+    LivePublicationEvent, LiveAnalysisPublicationEvent,
+    LivePublicationSnapshot, LiveReplayResult,
+    serialize_live_publication_event, serialize_live_analysis_publication_event,
+    serialize_live_publication_snapshot,
 )
 from app.live_monitoring.worker import LiveProcessingWorker, LiveWorkerState
 from app.models.live_monitoring import LiveStatusResponse
@@ -15,7 +17,7 @@ from app.models.live_monitoring import LiveStatusResponse
 MAX_LIVE_CONNECTIONS = 2
 HEARTBEAT_SECONDS = 15.0
 _EVENT_TYPES = frozenset((
-    "snapshot", "observation_changes", "replay_gap", "service_status",
+    "snapshot", "observation_changes", "analysis_changes", "replay_gap", "service_status",
     "heartbeat", "stream_end",
 ))
 _NOTICES = (
@@ -53,6 +55,9 @@ def encode_live_sse_event(event_type: str, payload: object = None) -> bytes:
         data = serialize_live_publication_snapshot(payload)
     elif event_type == "observation_changes" and type(payload) is LivePublicationEvent:
         data = serialize_live_publication_event(payload)
+        event_id = payload.event_id
+    elif event_type == "analysis_changes" and type(payload) is LiveAnalysisPublicationEvent:
+        data = serialize_live_analysis_publication_event(payload)
         event_id = payload.event_id
     elif event_type == "replay_gap" and type(payload) is LiveReplayResult and payload.status == "GAP":
         data = _json_bytes({
@@ -123,6 +128,7 @@ class LiveMonitoringService:
     def status(self) -> LiveStatusResponse:
         worker = self._worker.snapshot()
         publication = worker.publication
+        analysis = worker.analysis
         state = ("STOPPED" if self._closed or worker.state is LiveWorkerState.STOPPED else
                  "STOPPING" if self._runner_state == "STOPPING" or worker.state is LiveWorkerState.STOPPING else
                  "FAILED" if self._runner_state == "FAILED" or worker.state is LiveWorkerState.FAILED else
@@ -130,7 +136,7 @@ class LiveMonitoringService:
                  "RUNNING" if self._runner_state == "RUNNING" else
                  "RUNNING" if worker.state is LiveWorkerState.RUNNING_STEP else "READY")
         return LiveStatusResponse(
-            schema_version="1", service_state=state,
+            schema_version="2", service_state=state,
             session_id=publication.session_id, source_role=worker.session.source_role,
             worker_state=worker.state.value, publication_state=publication.state,
             latest_detection_revision=publication.latest_committed_detection_revision,
@@ -147,6 +153,13 @@ class LiveMonitoringService:
             interpretation_notices=_NOTICES,
             capabilities=(_CAPABILITIES if not self._runner_bound else
                           ("READ_ONLY_STATUS", "BOUNDED_SSE_REPLAY", "AUTOMATIC_POLLING", "NO_LLM")),
+            analysis_available=analysis is not None,
+            analysis_revision=analysis.revision if analysis is not None else None,
+            active_relation_count=analysis.relation_count if analysis is not None else 0,
+            active_risk_count=analysis.risk_count if analysis is not None else 0,
+            active_case_count=analysis.case_count if analysis is not None else 0,
+            analysis_state=("UNAVAILABLE" if analysis is None else
+                            "FAILED" if state == "FAILED" else "AVAILABLE"),
         )
 
     async def set_runner_state(self, state: str, code: str | None = None) -> None:
@@ -244,7 +257,9 @@ class LiveSSEConnection:
                     yield encode_live_sse_event("snapshot", replay.snapshot)
                     return
                 for event in replay.events:
-                    yield encode_live_sse_event("observation_changes", event)
+                    yield encode_live_sse_event(
+                        "observation_changes" if type(event) is LivePublicationEvent
+                        else "analysis_changes", event)
                     self._cursor = event.event_id
                 if service._runner_state in ("DEGRADED", "FAILED"):
                     yield encode_live_sse_event("service_status", (

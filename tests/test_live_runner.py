@@ -68,7 +68,7 @@ def test_automatic_poll_from_end_partial_then_publication_and_stop(tmp_path, mon
         gate.set()
         await _turns_until(lambda: worker.snapshot().total_parsed == 6)
         assert service.status().latest_detection_revision == 1
-        assert service.status().published_total == 1
+        assert service.status().published_total == 2
         assert b"event: observation_changes" in await anext(stream)
         runner.request_stop()
         gate.set()
@@ -158,7 +158,7 @@ def test_notify_failure_does_not_roll_back_detection_or_retry(tmp_path, monkeypa
     async def scenario():
         await runner.run()
         assert runner.state is LiveRunnerState.FAILED
-        assert service.status().published_total == 1
+        assert service.status().published_total == 2
         assert worker.snapshot().total_acknowledged == 5
         assert worker.snapshot().step_revision == 1
         await runner.shutdown()

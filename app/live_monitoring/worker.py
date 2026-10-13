@@ -262,7 +262,8 @@ class LiveProcessingWorker:
                 raise LiveWorkerError("ANALYSIS_ACCUMULATOR_ALREADY_OWNED")
         elif analysis_accumulator is not None:
             raise LiveWorkerError("INVALID_ANALYSIS_ACCUMULATOR")
-        publication = LivePublicationBuffer(detection_accumulator)
+        publication = LivePublicationBuffer(detection_accumulator,
+                                             analysis_accumulator=analysis_accumulator)
         session._worker_bound = True
         detection_accumulator._worker_bound = True
         if analysis_accumulator is not None:
@@ -357,7 +358,9 @@ class LiveProcessingWorker:
                 failure_code = "ANALYSIS_PREPARE_FAILED"
                 analysis_proposal = self._analysis.prepare(proposal)
             failure_code = "PUBLICATION_PREPARE_FAILED"
-            publication_proposal = self._publication.prepare(proposal)
+            publication_proposal = (self._publication.prepare_batch(proposal, analysis_proposal)
+                                    if self._analysis is not None
+                                    else self._publication.prepare(proposal))
             failure_code = "ANALYSIS_PROPOSAL_MISMATCH"
             if (publication_proposal.revision != proposal.proposal_revision
                 or publication_proposal._change_set is not proposal._change_set

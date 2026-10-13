@@ -41,6 +41,9 @@ a { color: #064f96; text-underline-offset: .2em; }
 .live-observations { display: grid; gap: .75rem; padding-inline-start: 1.5rem; min-width: 0; }
 .live-observations li { border: 1px solid #bccbdb; border-radius: .4rem; padding: .75rem; min-width: 0; overflow-wrap: anywhere; }
 .live-observations li p { margin: .2rem 0; }
+.live-observations li.live-risk-high { border-left: .35rem solid #8a1515; }
+.live-observations li.live-risk-medium { border-left: .35rem solid #704500; }
+.live-observations li.live-risk-low { border-left: .35rem solid #135839; }
 .local-warning { border-inline-start: .3rem solid #8a1515; background: #fff5f3; padding: .7rem 1rem; font-weight: 650; }
 .local-upload fieldset { border: 1px solid #9badc3; border-radius: .4rem; min-width: 0; margin: 1rem 0; padding: 1rem; }
 .local-upload legend { font-weight: 750; }

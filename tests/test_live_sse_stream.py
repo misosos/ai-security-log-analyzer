@@ -50,7 +50,7 @@ def test_notification_delivers_new_event_without_client_queue(tmp_path):
 
 def test_slow_consumer_gets_gap_after_eviction(tmp_path):
     path, _, worker, service = _service(tmp_path)
-    service.publication_buffer._max_items = 1
+    service.publication_buffer._max_items = 2
 
     async def scenario():
         _append(path, 0, 5)
@@ -58,6 +58,7 @@ def test_slow_consumer_gets_gap_after_eviction(tmp_path):
         stream = service.open_connection(None).stream()
         assert b"event: snapshot" in await anext(stream)
         assert first_id.encode() in await anext(stream)
+        assert b"event: analysis_changes" in await anext(stream)
         _append(path, 5)
         worker.step()
         _append(path, 6)
@@ -93,8 +94,12 @@ def test_two_cursors_independent_and_heartbeat_has_no_id(tmp_path, monkeypatch):
         assert b"event: snapshot" in await anext(first)
         assert b"event: snapshot" in await anext(second)
         assert first_id.encode() in await anext(first)
+        assert b"event: analysis_changes" in await anext(first)
         assert second_id.encode() in await anext(first)
+        assert b"event: analysis_changes" in await anext(first)
+        assert b"event: analysis_changes" in await anext(second)
         assert second_id.encode() in await anext(second)
+        assert b"event: analysis_changes" in await anext(second)
         heartbeat = await anext(second)
         assert b"event: heartbeat\n" in heartbeat
         assert b"id:" not in heartbeat

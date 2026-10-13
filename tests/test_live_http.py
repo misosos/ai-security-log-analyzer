@@ -71,6 +71,8 @@ def test_explicit_status_is_safe_read_only_and_loopback_only(tmp_path, monkeypat
             "published_total", "evicted_total", "replay_gap_total", "max_event_items",
             "max_event_bytes", "max_connections", "active_connections",
             "fixed_error_code", "recovery_action", "interpretation_notices", "capabilities",
+            "analysis_available", "analysis_revision", "active_relation_count",
+            "active_risk_count", "active_case_count", "analysis_state",
         }
         assert body["fixed_error_code"] is None and body["recovery_action"] is None
         assert body["available_event_count"] == 0

@@ -61,6 +61,25 @@
       <p>‘현재 탐지 결과에는 더 이상 일치하지 않음’은 현재 누적 탐지 결과의 상태만 뜻하며, 과거 관찰의 해소나 시스템의 안전을 의미하지 않습니다.</p>
       <p id="live-empty">아직 새 로그 줄이 없습니다. 관찰이 없다는 것은 안전하다는 뜻이 아닙니다.</p>
       <ol id="live-observations" class="live-observations" aria-label="현재 표시 중인 탐지 관찰"></ol>
+      <section aria-labelledby="live-relations-heading">
+        <h3 id="live-relations-heading">지원되는 관계</h3>
+        <p>시간·주체 조건이 일치한 관찰이며 인과관계나 계정 침해를 확정하지 않습니다.</p>
+        <p id="live-relations-empty">아직 지원되는 관계가 없습니다.</p>
+        <ol id="live-relations" class="live-observations"></ol>
+      </section>
+      <section aria-labelledby="live-risks-heading">
+        <h3 id="live-risks-heading">기존 위험도 평가</h3>
+        <p>현재까지 포함된 로그 관찰의 검토 우선순위입니다. 위험도 하향은 해결이나 안전을 뜻하지 않습니다.</p>
+        <p id="live-risks-empty">현재 위험도 평가가 없습니다.</p>
+        <ol id="live-risks" class="live-observations"></ol>
+      </section>
+      <section aria-labelledby="live-cases-heading">
+        <h3 id="live-cases-heading">조사 사례</h3>
+        <p>함께 검토할 관찰 단위이며 확정 사고·침해·공격 성공을 뜻하지 않습니다.</p>
+        <p id="live-cases-empty">아직 조사 사례가 없습니다.</p>
+        <ol id="live-cases" class="live-observations"></ol>
+      </section>
+      <p>현재 분석 결과에 더 이상 일치하지 않아도 과거 관찰이 해결됐거나 시스템이 안전하다는 뜻은 아닙니다.</p>
       <p id="live-stale" class="local-warning" hidden>이전 목록은 최신 상태가 아닐 수 있습니다. 현재 요약을 기준으로 다시 확인해 주세요.</p>
     </section>
 
