@@ -104,6 +104,7 @@ def main() -> None:
                 first = _frame(stream)
                 assert b"event: snapshot" in first
                 assert b'"analysis_available":true' in first
+                append_started = time.perf_counter()
                 with source.open("ab") as output:
                     for second in range(5):
                         output.write((f"2026-01-02 03:04:{second:02d} INFO login_failed "
@@ -117,6 +118,7 @@ def main() -> None:
                     if b"event: analysis_changes" in frame and b"CASE-BRUTE-SUCCESS-01" in frame:
                         break
                 wire = b"".join(frames)
+                append_to_analysis_sse_ms = (time.perf_counter() - append_started) * 1000
                 assert b"event: observation_changes" in wire
                 assert b"event: analysis_changes" in wire
                 for secret in (b"PRIVATE_ACCOUNT_CANARY", b"192.0.2.123",
@@ -133,6 +135,9 @@ def main() -> None:
                     time.sleep(0.05)
                 else:
                     raise AssertionError("Safari pending button did not become visible")
+                for key in ("live-observations", "live-relations", "live-risks", "live-cases"):
+                    assert _safari_script(safari_session,
+                                          f"return document.getElementById('{key}').children.length;") == 0
                 _safari_script(safari_session,
                                "document.getElementById('live-show-pending').click();")
                 for key in ("live-observations", "live-relations", "live-risks", "live-cases"):
@@ -175,6 +180,8 @@ def main() -> None:
             assert probe.connect_ex(("127.0.0.1", port)) != 0
     print("loopback HTTP/SSE smoke PASS; Safari WebDriver tested=" +
           str(os.environ.get("LIVE_SAFARI_WEBDRIVER") == "1") +
+          "; append-to-analysis-SSE one sample ms=" +
+          str(round(append_to_analysis_sse_ms, 3)) +
           "; temporary source and listener closed")
 
 

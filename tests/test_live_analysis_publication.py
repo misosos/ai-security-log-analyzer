@@ -1,6 +1,7 @@
 """Application analysis is published as one bounded, ordered batch."""
 
 import json
+from dataclasses import asdict
 
 import pytest
 
@@ -74,6 +75,11 @@ def test_batch_event_order_replay_and_private_values(tmp_path):
         assert b"CASE-BRUTE-SUCCESS-01" in wire
         for secret in (b"ACCOUNT_PRIVATE_CANARY", b"192.0.2.123", b"source.log"):
             assert secret not in wire
+        safe_tree = json.dumps(asdict(snapshot), default=str).encode()
+        safe_tree += repr(snapshot).encode()
+        safe_tree += repr(replay.events).encode()
+        for secret in (b"ACCOUNT_PRIVATE_CANARY", b"192.0.2.123", b"source.log"):
+            assert secret not in safe_tree
     finally:
         worker.close()
     assert session._fd == -1
@@ -143,6 +149,84 @@ def test_batch_commit_swap_failure_has_no_partial_publication(tmp_path, monkeypa
         assert worker.publication_buffer.snapshot().published_total == 0
         assert worker.snapshot().state.value == "FAILED"
         assert "DETECTOR_PRIVATE_EXCEPTION_CANARY" not in repr(raised.value)
+    finally:
+        worker.close()
+
+
+@pytest.mark.parametrize("boundary", [
+    "observation_serialization", "analysis_serialization", "snapshot_projection",
+])
+def test_batch_prepare_faults_release_without_partial_publication(tmp_path, monkeypatch, boundary):
+    path, session, detection, worker = _worker(tmp_path)
+    _append(path, *(_failure(index) for index in range(5)))
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("PRIVATE_EXCEPTION_CANARY")
+
+    target = {
+        "observation_serialization": "serialize_live_publication_event",
+        "analysis_serialization": "serialize_live_analysis_publication_event",
+        "snapshot_projection": "analysis_snapshot_data",
+    }[boundary]
+    monkeypatch.setattr(publication_module, target, fail)
+    try:
+        with pytest.raises(LiveWorkerError) as raised:
+            worker.step()
+        assert raised.value.code == "PUBLICATION_PREPARE_FAILED"
+        assert "PRIVATE_EXCEPTION_CANARY" not in repr(raised.value)
+        queue = session.snapshot()
+        assert queue.acknowledged_record_count == 0
+        assert queue.released_lease_count == 1
+        assert queue.available_item_count == 5
+        assert detection.snapshot().revision == worker._analysis.snapshot().revision == 0
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert worker.publication_buffer._active is None
+    finally:
+        worker.close()
+
+
+def test_two_event_combined_byte_cap_rejects_before_ack(tmp_path):
+    path, session, detection, worker = _worker(tmp_path)
+    # Each safe event fits independently, but their combined batch does not.
+    worker.publication_buffer._max_bytes = 600
+    _append(path, *(_failure(index) for index in range(5)))
+    try:
+        with pytest.raises(LiveWorkerError) as raised:
+            worker.step()
+        assert raised.value.code == "PUBLICATION_PREPARE_FAILED"
+        assert session.snapshot().acknowledged_record_count == 0
+        assert session.snapshot().available_item_count == 5
+        assert detection.snapshot().revision == worker._analysis.snapshot().revision == 0
+        assert worker.publication_buffer.snapshot().published_total == 0
+    finally:
+        worker.close()
+
+
+def test_fault_after_batch_swap_keeps_both_events_and_never_retries(tmp_path, monkeypatch):
+    path, session, detection, worker = _worker(tmp_path)
+    _append(path, *(_failure(index) for index in range(5)))
+    original_commit = LivePublicationBuffer.commit_prepared
+
+    def fail_after_swap(instance, proposal):
+        original_commit(instance, proposal)
+        raise RuntimeError("PRIVATE_EXCEPTION_CANARY")
+
+    monkeypatch.setattr(LivePublicationBuffer, "commit_prepared", fail_after_swap)
+    try:
+        with pytest.raises(LiveWorkerError) as raised:
+            worker.step()
+        assert raised.value.code == "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT"
+        assert session.snapshot().acknowledged_record_count == 5
+        assert detection.snapshot().revision == worker._analysis.snapshot().revision == 1
+        replay = worker.publication_buffer.replay_after(None)
+        assert [event.event_type for event in replay.events] == [
+            "DETECTION_CHANGE", "ANALYSIS_CHANGE",
+        ]
+        assert worker.snapshot().state.value == "FAILED"
+        with pytest.raises(LiveWorkerError):
+            worker.step()
+        assert worker.publication_buffer.snapshot().published_total == 2
+        assert "PRIVATE_EXCEPTION_CANARY" not in repr(raised.value)
     finally:
         worker.close()
 

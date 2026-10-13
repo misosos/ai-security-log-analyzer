@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app import local_web
 from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator
+from app.live_monitoring.detection_accumulator import LiveDetectionAccumulator
 from app.live_monitoring.core import LiveTailSession
 from app.live_monitoring.worker import LiveProcessingWorker
 from app.live_monitoring.publication import (
@@ -34,7 +35,8 @@ def _stats(samples):
     }
 
 
-def _run_one(*, trace=False):
+def _run_one(*, trace=False, prefix=256):
+    assert type(prefix) is int and 1 <= prefix <= 256
     with tempfile.TemporaryDirectory(prefix="live-benchmark-") as root:
         source = Path(root) / "synthetic.log"
         source.write_bytes(b"old line\n")
@@ -48,9 +50,9 @@ def _run_one(*, trace=False):
         worker = service._worker
         try:
             raw = b"2026-01-02 03:04:01 INFO login_failed user=synthetic ip=192.0.2.11\n"
-            # 255 committed events; each actual step respects the 16-line poll
+            # Prior committed events; each actual step respects the 16-line poll
             # cap and the one-lease-per-step ownership contract.
-            remaining = 255
+            remaining = prefix - 1
             while remaining:
                 count = min(16, remaining)
                 with source.open("ab") as stream:
@@ -58,15 +60,17 @@ def _run_one(*, trace=False):
                 processed = worker.step().parsed_count
                 assert processed == count
                 remaining -= count
-            assert worker._accumulator.snapshot().history_record_count == 255
+            assert worker._accumulator.snapshot().history_record_count == prefix - 1
             final = b"2026-01-02 03:04:06 INFO user_login user=synthetic ip=192.0.2.11\n"
             with source.open("ab") as stream:
                 stream.write(final)
             prepare_span = []
+            detection_prepare_span = []
             publication_prepare_span = []
             publication_commit_span = []
             after_ack = []
             original_prepare = LiveAnalysisAccumulator.prepare
+            original_detection_prepare = LiveDetectionAccumulator.prepare
             original_ack = LiveTailSession.acknowledge_lease
             original_publication_prepare = LivePublicationBuffer.prepare_batch
             original_publication_commit = LivePublicationBuffer.commit_prepared
@@ -77,6 +81,13 @@ def _run_one(*, trace=False):
                     return original_prepare(instance, proposal)
                 finally:
                     prepare_span.append((time.perf_counter_ns() - start) / 1e6)
+
+            def detection_prepare(instance, batch):
+                start = time.perf_counter_ns()
+                try:
+                    return original_detection_prepare(instance, batch)
+                finally:
+                    detection_prepare_span.append((time.perf_counter_ns() - start) / 1e6)
 
             def ack(instance, lease):
                 value = original_ack(instance, lease)
@@ -98,6 +109,7 @@ def _run_one(*, trace=False):
                     publication_commit_span.append((time.perf_counter_ns() - start) / 1e6)
 
             LiveAnalysisAccumulator.prepare = prepare
+            LiveDetectionAccumulator.prepare = detection_prepare
             LiveTailSession.acknowledge_lease = ack
             LivePublicationBuffer.prepare_batch = publication_prepare
             LivePublicationBuffer.commit_prepared = publication_commit
@@ -112,12 +124,13 @@ def _run_one(*, trace=False):
                 if trace:
                     tracemalloc.stop()
                 LiveAnalysisAccumulator.prepare = original_prepare
+                LiveDetectionAccumulator.prepare = original_detection_prepare
                 LiveTailSession.acknowledge_lease = original_ack
                 LivePublicationBuffer.prepare_batch = original_publication_prepare
                 LivePublicationBuffer.commit_prepared = original_publication_commit
             assert result.status == "PROCESSED" and result.parsed_count == 1
             assert worker._analysis.snapshot().revision == worker._accumulator.snapshot().revision
-            assert worker._accumulator.snapshot().history_record_count == 256
+            assert worker._accumulator.snapshot().history_record_count == prefix
             analysis = worker._analysis.snapshot()
             replay = worker.publication_buffer.replay_after(None)
             detection_event_bytes = [len(serialize_live_publication_event(item)) for item in replay.events
@@ -125,6 +138,9 @@ def _run_one(*, trace=False):
             analysis_event_bytes = [len(serialize_live_analysis_publication_event(item)) for item in replay.events
                                     if item.event_type == "ANALYSIS_CHANGE"]
             latest_events = tuple(item for item in replay.events if item.revision == result.accumulator_revision)
+            snapshot_start = time.perf_counter_ns()
+            snapshot_bytes = len(serialize_live_publication_snapshot(worker.publication_buffer.snapshot()))
+            snapshot_ms = (time.perf_counter_ns() - snapshot_start) / 1e6
             serialization_start = time.perf_counter_ns()
             for item in latest_events:
                 if item.event_type == "DETECTION_CHANGE":
@@ -135,19 +151,21 @@ def _run_one(*, trace=False):
             return {
                 "worker_ms": (end - start) / 1e6,
                 "analysis_ms": prepare_span[0],
+                "detection_ms": detection_prepare_span[0],
                 "commit_ms": (end - after_ack[0]) / 1e6,
                 "publication_prepare_ms": publication_prepare_span[0],
                 "publication_commit_ms": publication_commit_span[0],
                 "detection_event_bytes": max(detection_event_bytes, default=0),
                 "analysis_event_bytes": max(analysis_event_bytes, default=0),
-                "snapshot_bytes": len(serialize_live_publication_snapshot(worker.publication_buffer.snapshot())),
+                "snapshot_bytes": snapshot_bytes,
+                "snapshot_serialization_ms": snapshot_ms,
                 "latest_batch_bytes": sum(len(serialize_live_publication_event(item))
                                           if item.event_type == "DETECTION_CHANGE"
                                           else len(serialize_live_analysis_publication_event(item))
                                           for item in latest_events),
                 "serialization_ms": serialization_ms,
-                "events": 256,
-                "raw_bytes": len(raw) * 255 + len(final),
+                "events": prefix,
+                "raw_bytes": len(raw) * (prefix - 1) + len(final),
                 "detections": worker._accumulator.snapshot().active_observation_count,
                 "relations": analysis.relation_count,
                 "risks": analysis.risk_count,

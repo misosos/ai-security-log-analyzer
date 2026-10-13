@@ -1,5 +1,7 @@
 # v0.2.0 Phase 16 — live correlation·risk·조사 사례 의미 보존 설계
 
+> Phase 16.4의 실제 통합 범위, 추적성, 개인정보·성능 측정과 조건부 판정은 [통합 감사 기록](live_analysis_16_4_audit.md)을 따른다. 현재 구현은 `application` 한 source의 safe analysis publication/UI까지이고 SSH·access·cross-source 분석은 아니다.
+
 상태: **Phase 16 설계·계약 검증, Phase 16.1 내부 구현, Phase 16.2 application worker 결합, Phase 16.3 안전한 publication/UI 연결**. Application에서 기존 detection `observation_changes`를 유지하고 safe `analysis_changes`를 별도 게시한다. 판정은 기존 코드의 **각 committed event prefix**와 같은 결과를 만들 수 있는 범위에 한정한다. 관계는 인과관계가 아니고 탐지·높은 위험도·로그인 성공은 침해 확정이 아니다.
 
 > Phase 16.1 구현 갱신 (2026-10-13): `app/live_monitoring/analysis_accumulator.py`에 **application-only 내부** proposal/commit/abort 계층을 추가했다. Phase 16.2에서 worker와 queue ack에 결합했고 Phase 16.3에서 raw state가 아닌 안전 요약만 SSE/UI에 연결했다.

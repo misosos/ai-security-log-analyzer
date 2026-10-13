@@ -11,6 +11,7 @@ from app.live_monitoring import (
     LiveDetectionAccumulator, LiveMonitorConfig, LiveProcessingWorker,
     open_live_tail_session,
 )
+from app.live_monitoring import service as service_module
 from app.live_monitoring.service import (
     LiveMonitoringService, LiveServiceError, encode_live_sse_event,
 )
@@ -39,6 +40,19 @@ def _client(service=None, *, host="127.0.0.1", peer="127.0.0.1"):
 
 def _frames(data):
     return [item for item in data.split(b"\n\n") if item]
+
+
+def test_sse_encoder_rejects_serialized_newline_without_leaking_payload(tmp_path, monkeypatch):
+    _, worker = _worker(tmp_path)
+    try:
+        monkeypatch.setattr(service_module, "serialize_live_publication_snapshot",
+                            lambda _snapshot: b'{"private":"LINE_CANARY\n"}')
+        with pytest.raises(LiveServiceError) as raised:
+            encode_live_sse_event("snapshot", worker.publication_buffer.snapshot())
+        assert raised.value.code == "INVALID_SERVICE"
+        assert "LINE_CANARY" not in repr(raised.value)
+    finally:
+        worker.close()
 
 
 def test_default_app_is_fixed_disabled_without_changing_existing_routes():
