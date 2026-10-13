@@ -96,3 +96,31 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 - [ ] **VoiceOver 후속 접근성 검증:** 오류 안내 읽기: NOT_TESTED. Disclosure·Timeline·동적 상태 등 나머지 screen-reader 흐름도 NOT_TESTED다. 사용자 승인에 따라 v0.1.0의 필수 GO gate가 아니라 후속 검증으로 분리한다. VoiceOver 미검증만으로 NO-GO로 판정하지 않는다.
 
 **Phase 10.1 로컬 릴리스 후보 접근성 수용 판정: GO.** Safari WebDriver 주요 흐름, 사용자 수동 keyboard-only 주요 흐름·visible focus, 실제 200% 확대·가능한 최소 창 너비, 콘솔 오류 부재, 시각적 구분·오류 복구 및 전체 회귀가 확인됐다. 사용자의 변경된 수용 기준에 따라 VoiceOver 나머지 읽기와 정확한 320 CSS px 측정은 후속 검증이며 이번 GO의 근거로 삼지 않는다. 다운로드 파일 속성의 Safari 직접 확인도 미완료이나 서버·브라우저 자동 계약 검증과 사용자 Enter 시작 확인을 구분한다. WCAG 2.2 AA 준수를 주장하지 않는다. 기준 기능 SHA의 원격 CI는 성공했지만 이 문서 변경 커밋 자체의 원격 CI는 push 전에는 확인할 수 없으므로 실제 tag·Release 전 최종 SHA의 CI를 다시 확인해야 한다. GO는 공개 배포 실행 승인이나 hosted upload 승인이 아니다.
+
+## v0.2.0 로컬 live 릴리스 후보 gate — Phase 17, 2026-10-13
+
+이 절은 위의 **v0.1.0 역사적 판정과 별개**다. [Phase 17 수용성 기록](live_monitoring_acceptance_17.md)의 environment별 PASS/BLOCKED/NOT_TESTED를 따른다. 현재 판정은 **로컬 기능 무결성 CONDITIONAL GO, 실제 릴리스 실행 GO 아님**이다. 이 checklist 자체는 버전 확정·tag·Release 승인이 아니다.
+
+- [x] 시작 기능 SHA의 원격 main/CI, 변경 전 전체 회귀, 합성 단일 application loopback, FROM_END, status·혼합 SSE/replay/gap, 정상·오류 종료 뒤 listener/process FD·임시 자료 정리를 확인했다.
+- [x] Safari 18.6 WebDriver에서 live 영역, staged 버튼 전후 네 결과 영역, pause 버튼을 확인했다. 이것은 사람의 키보드·확대·콘솔 검수를 대체하지 않는다.
+- [ ] 실제 사용자 Safari keyboard-only: skip link, sample/파일 입력, live 버튼, 재연결, 다운로드, focus·trap·Tab/Option+Tab을 확인한다.
+- [ ] 실제 Safari 200% 페이지 확대와 가능한 최소 CSS viewport에서 네 영역의 사용성·페이지 전체 overflow를 확인한다. 정확한 320 CSS px가 불가능하면 별도 NOT_TESTED로 남긴다.
+- [ ] Safari Web Inspector의 JavaScript/CSP/MIME 오류, EventSource zombie, URL/Network 개인정보와 SSE 종료를 확인한다.
+- [ ] 실제 Safari에서 pause 중 append, gap/overflow, DEGRADED/FAILED/stream_end, 수동 복구의 문구·focus·scroll을 확인한다. 재현하지 못한 상태는 Node PASS와 구분한다.
+- [ ] Phase 17 검수 커밋의 원격 CI를 **push 이후 별도 승인된 릴리스 단계**에서 확인한다. 이번 작업에서는 push하지 않는다.
+- [ ] 위 수동 gate의 blocker가 없고 새 전체 회귀·개인정보·자원 정리 결과가 유지된 뒤에만 v0.2.0 tag/Release 실행 여부를 별도 결정한다.
+
+단일 source·loopback·process-local 범위만 후보에 포함한다. SSH/access live analysis, cross-source, 영구 저장, crash recovery, exactly-once, hosted 배포는 후보 밖이다. VoiceOver 전체 읽기와 Safari 정확한 320 CSS px 미검증만으로 자동 NO-GO를 선언하지 않지만 이를 PASS로 표시하지 않는다. 탐지 관찰·관계·사례는 침해·인과·확정 사고가 아니다.
+
+### Phase 17.1 사용자 직접 확인 — 2026-10-14
+
+위 Phase 17 체크박스는 당시의 미완료 상태를 보존한다. 최신 항목별 결과는 [Phase 17.1 후속 기록](live_monitoring_acceptance_17.md#phase-171-후속-사용자-직접-검수--2026-10-14)을 따른다.
+
+- [x] 사용자가 Safari keyboard-only의 live 일시 정지·재개, 새 결과 적용, visible focus·trap 부재를 `PASS`로 확인했다. 이번 응답은 Tab과 Option+Tab 중 사용한 방식을 특정하지 않는다.
+- [x] 사용자가 실제 Safari 페이지 확대 200%와 가능한 최소 창 너비에서 핵심 버튼·네 결과 영역 사용성을 각각 `PASS`로 확인했다. 정확한 CSS viewport 숫자와 320 CSS px는 `NOT_TESTED`다.
+- [x] 사용자가 Web Inspector의 새로고침·live 연결·새 결과 적용 범위에서 JS/CSP/MIME 오류, 무제한 중복 EventSource, URL/SSE 민감정보 문제 없음을 `PASS`로 확인했다. 이후 pause·terminal 시점 Inspector 재관찰과 종료 뒤 zombie 요청은 별도 미검증이다.
+- [x] 사용자가 실제 Safari pause 중 append의 pending 증가·서버 수집 지속 안내·재개 뒤 수동 적용, 합성 truncation 뒤 terminal 복구 안내를 각각 `PASS`로 확인했다.
+- [ ] 실제 Safari replay gap 화면은 안전한 주입을 수행하지 못해 `NOT_TESTED`다. 자동 HTTP·Node·pytest 계약 PASS를 사용자 수동 확인으로 대체하지 않는다.
+- [ ] 이번 검수 커밋의 원격 CI와 v0.2.0 tag/Release 실행 승인은 별도 후속 단계다. 이 amend에서는 push·tag·Release를 하지 않는다.
+
+현재 후보 판정은 **CONDITIONAL GO**다. 위 사용자 직접 PASS 범위에서 최소 NO-GO blocker는 보고되지 않았으나 실제 Safari gap·수동 재연결/종료 뒤 Network 관찰이 남는다. VoiceOver 상세와 정확한 320 CSS px만 미검증이라는 이유로 자동 NO-GO를 선언하지 않지만 WCAG 준수도 주장하지 않는다.

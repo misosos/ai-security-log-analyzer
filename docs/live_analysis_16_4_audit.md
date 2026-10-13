@@ -82,3 +82,9 @@ Runner 0.5초 polling 중 status HTTP 40회는 median/p95/max **2.524/3.973/5.86
 추가 동일 절차 재실행(표본 12, warm-up 2, tracing 없음)에서 256-prefix safe snapshot UTF-8 JSON 생성은 median/p95/max **0.119/0.145/0.145ms**였다. 실제 loopback socket smoke의 append→`analysis_changes` 수신은 **43.516ms, 단일 표본**이었다. 후자는 OS scheduling·runner cadence의 영향을 받으므로 p95나 SLA로 일반화하지 않는다. 두 반복 측정의 시간값은 표본 변동이 있어 위 표와 직접 합산하지 않는다.
 
 **CONDITIONAL GO** — 현 단일 application·loopback·합성 계약에서 batch parity, FIFO 실패 처리, 두-event 원자적 buffer swap, 명시적 gap, 개인정보 safe DTO, 현재 개발 상한과 정상 종료가 확인됐다. 256-prefix worker p95는 0.5초 polling 간격 아래였으나 운영 SLA가 아니다. v0.2에 포함할 후보는 이 단일-source 로컬 분석·bounded replay·단계적 UI에 한정한다. 릴리스 전 실제 Safari keyboard-only, 200% 확대·최소 폭, console/CSP와 gap·terminal·pause 중 append를 사람이 확인해야 한다. 확인되지 않은 OS 전체 FD/task/zombie stream 계측도 남아 있다. 이 미확인 항목은 현재 범위의 조건이며 PASS가 아니다. SSH/access live analysis, cross-source, 영구 저장, crash recovery, exactly-once, hosted 제공은 v0.2 이후로 보류한다. 탐지는 침해 확정이 아니고 관계는 인과관계가 아니며 risk 하향·NO_LONGER는 안전/해결을 뜻하지 않는다.
+
+## Phase 17 후속 검수 연결
+
+[Phase 17 수용성 기록](live_monitoring_acceptance_17.md)은 실제 loopback 정상·오류 종료 뒤 listener/process FD/임시 자료 정리와 Safari 18.6 WebDriver·HTTP/SSE 재검증을 추가한다. WebDriver는 사람의 keyboard-only, 실제 200% 확대 또는 Web Inspector 관찰을 대신하지 않는다. 이 미완료 항목은 Phase 17에서 별도 `BLOCKED`/`NOT_TESTED`로 남겨 v0.2 릴리스 실행 gate와 구분한다. Phase 16.4의 당시 판정을 사후에 PASS로 재해석하지 않는다.
+
+2026-10-14 **Phase 17.1 후속 수동 검수**에서 사용자는 실제 Safari keyboard-only, 200% 페이지 확대, 가능한 최소 창 너비, Web Inspector의 주요 live 연결·결과 적용, pause 중 append와 terminal 안내를 각각 `PASS`로 확인했다. 실제 Safari replay gap은 안전한 주입 방법이 없어 `NOT_TESTED`이고 정확한 CSS viewport 수치·VoiceOver 상세·종료 뒤 Network zombie 요청도 미확인이다. 결과와 환경별 증거는 위 Phase 17 문서의 후속 절을 우선하며, Phase 16.4 당시의 `PARTIAL`·`NOT_TESTED`를 소급 수정하지 않는다.
