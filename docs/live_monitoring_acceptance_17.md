@@ -86,3 +86,7 @@ Safari의 `window.innerWidth`를 Apple Events로 읽으려 했으나 Safari의 �
 최종 검증: Phase 17.1 문서 focused **5 passed**, live focused **371 passed**, 전체 문서 계약 **135 passed**, 전체 `uv run pytest -q` **1,992 passed, 기존 경고 2개**였다. 변경 전 1,991건보다 문서 계약 테스트가 1건 늘었고 새 경고는 없다. 합성 인증·웹 **79/79**, Linux **21/21**, risk/case **70/70**; UTC와 `Asia/Seoul` 동일 live prefix·publication·detection focused **32건씩 PASS**였다. Node 문법·동작, `uv lock --check`, 변경 Python `py_compile`, `git diff --check`도 통과했다. 이는 현재 합성 계약의 반복·timezone 일치이지 운영 SLA나 모든 Safari 상태의 검증이 아니다.
 
 **최종 판정: CONDITIONAL GO.** 사용자가 확인한 keyboard-only, 200% 확대, 최소 너비, Inspector의 주요 흐름, pause 중 append, terminal 화면에서는 NO-GO blocker가 보고되지 않았다. 그러나 실제 Safari replay gap 화면과 이번 회차 수동 재연결·종료 뒤 zombie EventSource 관찰은 `NOT_TESTED`이므로 v0.2.0 릴리스 실행을 무조건 GO로 선언하지 않는다. 정확한 320 CSS px와 VoiceOver 상세 미검증만으로 NO-GO를 선언하지도 않는다. 자동·HTTP 계약 검증은 별도 증거이며 운영 무유실·exactly-once·hosted 준비 또는 WCAG 준수를 뜻하지 않는다.
+
+## Phase 18 후속 gate
+
+위 Phase 17.1 판정은 당시의 이력이다. 실제 Safari replay gap 화면과 정상 종료 뒤 bounded 재연결은 [Phase 18 복구 검증](live_monitoring_release_gate_18.md)에서 사용자 직접 확인과 서버 측 증거를 분리해 추가했다. Gap 화면은 `PASS`, 서버 종료 뒤 수동 복구 안내와 무조작 약 20초 동안 새 요청 비증가는 `PASS`다. Safari에서 `stream_end` frame 자체의 수신, 정확한 320 CSS px, VoiceOver 상세는 검증했다고 주장하지 않는다. 릴리스 후보 준비는 `CONDITIONAL GO`이며 최종 준비 SHA의 원격 CI와 tag/Release는 별도 gate다.

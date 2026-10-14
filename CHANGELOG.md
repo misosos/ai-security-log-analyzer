@@ -1,5 +1,22 @@
 # 변경 이력
 
+## [0.2.0] - 2026-10-14
+
+### 추가
+
+- 승인한 로컬 단일 source 파일을 `--monitor-config`로 지정하는 bounded 실시간 모니터링. `FROM_END`로 시작해 실행 전 기존 줄은 처리하지 않는다. Application·SSH·access 로그의 기존 parser·detector 의미를 재사용한다.
+- 제한된 tail poll·queue item/byte 상한, 단일 lease·ack·release, detection proposal과 사전 검증된 commit. Application source에서는 기존 correlation·risk·case를 bounded 전체 prefix에서 재계산해 함께 commit한다. 실패 후 로그인 성공과 반복 인증 실패 후 로그인 성공 관계, 기존 위험도 평가, 결정적 조사 사례를 내부 분석과 안전한 화면 요약으로 연결한다.
+- 개인정보 안전 `observation_changes`·`analysis_changes` SSE와 process-local bounded replay. 한 revision의 두 event는 사전 검증한 batch로 게시하고 event ID 순서를 공유한다. 오래된 cursor에는 explicit replay gap을 반환한다.
+- 실시간 웹 영역의 탐지 관찰·지원 관계·기존 위험도 평가·조사 사례 분리, **새 결과 N건 보기** 단계적 적용, 화면 업데이트 일시 정지·재개, 수동 복구 안내. 화면 일시 정지는 서버 수집을 멈추지 않는다.
+- 정상 종료에서 runner·SSE 연결·tail FD와 알려진 임시 자원을 정리한다. 기존 합성 샘플, 3파일 분석, Linux Audit 별도 흐름과 HTML 보고서는 유지한다.
+
+### 보안과 한계
+
+- 공개 status·SSE·DOM은 allowlist 기반 안전 projection만 사용한다. 원래 계정·IP·path/query·raw line·내부 subject key 및 원본 근거는 trusted 내부 분석에만 남을 수 있다. 탐지·관계·조사 사례는 침해·공격 성공·인과관계를 확정하지 않는다.
+- Live analysis는 **단일 application source**만 지원한다. SSH/access는 detection-only이며 cross-source 관계, Linux Audit live 분석, 영구 저장, crash recovery, 여러 process 간 공유, hosted/multi-tenant 용도는 지원하지 않는다.
+- Queue ack는 되돌릴 수 없는 경계이고 queue·detection·analysis·publication 전체는 원자적 transaction이 아니다. Exactly-once·운영 무유실·운영 SLA를 보장하지 않는다. Replay eviction은 gap을 만들 수 있고 재시작 시 session과 buffer가 사라진다.
+- 기본 실시간 흐름에서 event마다 LLM을 호출하지 않는다. WCAG 2.2 AA 완전 준수, wheel/PyPI 설치를 주장하지 않는다. 공식 설치 경계는 source checkout이다.
+
 ## [0.1.0] - 2026-10-09
 
 첫 로컬 릴리스 후보의 구현 범위다. 태그·GitHub Release·PyPI 배포 완료를 뜻하지 않는다.

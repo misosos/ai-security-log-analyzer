@@ -1,6 +1,6 @@
 [project]
 name = "ai-security-log-analyzer"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 description = "Evidence-based security log analysis with bounded Linux Audit telemetry"
 readme = "README.md"

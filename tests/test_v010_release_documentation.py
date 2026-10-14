@@ -11,9 +11,9 @@ def _text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_single_project_version_and_locked_source_checkout_commands():
+def test_historical_v010_note_and_locked_source_checkout_commands():
     project = tomllib.loads(_text("pyproject.toml"))
-    assert project["project"]["version"] == "0.1.0"
+    assert _text("docs/releases/v0.1.0.md").startswith("# v0.1.0 로컬 릴리스 노트\n")
     assert project["project"]["license"] == "MIT"
     assert project["project"]["requires-python"].startswith(">=3.12")
     for path in ("README.md", "docs/releases/v0.1.0.md"):
@@ -138,7 +138,7 @@ def test_readme_release_guidance_is_durable_and_checklist_is_historical():
     ):
         assert temporary_claim not in readme
     for verified_or_limited in (
-        "[릴리스 노트](docs/releases/v0.1.0.md)",
+        "[이전 릴리스 노트](docs/releases/v0.1.0.md)",
         "keyboard-only 주요 흐름", "visible focus", "실제 200% 확대",
         "가능한 최소 창 너비", "콘솔 오류 부재", "정확한 320 CSS px",
         "VoiceOver 읽기는 미검증", "실제 운영환경 탐지율",

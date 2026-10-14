@@ -88,3 +88,5 @@ Runner 0.5초 polling 중 status HTTP 40회는 median/p95/max **2.524/3.973/5.86
 [Phase 17 수용성 기록](live_monitoring_acceptance_17.md)은 실제 loopback 정상·오류 종료 뒤 listener/process FD/임시 자료 정리와 Safari 18.6 WebDriver·HTTP/SSE 재검증을 추가한다. WebDriver는 사람의 keyboard-only, 실제 200% 확대 또는 Web Inspector 관찰을 대신하지 않는다. 이 미완료 항목은 Phase 17에서 별도 `BLOCKED`/`NOT_TESTED`로 남겨 v0.2 릴리스 실행 gate와 구분한다. Phase 16.4의 당시 판정을 사후에 PASS로 재해석하지 않는다.
 
 2026-10-14 **Phase 17.1 후속 수동 검수**에서 사용자는 실제 Safari keyboard-only, 200% 페이지 확대, 가능한 최소 창 너비, Web Inspector의 주요 live 연결·결과 적용, pause 중 append와 terminal 안내를 각각 `PASS`로 확인했다. 실제 Safari replay gap은 안전한 주입 방법이 없어 `NOT_TESTED`이고 정확한 CSS viewport 수치·VoiceOver 상세·종료 뒤 Network zombie 요청도 미확인이다. 결과와 환경별 증거는 위 Phase 17 문서의 후속 절을 우선하며, Phase 16.4 당시의 `PARTIAL`·`NOT_TESTED`를 소급 수정하지 않는다.
+
+**Phase 18 후속:** [복구 gate 기록](live_monitoring_release_gate_18.md)은 실제 Safari replay gap 화면과 서버 정상 종료 뒤 수동 복구 안내·무조작 관찰 중 요청 비증가를 추가 확인한다. 이는 Phase 16.4 당시의 미검증 판정을 소급 변경하지 않는다. Safari `stream_end` frame 자체, 정확한 320 CSS px, VoiceOver 상세와 최종 준비 커밋의 원격 CI는 별도 미검증 범위다.

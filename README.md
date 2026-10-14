@@ -4,7 +4,7 @@
 
 AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로그, 웹 접근 로그와 선택적인 Linux Audit 레코드를 정규화한 뒤, 결정적인 규칙으로 탐지·상관관계·IP별 위험도를 계산하는 방어 목적의 배치 분석 프로젝트입니다. 보안 로그 조사 흐름을 학습하거나 소규모 환경에서 초기 검토하는 데 사용할 수 있습니다.
 
-v0.2.0 준비 단계에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core·parser adapter·단일 record lease·worker·detection accumulator](docs/live_log_monitoring_design.md)가 있습니다. 기존 application·SSH·access parser와 detector를 그대로 재사용합니다. Worker는 queue ack 성공 후에만 탐지 후보를 commit하며, 이는 원자적 transaction이나 exactly-once가 아닙니다. Session-local observation ID에는 개인정보나 hash가 없지만 trusted 내부 history에는 원문 계정·path/query가 남을 수 있습니다. 전체 PARSED session prefix는 명시된 item·byte 상한 안에 보존하며 오래된 event를 조용히 제거하지 않습니다. 현재 공개된 v0.1.0 업로드·배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
+v0.2.0에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core·parser adapter·단일 record lease·worker·detection accumulator](docs/live_log_monitoring_design.md)가 있습니다. 기존 application·SSH·access parser와 detector를 그대로 재사용합니다. Worker는 queue ack 성공 후에만 탐지 후보를 commit하며, 이는 원자적 transaction이나 exactly-once가 아닙니다. Session-local observation ID에는 개인정보나 hash가 없지만 trusted 내부 history에는 원문 계정·path/query가 남을 수 있습니다. 전체 PARSED session prefix는 명시된 item·byte 상한 안에 보존하며 오래된 event를 조용히 제거하지 않습니다. 기존 v0.1.0 업로드·배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
 
 Phase 14~15에서는 확정된 detection change만 받는 process-local·memory-only bounded publication/replay buffer, 읽기 전용 loopback status/SSE, `--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다. 기본 `uv run python -m app.local_web`에서는 live endpoint와 화면 영역이 비활성입니다. Detection commit 이후 publication 실패는 되돌리지 않고 terminal 무결성 오류로 기록합니다. SSE는 무유실·재시작 후 복구·여러 process 간 일관성을 보장하지 않습니다.
 
@@ -12,7 +12,7 @@ Phase 16의 [live correlation·risk·조사 사례 설계](docs/live_analysis_co
 
 Phase 16.1에서는 단일 `application` source에 한정한 내부 proposal/commit/abort 분석 상태를 구현했고, Phase 16.2에서 worker의 queue ack 이후 detection commit과 함께 확정했습니다. Phase 16.3은 개인정보 안전 관계·위험도·조사 사례 요약을 bounded publication과 `analysis_changes` SSE에 연결합니다. 기존 `observation_changes`는 유지하고 브라우저에서는 두 event를 함께 제한된 대기열에 보관하다가 **새 결과 보기**를 선택할 때 표시합니다. SSH·access의 이 분석은 아직 제공하지 않습니다. 256 PARSED event/256 KiB를 넘으면 일부 기록을 버리고 계속하지 않습니다. Ack는 되돌릴 수 없고 queue·두 accumulator·publication은 원자적 transaction이 아닙니다. 탐지·관계·위험도·조사 사례는 침해나 인과관계의 확정이 아닙니다. Session-local ID는 재시작 후 유지되지 않으며 crash recovery·exactly-once도 없습니다.
 
-Phase 16.4의 [로컬 통합 감사](docs/live_analysis_16_4_audit.md)와 [Phase 17·17.1 수용성 기록](docs/live_monitoring_acceptance_17.md)은 합성 application 흐름의 batch parity·두-event publication·replay·개인정보 경계, 실제 loopback 정상·오류 종료 정리를 구분해 기록합니다. Phase 17.1에서 사용자가 Safari의 live keyboard-only·실제 200% 확대·최소 창 너비·Web Inspector 주요 흐름·pause 중 append·terminal 화면을 직접 `PASS`로 확인했습니다. 실제 Safari replay gap 화면, 정확한 320 CSS px, VoiceOver 상세와 일부 수동 재연결·종료 후 Network 관찰은 미검증이므로 **CONDITIONAL GO, 릴리스 실행 GO 아님**입니다. 운영 SLA나 WCAG 2.2 AA 준수를 뜻하지 않습니다. 현재 live 분석은 application만 지원하고 SSH·access 분석과 cross-source 결합, crash recovery는 v0.2 이후로 보류합니다.
+Phase 16.4의 [로컬 통합 감사](docs/live_analysis_16_4_audit.md), [Phase 17·17.1 수용성 기록](docs/live_monitoring_acceptance_17.md), [Phase 18 복구 검증](docs/live_monitoring_release_gate_18.md)은 합성 application 흐름의 batch parity·두-event publication·replay·개인정보 경계와 실제 loopback 종료 정리를 구분합니다. 사용자는 Safari의 live keyboard-only·실제 200% 확대·최소 창 너비·Web Inspector 주요 흐름·pause 중 append·terminal 및 replay gap 복구 화면을 직접 확인했습니다. 종료 후 수동 복구 안내와 버튼을 누르지 않는 동안 요청이 늘지 않는 것도 확인했습니다. 정확한 320 CSS px와 VoiceOver 상세는 미검증이며, 최종 릴리스 실행은 별도 원격 CI·tag gate가 남아 있습니다. 운영 SLA나 WCAG 2.2 AA 준수를 뜻하지 않습니다. 현재 live 분석은 application만 지원하고 SSH·access 분석과 cross-source 결합, crash recovery는 v0.2 이후로 보류합니다.
 
 로컬 모니터링 사용 순서: (1) 읽을 수 있는 로그 파일 하나를 준비합니다. (2) 개인 경로가 없는 [예시 설정](docs/examples/live-monitor.json)을 복사해 설정 파일과 source의 절대 경로를 자신의 로컬 경로로 바꾸고 설정 권한을 소유자만 읽을 수 있게 합니다. (3) `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`으로 실행합니다. `--port 8123`과 `--no-browser`도 함께 사용할 수 있습니다. (4) 브라우저의 **실시간 로그 모니터링** 영역에서 상태와 로그 역할을 확인합니다. (5) 실행 뒤 새 로그 줄이 추가되어 탐지 관찰이 생기면 **새 결과 N건 보기**를 눌러 목록에 반영합니다. (6) `Ctrl+C`로 종료합니다. 시작 전 파일 내용은 읽지 않습니다. **화면 업데이트 일시 정지**는 서버 수집을 멈추지 않습니다. 기존 3파일 분석과 Linux Audit 단일 업로드는 별도 흐름입니다. 원본 로그·결과를 서버에 영구 저장하지 않지만 process 재시작 중의 추가분 복구는 없습니다. `/api/health`의 200은 웹 서버 준비만 뜻하고 live 상태는 `/api/v1/live/status`에서 확인합니다. 단일 source·memory-only이며 replay eviction/gap, crash gap, 중복 가능성이 있어 exactly-once가 아닙니다. 탐지 관찰은 침해 확정이 아니고 hosted 용도가 아닙니다.
 
@@ -31,7 +31,7 @@ Phase 16.4의 [로컬 통합 감사](docs/live_analysis_16_4_audit.md)와 [Phase
 - Python 3.12 이상(`pyproject.toml`의 `requires-python = ">=3.12"`)
 - [uv](https://docs.astral.sh/uv/)
 
-저장소를 받은 뒤 프로젝트 루트에서 검증된 잠금 파일로 개발 의존성까지 동기화합니다. 프로젝트 버전의 단일 출처는 `pyproject.toml`의 `0.1.0`이며 API/평가 schema version과 별개입니다. 이 버전의 공식 설치 방식은 source checkout입니다. 현재 `uv build`는 flat-layout package discovery 오류로 실패하므로 wheel/PyPI 설치를 지원한다고 주장하지 않습니다.
+저장소를 받은 뒤 프로젝트 루트에서 검증된 잠금 파일로 개발 의존성까지 동기화합니다. 프로젝트 버전의 단일 출처는 `pyproject.toml`의 `0.2.0`이며 API/평가 schema version과 별개입니다. 이 버전의 공식 설치 방식은 source checkout입니다. 현재 `uv build`는 flat-layout package discovery 오류로 실패하므로 wheel/PyPI 설치를 지원한다고 주장하지 않습니다.
 
 ```bash
 uv sync --locked --dev
@@ -72,7 +72,7 @@ uv run python -m app.local_web
 | Hosted server | 지원 안 함 | 인증·인가·tenant isolation 없음 |
 | Public internet | 노출 금지 | 실제 로그 업로드 보안 gate 미충족 |
 
-`v0.1.0`의 범위와 제한은 [변경 이력](CHANGELOG.md), [릴리스 노트](docs/releases/v0.1.0.md), [릴리스 체크리스트](docs/release_checklist.md)에 기록했다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 릴리스 후보의 원격 CI와 Safari WebDriver 주요 흐름을 확인했다. 실제 운영환경 탐지율·WCAG 2.2 AA 준수·hosted 배포를 주장하지 않는다.
+`v0.2.0`의 범위와 제한은 [변경 이력](CHANGELOG.md), [릴리스 노트](docs/releases/v0.2.0.md), [릴리스 체크리스트](docs/release_checklist.md)에 기록했다. v0.1.0은 [이전 릴리스 노트](docs/releases/v0.1.0.md)에 보존한다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 릴리스 후보의 원격 CI와 Safari WebDriver 주요 흐름을 확인했다. 실제 운영환경 탐지율·WCAG 2.2 AA 준수·hosted 배포를 주장하지 않는다.
 
 ### 업데이트와 삭제
 

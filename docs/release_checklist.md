@@ -124,3 +124,26 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 - [ ] 이번 검수 커밋의 원격 CI와 v0.2.0 tag/Release 실행 승인은 별도 후속 단계다. 이 amend에서는 push·tag·Release를 하지 않는다.
 
 현재 후보 판정은 **CONDITIONAL GO**다. 위 사용자 직접 PASS 범위에서 최소 NO-GO blocker는 보고되지 않았으나 실제 Safari gap·수동 재연결/종료 뒤 Network 관찰이 남는다. VoiceOver 상세와 정확한 320 CSS px만 미검증이라는 이유로 자동 NO-GO를 선언하지 않지만 WCAG 준수도 주장하지 않는다.
+
+## v0.2.0 로컬 릴리스 후보 준비 — Phase 18
+
+이 절만 v0.2.0 후보의 현재 gate다. 위 v0.1.0 및 Phase 17/17.1 체크 상태는 당시 기록으로 보존한다. [Phase 18 Safari 복구 기록](live_monitoring_release_gate_18.md)에서 실제 replay gap·종료 후 수동 복구와 무조작 중 요청 비증가를 사용자와 확인했다. Safari `stream_end` frame 자체·정확한 320 CSS px·VoiceOver 상세는 확인하지 않았다. 로컬 후보 판정은 **CONDITIONAL GO**이며 실제 tag/Release 실행 승인이 아니다.
+
+### 후보 소스와 로컬 검증
+
+- [x] v0.2.0의 버전 단일 출처는 `pyproject.toml`이고 `uv.lock` metadata만 이에 맞춘다. Dependency 집합은 변경하지 않는다.
+- [x] 영속적인 [v0.2.0 릴리스 노트](releases/v0.2.0.md), CHANGELOG, README, LICENSE, [SECURITY](../SECURITY.md) 경계를 확인한다.
+- [x] 시작 SHA의 원격 CI, 변경 전 전체 회귀, 인증·웹 79/79, Linux 21/21, risk/case 70/70을 확인했다.
+- [x] Safari 18.6에서 replay gap의 stale·복구와 정상 종료 뒤 수동 복구 문구, 버튼 무조작 중 요청 비증가를 사용자 직접 확인했다. `stream_end` frame 자체는 미확인이다.
+- [ ] 준비 커밋의 별도 clean checkout에서 locked install·전체 회귀·세 평가, 기존 sample/3파일/Linux Audit와 loopback live smoke, privacy canary, listener·FD·임시 자료 정리를 다시 확인한다.
+- [x] UTC/KST 동일 focused 32건씩, Node 문법·동작, `uv lock --check`, `git diff --check`, live focused 371건과 전체 회귀 1,995건·기존 경고 2개를 확인했다. 실제 loopback smoke의 종료 후 listener·임시 자료 정리와 기존 runner/worker의 task·SSE slot·tail FD·active lease/proposal 정리 테스트를 구분한다.
+- [ ] `uv build` 결과를 별도 기록한다. 기존 flat-layout 문제가 남으면 source checkout만 지원하고 wheel/PyPI는 주장하지 않는다.
+
+### 게시 전 별도 gate — 이번 준비 단계에서는 미수행
+
+- [ ] 최종 준비 커밋을 push한 뒤 **바로 그 SHA**의 GitHub Actions CI 성공과 clean working tree, local/remote `main` 일치를 확인한다.
+- [ ] 기존 `v0.2.0` tag·GitHub Release가 없는지 확인하고 annotated tag target을 최종 SHA로 검증한다.
+- [ ] GitHub Release body가 [영속적인 릴리스 노트](releases/v0.2.0.md)와 일치하고 asset이 **0개**인지 검증한다.
+- [ ] 사용자·유지관리자의 최종 tag/Release 승인과 새로운 blocker 부재를 확인한다. v0.1.0 tag·Release는 변경하지 않는다.
+
+단일 application source의 live analysis, SSH/access detection-only, process-local bounded replay만 포함한다. Cross-source, crash recovery, exactly-once, hosted/multi-tenant, 운영 SLA, WCAG 2.2 AA 완전 준수와 wheel/PyPI 배포는 후보 범위 밖이다.
