@@ -238,6 +238,8 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
+향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사를 최소 범위로 검토하며, durable checkpoint·rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 이는 **설계**이며 현재 명령이나 기능으로 **구현되지 않았습니다**. 재시작 중 기록 복구나 운영 무유실을 약속하지 않습니다.
+
 ## 오프라인 탐지 평가 기준선
 
 작은 합성 경계 corpus에서 현재 parser·탐지·관계·risk·조사 사례 계약을 분리해 평가합니다.
