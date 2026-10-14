@@ -119,6 +119,6 @@ def test_readme_roadmap_distinguishes_setup_core_from_unimplemented_features() -
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "local_collector_v030_design.md" in readme
     paragraph = next(p for p in readme.split("\n\n") if "local_collector_v030_design.md" in p)
-    assert "설계" in paragraph and "마법사 core는 구현" in paragraph
+    assert "설계" in paragraph and "마법사와 기본 설정 조회·삭제" in paragraph
     assert "checkpoint" in paragraph and "rotation" in paragraph
     assert "후속 gate" in paragraph

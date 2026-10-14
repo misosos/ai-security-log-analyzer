@@ -14,6 +14,8 @@ import webbrowser
 
 import uvicorn
 
+from app.live_monitoring.config import resolve_default_monitor_config_path
+
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -97,14 +99,19 @@ def _port_text(value: str) -> int:
 
 
 def _arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = _Parser(description="로컬 보안 로그 분석기 실행")
+    parser = _Parser(description="로컬 보안 로그 분석기 실행",
+                     epilog="예: uv run python -m app.local_web --monitor --no-browser")
     parser.add_argument("--port", type=_port_text, action=_SinglePort,
                         default=None, metavar="PORT", help="로컬 포트 (1024–65535, 기본 8000)")
     parser.add_argument("--no-browser", action="store_true", help="브라우저를 자동으로 열지 않음")
     parser.add_argument("--monitor-config", action=_SingleConfig, default=None,
                         metavar="/absolute/path/to/live-monitor.json",
                         help="명시적으로 승인한 단일 로그의 로컬 모니터링 설정")
+    parser.add_argument("--monitor", action="store_true",
+                        help="기본 private v2 설정으로 로컬 모니터링 시작 (예: --monitor --no-browser)")
     result = parser.parse_args(argv)
+    if result.monitor and result.monitor_config is not None:
+        parser.error("monitor options conflict")
     if result.port is None:
         result.port = DEFAULT_PORT
     return result
@@ -149,6 +156,7 @@ def run_local_web(
     *,
     open_browser: bool = True,
     monitor_config: Path | None = None,
+    monitor_default: bool = False,
     listener_factory=_listener,
     server_factory=_server,
     readiness=_healthy,
@@ -156,6 +164,7 @@ def run_local_web(
     monotonic=time.monotonic,
     sleep=time.sleep,
     runtime_factory=_live_runtime,
+    default_config_resolver=resolve_default_monitor_config_path,
 ) -> int:
     """Run until interrupted; injectable boundaries keep lifecycle tests bounded."""
     if type(port) is not int or not MIN_PORT <= port <= MAX_PORT:
@@ -167,19 +176,35 @@ def run_local_web(
     if monitor_config is not None and not isinstance(monitor_config, Path):
         print("LIVE_CONFIG_INVALID: 설정은 절대 경로의 로컬 파일이어야 합니다. 설정 파일을 확인하십시오.", file=sys.stderr)
         return 2
+    if type(monitor_default) is not bool or (monitor_default and monitor_config is not None):
+        print("LOCAL_WEB_INVALID_ARGUMENT: 모니터링 옵션을 확인하십시오.", file=sys.stderr)
+        return 2
     try:
         from app.api import app
     except Exception:
         print("LOCAL_WEB_IMPORT_FAILED: 앱을 시작할 수 없습니다.", file=sys.stderr)
         return 4
     service = None
-    if monitor_config is not None:
+    if monitor_config is not None or monitor_default:
         from app.api import create_app
         from app.live_monitoring.config import LiveMonitorError
+        from app.live_monitoring.default_config import open_default_config
         try:
-            service, runner = runtime_factory(monitor_config)
+            if monitor_default:
+                config_path = default_config_resolver()
+                with open_default_config(config_path) as guard:
+                    service, runner = runtime_factory(config_path)
+                    guard.check()
+            else:
+                service, runner = runtime_factory(monitor_config)
             app = create_app(live_monitoring_service=service, live_monitoring_runner=runner)
         except LiveMonitorError as error:
+            if service is not None:
+                asyncio.run(service.close())
+            if monitor_default:
+                print(f"{error.code}: 기본 설정으로 모니터링을 준비하지 못했습니다. "
+                      "uv run python -m app.monitor_setup 으로 설정을 확인하십시오.", file=sys.stderr)
+                return 4
             code = "LIVE_SOURCE_UNAVAILABLE" if error.code in (
                 "SOURCE_UNAVAILABLE", "NON_REGULAR_SOURCE", "SYMLINK_REJECTED", "PERMISSION_DENIED",
             ) else "LIVE_CONFIG_INVALID"
@@ -294,10 +319,11 @@ def main(argv: list[str] | None = None) -> int:
         if str(error) == "INVALID_PORT":
             print("LOCAL_WEB_INVALID_PORT: 포트는 1024~65535의 정수여야 합니다.", file=sys.stderr)
         else:
-            print("LOCAL_WEB_INVALID_ARGUMENT: --port는 한 번만 허용하며 --host는 지원하지 않습니다.", file=sys.stderr)
+            print("LOCAL_WEB_INVALID_ARGUMENT: 옵션을 확인하십시오. --monitor와 --monitor-config는 함께 사용할 수 없습니다.", file=sys.stderr)
         return 2
     try:
         return run_local_web(arguments.port, open_browser=not arguments.no_browser,
+                             monitor_default=arguments.monitor,
                              monitor_config=(Path(arguments.monitor_config)
                                              if arguments.monitor_config is not None else None))
     except KeyboardInterrupt:

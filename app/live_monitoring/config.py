@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import sys
 
 
 CONFIG_MAX_BYTES = 4096
@@ -18,6 +19,17 @@ _MESSAGES = {
     "DUPLICATE_JSON_KEY": "모니터링 설정에 중복된 항목이 있습니다.",
     "UNSUPPORTED_SCHEMA": "지원하는 설정 버전을 사용하십시오.",
     "SOURCE_DISABLED": "비활성화된 로그 설정은 시작할 수 없습니다.",
+    "DEFAULT_CONFIG_MISSING": "기본 설정이 없습니다. 설정 마법사를 실행하십시오.",
+    "DEFAULT_CONFIG_UNSAFE_PARENT": "기본 설정 디렉터리 권한을 확인하십시오.",
+    "DEFAULT_CONFIG_PERMISSION": "기본 설정의 소유자와 권한을 확인하십시오.",
+    "DEFAULT_CONFIG_SYMLINK": "기본 설정은 심볼릭 링크일 수 없습니다.",
+    "DEFAULT_CONFIG_TYPE": "기본 설정은 일반 파일이어야 합니다.",
+    "DEFAULT_CONFIG_TOO_LARGE": "기본 설정 크기를 확인하십시오.",
+    "DEFAULT_CONFIG_MALFORMED": "기본 설정이 손상되었습니다. 수동으로 확인하십시오.",
+    "DEFAULT_CONFIG_SCHEMA": "기본 설정은 지원하는 v2 형식이어야 합니다.",
+    "DEFAULT_CONFIG_CHANGED": "검사 중 기본 설정이 변경되었습니다. 다시 시도하십시오.",
+    "DEFAULT_CONFIG_DELETE_FAILED": "기본 설정을 삭제하지 못했습니다. 권한을 확인하십시오.",
+    "DEFAULT_CONFIG_POST_DELETE_FAILED": "삭제 결과를 확인하지 못했습니다. 수동으로 확인하십시오.",
     "UNSUPPORTED_ROLE": "지원하는 로그 역할을 선택하십시오.",
     "UNSUPPORTED_START_POLICY": "FROM_END 시작 정책을 사용하십시오.",
     "NON_ABSOLUTE_PATH": "절대 경로를 지정하십시오.",
@@ -152,6 +164,31 @@ def _validate_absolute_path(value: str) -> None:
         raise LiveMonitorError("NON_ABSOLUTE_PATH")
 
 
+def resolve_default_monitor_config_path(*, platform: str | None = None,
+                                        home: Path | None = None,
+                                        xdg_config_home: str | None = None) -> Path:
+    """Resolve one conventional local path; never search or expand input text."""
+    system = sys.platform if platform is None else platform
+    user_home = Path.home() if home is None else home
+    if not isinstance(user_home, Path):
+        raise LiveMonitorError("NON_ABSOLUTE_PATH")
+    _validate_absolute_path(os.fspath(user_home))
+    if system == "darwin":
+        base = user_home / "Library/Application Support"
+    elif system.startswith("linux"):
+        xdg = os.environ.get("XDG_CONFIG_HOME") if xdg_config_home is None else xdg_config_home
+        if xdg:
+            if type(xdg) is not str:
+                raise LiveMonitorError("NON_ABSOLUTE_PATH")
+            _validate_absolute_path(xdg)
+            base = Path(xdg)
+        else:
+            base = user_home / ".config"
+    else:
+        raise LiveMonitorError("UNSAFE_PLATFORM")
+    return base / "ai-security-log-analyzer/monitoring.json"
+
+
 def _open_regular(path: Path, *, config_file: bool = False) -> tuple[int, os.stat_result]:
     """Walk an absolute path without following parent or final symlinks."""
     if not all(hasattr(os, name) for name in (
@@ -225,20 +262,16 @@ def _reject_constant(_value: str) -> None:
     raise LiveMonitorError("INVALID_CONFIG")
 
 
-def _read_config_document(path: Path) -> object:
-    if not isinstance(path, Path):
-        raise LiveMonitorError("NON_ABSOLUTE_PATH")
-    descriptor, metadata = _open_regular(path, config_file=True)
+def _read_config_document_from_fd(descriptor: int, metadata: os.stat_result) -> object:
+    """Decode an already validated descriptor without reopening its pathname."""
     try:
         if metadata.st_size > CONFIG_MAX_BYTES:
             raise LiveMonitorError("CONFIG_TOO_LARGE")
-        data = os.read(descriptor, CONFIG_MAX_BYTES + 1)
+        data = os.pread(descriptor, CONFIG_MAX_BYTES + 1, 0)
         if len(data) > CONFIG_MAX_BYTES:
             raise LiveMonitorError("CONFIG_TOO_LARGE")
     except OSError:
         raise LiveMonitorError("CONFIG_UNAVAILABLE") from None
-    finally:
-        os.close(descriptor)
     try:
         decoded = data.decode("utf-8", errors="strict")
     except UnicodeDecodeError:
@@ -252,6 +285,16 @@ def _read_config_document(path: Path) -> object:
     except (ValueError, TypeError, RecursionError):
         raise LiveMonitorError("INVALID_CONFIG") from None
     return parsed
+
+
+def _read_config_document(path: Path) -> object:
+    if not isinstance(path, Path):
+        raise LiveMonitorError("NON_ABSOLUTE_PATH")
+    descriptor, metadata = _open_regular(path, config_file=True)
+    try:
+        return _read_config_document_from_fd(descriptor, metadata)
+    finally:
+        os.close(descriptor)
 
 
 def _parse_v2(parsed: object) -> LiveMonitorConfigV2:

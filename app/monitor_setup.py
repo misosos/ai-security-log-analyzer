@@ -13,8 +13,9 @@ from typing import Callable
 
 from app.live_monitoring.config import (
     LiveMonitorConfigV2, LiveMonitorError, _open_regular, _validate_absolute_path,
-    load_live_monitor_config, load_live_monitor_setup_config,
+    load_live_monitor_config, load_live_monitor_setup_config, resolve_default_monitor_config_path,
 )
+from app.live_monitoring.default_config import open_default_config, source_available
 from app.live_monitoring.core import LiveTailRecord, MAX_LINE_BYTES
 from app.live_monitoring.parser_adapter import parse_live_records
 
@@ -41,6 +42,17 @@ _RECOVERY = {
     "SETUP_SAVE_FAILED": ("설정 파일을 저장하지 못했습니다.", "디렉터리 권한과 저장 공간을 확인하십시오.", True),
     "SETUP_POST_WRITE_FAILED": ("저장 후 설정 검증에 실패했습니다.", "설정 파일 상태를 확인하십시오.", False),
     "SETUP_INTERNAL_FAILED": ("설정 준비 중 내부 오류가 발생했습니다.", "다시 시도해도 반복되면 합성 자료로 신고하십시오.", False),
+    "DEFAULT_CONFIG_MISSING": ("기본 설정이 없습니다.", "uv run python -m app.monitor_setup 을 실행하십시오.", True),
+    "DEFAULT_CONFIG_UNSAFE_PARENT": ("기본 설정 디렉터리가 안전하지 않습니다.", "권한을 수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_PERMISSION": ("기본 설정의 소유자 또는 권한이 안전하지 않습니다.", "소유자와 0600 권한을 수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_SYMLINK": ("기본 설정에 심볼릭 링크가 있습니다.", "수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_TYPE": ("기본 설정은 일반 파일이어야 합니다.", "수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_TOO_LARGE": ("기본 설정이 너무 큽니다.", "수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_MALFORMED": ("기본 설정이 손상되었습니다.", "원본을 수동으로 확인하십시오.", False),
+    "DEFAULT_CONFIG_SCHEMA": ("기본 설정 버전이 지원되지 않습니다.", "v2 설정을 다시 생성하십시오.", False),
+    "DEFAULT_CONFIG_CHANGED": ("검사 중 기본 설정이 변경되었습니다.", "다시 시도하십시오.", True),
+    "DEFAULT_CONFIG_DELETE_FAILED": ("기본 설정 삭제에 실패했습니다.", "권한을 확인한 뒤 다시 시도하십시오.", True),
+    "DEFAULT_CONFIG_POST_DELETE_FAILED": ("삭제 결과를 확인하지 못했습니다.", "수동으로 확인하십시오.", False),
 }
 
 
@@ -71,6 +83,20 @@ class SetupResult:
     status: str
     source_role: str | None = None
     dry_run: DryRunSummary | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DefaultConfigSummary:
+    schema_version: str
+    source_role: str
+    enabled: bool
+    start_position: str
+    parser_timezone: str
+    checkpoint_policy: str
+    rotation_policy: str
+    permission_ok: bool
+    source_available: bool
+    runnable: bool
 
 
 def _safe_path(value: str | Path) -> Path:
@@ -203,13 +229,55 @@ def _preview_source(path: Path) -> tuple[DryRunSummary, tuple[int, int, int, int
 
 
 def _default_output() -> Path:
-    if sys.platform == "darwin":
-        return Path.home() / "Library/Application Support/ai-security-log-analyzer/monitoring.json"
-    if sys.platform.startswith("linux"):
-        xdg = os.environ.get("XDG_CONFIG_HOME")
-        base = _safe_path(xdg) if xdg else Path.home() / ".config"
-        return base / "ai-security-log-analyzer/monitoring.json"
-    raise MonitorSetupError("SETUP_UNSUPPORTED_OS")
+    try:
+        return resolve_default_monitor_config_path()
+    except LiveMonitorError as error:
+        raise MonitorSetupError("SETUP_UNSUPPORTED_OS" if error.code == "UNSAFE_PLATFORM"
+                                else "SETUP_INVALID_INPUT") from None
+
+
+def _management_path(path: Path | None) -> Path:
+    return path if path is not None else _default_output()
+
+
+def _management_error(error: LiveMonitorError) -> MonitorSetupError:
+    return MonitorSetupError(error.code)
+
+
+def show_default_config(path: Path | None = None) -> DefaultConfigSummary:
+    try:
+        with open_default_config(_management_path(path)) as guard:
+            available = source_available(guard.config)
+            guard.check()
+            config = guard.config
+            return DefaultConfigSummary(config.schema_version, config.source_role,
+                                        config.enabled, config.start_position,
+                                        config.parser_timezone, config.checkpoint_policy,
+                                        config.rotation_policy, True, available, available)
+    except LiveMonitorError as error:
+        raise _management_error(error) from None
+
+
+def delete_default_config(path: Path | None = None, *,
+                          ask: Callable[[str], str] = input,
+                          emit: Callable[[str], None] = print) -> SetupResult:
+    try:
+        with open_default_config(_management_path(path)) as guard:
+            guard.check()
+            config = guard.config
+            emit(f"기본 설정 1개: schema {config.schema_version}, {config.source_role}, "
+                 f"{config.start_position}. 원본 로그와 결과는 삭제하지 않습니다.")
+            emit("삭제 후 --monitor는 설정을 다시 만들 때까지 실행되지 않습니다.")
+            if not _approved(ask("기본 모니터링 설정을 삭제하시겠습니까? [y/N] ")):
+                emit("기본 설정 삭제를 취소했습니다.")
+                return SetupResult("CANCELLED")
+            guard.check()
+            guard.unlink()
+            emit("기본 설정 삭제 완료. 원본 로그는 삭제하지 않았습니다.")
+            emit("다시 설정하려면 uv run python -m app.monitor_setup 을 실행하십시오.")
+            return SetupResult("DELETED", "application")
+    except LiveMonitorError as error:
+        raise _management_error(error) from None
 
 
 def _private_parent(path: Path) -> tuple[int, list[Path]]:
@@ -413,7 +481,10 @@ def run_setup(*, output: str | Path | None = None,
     emit("설정 생성 완료. application, FROM_END. 외부 LLM 자동 전송은 없습니다.")
     emit("설정 파일을 공유하지 마세요. 서버 종료는 Ctrl+C입니다.")
     emit("실행 명령 (현재 터미널에 경로가 남을 수 있음):")
-    emit("uv run python -m app.local_web --monitor-config " + shlex.quote(os.fspath(destination)))
+    if output is None:
+        emit("uv run python -m app.local_web --monitor")
+    else:
+        emit("uv run python -m app.local_web --monitor-config " + shlex.quote(os.fspath(destination)))
     return SetupResult("CREATED", "application", saved)
 
 
@@ -424,11 +495,32 @@ class _SetupParser(argparse.ArgumentParser):
 
 def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
          emit: Callable[[str], None] = print) -> int:
-    parser = _SetupParser(description="단일 application 로그의 로컬 모니터링 설정 생성")
+    parser = _SetupParser(
+        description="단일 application 로그의 로컬 모니터링 설정 생성",
+        epilog="예: uv run python -m app.monitor_setup --show | --delete",
+    )
     parser.add_argument("--output", metavar="/absolute/path/to/monitoring.json")
     parser.add_argument("--no-color", action="store_true", help="색상 출력 없이 실행 (기본값)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--show", action="store_true", help="기본 설정의 안전한 요약 조회")
+    mode.add_argument("--delete", action="store_true", help="기본 설정 하나만 승인 후 삭제")
     try:
         args = parser.parse_args(argv)
+        if args.output is not None and (args.show or args.delete):
+            raise MonitorSetupError("SETUP_INVALID_INPUT")
+        if args.show:
+            summary = show_default_config()
+            emit(f"기본 설정 존재: schema {summary.schema_version}, 로그 유형 {summary.source_role}, "
+                 f"활성 {summary.enabled}, 시작 {summary.start_position}.")
+            emit(f"parser timezone {summary.parser_timezone}, checkpoint {summary.checkpoint_policy}, "
+                 f"rotation {summary.rotation_policy}, config 권한 적합 {summary.permission_ok}.")
+            emit(f"현재 source 사용 가능 {summary.source_available}, 실행 가능 {summary.runnable}.")
+            emit("다음 행동: uv run python -m app.local_web --monitor" if summary.runnable else
+                 "다음 행동: 원본 로그의 접근 가능 여부를 수동으로 확인하십시오.")
+            return 0
+        if args.delete:
+            delete_default_config(ask=ask, emit=emit)
+            return 0
         run_setup(output=args.output, ask=ask, emit=emit)
         return 0
     except MonitorSetupError as error:
@@ -439,6 +531,8 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
                                    "SETUP_SOURCE_CHANGED", "SETUP_UNSUPPORTED_OS",
                                    "SETUP_BINARY_INPUT", "SETUP_INVALID_UTF8", "SETUP_LINE_TOO_LONG",
                                    "SETUP_UNSUPPORTED_FORMAT") else
+                3 if error.code.startswith("DEFAULT_CONFIG_") and error.code not in (
+                    "DEFAULT_CONFIG_DELETE_FAILED", "DEFAULT_CONFIG_POST_DELETE_FAILED") else
                 1 if error.code == "SETUP_INTERNAL_FAILED" else 4)
     except (EOFError, KeyboardInterrupt):
         print("SETUP_CANCELLED: 설정 생성을 취소했습니다.")

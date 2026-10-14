@@ -1,13 +1,16 @@
-# Phase 20 — 로컬 application 모니터링 설정 마법사
+# Phase 20·20.1 — 로컬 application 모니터링 설정 마법사와 기본 설정 관리
 
 상태: **구현됨**. 다음 명령은 trusted 로컬 CLI이며 브라우저·웹 API·detector·LLM을 실행하지 않는다.
 
 ```bash
 uv run python -m app.monitor_setup
 uv run python -m app.monitor_setup --output /absolute/path/to/monitoring.json --no-color
+uv run python -m app.monitor_setup --show
+uv run python -m app.monitor_setup --delete
+uv run python -m app.local_web --monitor
 ```
 
-기본 저장 위치는 macOS의 사용자 `Library/Application Support/ai-security-log-analyzer/monitoring.json`, Linux의 `$XDG_CONFIG_HOME/ai-security-log-analyzer/monitoring.json` 또는 사용자 `.config` 아래다. `--output`은 절대 경로만 받는다. 기존 설정 파일은 덮어쓰지 않는다. 실시간 수집 자체는 별도 명령 `uv run python -m app.local_web --monitor-config <생성된-config-절대-경로>`로 **사용자가 직접** 시작한다. v1 config와 v2 config를 기존 loader가 모두 읽으며, v2는 application 단일 source로만 변환된다.
+기본 저장 위치는 macOS의 사용자 `Library/Application Support/ai-security-log-analyzer/monitoring.json`, Linux의 `$XDG_CONFIG_HOME/ai-security-log-analyzer/monitoring.json` 또는 사용자 `.config` 아래다. Setup과 launcher는 같은 resolver를 사용하며 cwd·저장소 위치를 탐색하지 않는다. `--output`은 절대 경로만 받는다. 기존 설정 파일은 덮어쓰지 않는다. 기본 설정은 별도 명령 `uv run python -m app.local_web --monitor`로 **사용자가 직접** 시작한다. 기존 명시적 `--monitor-config <절대-경로>`도 유지하며 사용자 지정 `--output`은 그 명령으로 실행한다. v1 config와 v2 config를 기존 loader가 모두 읽지만 `--monitor`는 private 기본 위치의 v2만 허용한다. `--monitor`가 없으면 live는 자동 활성화되지 않는다.
 
 ## 사용자 흐름과 승인
 
@@ -18,7 +21,17 @@ uv run python -m app.monitor_setup --output /absolute/path/to/monitoring.json --
 5. 제한된 기존 샘플의 안전한 count를 확인한다. 이것은 **형식 확인**이지 기존 줄의 live 분석·결과 확정이 아니다.
 6. schema 2, application, `FROM_END`, `Asia/Seoul`, 안전한 저장 위치 설명과 검사 수치를 확인한다. 원본 줄·계정·IP·source path는 미리보기에 없다.
 7. `이 설정을 저장하시겠습니까? [y/N]`에 `y`/`yes`만 승인이다. 앞뒤 공백·대소문자는 정규화하지만 그 외 값은 승인하지 않는다. 취소 시 config·임시 파일은 없다.
-8. 성공 후 시작 명령을 **실행하지 않고** 표시한다. 이 마지막 대화형 안내에만 shell-quoted config 절대 경로를 포함한다. 이는 터미널 scrollback에 남을 수 있으므로 공유하지 않는다. `--output` 자체는 OS 프로세스 목록/셸 기록에 남을 수 있다.
+8. 성공 후 시작 명령을 **실행하지 않고** 표시한다. 기본 저장이면 경로 없는 `--monitor`만 안내한다. 명시적 `--output`일 때에만 마지막 대화형 안내에 shell-quoted config 절대 경로를 포함한다. 이는 터미널 scrollback에 남을 수 있으므로 공유하지 않는다. `--output` 자체는 OS 프로세스 목록/셸 기록에 남을 수 있다.
+
+## 기본 설정 조회·삭제·실행
+
+`--show`는 기본 v2 config 하나의 존재·schema·application 역할·enabled·`FROM_END`·timezone·checkpoint/rotation 정책·권한 적합·현재 source 사용 가능 여부만 출력한다. 원본 JSON, source/config 경로, 파일 identity, 로그는 출력하지 않는다. 기본 설정이 없으면 `uv run python -m app.monitor_setup`을 안내하고 서버를 띄우지 않는다. 조회 순간의 source 사용 가능 여부는 앞으로의 처리를 보증하지 않는다.
+
+`--delete`는 **기본 config 파일 하나만** 대상으로 한다. Private parent `0700`, 소유자·파일 `0600`, regular/non-symlink, 최대 4096B, 정확한 v2 schema, 열린 FD와 경로 identity를 승인 전과 직전에 검사한다. 승인 질문에 `y`/`yes`만 허용한다. 취소·EOF는 삭제 없이 종료 0이다. 손상된 파일·잘못된 권한은 자동 고치거나 지우지 않는다. 설정 하나만 `unlink`하며 원본 로그·parent·sibling·사용자 지정 `--output` 파일은 삭제하지 않는다. 설정 삭제는 secure erase가 아니고 backup·Time Machine 자료도 지우지 않는다. 실행 중 설정을 지워도 이미 열린 source의 처리가 즉시 멈추지 않는다. 재사용하려면 마법사를 다시 실행한다.
+
+`--monitor`는 같은 resolver에서 기본 경로를 찾아 private parent/file와 v2 schema를 먼저 검증한 뒤 기존 runtime을 구성한다. 누락·손상·권한 오류에는 sample-only 서버로 fallback하지 않는다. `--monitor-config`와 동시 사용은 CLI 오류다. 명시적 `--monitor-config`는 기존 v1/v2 경로 계약을 유지하며, 기본 설정 전용 `0700` parent/`0600` file 규칙을 그 경로에 소급 적용하지 않는다.
+
+검사와 unlink 사이에는 OS가 제공하는 단일 **조건부 unlink-by-inode** 연산이 없다. 열린 parent/파일 FD, `O_NOFOLLOW`, 반복 identity 검사로 확인 가능한 교체는 거부하지만 같은 사용자 권한의 비협조 프로세스가 마지막 검사 직후 경로를 바꾸는 극단적 race까지 원자적으로 차단한다고 주장하지 않는다. File lock은 도입하지 않았다. 동시에 두 삭제를 하면 하나만 성공하며 나머지는 누락 또는 identity 변경으로 실패한다. Setup과 삭제가 경쟁할 때도 자동 덮어쓰기·재생성은 하지 않는다. Source 파일이 교체되면 조회는 순간 상태만 표시하고, 실제 실행은 기존 안전 열기 경계에서 다시 검증한다.
 
 ## 입력·저장 계약
 
@@ -36,12 +49,12 @@ Dry-run 개발용 상한은 **4,096 byte·완성 줄 16개·줄 2,048 byte**다.
 
 | 종료 코드 | 의미 |
 |---|---|
-| 0 | 생성 성공 또는 명시적 취소 (`CANCELLED` 별도 safe result) |
+| 0 | 생성·조회·삭제 성공 또는 명시적 취소 (`CANCELLED` 별도 safe result) |
 | 2 | 역할·경로 등 사용자 입력 오류 |
-| 3 | 안전한 source 검사 실패 |
-| 4 | config 저장·검증 실패 |
+| 3 | source 또는 기본 config 안전 검증 실패 |
+| 4 | config 저장·삭제 실패 |
 | 1 | 예상 밖 내부 실패, traceback 없이 고정 메시지 |
 
 ## 남은 범위
 
-Config 삭제·수정, checkpoint, rotation 자동 복구, 다중 source, 별도 collector/IPC, 서비스 설치, 웹 설정 화면, 원격 수집은 없다. 설정 생성 후에도 프로세스 재시작 중 유실 가능성과 `FROM_END` 의미는 기존 v0.2 경계 그대로다. 마법사의 안전한 출력만으로 원본 로그나 OS crash dump의 보안성을 보장하지 않는다. 실제 검증은 macOS이며 Linux 안전 API/권한/파일 시스템별 no-clobber 동작은 별도 실행 검증 전 지원 완료로 주장하지 않는다.
+Config 수정·덮어쓰기와 사용자 지정 `--output` 자동 삭제, checkpoint, rotation 자동 복구, 다중 source, 별도 collector/IPC, 서비스 설치, 웹 설정 화면, 원격 수집은 없다. 설정 생성 후에도 프로세스 재시작 중 유실 가능성과 `FROM_END` 의미는 기존 v0.2 경계 그대로다. 마법사의 안전한 출력만으로 원본 로그나 OS crash dump의 보안성을 보장하지 않는다. 실제 검증은 macOS이며 Linux 안전 API/권한/파일 시스템별 no-clobber·unlink 동작은 별도 실행 검증 전 지원 완료로 주장하지 않는다.

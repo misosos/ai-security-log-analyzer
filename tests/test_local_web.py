@@ -98,6 +98,85 @@ def test_fixed_loopback_configuration_and_port_validation(capsys):
     assert "LOCAL_WEB_INVALID_ARGUMENT" in capsys.readouterr().err
 
 
+def test_monitor_flag_is_explicit_and_exclusive(capsys, tmp_path):
+    assert local_web._arguments([]).monitor is False
+    assert local_web._arguments(["--monitor", "--no-browser", "--port", "8123"]).monitor is True
+    with pytest.raises(local_web._ArgumentFailure):
+        local_web._arguments(["--monitor", "--monitor-config", str(tmp_path / "x.json")])
+    assert local_web.main(["--monitor", "--monitor-config", str(tmp_path / "x.json")]) == 2
+    assert "LOCAL_WEB_INVALID_ARGUMENT" in capsys.readouterr().err
+    assert local_web.run_local_web(monitor_default=True, monitor_config=tmp_path / "x.json") == 2
+
+
+def test_monitor_missing_default_is_fixed_error_before_socket(capsys, tmp_path):
+    def no_listener(_port):
+        pytest.fail("missing config must never bind a socket")
+
+    result = local_web.run_local_web(monitor_default=True,
+                                     default_config_resolver=lambda: tmp_path / "missing" / "config.json",
+                                     listener_factory=no_listener)
+    assert result == 4
+    text = capsys.readouterr().err
+    assert "DEFAULT_CONFIG_MISSING" in text and str(tmp_path) not in text
+
+
+@pytest.mark.parametrize("mutation,expected", [
+    ("mode", "DEFAULT_CONFIG_PERMISSION"),
+    ("v1", "DEFAULT_CONFIG_SCHEMA"),
+    ("malformed", "DEFAULT_CONFIG_MALFORMED"),
+    ("source_missing", "SOURCE_UNAVAILABLE"),
+])
+def test_monitor_default_refuses_invalid_config_before_bind(capsys, tmp_path, mutation, expected):
+    import json
+    from app.monitor_setup import create_monitor_config
+
+    source = tmp_path / "source.log"
+    source.write_text("2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n")
+    config = tmp_path / "private" / "monitoring.json"
+    create_monitor_config(source, config)
+    if mutation == "mode":
+        config.chmod(0o644)
+    elif mutation == "v1":
+        config.write_text(json.dumps({"schema_version": "1", "source": {
+            "role": "application", "path": str(source)}, "start_policy": "FROM_END"}))
+    elif mutation == "malformed":
+        config.write_text("{invalid")
+    else:
+        source.unlink()
+    def no_listener(_port):
+        pytest.fail("unsafe default config must never bind")
+    assert local_web.run_local_web(monitor_default=True, default_config_resolver=lambda: config,
+                                   listener_factory=no_listener) == 4
+    error = capsys.readouterr().err
+    assert expected in error and str(config) not in error and str(source) not in error
+
+
+def test_monitor_config_replacement_during_runtime_build_closes_service(capsys, tmp_path):
+    import os
+    from app.monitor_setup import create_monitor_config
+
+    source = tmp_path / "source.log"
+    source.write_text("2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n")
+    config = tmp_path / "private" / "monitoring.json"
+    create_monitor_config(source, config)
+    closed = []
+    class Service:
+        async def close(self):
+            closed.append(True)
+    def replace_and_return(_path):
+        replacement = config.parent / "replacement"
+        replacement.write_bytes(config.read_bytes())
+        replacement.chmod(0o600)
+        os.replace(replacement, config)
+        return Service(), object()
+    def no_listener(_port):
+        pytest.fail("changed config must never bind")
+    assert local_web.run_local_web(monitor_default=True, default_config_resolver=lambda: config,
+                                   runtime_factory=replace_and_return, listener_factory=no_listener) == 4
+    assert closed == [True]
+    assert "DEFAULT_CONFIG_CHANGED" in capsys.readouterr().err
+
+
 def test_readiness_precedes_one_browser_open_and_ctrl_c_shutdown(capsys):
     result, opened, checks = _run_fake()
     assert result == 0

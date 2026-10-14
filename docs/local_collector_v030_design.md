@@ -1,6 +1,6 @@
 # v0.3.0 안전한 로컬 설정·Collector 설계 (Phase 19)
 
-상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 Phase 20 구현 범위는 [설정 마법사 사용·검증 문서](monitor_setup_20.md)를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. 재시작 복구·rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 따라서 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
+상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를, Phase 20.1에서 기본 설정 조회·삭제와 `--monitor` 실행을 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 구현된 범위는 [설정 마법사 사용·검증 문서](monitor_setup_20.md)를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. 재시작 복구·rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 따라서 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
 
 ## 1. 현재 코드 감사와 사용자 문제
 
@@ -27,7 +27,7 @@
 | B 개발자·소규모 운영 | 이후 source 목록을 코드로 관리, `dry-run`·진단, 상태·rotation/위치 확인 | 설계만; 다중 source·durable 위치·서비스화는 Phase 21~24 |
 | C 중앙·기업 | 원격 agent, 중앙 서버, mTLS, tenant isolation, 장기 저장·알림 | v0.3 범위 밖. hosted 보안성을 주장하지 않음 |
 
-권장 명령은 **`uv run python -m app.monitor_setup`**이다. 웹 launcher와 별개 trusted CLI라서 브라우저 route/권한을 늘리지 않는다. `app.local_web --setup-monitoring`은 웹 서버와 설정 write 권한을 같은 진입점에 섞어 역할이 불명확하다. Phase 20에서는 v2 reader migration을 완료해 기존 `--monitor-config`에서 v1과 v2를 모두 읽는다. Config 삭제는 Phase 20.1로 남겼으며 이번 core에는 없다.
+권장 명령은 **`uv run python -m app.monitor_setup`**이다. 웹 launcher와 별개 trusted CLI라서 브라우저 route/권한을 늘리지 않는다. `app.local_web --setup-monitoring`은 웹 서버와 설정 write 권한을 같은 진입점에 섞어 역할이 불명확하다. Phase 20에서 v2 reader migration을 완료했고 Phase 20.1에서 기본 config 하나의 `--show`·`--delete` 및 launcher `--monitor`를 연결했다. 기존 명시적 `--monitor-config`는 v1과 v2를 모두 읽는다.
 
 ### 마법사 단계·사용자 문구 (제안)
 
@@ -41,7 +41,7 @@
 8. “이 파일에 대한 읽기와 private 설정 저장을 승인합니까?” 기본값 `아니요`; 승인 전 저장·서버 시작 없음.
 9. private·원자적 저장 후 저장 결과는 고정 code/설명만 보여준다.
 10. 저장된 설정을 다시 안전하게 load하고 descriptor identity·bounded dry-run을 재검사한다. 미리보기와 달라졌으면 시작 금지.
-11. 경로를 명령줄 인자로 새로 출력하지 않는 실행 방식 권장: 후속 launcher의 `--monitor-profile`처럼 고정 profile ID로 내부 저장 위치를 찾게 한다. 해당 launcher가 도입되기 전에는 **사용자에게 현재 `--monitor-config`의 절대 경로를 비공개 로컬 안내로만 제공**하고, 공유 터미널 기록·스크린샷에 경로가 남을 수 있음을 고지한다. 이 경계의 완성은 Phase 20 구현 조건.
+11. 경로를 명령줄 인자로 출력하지 않는 기본 실행은 Phase 20.1의 `app.local_web --monitor`가 담당한다. 명시적 `--output`은 기존 `--monitor-config`의 절대 경로를 비공개 로컬 안내로만 제공하고, 공유 터미널 기록·스크린샷에 경로가 남을 수 있음을 고지한다.
 12. 즉시 실행은 별도 재확인 후 foreground만; 기본값은 실행 명령 안내. 관리자 권한, password/API key 입력, `sudo`, shell 실행 없음.
 
 | 고정 오류 code | 상황·복구 행동 (원문 미포함) |
@@ -105,9 +105,9 @@ v2 제안 스키마는 `additionalProperties=false`이며 source 배열은 **v0.
 | 생성·원자성 | 열린 parent dir FD에만 작업; symlink-free 경로/owner 확인; 같은 디렉터리에 `O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC`로 `0600` 임시 파일 생성, bounded write→`fsync(file)`. **`os.replace`는 기존 대상을 덮어쓰므로 신규 설정의 no-clobber 조건에 단독 사용 금지**. 가능한 macOS/Linux FS에서는 임시 파일을 대상 이름에 `os.link(..., dir_fd=...)`로 no-clobber publish, temp unlink→parent `fsync`; 미지원 FS는 저장 실패. 기존 파일 update는 별도 승인·version CAS와 재검증 gate 없이는 금지 |
 | 장애·cleanup | temp 이름에 source/path 포함 금지; 실패 시 특정 temp만 제거; crash 후 남은 owner-private temp는 다음 실행에서 사용자 확인 후 보수적으로 정리. `fsync` 실패는 성공이라 표시하지 않음. 원자적 이름 게시와 crash 내구성은 FS별 테스트 필요 |
 | 백업·secret | 기본 backup 없음; config에 credential/API key/password 금지. OS backup·Time Machine 복제 가능성을 안내하며 정책은 사용자가 관리 |
-| 출력·삭제 | 웹 UI·stdout/stderr·일반 log에는 원래 path/파일명 불가. `monitor_setup remove`는 owner 확인·정확한 profile 선택·재확인 후 config만 삭제; source 원본은 삭제하지 않음. checkpoint가 있으면 별도 선택·확인, 백업·crash dump까지 지웠다고 주장하지 않음 |
+| 출력·삭제 | 웹 UI·stdout/stderr·일반 log에는 원래 path/파일명 불가. 현재 `monitor_setup --delete`는 private 기본 config 하나를 owner·mode·identity 확인 및 재승인 뒤 삭제; source 원본은 삭제하지 않음. 사용자 지정 config와 미래 checkpoint 삭제는 범위 밖이며, 백업·crash dump까지 지웠다고 주장하지 않음 |
 
-현재 `--monitor-config`는 절대 경로 인자여서 shell history/프로세스 목록 노출 가능성이 있다. v0.3 마법사는 이를 기본 경로/profile 해석으로 없애야 **초보 사용자의 완결된 흐름**이 된다. 공개 CLI help에는 generic placeholder만 둔다. Python 3.12의 `dir_fd`, `O_NOFOLLOW`, `os.link`, `fsync`, `os.replace` 문서가 제공하는 것은 API 의미이며, 위 조합의 보안성과 각 FS 내구성은 프로젝트가 테스트할 정책이다.
+명시적 `--monitor-config`는 절대 경로 인자여서 shell history/프로세스 목록 노출 가능성이 있다. 기본 설정에 한한 `--monitor`는 경로를 명령 인자로 받지 않아 **초보 사용자의 완결된 흐름**을 제공한다. 공개 CLI help에는 generic placeholder만 둔다. Python 3.12의 `dir_fd`, `O_NOFOLLOW`, `os.link`, `fsync`, `os.replace` 문서가 제공하는 것은 API 의미이며, 위 조합의 보안성과 각 FS 내구성은 프로젝트가 테스트할 정책이다.
 
 ## 4. 프로세스 경계와 재시작 복구
 
@@ -219,12 +219,12 @@ Trusted setup CLI에서만 source 추가·삭제·권한 확인·config/checkpoi
 
 ## 9. v0.3 최소 범위·로드맵·중단 조건
 
-**v0.3 최소 구현 확정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. Phase 20 core는 설정을 저장하지만 profile 기반 실행과 삭제를 구현하지 않는다. 따라서 현재 실행 명령의 config 경로가 shell history·프로세스 목록·터미널 기록에 남는 한계를 고지하며, 경로 없는 실행 UX는 후속 별도 gate에서 검토한다. Durable checkpoint·rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **v0.3 최소 출하에 포함하지 않는다**. 실무 수준의 재시작 연속성은 Phase 21 통과 전 별도 제한으로 고지한다.
+**v0.3 최소 구현 확정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/기본 설정 하나의 승인 삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. Phase 20.1에서 기본 위치의 경로 없는 `--monitor`를 구현했다. 명시적 사용자 지정 config 경로는 여전히 shell history·프로세스 목록·터미널 기록에 남을 수 있다. Durable checkpoint·rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **v0.3 최소 출하에 포함하지 않는다**. 실무 수준의 재시작 연속성은 Phase 21 통과 전 별도 제한으로 고지한다.
 
 | 단계 | 사용자 가치·public contract | privacy boundary·시험/benchmark | 중단 조건·의존성 |
 |---|---|---|---|
 | Phase 20 wizard core | `app.monitor_setup` 역할/파일 검증·dry-run·안전 미리보기 | raw 경로/샘플 미출력 canary; sample 4KiB/16줄 latency | parser parity·identity 실패 시 중단; v1 loader 검토 |
-| Phase 20.1 저장·삭제 | v2 config/profile lookup·명시 승인/no-clobber/remove | 0700/0600·TOCTOU·fsync crash fault; write latency | symlink·existing overwrite·shell history 경로면 중단; 20 의존 |
+| Phase 20.1 저장·삭제 | 기본 v2 config 조회·승인 삭제, 경로 없는 `--monitor`; 구현 완료 | 0700/0600·TOCTOU·종료 검증; 최종 검사 직후 same-user 교체 race 잔존 | symlink·existing overwrite 거부; 20 의존 |
 | Phase 20.2 사용자 흐름 | 실제 초보 CLI·접근성/오류 복구 | Safari는 read-only 유지; keyboard·문구·privacy test | 승인 없는 시작·오해면 중단; 20.1 의존 |
 | Phase 21 checkpoint core | 마지막 처리 위치·재시작 동등성 | private trusted prefix/state; crash-window·256-prefix parity·fsync p95 | offset-only parity 위반·손상 무시면 중단; 20.2 의존 |
 | Phase 21.1 rotation | generation 검증·교체 경고 | 파일 identity 원문 비공개; rename/copytruncate/race tests·poll p95 | 추측 병합·silent loss면 중단; 21 의존 |

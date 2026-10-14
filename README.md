@@ -20,10 +20,17 @@ JSON을 직접 작성하지 않으려면 [안전한 설정 마법사](docs/monit
 
 ```bash
 uv run python -m app.monitor_setup
-uv run python -m app.local_web --monitor-config <생성된-config-절대-경로>
+uv run python -m app.local_web --monitor
 ```
 
-마법사는 source 경로를 private config에 저장하므로 파일을 공유하지 마십시오. 마지막 대화형 안내의 실행 명령에는 config 경로가 포함되어 터미널 기록에 남을 수 있습니다. 새 줄만 읽는 `FROM_END`이며 기존 줄은 분석하지 않습니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; checkpoint·rotation 자동 복구와 강제 종료 뒤 복구는 지원하지 않습니다. SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다.
+기본 설정을 안전한 요약으로 확인하거나 기본 설정 파일 하나만 승인 후 삭제할 수 있습니다.
+
+```bash
+uv run python -m app.monitor_setup --show
+uv run python -m app.monitor_setup --delete
+```
+
+`--show`는 원본 경로나 JSON을 표시하지 않습니다. `--delete`는 원본 로그·설정 parent·사용자 지정 `--output` 파일을 삭제하지 않습니다. 설정 삭제는 secure erase가 아니며 실행 중인 모니터링을 즉시 멈추지도 않습니다. 마법사는 source 경로를 private config에 저장하므로 파일을 공유하지 마십시오. 명시적 `--output`을 쓰는 경우에는 기존 `--monitor-config <절대-경로>`로 실행하며 경로가 터미널 기록에 남을 수 있습니다. `--monitor`가 없으면 live는 자동 활성화되지 않습니다. 새 줄만 읽는 `FROM_END`이며 기존 줄은 분석하지 않습니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; checkpoint·rotation 자동 복구와 강제 종료 뒤 복구는 지원하지 않습니다. SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다.
 
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
@@ -247,7 +254,7 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
-향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사 core는 구현됐으며, 설정 삭제·durable checkpoint·rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 재시작 중 기록 복구나 운영 무유실을 약속하지 않습니다.
+향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제·경로 없는 실행은 구현됐으며, durable checkpoint·rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 재시작 중 기록 복구나 운영 무유실을 약속하지 않습니다.
 
 ## 오프라인 탐지 평가 기준선
 
