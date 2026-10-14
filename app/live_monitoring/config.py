@@ -17,6 +17,7 @@ _MESSAGES = {
     "CONFIG_TOO_LARGE": "모니터링 설정 파일이 너무 큽니다.",
     "DUPLICATE_JSON_KEY": "모니터링 설정에 중복된 항목이 있습니다.",
     "UNSUPPORTED_SCHEMA": "지원하는 설정 버전을 사용하십시오.",
+    "SOURCE_DISABLED": "비활성화된 로그 설정은 시작할 수 없습니다.",
     "UNSUPPORTED_ROLE": "지원하는 로그 역할을 선택하십시오.",
     "UNSUPPORTED_START_POLICY": "FROM_END 시작 정책을 사용하십시오.",
     "NON_ABSOLUTE_PATH": "절대 경로를 지정하십시오.",
@@ -85,6 +86,59 @@ class LiveMonitorConfig:
             raise LiveMonitorError("UNSUPPORTED_SCHEMA")
         if type(self.start_policy) is not str or self.start_policy != "FROM_END":
             raise LiveMonitorError("UNSUPPORTED_START_POLICY")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveMonitorConfigV2:
+    """Trusted v2 on-disk contract; source_path never belongs in a public repr."""
+
+    source_path: Path = field(repr=False)
+    schema_version: str = "2"
+    source_id: str = "SOURCE-000001"
+    source_role: str = "application"
+    display_alias: str = "애플리케이션 로그 1"
+    enabled: bool = True
+    start_position: str = "FROM_END"
+    parser_timezone: str = "Asia/Seoul"
+    checkpoint_policy: str = "DISABLED"
+    rotation_policy: str = "FAIL_CLOSED"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_path, Path):
+            raise LiveMonitorError("NON_ABSOLUTE_PATH")
+        _validate_absolute_path(os.fspath(self.source_path))
+        if type(self.schema_version) is not str or self.schema_version != "2":
+            raise LiveMonitorError("UNSUPPORTED_SCHEMA")
+        if (type(self.source_id) is not str or self.source_id != "SOURCE-000001"
+            or type(self.source_role) is not str or self.source_role != "application"
+            or type(self.display_alias) is not str or self.display_alias != "애플리케이션 로그 1"
+            or type(self.enabled) is not bool
+            or type(self.start_position) is not str or self.start_position != "FROM_END"
+            or type(self.parser_timezone) is not str or self.parser_timezone != "Asia/Seoul"
+            or type(self.checkpoint_policy) is not str or self.checkpoint_policy != "DISABLED"
+            or type(self.rotation_policy) is not str or self.rotation_policy != "FAIL_CLOSED"):
+            raise LiveMonitorError("INVALID_CONFIG")
+
+    def as_document(self) -> dict[str, object]:
+        return {
+            "schema_version": "2",
+            "sources": [{
+                "source_id": self.source_id,
+                "source_role": self.source_role,
+                "source_path": os.fspath(self.source_path),
+                "display_alias": self.display_alias,
+                "enabled": self.enabled,
+                "start_position": self.start_position,
+                "parser_timezone": self.parser_timezone,
+                "checkpoint_policy": self.checkpoint_policy,
+                "rotation_policy": self.rotation_policy,
+            }],
+        }
+
+    def to_runtime(self) -> LiveMonitorConfig:
+        if not self.enabled:
+            raise LiveMonitorError("SOURCE_DISABLED")
+        return LiveMonitorConfig("application", self.source_path)
 
 
 def _validate_absolute_path(value: str) -> None:
@@ -171,7 +225,7 @@ def _reject_constant(_value: str) -> None:
     raise LiveMonitorError("INVALID_CONFIG")
 
 
-def load_live_monitor_config(path: Path) -> LiveMonitorConfig:
+def _read_config_document(path: Path) -> object:
     if not isinstance(path, Path):
         raise LiveMonitorError("NON_ABSOLUTE_PATH")
     descriptor, metadata = _open_regular(path, config_file=True)
@@ -197,7 +251,49 @@ def load_live_monitor_config(path: Path) -> LiveMonitorConfig:
         raise
     except (ValueError, TypeError, RecursionError):
         raise LiveMonitorError("INVALID_CONFIG") from None
-    if type(parsed) is not dict or set(parsed) != {"schema_version", "source", "start_policy"}:
+    return parsed
+
+
+def _parse_v2(parsed: object) -> LiveMonitorConfigV2:
+    if type(parsed) is not dict or set(parsed) != {"schema_version", "sources"}:
+        raise LiveMonitorError("INVALID_CONFIG")
+    if type(parsed["schema_version"]) is not str or parsed["schema_version"] != "2":
+        raise LiveMonitorError("UNSUPPORTED_SCHEMA")
+    sources = parsed["sources"]
+    if type(sources) is not list or len(sources) != 1 or type(sources[0]) is not dict:
+        raise LiveMonitorError("INVALID_CONFIG")
+    source = sources[0]
+    if set(source) != {"source_id", "source_role", "source_path", "display_alias", "enabled",
+                       "start_position", "parser_timezone", "checkpoint_policy", "rotation_policy"}:
+        raise LiveMonitorError("INVALID_CONFIG")
+    if type(source["source_path"]) is not str:
+        raise LiveMonitorError("NON_ABSOLUTE_PATH")
+    return LiveMonitorConfigV2(source_path=Path(source["source_path"]),
+                               schema_version=parsed["schema_version"],
+                               source_id=source["source_id"], source_role=source["source_role"],
+                               display_alias=source["display_alias"], enabled=source["enabled"],
+                               start_position=source["start_position"],
+                               parser_timezone=source["parser_timezone"],
+                               checkpoint_policy=source["checkpoint_policy"],
+                               rotation_policy=source["rotation_policy"])
+
+
+def load_live_monitor_setup_config(path: Path) -> LiveMonitorConfigV2:
+    return _parse_v2(_read_config_document(path))
+
+
+def load_live_monitor_config(path: Path) -> LiveMonitorConfig:
+    parsed = _read_config_document(path)
+    if type(parsed) is not dict:
+        raise LiveMonitorError("INVALID_CONFIG")
+    if "schema_version" in parsed and (type(parsed["schema_version"]) is not str
+                                        or parsed["schema_version"] not in ("1", "2")):
+        raise LiveMonitorError("UNSUPPORTED_SCHEMA")
+    if parsed.get("schema_version") == "2":
+        if set(parsed) == {"schema_version", "source", "start_policy"}:
+            raise LiveMonitorError("UNSUPPORTED_SCHEMA")
+        return _parse_v2(parsed).to_runtime()
+    if set(parsed) != {"schema_version", "source", "start_policy"}:
         raise LiveMonitorError("INVALID_CONFIG")
     source = parsed["source"]
     if type(source) is not dict or set(source) != {"role", "path"}:

@@ -1,6 +1,6 @@
 # v0.3.0 안전한 로컬 설정·Collector 설계 (Phase 19)
 
-상태: **설계만**. 아래의 `현재`는 공개 v0.2.0 코드에서 확인한 계약이고, `제안`은 아직 실행 가능한 기능이 아니다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. v0.3 최소 출하 단위는 **단일 application source 설정 마법사**이며 재시작 복구·rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 따라서 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
+상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 Phase 20 구현 범위는 [설정 마법사 사용·검증 문서](monitor_setup_20.md)를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. 재시작 복구·rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 따라서 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
 
 ## 1. 현재 코드 감사와 사용자 문제
 
@@ -27,7 +27,7 @@
 | B 개발자·소규모 운영 | 이후 source 목록을 코드로 관리, `dry-run`·진단, 상태·rotation/위치 확인 | 설계만; 다중 source·durable 위치·서비스화는 Phase 21~24 |
 | C 중앙·기업 | 원격 agent, 중앙 서버, mTLS, tenant isolation, 장기 저장·알림 | v0.3 범위 밖. hosted 보안성을 주장하지 않음 |
 
-권장 명령은 **`uv run python -m app.monitor_setup`**이다. 웹 launcher와 별개 trusted CLI라서 브라우저 route/권한을 늘리지 않고 dry-run·설정 삭제를 같은 모듈 하위 명령으로 제공할 수 있다. `app.local_web --setup-monitoring`은 웹 서버와 설정 write 권한을 같은 진입점에 섞어 역할이 불명확하다. 기존 `--monitor-config`와 v1 파일은 계속 읽되, 새 마법사는 v2 파일을 만들기 전 별도 reader migration gate가 필요하다. 마법사 저장물을 현재 v1 loader에 곧바로 전달한다고 주장하지 않는다.
+권장 명령은 **`uv run python -m app.monitor_setup`**이다. 웹 launcher와 별개 trusted CLI라서 브라우저 route/권한을 늘리지 않는다. `app.local_web --setup-monitoring`은 웹 서버와 설정 write 권한을 같은 진입점에 섞어 역할이 불명확하다. Phase 20에서는 v2 reader migration을 완료해 기존 `--monitor-config`에서 v1과 v2를 모두 읽는다. Config 삭제는 Phase 20.1로 남겼으며 이번 core에는 없다.
 
 ### 마법사 단계·사용자 문구 (제안)
 
@@ -219,7 +219,7 @@ Trusted setup CLI에서만 source 추가·삭제·권한 확인·config/checkpoi
 
 ## 9. v0.3 최소 범위·로드맵·중단 조건
 
-**v0.3 최소 구현 확정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. Profile 기반 실행이 없으면 경로가 shell history에 남는 UX 결함이 있으므로 Phase 20 gate에서 해결한다. Durable checkpoint·rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **v0.3 최소 출하에 포함하지 않는다**. 실무 수준의 재시작 연속성은 Phase 21 통과 전 별도 제한으로 고지한다.
+**v0.3 최소 구현 확정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. Phase 20 core는 설정을 저장하지만 profile 기반 실행과 삭제를 구현하지 않는다. 따라서 현재 실행 명령의 config 경로가 shell history·프로세스 목록·터미널 기록에 남는 한계를 고지하며, 경로 없는 실행 UX는 후속 별도 gate에서 검토한다. Durable checkpoint·rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **v0.3 최소 출하에 포함하지 않는다**. 실무 수준의 재시작 연속성은 Phase 21 통과 전 별도 제한으로 고지한다.
 
 | 단계 | 사용자 가치·public contract | privacy boundary·시험/benchmark | 중단 조건·의존성 |
 |---|---|---|---|

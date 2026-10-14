@@ -37,7 +37,7 @@ def test_current_contract_is_code_anchored_and_not_a_new_runtime() -> None:
     for contract in ("FROM_END", "SSH/access", "Linux Audit", "SOURCE_REPLACED", "SOURCE_TRUNCATED",
                      "256건/256KiB", "32항목/16KiB", "ack", "process-local"):
         assert contract in current
-    assert "**설계만**" in text and "현재" in text and "제안" in text
+    assert "Phase 19는 **설계만**" in text and "Phase 20에서" in text
 
 
 def test_wizard_is_trusted_cli_with_complete_recovery_and_no_browser_path_control() -> None:
@@ -115,9 +115,10 @@ def test_future_boundaries_threats_retention_and_research_are_explicit() -> None
     assert "retention은 미정" in basis and "제품별 구현 사례" in basis
 
 
-def test_readme_roadmap_does_not_announce_unimplemented_features() -> None:
+def test_readme_roadmap_distinguishes_setup_core_from_unimplemented_features() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "local_collector_v030_design.md" in readme
     paragraph = next(p for p in readme.split("\n\n") if "local_collector_v030_design.md" in p)
-    assert "설계" in paragraph and "구현되지" in paragraph
+    assert "설계" in paragraph and "마법사 core는 구현" in paragraph
     assert "checkpoint" in paragraph and "rotation" in paragraph
+    assert "후속 gate" in paragraph
