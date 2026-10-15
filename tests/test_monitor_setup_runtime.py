@@ -151,7 +151,9 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
             time.sleep(0.05)
         else:
             assert False, "default live readiness timeout"
-        assert process.poll() is None and body["latest_detection_revision"] == 0
+        assert process.poll() is None and body["latest_detection_revision"] == 0, (
+            process.stderr.read() if process.poll() is not None else "unexpected revision"
+        )
         assert str(source) not in json.dumps(body) and str(default) not in json.dumps(body)
         with urlopen(f"http://127.0.0.1:{port}/api/v1/live/events", timeout=5) as stream:
             snapshot = b""
@@ -180,8 +182,9 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
         assert cancelled.returncode == 0 and default.exists()
         deleted = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--delete"],
                                  input="yes\n", env=env, capture_output=True, text=True, timeout=8)
-        assert deleted.returncode == 0 and not default.exists() and source.exists()
-        # An already-open live source is not stopped merely by removing its config pathname.
+        assert deleted.returncode == 4 and "CHECKPOINT_DELETE_FAILED" in deleted.stderr
+        assert default.exists() and source.exists()
+        # A checkpoint-enabled active process owns its recovery file; deletion fails closed.
         assert _get_json(port, "/api/v1/live/status")[0] == 200
     finally:
         if process.poll() is None:
@@ -195,7 +198,40 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
     assert str(source) not in stdout + stderr and str(default) not in stdout + stderr
     with socket.socket() as probe:
         assert probe.connect_ex(("127.0.0.1", port)) != 0
+    # Same-file restart replays committed analysis privately, then processes
+    # only the complete line appended while the server was stopped.
+    with source.open("a", encoding="utf-8") as stream:
+        stream.write(APP_LINE)
+    restart_port = _free_port()
+    restarted = subprocess.Popen([sys.executable, "-m", "app.local_web", "--monitor", "--no-browser",
+                                  "--port", str(restart_port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True, env=env)
+    try:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            if restarted.poll() is not None:
+                break
+            try:
+                _, resumed = _get_json(restart_port, "/api/v1/live/status")
+                if resumed["latest_detection_revision"] >= 2:
+                    break
+            except (OSError, ValueError):
+                pass
+            time.sleep(0.05)
+        assert restarted.poll() is None and resumed["latest_detection_revision"] >= 2
+        assert resumed["analysis_revision"] == resumed["latest_detection_revision"]
+    finally:
+        if restarted.poll() is None:
+            restarted.send_signal(signal.SIGINT)
+        restarted.communicate(timeout=8)
+    with socket.socket() as probe:
+        assert probe.connect_ex(("127.0.0.1", restart_port)) != 0
+    deleted = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--delete"],
+                             input="yes\n", env=env, capture_output=True, text=True, timeout=8)
+    assert deleted.returncode == 0 and not default.exists() and source.exists()
+    assert not (default.parent / "checkpoint-source-000001.json").exists()
     missing = subprocess.run([sys.executable, "-m", "app.local_web", "--monitor", "--no-browser",
                               "--port", str(port)], env=env, capture_output=True, text=True, timeout=8)
     assert missing.returncode == 4 and "DEFAULT_CONFIG_MISSING" in missing.stderr
     assert list(tmp_path.rglob(".monitor-*")) == []
+    assert list(tmp_path.rglob(".checkpoint-*")) == []

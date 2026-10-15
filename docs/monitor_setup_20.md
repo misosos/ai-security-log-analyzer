@@ -1,5 +1,7 @@
 # Phase 20·20.1 — 로컬 application 모니터링 설정 마법사와 기본 설정 관리
 
+Phase 21 갱신: 아래 Phase 20/20.1 당시 설명의 `checkpoint_policy=DISABLED`·"config 하나만 삭제"·"file lock 없음"은 기존 설정에만 해당한다. 새 설정은 `BOUNDED_REPLAY_V1`이며 기본 `--monitor`에서 동일 파일 bounded checkpoint를 사용한다. `--show`는 checkpoint 상태/이력 건수도 안전하게 표시한다. 승인 삭제는 연결 checkpoint도 검사해 config 먼저, checkpoint 다음으로 지운다. 활성 모니터링이 lock을 가진 동안 삭제는 거부된다. 두 파일 삭제는 원자적이지 않고 부분 실패 시 수동 확인이 필요하다. 명시적 `--monitor-config`와 기존 `DISABLED` 설정은 재시작 때 기존 `FROM_END`다. 자세한 현재 계약은 [Phase 21 문서](live_checkpoint_21.md)를 우선한다.
+
 상태: **구현됨**. 다음 명령은 trusted 로컬 CLI이며 브라우저·웹 API·detector·LLM을 실행하지 않는다.
 
 ```bash

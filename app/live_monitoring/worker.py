@@ -67,6 +67,8 @@ _MESSAGES = {
     "ANALYSIS_COMMIT_FAILED_AFTER_DETECTION_COMMIT": "탐지 확정 후 내부 분석 확정에 실패했습니다. 종료하십시오.",
     "PUBLICATION_FAILED_AFTER_ANALYSIS_COMMIT": "내부 분석 확정 후 탐지 변경 게시에 실패했습니다. 종료하십시오.",
     "WORKER_SUMMARY_FAILED_AFTER_PUBLICATION": "게시 후 worker 요약을 확인할 수 없습니다. 종료하십시오.",
+    "CHECKPOINT_FAILED_AFTER_PUBLICATION": "마지막 처리 위치를 저장하지 못했습니다. 종료 후 설정을 확인하십시오.",
+    "CHECKPOINT_PREPARE_FAILED": "재생 범위 상한을 확인하십시오. 자동으로 기록을 버리지 않습니다.",
 }
 
 
@@ -217,7 +219,8 @@ class LiveProcessingWorker:
                  "_accumulator", "_post_ack_failures", "_uncommitted_after_ack",
                  "_last_acc_snapshot", "_publication", "_potentially_unpublished",
                  "_post_publication_aggregate_failures", "_service_bound", "_analysis",
-                 "_last_analysis_snapshot", "_last_committed_revision", "_analysis_lag")
+                 "_last_analysis_snapshot", "_last_committed_revision", "_analysis_lag",
+                 "_checkpoint")
 
     def __init__(self, session: LiveTailSession, detection_accumulator: LiveDetectionAccumulator,
                  max_lease_records: int, max_lease_bytes: int,
@@ -287,6 +290,7 @@ class LiveProcessingWorker:
         self._post_ack_failures = self._uncommitted_after_ack = 0
         self._potentially_unpublished = self._post_publication_aggregate_failures = 0
         self._last_acc_snapshot = accumulator_snapshot
+        self._checkpoint = None
 
     @property
     def publication_buffer(self) -> LivePublicationBuffer:
@@ -374,6 +378,10 @@ class LiveProcessingWorker:
                     or self._analysis._candidate_detection_state is not proposal._committed_state
                     or self._analysis._active is not analysis_proposal))):
                 raise LiveWorkerError("ANALYSIS_PROPOSAL_MISMATCH")
+            if self._checkpoint is not None:
+                failure_code = "CHECKPOINT_PREPARE_FAILED"
+                self._checkpoint.prevalidate_step(lease.records[-1]._end_offset,
+                                                  lease.item_count)
             next_successful = _add(self._successful, 1)
             next_parsed = _add(self._parsed, batch.parsed_count)
             next_ignored = _add(self._ignored, batch.ignored_count)
@@ -520,6 +528,12 @@ class LiveProcessingWorker:
             self._last_acc_snapshot = proposal._committed_snapshot
             self._post_publication_aggregate_failures = _add(self._post_publication_aggregate_failures, 1)
             self._fail("WORKER_AGGREGATE_FAILED_AFTER_PUBLICATION")
+        if self._checkpoint is not None:
+            try:
+                self._checkpoint.commit_step(self, lease.records[-1]._end_offset,
+                                             lease.item_count)
+            except Exception:
+                self._fail("CHECKPOINT_FAILED_AFTER_PUBLICATION")
         return result
 
     def resume_after_degraded(self) -> None:
@@ -563,6 +577,8 @@ class LiveProcessingWorker:
         try:
             if self._analysis is not None:
                 self._analysis.close()
+            if self._checkpoint is not None:
+                self._checkpoint.close()
             self._session.close()
             self._publication.close()
             self._accumulator.close()

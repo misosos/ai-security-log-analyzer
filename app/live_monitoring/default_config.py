@@ -65,8 +65,11 @@ class DefaultConfigGuard:
         try:
             parent = os.stat(self.path.parent, follow_symlinks=False)
             named = os.stat(self.path.name, dir_fd=self._parent_fd, follow_symlinks=False)
-            if (_identity(parent) != self._parent_identity
-                or _identity(os.fstat(self._parent_fd)) != self._parent_identity
+            # A checkpoint in this private directory legitimately changes its
+            # mtime/ctime. Keep the directory identity/owner/mode check while
+            # retaining the complete identity check for the config file.
+            if (_identity(parent)[:4] != self._parent_identity[:4]
+                or _identity(os.fstat(self._parent_fd))[:4] != self._parent_identity[:4]
                 or _identity(named) != self._file_identity
                 or _identity(os.fstat(self._file_fd)) != self._file_identity):
                 raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")

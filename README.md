@@ -6,7 +6,7 @@ AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로
 
 v0.2.0에는 명시적으로 승인한 단일 파일의 실행 이후 추가분을 읽는 [bounded 내부 tail core·parser adapter·단일 record lease·worker·detection accumulator](docs/live_log_monitoring_design.md)가 있습니다. 기존 application·SSH·access parser와 detector를 그대로 재사용합니다. Worker는 queue ack 성공 후에만 탐지 후보를 commit하며, 이는 원자적 transaction이나 exactly-once가 아닙니다. Session-local observation ID에는 개인정보나 hash가 없지만 trusted 내부 history에는 원문 계정·path/query가 남을 수 있습니다. 전체 PARSED session prefix는 명시된 item·byte 상한 안에 보존하며 오래된 event를 조용히 제거하지 않습니다. 기존 v0.1.0 업로드·배치 분석은 그대로 동작합니다. 즉시 처리·무유실·운영 성능·hosted 수집을 약속하지 않습니다.
 
-Phase 14~15에서는 확정된 detection change만 받는 process-local·memory-only bounded publication/replay buffer, 읽기 전용 loopback status/SSE, `--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다. 기본 `uv run python -m app.local_web`에서는 live endpoint와 화면 영역이 비활성입니다. Detection commit 이후 publication 실패는 되돌리지 않고 terminal 무결성 오류로 기록합니다. SSE는 무유실·재시작 후 복구·여러 process 간 일관성을 보장하지 않습니다.
+Phase 14~15에서는 확정된 detection change만 받는 process-local·memory-only bounded publication/replay buffer, 읽기 전용 loopback status/SSE, `--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다. 기본 `uv run python -m app.local_web`에서는 live endpoint와 화면 영역이 비활성입니다. Detection commit 이후 publication 실패는 되돌리지 않고 terminal 무결성 오류로 기록합니다. SSE replay는 여전히 process-local이며 재시작 후 이벤트 ID 연속성·무유실·여러 process 간 일관성을 보장하지 않습니다. 기본 v2 설정의 동일 파일 분석 prefix 복구는 별도의 bounded checkpoint 경계입니다.
 
 Phase 16의 [live correlation·risk·조사 사례 설계](docs/live_analysis_correlation_case_design.md)는 현재 단일-source history에서 기존 batch 의미를 보존할 수 있는 최소 범위와 개인정보 경계를 정리했습니다. 당시에는 설계만 완료됐고, 이후 Phase 16.1~16.3의 현재 연결 범위는 아래에 구분했습니다.
 
@@ -14,7 +14,7 @@ Phase 16.1에서는 단일 `application` source에 한정한 내부 proposal/com
 
 Phase 16.4의 [로컬 통합 감사](docs/live_analysis_16_4_audit.md), [Phase 17·17.1 수용성 기록](docs/live_monitoring_acceptance_17.md), [Phase 18 복구 검증](docs/live_monitoring_release_gate_18.md)은 합성 application 흐름의 batch parity·두-event publication·replay·개인정보 경계와 실제 loopback 종료 정리를 구분합니다. 사용자는 Safari의 live keyboard-only·실제 200% 확대·최소 창 너비·Web Inspector 주요 흐름·pause 중 append·terminal 및 replay gap 복구 화면을 직접 확인했습니다. 종료 후 수동 복구 안내와 버튼을 누르지 않는 동안 요청이 늘지 않는 것도 확인했습니다. 정확한 320 CSS px와 VoiceOver 상세는 미검증이며, 최종 릴리스 실행은 별도 원격 CI·tag gate가 남아 있습니다. 운영 SLA나 WCAG 2.2 AA 준수를 뜻하지 않습니다. 현재 live 분석은 application만 지원하고 SSH·access 분석과 cross-source 결합, crash recovery는 v0.2 이후로 보류합니다.
 
-로컬 모니터링 사용 순서: (1) 읽을 수 있는 로그 파일 하나를 준비합니다. (2) 개인 경로가 없는 [예시 설정](docs/examples/live-monitor.json)을 복사해 설정 파일과 source의 절대 경로를 자신의 로컬 경로로 바꾸고 설정 권한을 소유자만 읽을 수 있게 합니다. (3) `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`으로 실행합니다. `--port 8123`과 `--no-browser`도 함께 사용할 수 있습니다. (4) 브라우저의 **실시간 로그 모니터링** 영역에서 상태와 로그 역할을 확인합니다. (5) 실행 뒤 새 로그 줄이 추가되어 탐지 관찰이 생기면 **새 결과 N건 보기**를 눌러 목록에 반영합니다. (6) `Ctrl+C`로 종료합니다. 시작 전 파일 내용은 읽지 않습니다. **화면 업데이트 일시 정지**는 서버 수집을 멈추지 않습니다. 기존 3파일 분석과 Linux Audit 단일 업로드는 별도 흐름입니다. 원본 로그·결과를 서버에 영구 저장하지 않지만 process 재시작 중의 추가분 복구는 없습니다. `/api/health`의 200은 웹 서버 준비만 뜻하고 live 상태는 `/api/v1/live/status`에서 확인합니다. 단일 source·memory-only이며 replay eviction/gap, crash gap, 중복 가능성이 있어 exactly-once가 아닙니다. 탐지 관찰은 침해 확정이 아니고 hosted 용도가 아닙니다.
+로컬 모니터링 사용 순서: (1) 읽을 수 있는 로그 파일 하나를 준비합니다. (2) 아래 설정 마법사를 사용하는 것이 권장됩니다. 기존 수동 방식은 개인 경로가 없는 [예시 설정](docs/examples/live-monitor.json)을 복사하고 source 절대 경로를 로컬 값으로 바꿔 `uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json`으로 실행합니다. (3) 브라우저의 **실시간 로그 모니터링** 영역에서 상태와 로그 역할을 확인합니다. (4) 새 탐지 관찰이 생기면 **새 결과 N건 보기**를 눌러 반영합니다. (5) `Ctrl+C`로 종료합니다. 시작 전 파일 내용은 읽지 않습니다. **화면 업데이트 일시 정지**는 서버 수집을 멈추지 않습니다. 기존 3파일 분석과 Linux Audit 단일 업로드는 별도 흐름입니다. `/api/health`의 200은 웹 서버 준비만 뜻하고 live 상태는 `/api/v1/live/status`에서 확인합니다. 탐지 관찰은 침해 확정이 아니고 hosted 용도가 아닙니다.
 
 JSON을 직접 작성하지 않으려면 [안전한 설정 마법사](docs/monitor_setup_20.md)를 실행하세요. 현재는 **application 로그 하나**만 등록합니다. 미리보기와 bounded dry-run을 확인한 후 명시적으로 저장을 승인해야 하며, 설정 생성만으로 모니터링이 시작되지는 않습니다.
 
@@ -30,7 +30,7 @@ uv run python -m app.monitor_setup --show
 uv run python -m app.monitor_setup --delete
 ```
 
-`--show`는 원본 경로나 JSON을 표시하지 않습니다. `--delete`는 원본 로그·설정 parent·사용자 지정 `--output` 파일을 삭제하지 않습니다. 설정 삭제는 secure erase가 아니며 실행 중인 모니터링을 즉시 멈추지도 않습니다. 마법사는 source 경로를 private config에 저장하므로 파일을 공유하지 마십시오. 명시적 `--output`을 쓰는 경우에는 기존 `--monitor-config <절대-경로>`로 실행하며 경로가 터미널 기록에 남을 수 있습니다. `--monitor`가 없으면 live는 자동 활성화되지 않습니다. 새 줄만 읽는 `FROM_END`이며 기존 줄은 분석하지 않습니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; checkpoint·rotation 자동 복구와 강제 종료 뒤 복구는 지원하지 않습니다. SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다.
+`--show`는 원본 경로나 JSON을 표시하지 않고 마지막 처리 위치의 안전한 상태만 요약합니다. `--delete`는 기본 config와 연결된 private checkpoint만 승인 후 삭제하며 원본 로그·설정 parent·사용자 지정 `--output` 파일은 삭제하지 않습니다. checkpoint-enabled 모니터링 실행 중에는 삭제를 거부합니다. 설정 삭제는 secure erase가 아닙니다. 마법사는 source 경로를 private config에 저장하므로 공유하지 마십시오. 명시적 `--output`은 기존 `--monitor-config <절대-경로>`로 실행하며, 그 경로가 터미널 기록에 남을 수 있습니다. `--monitor`가 없으면 live는 자동 활성화되지 않습니다. 새 설정은 `BOUNDED_REPLAY_V1`을 사용합니다. 기본 `--monitor`로 실행하면 처음에는 `FROM_END`로 시작하고, 이후 **같은 application 파일**의 private checkpoint와 bounded 원본 구간을 재생해 탐지·관계·위험도·사례 prefix를 재구성합니다. 기존 `DISABLED` 설정과 명시적 `--monitor-config`는 계속 재시작 때 `FROM_END`입니다. Checkpoint에 원본 로그는 복사하지 않지만 private 파일 identity·byte 위치가 저장됩니다. 중복·gap 가능성이 있고 exactly-once·무유실·완전한 crash recovery가 아닙니다. 파일 교체·rotation·truncation은 자동 복구하지 않고 중단합니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다. [Phase 21 상세 계약](docs/live_checkpoint_21.md)을 참조하세요.
 
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
@@ -254,7 +254,7 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
-향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제·경로 없는 실행은 구현됐으며, durable checkpoint·rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 재시작 중 기록 복구나 운영 무유실을 약속하지 않습니다.
+향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제, 경로 없는 실행, 동일 파일 bounded checkpoint core는 구현됐습니다. rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 운영 무유실은 약속하지 않습니다.
 
 ## 오프라인 탐지 평가 기준선
 

@@ -1,6 +1,6 @@
 # v0.3.0 안전한 로컬 설정·Collector 설계 (Phase 19)
 
-상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를, Phase 20.1에서 기본 설정 조회·삭제와 `--monitor` 실행을 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 구현된 범위는 [설정 마법사 사용·검증 문서](monitor_setup_20.md)를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. 재시작 복구·rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 따라서 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
+상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를, Phase 20.1에서 기본 설정 조회·삭제와 `--monitor` 실행을, Phase 21에서 [동일 파일 bounded checkpoint core](live_checkpoint_21.md)를 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 구현된 범위는 새 문서를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. Rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
 
 ## 1. 현재 코드 감사와 사용자 문제
 

@@ -14,7 +14,8 @@ def test_readme_has_simple_default_flow_and_explicit_limits() -> None:
     assert "uv run python -m app.monitor_setup --show" in readme
     assert "uv run python -m app.monitor_setup --delete" in readme
     for boundary in ("원본 경로나 JSON을 표시하지", "기본 설정", "원본 로그", "사용자 지정",
-                     "즉시 멈추지도", "secure erase", "자동 활성화되지", "checkpoint·rotation"):
+                     "실행 중에는 삭제를 거부", "secure erase", "자동 활성화되지",
+                     "checkpoint", "rotation"):
         assert boundary in readme
 
 

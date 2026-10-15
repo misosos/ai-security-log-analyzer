@@ -33,6 +33,7 @@ def test_wizard_creates_private_v2_config_without_running_monitor(tmp_path: Path
     assert load_live_monitor_config(output).role == "application"
     assert str(source) not in "\n".join(lines)
     assert str(output) not in "\n".join(lines[:-1])  # explicitly scoped interactive command only
+    assert any("--output은 재시작 복구 대상이 아닙니다" in line for line in lines)
     assert output.read_bytes().endswith(b"\n")
     assert len(output.read_bytes()) < 4096
     assert output.read_bytes() == (json.dumps(json.loads(output.read_bytes()), ensure_ascii=False,

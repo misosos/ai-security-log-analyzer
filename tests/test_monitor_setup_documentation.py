@@ -16,7 +16,7 @@ def test_readme_usage_and_boundaries() -> None:
     assert "python -m app.monitor_setup --show" in readme
     assert "python -m app.monitor_setup --delete" in readme
     for boundary in ("application 로그 하나", "bounded dry-run", "설정 생성만으로", "FROM_END",
-                     "외부 LLM 자동 전송", "checkpoint·rotation 자동 복구"):
+                     "외부 LLM 자동 전송", "rotation", "BOUNDED_REPLAY_V1", "--monitor-config"):
         assert boundary in readme
 
 

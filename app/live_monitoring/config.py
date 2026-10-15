@@ -127,7 +127,8 @@ class LiveMonitorConfigV2:
             or type(self.enabled) is not bool
             or type(self.start_position) is not str or self.start_position != "FROM_END"
             or type(self.parser_timezone) is not str or self.parser_timezone != "Asia/Seoul"
-            or type(self.checkpoint_policy) is not str or self.checkpoint_policy != "DISABLED"
+            or type(self.checkpoint_policy) is not str
+            or self.checkpoint_policy not in ("DISABLED", "BOUNDED_REPLAY_V1")
             or type(self.rotation_policy) is not str or self.rotation_policy != "FAIL_CLOSED"):
             raise LiveMonitorError("INVALID_CONFIG")
 

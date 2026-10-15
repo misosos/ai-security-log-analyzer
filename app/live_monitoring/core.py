@@ -49,9 +49,10 @@ def _allocate_owner_token() -> int:
 class LiveTailRecord:
     """Trusted parser input: payload is intentionally absent from repr/str."""
 
-    __slots__ = ("role", "sequence", "byte_count", "_payload")
+    __slots__ = ("role", "sequence", "byte_count", "_payload", "_end_offset")
 
-    def __init__(self, role: str, sequence: int, payload: str, byte_count: int):
+    def __init__(self, role: str, sequence: int, payload: str, byte_count: int,
+                 *, end_offset: int | None = None):
         if (
             type(role) is not str
             or role not in ("application", "ssh", "access")
@@ -60,6 +61,7 @@ class LiveTailRecord:
             or type(payload) is not str
             or type(byte_count) is not int
             or not 0 <= byte_count <= MAX_LINE_BYTES
+            or (end_offset is not None and (type(end_offset) is not int or end_offset < 0))
         ):
             raise LiveMonitorError("INTERNAL_FAILURE")
         try:
@@ -72,6 +74,7 @@ class LiveTailRecord:
         object.__setattr__(self, "sequence", sequence)
         object.__setattr__(self, "byte_count", byte_count)
         object.__setattr__(self, "_payload", payload)
+        object.__setattr__(self, "_end_offset", end_offset)
 
     def __setattr__(self, _name: str, _value: object) -> None:
         raise LiveMonitorError("INTERNAL_FAILURE")
@@ -249,7 +252,8 @@ class LiveTailSession:
     """One explicit poll at a time; no detector, clock, thread or persistence."""
 
     __slots__ = (
-        "_config", "_fd", "_identity", "_offset", "_partial", "_pending_chunk",
+        "_config", "_fd", "_identity", "_offset", "_framed_offset", "_acked_offset",
+        "_partial", "_pending_chunk",
         "_queue", "_state", "_revision", "_processed", "_rejected",
         "_overflow", "_warnings", "_error_code", "_next_sequence",
         "_owner_token", "_next_lease_id", "_active_lease", "_attempts",
@@ -258,11 +262,18 @@ class LiveTailSession:
         "_worker_bound",
     )
 
-    def __init__(self, config: LiveMonitorConfig, descriptor: int, metadata: os.stat_result):
+    def __init__(self, config: LiveMonitorConfig, descriptor: int, metadata: os.stat_result,
+                 *, start_offset: int | None = None):
         self._config = config
         self._fd = descriptor
         self._identity = (metadata.st_dev, metadata.st_ino)
-        self._offset = os.lseek(descriptor, 0, os.SEEK_END)
+        end = os.lseek(descriptor, 0, os.SEEK_END)
+        if start_offset is not None and (type(start_offset) is not int or not 0 <= start_offset <= end):
+            raise LiveMonitorError("INVALID_CONFIG")
+        self._offset = end if start_offset is None else start_offset
+        os.lseek(descriptor, self._offset, os.SEEK_SET)
+        self._framed_offset = self._offset
+        self._acked_offset = self._offset
         self._partial = b""
         self._pending_chunk = b""
         self._queue = _BoundedRecordQueue()
@@ -336,7 +347,7 @@ class LiveTailSession:
             raise LiveMonitorError("PARTIAL_BUFFER_EXCEEDED")
         self._partial += segment
 
-    def _accept_line(self, line: bytes) -> None:
+    def _accept_line(self, line: bytes, end_offset: int) -> None:
         if len(line) > MAX_LINE_BYTES:
             raise LiveMonitorError("LINE_TOO_LONG")
         if b"\x00" in line or any(
@@ -352,7 +363,7 @@ class LiveTailSession:
         except UnicodeDecodeError:
             raise LiveMonitorError("INVALID_UTF8") from None
         record = LiveTailRecord(
-            self._config.role, self._next_sequence, payload, len(line),
+            self._config.role, self._next_sequence, payload, len(line), end_offset=end_offset,
         )
         next_sequence = _bounded_increment(self._next_sequence)
         next_processed = _bounded_increment(self._processed)
@@ -375,7 +386,8 @@ class LiveTailSession:
             self._append_partial(data[:newline])
             line = self._partial
             self._partial = b""
-            self._accept_line(line)
+            self._framed_offset += len(line) + 1
+            self._accept_line(line, self._framed_offset)
             accepted += 1
             data = data[newline + 1:]
         if data:
@@ -506,6 +518,8 @@ class LiveTailSession:
         for record in active.records:
             self._attempts.pop(record.sequence, None)
         self._active_lease = None
+        if active.records[-1]._end_offset is not None:
+            self._acked_offset = active.records[-1]._end_offset
         self._acknowledged = next_acknowledged
         self._last_settled_id = active.lease_id
         self._last_settlement = "ACK"
@@ -574,12 +588,12 @@ class LiveTailSession:
             raise LiveMonitorError("CLOSE_INVALID_OWNERSHIP")
 
 
-def open_live_tail_session(config: LiveMonitorConfig) -> LiveTailSession:
+def open_live_tail_session(config: LiveMonitorConfig, *, start_offset: int | None = None) -> LiveTailSession:
     if type(config) is not LiveMonitorConfig:
         raise LiveMonitorError("INVALID_CONFIG")
     descriptor, metadata = _open_regular(config.path)
     try:
-        return LiveTailSession(config, descriptor, metadata)
+        return LiveTailSession(config, descriptor, metadata, start_offset=start_offset)
     except Exception:
         os.close(descriptor)
         raise LiveMonitorError("INTERNAL_FAILURE") from None

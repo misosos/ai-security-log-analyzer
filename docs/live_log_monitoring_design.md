@@ -1,5 +1,7 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
+> Phase 21 현재 경계: 아래 과거 Phase 12~16 섹션에서 "checkpoint 없음" 또는 "재시작은 항상 FROM_END"라고 서술한 부분은 당시 계약이다. 신규 기본 private v2 설정의 `BOUNDED_REPLAY_V1`은 [동일 파일 bounded checkpoint 계약](live_checkpoint_21.md)에 따라 원본의 제한된 구간을 다시 읽어 내부 탐지·분석 prefix를 구성한다. 명시적 `--monitor-config`와 기존 `DISABLED` 설정은 여전히 `FROM_END`다. 과거 SSE publication·event ID는 복구되지 않는다. Rotation/truncation 자동 복구, exactly-once와 무유실은 지원하지 않는다.
+
 > 현재 구현은 [Phase 16.4 통합 감사](live_analysis_16_4_audit.md), 후속 실제 loopback·Safari 검수 상태는 [Phase 17 수용성 기록](live_monitoring_acceptance_17.md)을 우선한다. 아래 Phase 12~15 시점의 “아직 correlation·risk·case 없음” 문장은 해당 단계의 역사적 범위이며, 현재 `application` source에는 Phase 16.3의 안전한 analysis publication/UI가 연결되어 있다. SSH·access 분석, cross-source, crash recovery는 여전히 없다.
 
 상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 읽기 전용 status/SSE, Phase 14.2 단일 source CLI·bounded 자동 polling, Phase 15 사용자 live UI 구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰이며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 현재 개발용 기본값이 아니다.

@@ -27,7 +27,7 @@ READINESS_DEADLINE = 5.0
 SHUTDOWN_DEADLINE = 7.0
 
 
-def _live_runtime(config_path: Path):
+def _live_runtime(config_path: Path, *, checkpoint_default: bool = False):
     """Build exactly one trusted internal chain; close the FD on partial failure."""
     from app.live_monitoring import (
         LiveDetectionAccumulator, LiveProcessingWorker,
@@ -37,9 +37,22 @@ def _live_runtime(config_path: Path):
     from app.live_monitoring.service import LiveMonitoringService
     from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator
     from app.analyzer.risk import load_account_metadata
+    from app.live_monitoring.config import load_live_monitor_setup_config
+    from app.live_monitoring.checkpoint import LiveCheckpointManager
 
     config = load_live_monitor_config(config_path)
-    session = open_live_tail_session(config)
+    checkpoint = None
+    if checkpoint_default:
+        v2 = load_live_monitor_setup_config(config_path)
+        if v2.checkpoint_policy == "BOUNDED_REPLAY_V1":
+            checkpoint = LiveCheckpointManager(config_path, v2)
+    try:
+        session = open_live_tail_session(config, start_offset=(checkpoint.committed_offset
+                                                               if checkpoint else None))
+    except Exception:
+        if checkpoint is not None:
+            checkpoint.close()
+        raise
     worker = None
     service = None
     try:
@@ -52,6 +65,9 @@ def _live_runtime(config_path: Path):
                                    for account, value in metadata.items()))
         worker = LiveProcessingWorker(session, accumulator, 16, 4096,
                                       analysis_accumulator=analysis)
+        if checkpoint is not None:
+            checkpoint.initialize_or_restore(worker)
+            worker._checkpoint = checkpoint
         service = LiveMonitoringService(worker)
         runner = LiveMonitoringRunner(service)
         return service, runner
@@ -62,6 +78,8 @@ def _live_runtime(config_path: Path):
             worker.close()
         else:
             session.close()
+        if checkpoint is not None:
+            checkpoint.close()
         raise
 
 
@@ -193,7 +211,8 @@ def run_local_web(
             if monitor_default:
                 config_path = default_config_resolver()
                 with open_default_config(config_path) as guard:
-                    service, runner = runtime_factory(config_path)
+                    service, runner = (runtime_factory(config_path, checkpoint_default=True)
+                                       if runtime_factory is _live_runtime else runtime_factory(config_path))
                     guard.check()
             else:
                 service, runner = runtime_factory(monitor_config)
@@ -210,7 +229,14 @@ def run_local_web(
             ) else "LIVE_CONFIG_INVALID"
             print(f"{code}: 로컬 로그 모니터링을 준비하지 못했습니다. 설정과 파일 권한을 확인하십시오.", file=sys.stderr)
             return 4
-        except Exception:
+        except Exception as error:
+            from app.live_monitoring.checkpoint import LiveCheckpointError
+            if isinstance(error, LiveCheckpointError):
+                if service is not None:
+                    asyncio.run(service.close())
+                print(f"{error.code}: 자동 복구를 중단했습니다. 기본 설정과 같은 파일의 상태를 수동으로 확인하십시오.",
+                      file=sys.stderr)
+                return 4
             if service is not None:
                 asyncio.run(service.close())
             print("LIVE_RUNTIME_START_FAILED: 로컬 모니터링을 시작하지 못했습니다. 설정을 확인한 뒤 다시 시도하십시오.", file=sys.stderr)

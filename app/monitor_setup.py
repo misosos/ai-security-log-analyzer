@@ -16,6 +16,7 @@ from app.live_monitoring.config import (
     load_live_monitor_config, load_live_monitor_setup_config, resolve_default_monitor_config_path,
 )
 from app.live_monitoring.default_config import open_default_config, source_available
+from app.live_monitoring.checkpoint import LiveCheckpointManager, LiveCheckpointError, CHECKPOINT_NAME
 from app.live_monitoring.core import LiveTailRecord, MAX_LINE_BYTES
 from app.live_monitoring.parser_adapter import parse_live_records
 
@@ -53,6 +54,8 @@ _RECOVERY = {
     "DEFAULT_CONFIG_CHANGED": ("검사 중 기본 설정이 변경되었습니다.", "다시 시도하십시오.", True),
     "DEFAULT_CONFIG_DELETE_FAILED": ("기본 설정 삭제에 실패했습니다.", "권한을 확인한 뒤 다시 시도하십시오.", True),
     "DEFAULT_CONFIG_POST_DELETE_FAILED": ("삭제 결과를 확인하지 못했습니다.", "수동으로 확인하십시오.", False),
+    "CHECKPOINT_ORPHAN": ("이전에 남은 복구 자료가 있습니다.", "수동으로 상태를 확인하십시오.", False),
+    "CHECKPOINT_DELETE_FAILED": ("연결된 복구 자료를 삭제하지 못했습니다.", "수동으로 상태를 확인하십시오.", False),
 }
 
 
@@ -97,6 +100,9 @@ class DefaultConfigSummary:
     permission_ok: bool
     source_available: bool
     runnable: bool
+    checkpoint_exists: bool = False
+    recovery_state: str = "DISABLED"
+    bounded_history_count: int = 0
 
 
 def _safe_path(value: str | Path) -> Path:
@@ -248,12 +254,29 @@ def show_default_config(path: Path | None = None) -> DefaultConfigSummary:
     try:
         with open_default_config(_management_path(path)) as guard:
             available = source_available(guard.config)
+            checkpoint_exists = False
+            history_count = 0
+            recovery_state = "DISABLED"
+            if guard.config.checkpoint_policy == "BOUNDED_REPLAY_V1":
+                try:
+                    with_checkpoint = LiveCheckpointManager(guard.path, guard.config, readonly=True)
+                    try:
+                        checkpoint_exists = with_checkpoint._checkpoint is not None
+                        history_count = (with_checkpoint._checkpoint.history_count
+                                         if checkpoint_exists else 0)
+                        recovery_state = "RECOVERABLE" if checkpoint_exists else "FIRST_START"
+                    finally:
+                        with_checkpoint.close()
+                except LiveCheckpointError:
+                    recovery_state = "NEEDS_REVIEW"
             guard.check()
             config = guard.config
             return DefaultConfigSummary(config.schema_version, config.source_role,
                                         config.enabled, config.start_position,
                                         config.parser_timezone, config.checkpoint_policy,
-                                        config.rotation_policy, True, available, available)
+                                        config.rotation_policy, True, available,
+                                        available and recovery_state != "NEEDS_REVIEW",
+                                        checkpoint_exists, recovery_state, history_count)
     except LiveMonitorError as error:
         raise _management_error(error) from None
 
@@ -265,17 +288,33 @@ def delete_default_config(path: Path | None = None, *,
         with open_default_config(_management_path(path)) as guard:
             guard.check()
             config = guard.config
+            checkpoint = None
             emit(f"기본 설정 1개: schema {config.schema_version}, {config.source_role}, "
-                 f"{config.start_position}. 원본 로그와 결과는 삭제하지 않습니다.")
+                 f"{config.start_position}. 연결된 복구 자료도 삭제합니다. 원본 로그와 결과는 삭제하지 않습니다.")
             emit("삭제 후 --monitor는 설정을 다시 만들 때까지 실행되지 않습니다.")
-            if not _approved(ask("기본 모니터링 설정을 삭제하시겠습니까? [y/N] ")):
-                emit("기본 설정 삭제를 취소했습니다.")
-                return SetupResult("CANCELLED")
-            guard.check()
-            guard.unlink()
-            emit("기본 설정 삭제 완료. 원본 로그는 삭제하지 않았습니다.")
-            emit("다시 설정하려면 uv run python -m app.monitor_setup 을 실행하십시오.")
-            return SetupResult("DELETED", "application")
+            try:
+                if not _approved(ask("기본 모니터링 설정을 삭제하시겠습니까? [y/N] ")):
+                    emit("기본 설정 삭제를 취소했습니다.")
+                    return SetupResult("CANCELLED")
+                guard.check()
+                if config.checkpoint_policy == "BOUNDED_REPLAY_V1":
+                    try:
+                        checkpoint = LiveCheckpointManager(guard.path, config)
+                    except LiveCheckpointError:
+                        raise MonitorSetupError("CHECKPOINT_DELETE_FAILED") from None
+                guard.check()
+                guard.unlink()
+                if checkpoint is not None:
+                    try:
+                        checkpoint.delete_after_config()
+                    except LiveCheckpointError:
+                        raise MonitorSetupError("CHECKPOINT_DELETE_FAILED") from None
+                emit("기본 설정 삭제 완료. 원본 로그는 삭제하지 않았습니다.")
+                emit("다시 설정하려면 uv run python -m app.monitor_setup 을 실행하십시오.")
+                return SetupResult("DELETED", "application")
+            finally:
+                if checkpoint is not None:
+                    checkpoint.close()
     except LiveMonitorError as error:
         raise _management_error(error) from None
 
@@ -361,6 +400,13 @@ def _save_private(document: LiveMonitorConfigV2, output: Path,
         else:
             raise MonitorSetupError("SETUP_OUTPUT_SYMLINK" if stat.S_ISLNK(existing.st_mode)
                                     else "SETUP_OUTPUT_EXISTS")
+        if document.checkpoint_policy == "BOUNDED_REPLAY_V1":
+            try:
+                os.stat(CHECKPOINT_NAME, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise MonitorSetupError("CHECKPOINT_ORPHAN")
         temp_name = ".monitor-" + secrets.token_hex(8)
         fd = os.open(temp_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                      0o600, dir_fd=parent_fd)
@@ -440,7 +486,7 @@ def create_monitor_config(source: str | Path, output: str | Path, *,
             raise MonitorSetupError("SETUP_SOURCE_CHANGED")
         summary = _inspect(fd, source_path, opened)
         _validate_source_unchanged(source_path, fd, opened)
-        document = LiveMonitorConfigV2(source_path)
+        document = LiveMonitorConfigV2(source_path, checkpoint_policy="BOUNDED_REPLAY_V1")
         _save_private(document, output_path,
                       lambda: _validate_source_unchanged(source_path, fd, opened))
         return summary
@@ -468,6 +514,10 @@ def run_setup(*, output: str | Path | None = None,
     summary, expected_identity = _preview_source(source)
     destination = _safe_path(output) if output is not None else _default_output()
     emit("미리보기: schema 2, application, FROM_END, Asia/Seoul; 저장 위치: 사용자 전용 설정 파일.")
+    if output is None:
+        emit("기본 --monitor 실행은 같은 파일의 bounded 재시작 복구를 사용합니다.")
+    else:
+        emit("사용자 지정 --output은 재시작 복구 대상이 아닙니다. 명시적 경로 실행은 매번 FROM_END입니다.")
     emit(f"bounded 검사: {summary.inspected_bytes}B, {summary.inspected_lines}줄, "
          f"parsed {summary.parsed_count}, ignored {summary.ignored_count}, "
          f"rejected {summary.rejected_count}, partial {summary.partial_line}.")
@@ -484,6 +534,7 @@ def run_setup(*, output: str | Path | None = None,
     if output is None:
         emit("uv run python -m app.local_web --monitor")
     else:
+        emit("사용자 지정 --output은 기본 checkpoint 대상이 아닙니다. 명시적 경로 실행은 재시작 때 FROM_END입니다.")
         emit("uv run python -m app.local_web --monitor-config " + shlex.quote(os.fspath(destination)))
     return SetupResult("CREATED", "application", saved)
 
@@ -515,6 +566,7 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             emit(f"parser timezone {summary.parser_timezone}, checkpoint {summary.checkpoint_policy}, "
                  f"rotation {summary.rotation_policy}, config 권한 적합 {summary.permission_ok}.")
             emit(f"현재 source 사용 가능 {summary.source_available}, 실행 가능 {summary.runnable}.")
+            emit(f"마지막 처리 위치: {summary.recovery_state}, bounded 이력 {summary.bounded_history_count}건.")
             emit("다음 행동: uv run python -m app.local_web --monitor" if summary.runnable else
                  "다음 행동: 원본 로그의 접근 가능 여부를 수동으로 확인하십시오.")
             return 0
