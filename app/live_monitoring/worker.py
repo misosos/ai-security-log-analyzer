@@ -328,6 +328,8 @@ class LiveProcessingWorker:
         self._transition(LiveWorkerState.RUNNING_STEP)
         self._revision = revision
         try:
+            if self._checkpoint is not None:
+                self._checkpoint._verify_lock_identity()
             polled = self._session.poll_once()
             available = self._session.snapshot().available_item_count
         except Exception:

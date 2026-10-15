@@ -11,7 +11,7 @@ import pytest
 from app.local_web import _live_runtime
 from app.monitor_setup import create_monitor_config
 from app.monitor_setup import show_default_config, delete_default_config, MonitorSetupError
-from app.live_monitoring.checkpoint import LiveCheckpointError, LiveCheckpointManager, CHECKPOINT_NAME
+from app.live_monitoring.checkpoint import LiveCheckpointError, LiveCheckpointManager, CHECKPOINT_NAME, LOCK_NAME
 from app.live_monitoring.worker import LiveWorkerError, LiveWorkerState
 
 
@@ -86,6 +86,96 @@ def test_concurrent_default_instance_is_rejected(tmp_path: Path) -> None:
         assert caught.value.code == "CHECKPOINT_ALREADY_OWNED"
     finally:
         _close(first)
+
+
+def test_replaced_lock_name_after_poll_stops_before_queue_ack(tmp_path: Path, monkeypatch) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+    lock = config.parent / LOCK_NAME
+    original_poll = worker._session.poll_once
+
+    def poll_then_replace_lock():
+        result = original_poll()
+        lock.unlink()
+        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        return result
+
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE)
+        monkeypatch.setattr(type(worker._session), "poll_once", lambda self: poll_then_replace_lock())
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "CHECKPOINT_PREPARE_FAILED"
+        for canary in (str(source), str(config), "canary_account", "192.0.2.9"):
+            assert canary not in str(caught.value) + repr(caught.value)
+        assert worker.snapshot().state is LiveWorkerState.DEGRADED
+        assert worker._session.snapshot().acknowledged_record_count == 0
+        assert worker._session.snapshot().available_item_count == 1
+        assert worker._session.snapshot().leased_item_count == 0
+        assert worker._accumulator.snapshot().revision == 0
+        assert worker._analysis.snapshot().revision == 0
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == checkpoint
+    finally:
+        _close(service)
+
+
+def test_replaced_lock_name_stops_idle_worker_before_poll(tmp_path: Path) -> None:
+    _, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    lock = config.parent / LOCK_NAME
+    try:
+        lock.unlink()
+        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "POLL_FAILURE"
+        assert worker.snapshot().state is LiveWorkerState.FAILED
+        assert worker._accumulator.snapshot().revision == 0
+        assert worker._analysis.snapshot().revision == 0
+    finally:
+        _close(service)
+
+
+def test_replaced_lock_name_after_ack_stops_without_checkpoint_advance(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    checkpoint = config.parent / CHECKPOINT_NAME
+    prior = checkpoint.read_bytes()
+    original = LiveCheckpointManager.commit_step
+
+    def replace_lock_before_commit(self, *args):
+        lock = config.parent / LOCK_NAME
+        lock.unlink()
+        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        return original(self, *args)
+
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE)
+        with monkeypatch.context() as patch:
+            patch.setattr(LiveCheckpointManager, "commit_step", replace_lock_before_commit)
+            with pytest.raises(LiveWorkerError) as caught:
+                worker.step()
+        assert caught.value.code == "CHECKPOINT_FAILED_AFTER_PUBLICATION"
+        assert worker.snapshot().state is LiveWorkerState.FAILED
+        assert worker._session.snapshot().acknowledged_record_count == 1
+        assert worker._accumulator.snapshot().revision == 1
+        assert worker._analysis.snapshot().revision == 1
+        assert worker.publication_buffer.snapshot().latest_committed_detection_revision == 1
+        assert checkpoint.read_bytes() == prior
+    finally:
+        _close(service)
 
 
 def test_unsupported_checkpoint_lock_platform_fails_closed(tmp_path: Path,
@@ -614,6 +704,68 @@ def test_fault_after_checkpoint_commit_does_not_reprocess_revision(tmp_path: Pat
         assert restored._worker._accumulator.snapshot().revision == 1
         assert restored._worker.publication_buffer.snapshot().published_total == 0
         assert restored._worker.step().status == "NO_DATA"
+    finally:
+        _close(restored)
+
+
+@pytest.mark.parametrize("point", ("directory_fsync", "post_write_validation"))
+def test_post_replace_fault_restores_complete_checkpoint_without_old_publication(
+    tmp_path: Path, monkeypatch, point: str,
+) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    checkpoint = config.parent / CHECKPOINT_NAME
+    prior = checkpoint.read_bytes()
+    manager = worker._checkpoint
+    original_fsync = os.fsync
+    original_read = LiveCheckpointManager._read_optional
+    reads = 0
+
+    def fail_directory_fsync(descriptor):
+        if descriptor == manager._parent_fd:
+            raise OSError("private post-replace canary")
+        return original_fsync(descriptor)
+
+    def fail_post_write_read(self):
+        nonlocal reads
+        if self is manager:
+            reads += 1
+            if reads == 2:
+                raise LiveCheckpointError("CHECKPOINT_WRITE_FAILED")
+        return original_read(self)
+
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE)
+        with monkeypatch.context() as patch:
+            if point == "directory_fsync":
+                patch.setattr(os, "fsync", fail_directory_fsync)
+            else:
+                patch.setattr(LiveCheckpointManager, "_read_optional", fail_post_write_read)
+            with pytest.raises(LiveWorkerError) as caught:
+                worker.step()
+        assert caught.value.code == "CHECKPOINT_FAILED_AFTER_PUBLICATION"
+        assert "private post-replace canary" not in repr(caught.value)
+        assert worker.snapshot().state is LiveWorkerState.FAILED
+        assert worker._accumulator.snapshot().revision == 1
+        assert worker._analysis.snapshot().revision == 1
+        assert worker.publication_buffer.snapshot().latest_committed_detection_revision == 1
+        assert checkpoint.read_bytes() != prior
+        assert list(config.parent.glob(".checkpoint-*")) == []
+    finally:
+        _close(service)
+
+    restored, _ = _live_runtime(config, checkpoint_default=True)
+    try:
+        assert restored._worker._accumulator.snapshot().revision == 1
+        assert restored._worker._analysis.snapshot().revision == 1
+        assert restored._worker.publication_buffer.snapshot().published_total == 0
+        assert restored._worker.step().status == "NO_DATA"
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(SUCCESS)
+        assert restored._worker.step().status == "PROCESSED"
+        assert restored._worker._analysis.snapshot().relation_count >= 1
     finally:
         _close(restored)
 

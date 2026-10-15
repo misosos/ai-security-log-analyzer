@@ -34,6 +34,8 @@ uv run python -m app.monitor_setup --delete
 
 Phase 21.1은 [관찰 가능한 로그 파일 축소](docs/live_rotation_21_1.md)를 읽기 위치보다 아직 큰 경우에도 감지해 중단합니다. 자동 rotation 연결은 여전히 없으며, 두 검사 사이의 truncate·재성장까지 무유실로 판별하지는 못합니다.
 
+Phase 21.2는 [checkpoint 잠금 이름 교체와 원자 교체 후 장애 경계](docs/live_checkpoint_21_2.md)를 검증합니다. 잠금 파일이 다른 inode로 바뀐 것이 관찰되면 다음 처리 전에 중단하지만, 악의적인 동일 사용자에 대한 절대적 단일 실행이나 전원 차단 시 exactly-once를 보장하지 않습니다.
+
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.

@@ -163,6 +163,7 @@ class LiveCheckpointManager:
                     fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     raise LiveCheckpointError("CHECKPOINT_ALREADY_OWNED") from None
+                self._verify_lock_identity()
             self._checkpoint = self._read_optional()
         except LiveCheckpointError:
             self.close()
@@ -177,6 +178,20 @@ class LiveCheckpointManager:
     @property
     def committed_offset(self) -> int | None:
         return self._checkpoint.committed_offset if self._checkpoint else None
+
+    def _verify_lock_identity(self) -> None:
+        if self._readonly or self._closed or self._lock_fd < 0:
+            raise LiveCheckpointError("CHECKPOINT_UNSAFE")
+        try:
+            named = os.stat(LOCK_NAME, dir_fd=self._parent_fd, follow_symlinks=False)
+            opened = os.fstat(self._lock_fd)
+        except OSError:
+            raise LiveCheckpointError("CHECKPOINT_UNSAFE") from None
+        if (not stat.S_ISREG(named.st_mode)
+            or (named.st_dev, named.st_ino, named.st_uid, named.st_mode) !=
+               (opened.st_dev, opened.st_ino, opened.st_uid, opened.st_mode)
+            or named.st_uid != os.geteuid() or named.st_mode & 0o777 != 0o600):
+            raise LiveCheckpointError("CHECKPOINT_UNSAFE")
 
     def _read_optional(self) -> Checkpoint | None:
         try:
@@ -221,6 +236,7 @@ class LiveCheckpointManager:
     def _write(self, checkpoint: Checkpoint) -> None:
         if self._readonly or self._closed:
             raise LiveCheckpointError("CHECKPOINT_UNSAFE")
+        self._verify_lock_identity()
         prior = self._read_optional()
         if prior is not self._checkpoint and prior != self._checkpoint:
             raise LiveCheckpointError("CHECKPOINT_CORRUPT")
@@ -266,6 +282,7 @@ class LiveCheckpointManager:
                     pass
 
     def initialize_or_restore(self, worker) -> None:
+        self._verify_lock_identity()
         session = worker._session
         if session.source_role != "application" or worker._analysis is None:
             raise LiveCheckpointError("CHECKPOINT_CORRUPT")
@@ -358,6 +375,7 @@ class LiveCheckpointManager:
             raise LiveCheckpointError("CHECKPOINT_REPLAY_MISMATCH") from None
 
     def prevalidate_step(self, end_offset: int | None, record_count: int) -> None:
+        self._verify_lock_identity()
         checkpoint = self._checkpoint
         if (checkpoint is None or type(end_offset) is not int or type(record_count) is not int
             or not 1 <= record_count <= 16 or end_offset <= checkpoint.committed_offset
