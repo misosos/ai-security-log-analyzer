@@ -69,6 +69,7 @@ _MESSAGES = {
     "WORKER_SUMMARY_FAILED_AFTER_PUBLICATION": "게시 후 worker 요약을 확인할 수 없습니다. 종료하십시오.",
     "CHECKPOINT_FAILED_AFTER_PUBLICATION": "마지막 처리 위치를 저장하지 못했습니다. 종료 후 설정을 확인하십시오.",
     "CHECKPOINT_PREPARE_FAILED": "재생 범위 상한을 확인하십시오. 자동으로 기록을 버리지 않습니다.",
+    "SOURCE_CHANGED_BEFORE_ACK": "로그 파일 상태가 달라졌습니다. 처리하지 않고 모니터링 상태를 확인하십시오.",
 }
 
 
@@ -417,6 +418,9 @@ class LiveProcessingWorker:
                                           active_relation_count=analysis_snapshot.relation_count if analysis_snapshot else 0,
                                           active_risk_count=analysis_snapshot.risk_count if analysis_snapshot else 0,
                                           active_case_count=analysis_snapshot.case_count if analysis_snapshot else 0)
+            # Narrow the post-poll race before the irreversible queue ack.
+            failure_code = "SOURCE_CHANGED_BEFORE_ACK"
+            self._session._probe_identity()
         except Exception:
             # A trusted fault hook may raise after prepare installed its active
             # proposal but before returning it to this frame.

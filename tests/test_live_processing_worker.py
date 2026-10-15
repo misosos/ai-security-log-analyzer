@@ -111,6 +111,41 @@ def test_ready_close_abandons_unprocessed_without_ack(tmp_path):
     assert worker.snapshot().total_acknowledged == 0
 
 
+def test_source_replacement_after_poll_is_released_before_ack_without_checkpoint(
+    tmp_path, monkeypatch,
+):
+    path, session, worker = make_worker(tmp_path)
+    original_poll = type(session).poll_once
+
+    def poll_then_replace(instance):
+        result = original_poll(instance)
+        replacement = tmp_path / "replacement.log"
+        replacement.write_text(GOOD + "\n", encoding="utf-8")
+        replacement.replace(path)
+        return result
+
+    append(path, GOOD)
+    monkeypatch.setattr(type(session), "poll_once", poll_then_replace)
+    try:
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "SOURCE_CHANGED_BEFORE_ACK"
+        assert worker.snapshot().state is LiveWorkerState.DEGRADED
+        queue = session.snapshot()
+        assert queue.acknowledged_record_count == 0
+        assert queue.available_item_count == queue.queue_item_count == 1
+        assert queue.leased_item_count == 0 and not queue.active_lease
+        assert queue.released_lease_count == 1
+        assert worker._accumulator.snapshot().revision == 0
+        assert not worker._accumulator.snapshot().active_proposal
+        assert worker._analysis.snapshot().revision == 0
+        assert not worker._analysis.snapshot().active_proposal
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert worker.publication_buffer._active is None
+    finally:
+        worker.close()
+
+
 @pytest.mark.parametrize("with_record", (False, True))
 def test_step_calls_each_ownership_stage_exactly_once(tmp_path, monkeypatch, with_record):
     from app.live_monitoring import worker as worker_module

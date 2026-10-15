@@ -124,6 +124,92 @@ def test_replaced_lock_name_after_poll_stops_before_queue_ack(tmp_path: Path, mo
         _close(service)
 
 
+@pytest.mark.parametrize("change", ("replace", "truncate"))
+def test_source_change_after_poll_stops_before_ack_and_checkpoint(
+    tmp_path: Path, monkeypatch, change: str,
+) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    previous_checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+    original_poll = type(worker._session).poll_once
+
+    def poll_then_change(session):
+        result = original_poll(session)
+        if change == "replace":
+            replacement = tmp_path / "replacement.log"
+            replacement.write_text(FAILURE, encoding="utf-8")
+            replacement.replace(source)
+        else:
+            with source.open("r+b") as stream:
+                stream.truncate(0)
+        return result
+
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE)
+        monkeypatch.setattr(type(worker._session), "poll_once", poll_then_change)
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "SOURCE_CHANGED_BEFORE_ACK"
+        assert all(value not in str(caught.value) + repr(caught.value)
+                   for value in (str(source), str(config), "canary_account", "192.0.2.9"))
+        assert worker.snapshot().state is LiveWorkerState.DEGRADED
+        queue = worker._session.snapshot()
+        assert queue.acknowledged_record_count == 0
+        assert queue.available_item_count == queue.queue_item_count == 1
+        assert queue.leased_item_count == 0 and not queue.active_lease
+        assert queue.released_lease_count == 1
+        assert worker._accumulator.snapshot().revision == 0
+        assert not worker._accumulator.snapshot().active_proposal
+        assert worker._analysis.snapshot().revision == 0
+        assert not worker._analysis.snapshot().active_proposal
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert worker.publication_buffer._active is None
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == previous_checkpoint
+    finally:
+        _close(service)
+
+
+def test_source_replacement_after_publication_prepare_aborts_entire_batch(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    previous_checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+    original_prepare = type(worker.publication_buffer).prepare_batch
+
+    def prepare_then_replace(buffer, *args):
+        proposal = original_prepare(buffer, *args)
+        replacement = tmp_path / "replacement.log"
+        replacement.write_text(FAILURE, encoding="utf-8")
+        replacement.replace(source)
+        return proposal
+
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE)
+        monkeypatch.setattr(type(worker.publication_buffer), "prepare_batch", prepare_then_replace)
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "SOURCE_CHANGED_BEFORE_ACK"
+        assert worker.snapshot().state is LiveWorkerState.DEGRADED
+        queue = worker._session.snapshot()
+        assert queue.acknowledged_record_count == 0
+        assert queue.available_item_count == queue.queue_item_count == 1
+        assert not queue.active_lease and queue.released_lease_count == 1
+        assert worker._accumulator.snapshot().revision == 0
+        assert worker._analysis.snapshot().revision == 0
+        assert not worker._accumulator.snapshot().active_proposal
+        assert not worker._analysis.snapshot().active_proposal
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert worker.publication_buffer._active is None
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == previous_checkpoint
+    finally:
+        _close(service)
+
+
 def test_replaced_lock_name_stops_idle_worker_before_poll(tmp_path: Path) -> None:
     _, config = _fixture(tmp_path)
     service, _ = _live_runtime(config, checkpoint_default=True)

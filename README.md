@@ -38,6 +38,8 @@ Phase 21.2는 [checkpoint 잠금 이름 교체와 원자 교체 후 장애 경�
 
 Phase 21.3은 [실제 두 서버 프로세스의 동일 파일 재시작](docs/live_checkpoint_21_3.md)을 검증했습니다. Bounded 원본 재생으로 분석 prefix를 복구하되 과거 publication을 다시 보내지 않습니다. 이전 프로세스의 SSE cursor는 새로운 transport session에서 replay gap으로 처리하도록 ID 충돌 가능성을 낮췄습니다. ID 형식은 같지만 전역 유일성이나 Safari 재시작 흐름의 수동 검증까지 보장하지는 않습니다.
 
+Phase 21.4는 [poll 이후 ack 이전의 파일 상태 재검증](docs/live_rotation_21_4.md)을 추가했습니다. 관찰 가능한 교체·축소가 이 구간에 발생하면 proposal을 취소하고 queue lease를 되돌린 뒤 모니터링을 중단합니다. 마지막 검사와 ack 사이의 race, 빠른 truncate·재성장, 자동 rotation 복구는 여전히 해결되지 않았습니다.
+
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
