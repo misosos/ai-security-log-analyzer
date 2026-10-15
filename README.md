@@ -42,6 +42,8 @@ Phase 21.4는 [poll 이후 ack 이전의 파일 상태 재검증](docs/live_rota
 
 Phase 21.5의 [rotation handoff 안전성 gate](docs/live_rotation_21_5.md)는 이전 파일 writer가 rename 후에도 계속 기록할 수 있고 일시적인 EOF만으로 종료를 알 수 없음을 검증했습니다. 현재의 단일 파일 checkpoint로 두 세대의 분석 prefix를 재시작 후 재구성할 수 없으므로, 자동 handoff는 구현하지 않고 fail closed를 유지합니다.
 
+Phase 21.6의 [두 파일 세대 복구 검토](docs/live_rotation_21_6.md)는 EOF 이후 old writer append, old/new partial line, retained old 파일의 재시작 거부, copytruncate 재성장의 관찰 한계를 재현했습니다. 자동 rotation 복구는 여전히 지원하지 않으며, 추가 private checkpoint metadata가 필요한 구현은 별도 승인을 기다립니다.
+
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.
