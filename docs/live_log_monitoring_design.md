@@ -4,6 +4,8 @@
 
 > Phase 21.4 현재 경계: [ack 직전 source 재검증](live_rotation_21_4.md)은 관찰 가능한 파일 교체·축소를 proposal 확정 전에 중단한다. 아래 과거 transaction 서술의 prepare 뒤에는 이 probe가 추가됐다. 마지막 probe와 ack 사이의 race 및 빠른 동일-inode truncate·재성장은 해결되지 않았다.
 
+> Phase 21.5 설계 gate: [rotation handoff 계약](live_rotation_21_5.md)은 old writer가 rename 후에도 기록할 수 있고 단일-file checkpoint가 두 세대 replay를 표현하지 못함을 확인한다. 자동 handoff·copytruncate 병합은 구현하지 않는다.
+
 > 현재 구현은 [Phase 16.4 통합 감사](live_analysis_16_4_audit.md), 후속 실제 loopback·Safari 검수 상태는 [Phase 17 수용성 기록](live_monitoring_acceptance_17.md)을 우선한다. 아래 Phase 12~15 시점의 “아직 correlation·risk·case 없음” 문장은 해당 단계의 역사적 범위이며, 현재 `application` source에는 Phase 16.3의 안전한 analysis publication/UI가 연결되어 있다. SSH·access 분석, cross-source, crash recovery는 여전히 없다.
 
 상태: **Phase 12~13.1 내부 live tail·parse·detection·worker, Phase 14 bounded publication/replay buffer, Phase 14.1 loopback 읽기 전용 status/SSE, Phase 14.2 단일 source CLI·bounded 자동 polling, Phase 15 사용자 live UI 구현** (2026-10-12). `v0.1.0`의 파일 업로드·분석 계약과 공개 Release는 변경하지 않는다. 사용자 표시명은 **로컬 로그 실시간 확인**을 우선한다. 여기서 ‘실시간’은 polling 기반의 추가분 관찰이며 즉시 처리, 무유실, SIEM·EDR, 침해 판정을 보장하지 않는다. 이 문서의 후속 분석 한도에 남긴 `TO_BE_BENCHMARKED`는 현재 개발용 기본값이 아니다.

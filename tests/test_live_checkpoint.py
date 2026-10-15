@@ -77,6 +77,35 @@ def test_changed_file_is_rejected_without_fallback(tmp_path: Path) -> None:
     assert (config.parent / CHECKPOINT_NAME).exists()
 
 
+def test_rename_with_old_writer_still_appending_does_not_handoff(tmp_path: Path) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    original_checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+    try:
+        with source.open("a", encoding="utf-8") as old_writer:
+            replacement = tmp_path / "new-generation.log"
+            replacement.write_text(SUCCESS, encoding="utf-8")
+            replacement.replace(source)
+            old_writer.write(FAILURE)
+            old_writer.flush()
+            with pytest.raises(LiveWorkerError) as caught:
+                worker.step()
+        assert caught.value.code == "POLL_FAILURE"
+        assert worker.snapshot().state is LiveWorkerState.FAILED
+        assert worker._session.snapshot().state == "FAILED"
+        assert worker._session.snapshot().acknowledged_record_count == 0
+        assert worker._session.snapshot().queue_item_count == 0
+        assert worker._accumulator.snapshot().revision == 0
+        assert worker._analysis.snapshot().revision == 0
+        assert worker.publication_buffer.snapshot().published_total == 0
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == original_checkpoint
+        assert all(canary not in str(caught.value) + repr(caught.value)
+                   for canary in (str(source), str(config), "canary_account", "192.0.2.9"))
+    finally:
+        _close(service)
+
+
 def test_concurrent_default_instance_is_rejected(tmp_path: Path) -> None:
     _, config = _fixture(tmp_path)
     first, _ = _live_runtime(config, checkpoint_default=True)
