@@ -117,6 +117,15 @@ async function main() {
   assert.equal(unknownApp.streams.length, 0);
   assert.equal(unknownApp.nodes["live-error"].textContent.includes("private-path-canary"), false);
 
+  const browserSafe = status();
+  browserSafe.session_id = "LIVE-SESSION-9007199254740991";
+  const largeSession = await app(200, browserSafe);
+  assert.equal(largeSession.streams.length, 1, "browser-safe process session ID is accepted");
+  const largeSnapshot = snapshot();
+  largeSnapshot.session_id = browserSafe.session_id;
+  largeSession.streams[0].send("snapshot", largeSnapshot);
+  assert.equal(largeSession.streams[0].closed, false);
+
   const current = await app();
   assert.deepEqual(current.calls.map((call) => call.url), ["/api/v1/live/status"]);
   assert.equal(current.streams.length, 1);

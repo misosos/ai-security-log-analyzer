@@ -9,9 +9,10 @@ import socket
 import subprocess
 import sys
 import time
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from app.live_monitoring.config import resolve_default_monitor_config_path
+from app.monitor_setup import create_monitor_config
 
 
 APP_LINE = "2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n"
@@ -31,6 +32,56 @@ def _get_json(port: int, path: str) -> tuple[int, dict]:
         return response.status, json.loads(response.read())
     finally:
         connection.close()
+
+
+def _sse_frames(port: int, count: int, *, cursor: str | None = None) -> list[tuple[str, dict]]:
+    frames = []
+    request = Request(f"http://127.0.0.1:{port}/api/v1/live/events",
+                      headers={"Last-Event-ID": cursor} if cursor is not None else {})
+    with urlopen(request, timeout=5) as stream:
+        for _ in range(count):
+            lines = []
+            for _ in range(30):
+                line = stream.readline()
+                if line == b"\n":
+                    break
+                assert line, "SSE stream closed before requested frame"
+                lines.append(line)
+            else:
+                assert False, "SSE frame exceeded bounded line count"
+            event = next(line[7:].decode("ascii").strip() for line in lines
+                         if line.startswith(b"event: "))
+            payload = json.loads(next(line[6:] for line in lines if line.startswith(b"data: ")))
+            frames.append((event, payload))
+    return frames
+
+
+def _wait_live_status(port: int, predicate, *, seconds: float = 8) -> dict:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            status, body = _get_json(port, "/api/v1/live/status")
+            if status == 200 and predicate(body):
+                return body
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.05)
+    raise AssertionError("bounded live status condition not reached")
+
+
+def _stop_runtime(process: subprocess.Popen, port: int) -> tuple[str, str]:
+    if process.poll() is None:
+        process.send_signal(signal.SIGINT)
+    try:
+        output = process.communicate(timeout=8)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate(timeout=3)
+        raise AssertionError("local runtime failed to stop within deadline") from None
+    assert process.returncode == 0
+    with socket.socket() as probe:
+        assert probe.connect_ex(("127.0.0.1", port)) != 0
+    return output
 
 
 def test_cli_created_v2_config_runs_in_existing_local_web(tmp_path: Path) -> None:
@@ -235,3 +286,108 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
     assert missing.returncode == 4 and "DEFAULT_CONFIG_MISSING" in missing.stderr
     assert list(tmp_path.rglob(".monitor-*")) == []
     assert list(tmp_path.rglob(".checkpoint-*")) == []
+
+
+def test_checkpoint_restart_rebuilds_safe_analysis_without_republishing_old_events(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source-private-canary.log"
+    source.write_text(APP_LINE, encoding="utf-8")
+    config = tmp_path / "private" / "monitoring.json"
+    create_monitor_config(source, config)
+    program = (
+        "import sys; from pathlib import Path; from app.local_web import run_local_web; "
+        "raise SystemExit(run_local_web(int(sys.argv[2]), open_browser=False, "
+        "monitor_default=True, default_config_resolver=lambda: Path(sys.argv[1])))"
+    )
+    secrets = (str(source).encode(), str(config).encode(), b"ACCOUNT_PRIVATE_CANARY",
+               b"192.0.2.123", b"192.0.2.1", b"private-query-canary",
+               b"private-raw-line-canary")
+
+    def start(port: int) -> subprocess.Popen:
+        return subprocess.Popen([sys.executable, "-c", program, str(config), str(port)],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    first_port = _free_port()
+    first = start(first_port)
+    try:
+        initial = _wait_live_status(first_port, lambda body: body["service_state"] == "RUNNING")
+        assert initial["latest_detection_revision"] == 0  # Existing line is FROM_END.
+        failures = "".join(
+            f"2026-01-02 03:04:{second:02d} INFO login_failed "
+            "user=ACCOUNT_PRIVATE_CANARY ip=192.0.2.123 "
+            "query=private-query-canary note=private-raw-line-canary\n"
+            for second in range(5)
+        )
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(failures)
+        committed = _wait_live_status(
+            first_port, lambda body: body["latest_detection_revision"] >= 1
+            and body["published_total"] >= 2,
+        )
+        assert committed["analysis_revision"] == committed["latest_detection_revision"] == 1
+        assert committed["active_risk_count"] >= 1
+        first_session = committed["session_id"]
+        first_frames = _sse_frames(first_port, 1 + committed["published_total"])
+        assert [name for name, _ in first_frames] == [
+            "snapshot", "observation_changes", "analysis_changes",
+        ]
+        previous_cursor = first_frames[-1][1]["event_id"]
+        for _, payload in first_frames:
+            wire = json.dumps(payload, ensure_ascii=False).encode()
+            assert all(secret not in wire for secret in secrets)
+    finally:
+        first_output = _stop_runtime(first, first_port)
+
+    checkpoint = config.parent / "checkpoint-source-000001.json"
+    assert checkpoint.exists() and checkpoint.stat().st_mode & 0o777 == 0o600
+    assert list(config.parent.glob(".checkpoint-*")) == []
+    second_port = _free_port()
+    second = start(second_port)
+    try:
+        restored = _wait_live_status(second_port, lambda body: body["service_state"] == "RUNNING")
+        assert restored["session_id"] != first_session
+        assert restored["latest_detection_revision"] == restored["analysis_revision"] == 1
+        assert restored["published_total"] == restored["available_event_count"] == 0
+        assert restored["active_risk_count"] >= 1
+        restored_snapshot = _sse_frames(second_port, 1)
+        assert restored_snapshot[0][0] == "snapshot"
+        assert restored_snapshot[0][1]["analysis"]["revision"] == 1
+        assert restored_snapshot[0][1]["analysis"]["risk_count"] >= 1
+        assert restored_snapshot[0][1]["published_total"] == 0
+        stale_cursor = _sse_frames(second_port, 2, cursor=previous_cursor)
+        assert [name for name, _ in stale_cursor] == ["replay_gap", "snapshot"]
+        assert stale_cursor[0][1]["code"] == "FOREIGN_SESSION"
+
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write("2026-01-02 03:04:06 INFO user_login "
+                         "user=ACCOUNT_PRIVATE_CANARY ip=192.0.2.123 "
+                         "query=private-query-canary note=private-raw-line-canary\n")
+        updated = _wait_live_status(
+            second_port, lambda body: body["analysis_revision"] >= 2
+            and body["active_relation_count"] >= 2 and body["active_case_count"] >= 1,
+        )
+        assert updated["latest_detection_revision"] == updated["analysis_revision"] == 2
+        assert updated["published_total"] == 1  # New analysis only; old events were not replayed.
+        frames = _sse_frames(second_port, 1 + updated["published_total"])
+        assert [name for name, _ in frames] == ["snapshot", "analysis_changes"]
+        snapshot = frames[0][1]["analysis"]
+        assert {item["relation_type"] for item in snapshot["relations"]} == {
+            "failed_to_successful_login", "brute_force_to_successful_login",
+        }
+        assert any(item["rule_id"] == "CASE-BRUTE-SUCCESS-01" for item in snapshot["cases"])
+        assert snapshot["risk_count"] >= 1
+        assert frames[1][1]["revision"] == 2
+        assert any(item["rule_id"] == "CASE-BRUTE-SUCCESS-01"
+                   for item in frames[1][1]["case_changes"])
+        _, status_body = _get_json(second_port, "/api/v1/live/status")
+        with urlopen(f"http://127.0.0.1:{second_port}/openapi.json", timeout=5) as response:
+            openapi = response.read()
+        for public in (json.dumps(status_body).encode(), openapi,
+                       *(json.dumps(payload, ensure_ascii=False).encode() for _, payload in frames)):
+            assert all(secret not in public for secret in secrets)
+    finally:
+        second_output = _stop_runtime(second, second_port)
+    for output in (*first_output, *second_output):
+        assert all(secret.decode() not in output for secret in secrets)
+    assert list(config.parent.glob(".checkpoint-*")) == []

@@ -7,6 +7,7 @@ accepts only the bound accumulator's active, prevalidated proposal.
 
 from dataclasses import dataclass, field, replace
 import json
+import secrets
 
 from app.live_monitoring.core import MAX_COUNTER
 from app.live_monitoring.detection_accumulator import (
@@ -24,6 +25,9 @@ MAX_PUBLICATION_BYTES = 16_384
 MAX_ANALYSIS_SNAPSHOT_BYTES = 131_072  # Development cap; not a history budget.
 MAX_ANALYSIS_SNAPSHOT_ITEMS = 256  # Per category; aligned with parsed-prefix item cap.
 _NEXT_SESSION_NUMBER = 0
+_PROCESS_SESSION_BASE: int | None = None
+_MAX_BROWSER_SESSION_NUMBER = (1 << 53) - 1  # JavaScript exact integer limit.
+_MAX_PROCESS_SESSIONS = 1_000_000
 _CHANGE_TYPES = ("CREATED", "UPDATED", "NO_LONGER_MATCHES")
 _STATES = ("ACTIVE", "NO_LONGER_MATCHES_CURRENT_RESULT")
 _TYPES = (
@@ -435,9 +439,19 @@ class LivePublicationBuffer:
             or analysis_accumulator.snapshot().closed
             or analysis_accumulator.snapshot().revision != 0):
             raise LivePublicationError("INVALID_BUFFER_ARGUMENT")
-        global _NEXT_SESSION_NUMBER
-        number = _add(_NEXT_SESSION_NUMBER, 1)
-        _NEXT_SESSION_NUMBER = number
+        global _NEXT_SESSION_NUMBER, _PROCESS_SESSION_BASE
+        if _NEXT_SESSION_NUMBER >= _MAX_PROCESS_SESSIONS:
+            raise LivePublicationError("COUNTER_LIMIT")
+        if _PROCESS_SESSION_BASE is None:
+            try:
+                # Public transport epoch only; never derived from an event or source.
+                _PROCESS_SESSION_BASE = secrets.randbelow(
+                    _MAX_BROWSER_SESSION_NUMBER - _MAX_PROCESS_SESSIONS) + 1
+            except Exception:
+                raise LivePublicationError("INVALID_BUFFER_ARGUMENT") from None
+        next_number = _add(_NEXT_SESSION_NUMBER, 1)
+        number = _PROCESS_SESSION_BASE + next_number
+        _NEXT_SESSION_NUMBER = next_number
         accumulator._publication_bound = True
         self._accumulator = accumulator
         self._analysis = analysis_accumulator

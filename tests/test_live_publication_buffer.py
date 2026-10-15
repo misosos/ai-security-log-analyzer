@@ -33,6 +33,43 @@ def setup(*, items=32, bytes_limit=16384):
     return accumulator, buffer
 
 
+def test_session_transport_ids_are_browser_safe_and_process_distinct(monkeypatch):
+    import app.live_monitoring.publication as publication
+
+    monkeypatch.setattr(publication, "_NEXT_SESSION_NUMBER", 0)
+    monkeypatch.setattr(publication, "_PROCESS_SESSION_BASE", None)
+    monkeypatch.setattr(publication.secrets, "randbelow", lambda limit: limit - 1)
+    _, first = setup()
+    _, second = setup()
+    first_number = int(first.session_id.removeprefix("LIVE-SESSION-"))
+    second_number = int(second.session_id.removeprefix("LIVE-SESSION-"))
+    assert first_number < second_number <= (1 << 53) - 1
+    assert first.replay_after(
+        f"LIVE-EVENT-{second_number:06d}-000001"
+    ).gap_code == "FOREIGN_SESSION"
+
+    monkeypatch.setattr(publication, "_PROCESS_SESSION_BASE", None)
+    monkeypatch.setattr(publication.secrets, "randbelow", lambda limit: 0)
+    _, next_process = setup()
+    assert next_process.session_id != first.session_id
+
+
+def test_session_entropy_failure_has_fixed_safe_error(monkeypatch):
+    import app.live_monitoring.publication as publication
+
+    monkeypatch.setattr(publication, "_PROCESS_SESSION_BASE", None)
+
+    def unavailable(_limit):
+        raise OSError("private entropy failure canary")
+
+    monkeypatch.setattr(publication.secrets, "randbelow", unavailable)
+    with pytest.raises(LivePublicationError) as raised:
+        setup()
+    assert raised.value.code == "INVALID_BUFFER_ARGUMENT"
+    assert "private entropy failure canary" not in repr(raised.value)
+    assert "private entropy failure canary" not in str(raised.value)
+
+
 def publish_changes(accumulator, buffer, count=7):
     events = []
     for index in range(count):
@@ -129,8 +166,8 @@ def test_oversized_event_and_foreign_or_malformed_replay():
     for supplied, expected in (
         ("bad", "MALFORMED_EVENT_ID"),
         ("LIVE-EVENT-999999-000001", "FOREIGN_SESSION"),
-        (f"LIVE-EVENT-{other.session_id[-6:]}-000001", "FOREIGN_SESSION"),
-        (f"LIVE-EVENT-{buffer.session_id[-6:]}-000001", "FUTURE_EVENT_ID"),
+        (f"LIVE-EVENT-{other.session_id.removeprefix('LIVE-SESSION-')}-000001", "FOREIGN_SESSION"),
+        (f"LIVE-EVENT-{buffer.session_id.removeprefix('LIVE-SESSION-')}-000001", "FUTURE_EVENT_ID"),
     ):
         assert buffer.replay_after(supplied).gap_code == expected
 
