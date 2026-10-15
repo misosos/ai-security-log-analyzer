@@ -32,6 +32,8 @@ uv run python -m app.monitor_setup --delete
 
 `--show`는 원본 경로나 JSON을 표시하지 않고 마지막 처리 위치의 안전한 상태만 요약합니다. `--delete`는 기본 config와 연결된 private checkpoint만 승인 후 삭제하며 원본 로그·설정 parent·사용자 지정 `--output` 파일은 삭제하지 않습니다. checkpoint-enabled 모니터링 실행 중에는 삭제를 거부합니다. 설정 삭제는 secure erase가 아닙니다. 마법사는 source 경로를 private config에 저장하므로 공유하지 마십시오. 명시적 `--output`은 기존 `--monitor-config <절대-경로>`로 실행하며, 그 경로가 터미널 기록에 남을 수 있습니다. `--monitor`가 없으면 live는 자동 활성화되지 않습니다. 새 설정은 `BOUNDED_REPLAY_V1`을 사용합니다. 기본 `--monitor`로 실행하면 처음에는 `FROM_END`로 시작하고, 이후 **같은 application 파일**의 private checkpoint와 bounded 원본 구간을 재생해 탐지·관계·위험도·사례 prefix를 재구성합니다. 기존 `DISABLED` 설정과 명시적 `--monitor-config`는 계속 재시작 때 `FROM_END`입니다. Checkpoint에 원본 로그는 복사하지 않지만 private 파일 identity·byte 위치가 저장됩니다. 중복·gap 가능성이 있고 exactly-once·무유실·완전한 crash recovery가 아닙니다. 파일 교체·rotation·truncation은 자동 복구하지 않고 중단합니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다. [Phase 21 상세 계약](docs/live_checkpoint_21.md)을 참조하세요.
 
+Phase 21.1은 [관찰 가능한 로그 파일 축소](docs/live_rotation_21_1.md)를 읽기 위치보다 아직 큰 경우에도 감지해 중단합니다. 자동 rotation 연결은 여전히 없으며, 두 검사 사이의 truncate·재성장까지 무유실로 판별하지는 못합니다.
+
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
 현재 지원하는 주요 관찰은 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like, Sensitive Resource Probing-like, Web Scanning-like, 인증 실패 후 로그인 성공, Brute Force 후 로그인 성공입니다. 탐지와 상관관계는 조사할 관찰이지 침해의 증명이 아니며, 이 프로젝트는 SIEM·EDR·WAF·자동 대응 또는 사고 판정 시스템이 아닙니다. 새 웹 관찰의 고정 pattern과 한계는 [설계 문서](docs/web_attack_observation_design.md)에 기록했습니다.

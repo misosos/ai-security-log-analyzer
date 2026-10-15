@@ -2,6 +2,8 @@
 
 상태: 단일 `application` source의 기본 private v2 설정에 구현된 경계. 이 문서는 기존 `FROM_END`와 worker transaction을 바꾸지 않는 복구 계약을 정의한다.
 
+후속 Phase 21.1은 [관찰 가능한 파일 크기 감소의 fail-closed 검사](live_rotation_21_1.md)를 추가했다. 자동 rotation 추종이나 checkpoint 세대 전환은 여전히 없다.
+
 ## 현재 확정 지점 감사
 
 `LiveTailSession._offset`은 `os.read` 직후 증가하므로 완성되지 않은 줄과 아직 큐에 있는 줄도 포함한다. `_partial`과 `_pending_chunk`는 메모리 전용이다. `acknowledge_lease()`는 FIFO queue prefix를 제거하지만 detector나 publication을 확정하지 않는다. Worker는 detection/analysis/publication proposal을 ack 전에 준비하고, ack → detection commit → analysis commit → publication commit → worker summary 순서로 확정한다. Runner 알림은 그 뒤이다. Ack 후 실패에 rollback이나 자동 재처리는 없다. Close는 미완료 queue record를 abandoned로 세고 FD·partial을 해제한다.

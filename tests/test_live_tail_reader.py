@@ -206,6 +206,55 @@ def test_source_changes_stop_instead_of_merging(tmp_path, change):
         session.close()
 
 
+def test_observed_shrink_above_read_offset_fails_before_polling_more(tmp_path):
+    path = tmp_path / "input.log"
+    path.write_bytes(b"old\n" * 128)
+    config = LiveMonitorConfig(role="application", path=path)
+    session = open_live_tail_session(config, start_offset=4)
+    try:
+        assert path.stat().st_size > session._offset
+        with path.open("r+b") as stream:
+            stream.truncate(128)
+        assert path.stat().st_size > session._offset
+        with pytest.raises(LiveMonitorError) as raised:
+            session.poll_once()
+        assert raised.value.code == "SOURCE_TRUNCATED"
+        assert session.snapshot().state == "FAILED"
+        assert session.snapshot().queue_item_count == 0
+        assert session._fd == -1
+    finally:
+        session.close()
+
+
+def test_shrink_during_read_fails_at_post_probe_without_ack(tmp_path, monkeypatch):
+    import app.live_monitoring.core as module
+
+    path, session = _open(tmp_path)
+    _append(path, b"a" * (MAX_CHUNK_BYTES * 4))
+    original_read = os.read
+    changed = False
+
+    def read_then_shrink(descriptor, amount):
+        nonlocal changed
+        data = original_read(descriptor, amount)
+        if not changed:
+            changed = True
+            with path.open("r+b") as stream:
+                stream.truncate(MAX_CHUNK_BYTES * 2)
+        return data
+
+    monkeypatch.setattr(module.os, "read", read_then_shrink)
+    try:
+        with pytest.raises(LiveMonitorError) as raised:
+            session.poll_once()
+        assert raised.value.code == "SOURCE_TRUNCATED"
+        assert session.snapshot().state == "FAILED"
+        assert session.snapshot().acknowledged_record_count == 0
+        assert session.snapshot().queue_item_count == 0
+    finally:
+        session.close()
+
+
 def test_partial_is_not_merged_across_replacement(tmp_path):
     path, session = _open(tmp_path)
     _append(path, b"secret partial")

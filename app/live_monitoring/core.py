@@ -252,7 +252,7 @@ class LiveTailSession:
     """One explicit poll at a time; no detector, clock, thread or persistence."""
 
     __slots__ = (
-        "_config", "_fd", "_identity", "_offset", "_framed_offset", "_acked_offset",
+        "_config", "_fd", "_identity", "_offset", "_observed_size", "_framed_offset", "_acked_offset",
         "_partial", "_pending_chunk",
         "_queue", "_state", "_revision", "_processed", "_rejected",
         "_overflow", "_warnings", "_error_code", "_next_sequence",
@@ -271,6 +271,7 @@ class LiveTailSession:
         if start_offset is not None and (type(start_offset) is not int or not 0 <= start_offset <= end):
             raise LiveMonitorError("INVALID_CONFIG")
         self._offset = end if start_offset is None else start_offset
+        self._observed_size = end
         os.lseek(descriptor, self._offset, os.SEEK_SET)
         self._framed_offset = self._offset
         self._acked_offset = self._offset
@@ -339,8 +340,10 @@ class LiveTailSession:
         os.close(descriptor)
         if (metadata.st_dev, metadata.st_ino) != self._identity:
             raise LiveMonitorError("SOURCE_REPLACED")
-        if os.fstat(self._fd).st_size < self._offset:
+        observed = os.fstat(self._fd).st_size
+        if observed < self._offset or observed < self._observed_size:
             raise LiveMonitorError("SOURCE_TRUNCATED")
+        self._observed_size = observed
 
     def _append_partial(self, segment: bytes) -> None:
         if len(self._partial) + len(segment) > MAX_PARTIAL_BYTES:

@@ -1,6 +1,6 @@
 # v0.3.0 안전한 로컬 설정·Collector 설계 (Phase 19)
 
-상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를, Phase 20.1에서 기본 설정 조회·삭제와 `--monitor` 실행을, Phase 21에서 [동일 파일 bounded checkpoint core](live_checkpoint_21.md)를 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 구현된 범위는 새 문서를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. Rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
+상태: Phase 19는 **설계만** 수행했다. 이후 Phase 20에서 단일 application source 설정 마법사 core와 v2 reader를, Phase 20.1에서 기본 설정 조회·삭제와 `--monitor` 실행을, Phase 21에서 [동일 파일 bounded checkpoint core](live_checkpoint_21.md)를, Phase 21.1에서 [관찰 가능한 파일 축소의 fail-closed 검사](live_rotation_21_1.md)를 구현했다. 아래 표의 `현재`는 공개 v0.2.0 감사 당시 계약이고, `제안` 중 구현된 범위는 새 문서를 우선한다. 탐지·관계·위험도·사례 의미와 v0.2.0 릴리스 노트는 변경하지 않는다. Rotation 자동 추종·다중 source·권한 분리 collector는 후속 gate다. 이 최소 단위만으로 실무 무유실 수집을 주장하지 않는다.
 
 ## 1. 현재 코드 감사와 사용자 문제
 
@@ -96,7 +96,7 @@ v2 제안 스키마는 `additionalProperties=false`이며 source 배열은 **v0.
 }
 ```
 
-`source_id`는 역할 순서의 비개인정보 ID이며 path/계정/hash에서 파생하지 않는다. 별칭은 고정 생성값만; 자유 입력은 개인정보·HTML 경계 검증 전 보류. `parser_timezone`은 기존 application parser의 naive-time 해석과 같아야 하며 임의 변경 no-go. v2에서 checkpoint·rotation enum은 **DISABLED / FAIL_CLOSED만** 유효. `enabled=false`는 저장은 가능하되 실행하지 않으며 암묵적 나중 자동 시작 금지. key 중복·unknown·bool-as-int·상한 초과·비정상 Unicode·상대 경로·symlink를 모두 거부. v1 reader는 기존처럼 남고 v1→v2는 백업/승인 후 명시 변환; 조용한 rewrite 금지.
+`source_id`는 역할 순서의 비개인정보 ID이며 path/계정/hash에서 파생하지 않는다. 별칭은 고정 생성값만; 자유 입력은 개인정보·HTML 경계 검증 전 보류. `parser_timezone`은 기존 application parser의 naive-time 해석과 같아야 하며 임의 변경 no-go. 위 JSON은 Phase 19 제안 당시의 `DISABLED` 예시다. 현재 v2 checkpoint enum은 `DISABLED`와 `BOUNDED_REPLAY_V1`, rotation enum은 `FAIL_CLOSED`만 유효하다. 새 기본 설정은 bounded 정책을, 기존 설정은 원래 값을 유지한다. `enabled=false`는 저장은 가능하되 실행하지 않으며 암묵적 나중 자동 시작 금지. key 중복·unknown·bool-as-int·상한 초과·비정상 Unicode·상대 경로·symlink를 모두 거부. v1 reader는 기존처럼 남고 v1→v2는 백업/승인 후 명시 변환; 조용한 rewrite 금지.
 
 | 정책 | 제안 |
 |---|---|
@@ -105,7 +105,7 @@ v2 제안 스키마는 `additionalProperties=false`이며 source 배열은 **v0.
 | 생성·원자성 | 열린 parent dir FD에만 작업; symlink-free 경로/owner 확인; 같은 디렉터리에 `O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC`로 `0600` 임시 파일 생성, bounded write→`fsync(file)`. **`os.replace`는 기존 대상을 덮어쓰므로 신규 설정의 no-clobber 조건에 단독 사용 금지**. 가능한 macOS/Linux FS에서는 임시 파일을 대상 이름에 `os.link(..., dir_fd=...)`로 no-clobber publish, temp unlink→parent `fsync`; 미지원 FS는 저장 실패. 기존 파일 update는 별도 승인·version CAS와 재검증 gate 없이는 금지 |
 | 장애·cleanup | temp 이름에 source/path 포함 금지; 실패 시 특정 temp만 제거; crash 후 남은 owner-private temp는 다음 실행에서 사용자 확인 후 보수적으로 정리. `fsync` 실패는 성공이라 표시하지 않음. 원자적 이름 게시와 crash 내구성은 FS별 테스트 필요 |
 | 백업·secret | 기본 backup 없음; config에 credential/API key/password 금지. OS backup·Time Machine 복제 가능성을 안내하며 정책은 사용자가 관리 |
-| 출력·삭제 | 웹 UI·stdout/stderr·일반 log에는 원래 path/파일명 불가. 현재 `monitor_setup --delete`는 private 기본 config 하나를 owner·mode·identity 확인 및 재승인 뒤 삭제; source 원본은 삭제하지 않음. 사용자 지정 config와 미래 checkpoint 삭제는 범위 밖이며, 백업·crash dump까지 지웠다고 주장하지 않음 |
+| 출력·삭제 | 웹 UI·stdout/stderr·일반 log에는 원래 path/파일명 불가. 현재 `monitor_setup --delete`는 private 기본 config와 연결된 checkpoint를 검증·승인 뒤 삭제하며 source 원본은 삭제하지 않음. 사용자 지정 config 삭제는 범위 밖이며, 백업·crash dump까지 지웠다고 주장하지 않음 |
 
 명시적 `--monitor-config`는 절대 경로 인자여서 shell history/프로세스 목록 노출 가능성이 있다. 기본 설정에 한한 `--monitor`는 경로를 명령 인자로 받지 않아 **초보 사용자의 완결된 흐름**을 제공한다. 공개 CLI help에는 generic placeholder만 둔다. Python 3.12의 `dir_fd`, `O_NOFOLLOW`, `os.link`, `fsync`, `os.replace` 문서가 제공하는 것은 API 의미이며, 위 조합의 보안성과 각 FS 내구성은 프로젝트가 테스트할 정책이다.
 
@@ -209,7 +209,7 @@ Trusted setup CLI에서만 source 추가·삭제·권한 확인·config/checkpoi
 | raw 로그 원본 | 사용자 지정 source, 기존 OS 권한 | app이 변경·삭제 안 함; 원래 정책 미정 | source 소유자; 웹 미노출·외부 전송 없음 |
 | in-memory queue | collector RAM, process 권한 | 현재 32/16KiB, 정상 close 해제; crash 시 소멸, secure erase 아님 | process; 웹 count만, 외부 없음 |
 | parser/analysis event history | trusted RAM, process 권한 | 256/256KiB fail closed, close/crash 후 소멸 | process; raw 웹·외부 없음; Phase 21 저장은 별도 승인 필요 |
-| checkpoint | **현재 없음**; 제안 private state dir 0700/file 0600 | Phase 21 보존 기간 미정; 정상·crash 뒤 남음 | 명시적 remove; 웹은 safe 상태만 |
+| checkpoint | Phase 21 기본 private 설정의 bounded 위치·검증 metadata만 0700/0600으로 저장 | config 삭제 승인 전까지 보존; 정상·crash 뒤 남음 | 연결 기본 config와 함께 삭제; 웹은 safe 상태만 |
 | config | 현재 사용자가 만든 0600 파일; 제안 private dir 0700/file 0600 | 삭제 전 지속, backup 가능 | 사용자/명시적 remove; 원래 path 웹·외부 없음 |
 | safe publication | 현재 process RAM, 32/16KiB | eviction gap, close/crash 소멸 | process; bounded SSE로 loopback 제공 |
 | HTML report | 사용자가 요청한 저장 위치·권한(writer 0600) | 사용자가 지울 때까지; backup 가능 | 사용자; 다운로드에 안전 projection이나 민감 조사 내용 가능, 외부 전송 없음 |
@@ -219,7 +219,7 @@ Trusted setup CLI에서만 source 추가·삭제·권한 확인·config/checkpoi
 
 ## 9. v0.3 최소 범위·로드맵·중단 조건
 
-**v0.3 최소 구현 확정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/기본 설정 하나의 승인 삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. Phase 20.1에서 기본 위치의 경로 없는 `--monitor`를 구현했다. 명시적 사용자 지정 config 경로는 여전히 shell history·프로세스 목록·터미널 기록에 남을 수 있다. Durable checkpoint·rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **v0.3 최소 출하에 포함하지 않는다**. 실무 수준의 재시작 연속성은 Phase 21 통과 전 별도 제한으로 고지한다.
+**Phase 19 당시 v0.3 최소 범위 결정:** trusted 대화형 CLI wizard, 닫힌 v2 config(application 1개), private·atomic no-clobber 저장/기본 설정 하나의 승인 삭제, bounded dry-run, 안전 미리보기·명시 승인, 기본 `FROM_END`, 기존 v0.2 `--monitor-config` 호환. 이후 Phase 20.1에서 기본 위치의 경로 없는 `--monitor`, Phase 21에서 같은 파일의 durable bounded checkpoint까지 구현했다. 명시적 사용자 지정 config 경로는 여전히 shell history·프로세스 목록·터미널 기록에 남을 수 있다. Rotation 자동 복구·다중 source·별도 collector·service 설치·원격/hosted는 **현재 구현 범위에 포함하지 않는다**. 완전한 crash recovery나 실무 무유실도 주장하지 않는다.
 
 | 단계 | 사용자 가치·public contract | privacy boundary·시험/benchmark | 중단 조건·의존성 |
 |---|---|---|---|

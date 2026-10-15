@@ -178,6 +178,36 @@ def test_truncation_rejected_and_no_checkpoint_replay_on_explicit_config(tmp_pat
         _close(explicit)
 
 
+def test_observed_shrink_above_cursor_does_not_ack_or_advance_checkpoint(tmp_path: Path) -> None:
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    try:
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(FAILURE * 200)
+        assert worker.step().status == "PROCESSED"
+        before_size = source.stat().st_size
+        assert worker._session._offset + 1 < before_size
+        prior_checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+        prior_ack = worker._session.snapshot().acknowledged_record_count
+        prior_revision = worker._accumulator.snapshot().revision
+        prior_publication = worker.publication_buffer.snapshot().latest_committed_detection_revision
+        with source.open("r+b") as stream:
+            stream.truncate(worker._session._offset + 1)
+        with pytest.raises(LiveWorkerError) as caught:
+            worker.step()
+        assert caught.value.code == "POLL_FAILURE"
+        assert worker.snapshot().state is LiveWorkerState.FAILED
+        assert worker._session.snapshot().error_code == "SOURCE_TRUNCATED"
+        assert worker._session.snapshot().acknowledged_record_count == prior_ack
+        assert worker._accumulator.snapshot().revision == prior_revision
+        assert worker._analysis.snapshot().revision == prior_revision
+        assert worker.publication_buffer.snapshot().latest_committed_detection_revision == prior_publication
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == prior_checkpoint
+    finally:
+        _close(service)
+
+
 def test_partial_ignored_and_rejected_replay_without_old_events(tmp_path: Path) -> None:
     source, config = _fixture(tmp_path)
     service, _ = _live_runtime(config, checkpoint_default=True)
