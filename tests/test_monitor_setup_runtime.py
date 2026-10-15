@@ -288,6 +288,78 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
     assert list(tmp_path.rglob(".checkpoint-*")) == []
 
 
+def test_cli_explicit_checkpoint_reset_starts_a_new_epoch(tmp_path: Path) -> None:
+    home = tmp_path / "reset-home"
+    home.mkdir(mode=0o700)
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = ""
+    source = tmp_path / "synthetic-reset.log"
+    source.write_text(APP_LINE, encoding="utf-8")
+    config = resolve_default_monitor_config_path(platform=sys.platform, home=home,
+                                                 xdg_config_home="")
+    setup = subprocess.run([sys.executable, "-m", "app.monitor_setup"],
+                           input=f"yes\napplication\n{source}\nyes\n", env=env,
+                           capture_output=True, text=True, timeout=8)
+    assert setup.returncode == 0 and config.exists()
+    port = _free_port()
+    process = subprocess.Popen([sys.executable, "-m", "app.local_web", "--monitor",
+                                "--no-browser", "--port", str(port)],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    try:
+        _wait_live_status(port, lambda body: body["latest_detection_revision"] == 0)
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(APP_LINE)
+        _wait_live_status(port, lambda body: body["latest_detection_revision"] >= 1)
+        active_reset = subprocess.run(
+            [sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
+            input="yes\n", env=env, capture_output=True, text=True, timeout=8,
+        )
+        assert active_reset.returncode == 3 and "CHECKPOINT_RESET_ACTIVE" in active_reset.stderr
+    finally:
+        stdout, stderr = _stop_runtime(process, port)
+    checkpoint = config.parent / "checkpoint-source-000001.json"
+    assert checkpoint.exists()
+    rotated = tmp_path / "retained-old.log"
+    source.replace(rotated)
+    source.write_text(APP_LINE * 3, encoding="utf-8")
+    failed = subprocess.run([sys.executable, "-m", "app.local_web", "--monitor",
+                             "--no-browser", "--port", str(port)], env=env,
+                            capture_output=True, text=True, timeout=8)
+    assert failed.returncode == 4 and checkpoint.exists()
+    cancelled = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
+                               input="no\n", env=env, capture_output=True, text=True, timeout=8)
+    assert cancelled.returncode == 0 and checkpoint.exists()
+    reset = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
+                           input="yes\n", env=env, capture_output=True, text=True, timeout=8)
+    assert reset.returncode == 0 and not checkpoint.exists()
+    assert config.exists() and source.exists() and rotated.exists()
+    for output in (stdout + stderr, active_reset.stdout + active_reset.stderr,
+                   failed.stdout + failed.stderr,
+                   cancelled.stdout + cancelled.stderr, reset.stdout + reset.stderr):
+        for private in (str(source), str(config), "synthetic", "192.0.2.1"):
+            assert private not in output
+    restarted_port = _free_port()
+    restarted = subprocess.Popen([sys.executable, "-m", "app.local_web", "--monitor",
+                                  "--no-browser", "--port", str(restarted_port)],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    try:
+        initial = _wait_live_status(restarted_port,
+                                    lambda body: body["latest_detection_revision"] == 0)
+        assert initial["analysis_revision"] == 0
+        assert _get_json(restarted_port, "/api/v1/live/status")[1]["latest_detection_revision"] == 0
+        with source.open("a", encoding="utf-8") as stream:
+            stream.write(APP_LINE)
+        resumed = _wait_live_status(restarted_port,
+                                    lambda body: body["latest_detection_revision"] >= 1)
+        assert resumed["analysis_revision"] == resumed["latest_detection_revision"]
+    finally:
+        restart_stdout, restart_stderr = _stop_runtime(restarted, restarted_port)
+    assert str(source) not in restart_stdout + restart_stderr
+    assert config.exists() and source.exists() and rotated.exists()
+    assert list(tmp_path.rglob(".checkpoint-*")) == []
+
+
 def test_checkpoint_restart_rebuilds_safe_analysis_without_republishing_old_events(
     tmp_path: Path,
 ) -> None:

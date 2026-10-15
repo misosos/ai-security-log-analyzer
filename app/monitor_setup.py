@@ -56,6 +56,13 @@ _RECOVERY = {
     "DEFAULT_CONFIG_POST_DELETE_FAILED": ("삭제 결과를 확인하지 못했습니다.", "수동으로 확인하십시오.", False),
     "CHECKPOINT_ORPHAN": ("이전에 남은 복구 자료가 있습니다.", "수동으로 상태를 확인하십시오.", False),
     "CHECKPOINT_DELETE_FAILED": ("연결된 복구 자료를 삭제하지 못했습니다.", "수동으로 상태를 확인하십시오.", False),
+    "CHECKPOINT_RESET_UNAVAILABLE": ("이 설정에는 복구 자료 초기화 기능이 없습니다.", "설정 정책을 확인하십시오.", False),
+    "CHECKPOINT_RESET_MISSING": ("초기화할 복구 자료가 없습니다.", "설정 상태를 확인하십시오.", False),
+    "CHECKPOINT_RESET_ACTIVE": ("모니터링 또는 다른 초기화가 복구 자료를 사용 중입니다.", "실행 중인 모니터링을 정상 종료한 뒤 다시 시도하십시오.", True),
+    "CHECKPOINT_RESET_UNSAFE": ("복구 자료를 안전하게 검증하지 못했습니다.", "권한과 내용을 수동으로 확인하십시오.", False),
+    "CHECKPOINT_RESET_CHANGED": ("승인 전후 복구 자료가 변경되었습니다.", "상태를 확인한 뒤 다시 시도하십시오.", True),
+    "CHECKPOINT_RESET_FAILED": ("복구 자료를 삭제하지 못했습니다.", "상태를 수동으로 확인하십시오.", False),
+    "CHECKPOINT_RESET_POST_DELETE_FAILED": ("삭제 후 상태를 확인하지 못했습니다.", "자동으로 다시 시작하지 말고 수동으로 확인하십시오.", False),
 }
 
 
@@ -319,6 +326,63 @@ def delete_default_config(path: Path | None = None, *,
         raise _management_error(error) from None
 
 
+def reset_default_checkpoint(path: Path | None = None, *,
+                             ask: Callable[[str], str] = input,
+                             emit: Callable[[str], None] = print) -> SetupResult:
+    """Explicitly abandon one default-config checkpoint; never start a monitor."""
+    try:
+        with open_default_config(_management_path(path)) as guard:
+            guard.check()
+            if guard.config.checkpoint_policy != "BOUNDED_REPLAY_V1":
+                raise MonitorSetupError("CHECKPOINT_RESET_UNAVAILABLE")
+            try:
+                checkpoint = LiveCheckpointManager(guard.path, guard.config)
+            except LiveCheckpointError as error:
+                code = ("CHECKPOINT_RESET_ACTIVE" if error.code == "CHECKPOINT_ALREADY_OWNED"
+                        else "CHECKPOINT_RESET_UNSAFE")
+                raise MonitorSetupError(code) from None
+            try:
+                if checkpoint._checkpoint is None:
+                    raise MonitorSetupError("CHECKPOINT_RESET_MISSING")
+                try:
+                    identity = checkpoint._reset_identity()
+                except LiveCheckpointError:
+                    raise MonitorSetupError("CHECKPOINT_RESET_UNSAFE") from None
+                emit("연결된 복구 자료 1개만 삭제하고 새 분석 epoch를 준비합니다.")
+                emit("과거 탐지·관계·위험도·조사 사례와 SSE 변경 기록의 연속성은 이어지지 않습니다.")
+                emit("다음 실행은 현재 파일 끝(FROM_END)에서 시작합니다. 중단 기간의 로그를 복구하지 않으며 무유실·exactly-once를 보장하지 않습니다.")
+                emit("원본 로그와 모니터링 설정, 다른 파일은 삭제하지 않습니다. 설정을 다시 만들 필요는 없습니다.")
+                try:
+                    answer = ask("복구 자료 1개를 삭제하고 새 분석 epoch를 시작할 준비를 하시겠습니까? [y/N] ")
+                except (EOFError, KeyboardInterrupt):
+                    answer = ""
+                if not _approved(answer):
+                    emit("복구 자료 초기화를 취소했습니다.")
+                    return SetupResult("CANCELLED")
+                guard.check()
+                try:
+                    checkpoint.reset_after_approval(identity)
+                except LiveCheckpointError as error:
+                    code = ("CHECKPOINT_RESET_CHANGED" if error.code == "CHECKPOINT_IDENTITY_CHANGED"
+                            else "CHECKPOINT_RESET_POST_DELETE_FAILED" if error.code == "CHECKPOINT_POST_DELETE_FAILED"
+                            else "CHECKPOINT_RESET_UNSAFE" if error.code in (
+                                "CHECKPOINT_CORRUPT", "CHECKPOINT_UNSAFE")
+                            else "CHECKPOINT_RESET_FAILED")
+                    raise MonitorSetupError(code) from None
+                try:
+                    guard.check()
+                except LiveMonitorError:
+                    raise MonitorSetupError("CHECKPOINT_RESET_POST_DELETE_FAILED") from None
+                emit("복구 자료 1개를 삭제했습니다. 원본 로그와 설정은 삭제하지 않았습니다.")
+                emit("모니터링은 자동 시작하지 않습니다. uv run python -m app.local_web --monitor 로 새 분석 epoch를 시작하십시오.")
+                emit("이 삭제는 secure erase가 아니며 backup·filesystem snapshot·crash dump에 이전 자료가 남을 수 있습니다.")
+                return SetupResult("RESET", "application")
+            finally:
+                checkpoint.close()
+    except LiveMonitorError as error:
+        raise _management_error(error) from None
+
+
 def _private_parent(path: Path) -> tuple[int, list[Path]]:
     """Walk by descriptor; create only missing private directories."""
     if not all(hasattr(os, key) for key in ("O_NOFOLLOW", "O_DIRECTORY", "O_CLOEXEC")):
@@ -548,16 +612,18 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
          emit: Callable[[str], None] = print) -> int:
     parser = _SetupParser(
         description="단일 application 로그의 로컬 모니터링 설정 생성",
-        epilog="예: uv run python -m app.monitor_setup --show | --delete",
+        epilog="예: uv run python -m app.monitor_setup --show | --delete | --reset-checkpoint",
     )
     parser.add_argument("--output", metavar="/absolute/path/to/monitoring.json")
     parser.add_argument("--no-color", action="store_true", help="색상 출력 없이 실행 (기본값)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--show", action="store_true", help="기본 설정의 안전한 요약 조회")
     mode.add_argument("--delete", action="store_true", help="기본 설정 하나만 승인 후 삭제")
+    mode.add_argument("--reset-checkpoint", action="store_true",
+                      help="명시적 승인 후 연결된 복구 자료 하나만 삭제하고 새 분석 epoch 준비")
     try:
         args = parser.parse_args(argv)
-        if args.output is not None and (args.show or args.delete):
+        if args.output is not None and (args.show or args.delete or args.reset_checkpoint):
             raise MonitorSetupError("SETUP_INVALID_INPUT")
         if args.show:
             summary = show_default_config()
@@ -573,6 +639,9 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
         if args.delete:
             delete_default_config(ask=ask, emit=emit)
             return 0
+        if args.reset_checkpoint:
+            reset_default_checkpoint(ask=ask, emit=emit)
+            return 0
         run_setup(output=args.output, ask=ask, emit=emit)
         return 0
     except MonitorSetupError as error:
@@ -585,6 +654,9 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
                                    "SETUP_UNSUPPORTED_FORMAT") else
                 3 if error.code.startswith("DEFAULT_CONFIG_") and error.code not in (
                     "DEFAULT_CONFIG_DELETE_FAILED", "DEFAULT_CONFIG_POST_DELETE_FAILED") else
+                3 if error.code in ("CHECKPOINT_RESET_UNAVAILABLE", "CHECKPOINT_RESET_MISSING",
+                                    "CHECKPOINT_RESET_ACTIVE", "CHECKPOINT_RESET_UNSAFE",
+                                    "CHECKPOINT_RESET_CHANGED") else
                 1 if error.code == "SETUP_INTERNAL_FAILED" else 4)
     except (EOFError, KeyboardInterrupt):
         print("SETUP_CANCELLED: 설정 생성을 취소했습니다.")

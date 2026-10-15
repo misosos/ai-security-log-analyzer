@@ -43,6 +43,8 @@ _MESSAGES = {
     "CHECKPOINT_REPLAY_MISMATCH": "재생 결과가 저장된 상태와 일치하지 않습니다.",
     "CHECKPOINT_WRITE_FAILED": "마지막 처리 위치를 저장하지 못했습니다. 모니터링을 중단하십시오.",
     "CHECKPOINT_ALREADY_OWNED": "다른 로컬 모니터링 프로세스가 사용 중입니다.",
+    "CHECKPOINT_IDENTITY_CHANGED": "복구 자료가 검사 중 변경되었습니다.",
+    "CHECKPOINT_POST_DELETE_FAILED": "복구 자료 삭제 결과를 확인하지 못했습니다.",
 }
 
 
@@ -66,6 +68,11 @@ def _pairs(items: list[tuple[str, object]]) -> dict[str, object]:
 
 def _constant(_value: str) -> None:
     raise LiveCheckpointError("CHECKPOINT_CORRUPT")
+
+
+def _file_identity(value: os.stat_result) -> tuple[int, ...]:
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_uid,
+            value.st_size, value.st_mtime_ns, value.st_ctime_ns)
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -193,7 +200,9 @@ class LiveCheckpointManager:
             or named.st_uid != os.geteuid() or named.st_mode & 0o777 != 0o600):
             raise LiveCheckpointError("CHECKPOINT_UNSAFE")
 
-    def _read_optional(self) -> Checkpoint | None:
+    def _read_optional(
+        self, *, with_identity: bool = False,
+    ) -> Checkpoint | tuple[Checkpoint, tuple[int, ...]] | None:
         try:
             named = os.stat(CHECKPOINT_NAME, dir_fd=self._parent_fd, follow_symlinks=False)
         except FileNotFoundError:
@@ -224,6 +233,15 @@ class LiveCheckpointManager:
             if (checkpoint.source_id != self._config.source_id
                 or checkpoint.parser_timezone != self._config.parser_timezone):
                 raise LiveCheckpointError("CHECKPOINT_CORRUPT")
+            if with_identity:
+                named_after = os.stat(CHECKPOINT_NAME, dir_fd=self._parent_fd,
+                                      follow_symlinks=False)
+                opened_after = os.fstat(fd)
+                if (_file_identity(named) != _file_identity(opened)
+                    or _file_identity(named) != _file_identity(named_after)
+                    or _file_identity(named) != _file_identity(opened_after)):
+                    raise LiveCheckpointError("CHECKPOINT_IDENTITY_CHANGED")
+                return checkpoint, _file_identity(opened)
             return checkpoint
         except LiveCheckpointError:
             raise
@@ -232,6 +250,32 @@ class LiveCheckpointManager:
         finally:
             if fd >= 0:
                 os.close(fd)
+
+    def _reset_identity(self) -> tuple[int, ...]:
+        """Capture the validated named file identity while holding the lock."""
+        self._verify_lock_identity()
+        observed = self._read_optional(with_identity=True)
+        if observed is None or observed[0] != self._checkpoint:
+            raise LiveCheckpointError("CHECKPOINT_CORRUPT")
+        return observed[1]
+
+    def reset_after_approval(self, expected_identity: tuple[int, ...]) -> None:
+        """Remove exactly the bound checkpoint, never config/source/lock."""
+        if type(expected_identity) is not tuple or len(expected_identity) != 7:
+            raise LiveCheckpointError("CHECKPOINT_UNSAFE")
+        if self._reset_identity() != expected_identity:
+            raise LiveCheckpointError("CHECKPOINT_IDENTITY_CHANGED")
+        try:
+            os.unlink(CHECKPOINT_NAME, dir_fd=self._parent_fd)
+        except OSError:
+            raise LiveCheckpointError("CHECKPOINT_WRITE_FAILED") from None
+        try:
+            os.fsync(self._parent_fd)
+            if self._read_optional() is not None:
+                raise LiveCheckpointError("CHECKPOINT_POST_DELETE_FAILED")
+            self._checkpoint = None
+        except Exception:
+            raise LiveCheckpointError("CHECKPOINT_POST_DELETE_FAILED") from None
 
     def _write(self, checkpoint: Checkpoint) -> None:
         if self._readonly or self._closed:

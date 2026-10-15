@@ -6,6 +6,8 @@
 
 Phase 21.2는 [잠금 이름 identity와 원자 교체 뒤 장애 경계](live_checkpoint_21_2.md)를 보강했다. 같은 사용자에 의한 모든 동시성 공격이나 전원 차단 내구성을 증명한 것은 아니다.
 
+Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](live_checkpoint_epoch_reset_21_7.md)를 추가했다. 기본 checkpoint 하나만 명시적으로 삭제하는 별도 CLI이며 이 문서의 same-file 복구나 fail-closed 기본값을 자동으로 바꾸지 않는다.
+
 ## 현재 확정 지점 감사
 
 `LiveTailSession._offset`은 `os.read` 직후 증가하므로 완성되지 않은 줄과 아직 큐에 있는 줄도 포함한다. `_partial`과 `_pending_chunk`는 메모리 전용이다. `acknowledge_lease()`는 FIFO queue prefix를 제거하지만 detector나 publication을 확정하지 않는다. Worker는 detection/analysis/publication proposal을 ack 전에 준비하고, ack → detection commit → analysis commit → publication commit → worker summary 순서로 확정한다. Runner 알림은 그 뒤이다. Ack 후 실패에 rollback이나 자동 재처리는 없다. Close는 미완료 queue record를 abandoned로 세고 FD·partial을 해제한다.

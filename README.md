@@ -28,6 +28,7 @@ uv run python -m app.local_web --monitor
 ```bash
 uv run python -m app.monitor_setup --show
 uv run python -m app.monitor_setup --delete
+uv run python -m app.monitor_setup --reset-checkpoint
 ```
 
 `--show`는 원본 경로나 JSON을 표시하지 않고 마지막 처리 위치의 안전한 상태만 요약합니다. `--delete`는 기본 config와 연결된 private checkpoint만 승인 후 삭제하며 원본 로그·설정 parent·사용자 지정 `--output` 파일은 삭제하지 않습니다. checkpoint-enabled 모니터링 실행 중에는 삭제를 거부합니다. 설정 삭제는 secure erase가 아닙니다. 마법사는 source 경로를 private config에 저장하므로 공유하지 마십시오. 명시적 `--output`은 기존 `--monitor-config <절대-경로>`로 실행하며, 그 경로가 터미널 기록에 남을 수 있습니다. `--monitor`가 없으면 live는 자동 활성화되지 않습니다. 새 설정은 `BOUNDED_REPLAY_V1`을 사용합니다. 기본 `--monitor`로 실행하면 처음에는 `FROM_END`로 시작하고, 이후 **같은 application 파일**의 private checkpoint와 bounded 원본 구간을 재생해 탐지·관계·위험도·사례 prefix를 재구성합니다. 기존 `DISABLED` 설정과 명시적 `--monitor-config`는 계속 재시작 때 `FROM_END`입니다. Checkpoint에 원본 로그는 복사하지 않지만 private 파일 identity·byte 위치가 저장됩니다. 중복·gap 가능성이 있고 exactly-once·무유실·완전한 crash recovery가 아닙니다. 파일 교체·rotation·truncation은 자동 복구하지 않고 중단합니다. 외부 LLM 자동 전송은 없습니다. 종료는 `Ctrl+C`; SSH/access detection-only 수동 v1 설정은 기존처럼 유지됩니다. [Phase 21 상세 계약](docs/live_checkpoint_21.md)을 참조하세요.
@@ -42,7 +43,9 @@ Phase 21.4는 [poll 이후 ack 이전의 파일 상태 재검증](docs/live_rota
 
 Phase 21.5의 [rotation handoff 안전성 gate](docs/live_rotation_21_5.md)는 이전 파일 writer가 rename 후에도 계속 기록할 수 있고 일시적인 EOF만으로 종료를 알 수 없음을 검증했습니다. 현재의 단일 파일 checkpoint로 두 세대의 분석 prefix를 재시작 후 재구성할 수 없으므로, 자동 handoff는 구현하지 않고 fail closed를 유지합니다.
 
-Phase 21.6의 [두 파일 세대 복구 검토](docs/live_rotation_21_6.md)는 EOF 이후 old writer append, old/new partial line, retained old 파일의 재시작 거부, copytruncate 재성장의 관찰 한계를 재현했습니다. 자동 rotation 복구는 여전히 지원하지 않으며, 추가 private checkpoint metadata가 필요한 구현은 별도 승인을 기다립니다.
+Phase 21.6의 [두 파일 세대 복구 검토](docs/live_rotation_21_6.md)는 EOF 이후 old writer append, old/new partial line, retained old 파일의 재시작 거부, copytruncate 재성장의 관찰 한계를 재현했습니다. 자동 rotation 복구는 여전히 지원하지 않으며, 두 세대 private checkpoint metadata 확대는 승인되지 않았습니다.
+
+Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkpoint_epoch_reset_21_7.md)를 추가했습니다. 파일 교체·축소 또는 checkpoint 불일치로 중단되면 원인을 확인하고 모니터링을 종료한 뒤 `uv run python -m app.monitor_setup --reset-checkpoint`에서 결과 연속성 포기를 `y/yes`로 승인할 수 있습니다. 연결된 derived checkpoint **하나만** 삭제하며 설정·원본 로그는 그대로 둡니다. 다음 `--monitor`는 현재 파일의 `FROM_END`부터 새 세션으로 시작하고 중단 기간 로그나 과거 탐지·관계·위험도·사례를 복원하지 않습니다. 자동 rotation handoff와 두 세대 checkpoint metadata 확대는 승인되지 않았으며 계속 NO-GO입니다. 이 삭제는 secure erase가 아닙니다.
 
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 
