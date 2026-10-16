@@ -45,7 +45,7 @@ Phase 21.5의 [rotation handoff 안전성 gate](docs/live_rotation_21_5.md)는 �
 
 Phase 21.6의 [두 파일 세대 복구 검토](docs/live_rotation_21_6.md)는 EOF 이후 old writer append, old/new partial line, retained old 파일의 재시작 거부, copytruncate 재성장의 관찰 한계를 재현했습니다. 자동 rotation 복구는 여전히 지원하지 않으며, 두 세대 private checkpoint metadata 확대는 승인되지 않았습니다.
 
-Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkpoint_epoch_reset_21_7.md)를 추가했습니다. 파일 교체·축소 또는 checkpoint 불일치로 중단되면 원인을 확인하고 모니터링을 종료한 뒤 `uv run python -m app.monitor_setup --reset-checkpoint`에서 결과 연속성 포기를 `y/yes`로 승인할 수 있습니다. 연결된 derived checkpoint **하나만** 삭제하며 설정·원본 로그는 그대로 둡니다. 다음 `--monitor`는 현재 파일의 `FROM_END`부터 새 세션으로 시작하고 중단 기간 로그나 과거 탐지·관계·위험도·사례를 복원하지 않습니다. 자동 rotation handoff와 두 세대 checkpoint metadata 확대는 승인되지 않았으며 계속 NO-GO입니다. 이 삭제는 secure erase가 아닙니다.
+Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkpoint_epoch_reset_21_7.md)를 추가했습니다. 파일 교체·축소 또는 checkpoint 불일치로 중단되면 원인을 확인하고 모니터링을 종료한 뒤 `uv run python -m app.monitor_setup --reset-checkpoint`에서 결과 연속성 포기를 `y/yes`로 승인할 수 있습니다. 연결된 derived checkpoint **하나만** 삭제하며 설정·원본 로그는 그대로 둡니다. 다음 `--monitor`는 현재 파일의 `FROM_END`부터 새 세션으로 시작하고 중단 기간 로그나 과거 탐지·관계·위험도·사례를 복원하지 않습니다. [Phase 21.8 Linux 검증 기록](docs/live_checkpoint_epoch_reset_21_8_linux_audit.md)은 Ubuntu CI 증거와 별도 프로세스 reset 검증의 범위를 구분합니다. 자동 rotation handoff와 두 세대 checkpoint metadata 확대는 승인되지 않았으며 계속 NO-GO입니다. 이 삭제는 secure erase가 아닙니다.
 
 연결이 종료되면 화면의 서버 상태 안내를 확인하고 필요한 경우 **최신 상태로 다시 연결**을 선택하십시오. 이 동작은 잃은 변경 기록을 복원하지 않습니다. Phase 15.1의 [실시간 UI 수용성 검증 기록](docs/live_monitoring_acceptance_15_1.md)은 자동 테스트, 실제 Safari WebDriver 확인, 아직 필요한 수동 keyboard·확대·콘솔 확인을 구분합니다.
 

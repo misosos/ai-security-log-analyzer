@@ -33,4 +33,4 @@ Checkpoint 파일 자체에는 기존 승인된 private identity·offset·safe s
 
 ## 검증과 남은 한계
 
-macOS의 합성 regular file에서 승인·취소, active lock, 같은 내용의 inode 교체, config 교체, symlink·malformed·missing checkpoint, 동시 reset, 삭제 뒤 `fsync` 장애와 실제 CLI→loopback 서버 종료→파일 교체→재시작 거부→reset→새 FROM_END 시작을 검증했다. Old SSE cursor와 새 session의 gap 의미는 기존 transport 테스트에 의존하며 이번 단계의 Safari 수동 테스트는 없다. Linux 실제 filesystem, 전원 차단, 같은 UID의 악의적 최종-nanosecond swap, secure erase는 NOT_TESTED 또는 보장 밖이다. 자동 rotation, copytruncate, 두 세대 분석 연속성은 [Phase 21.6 gate](live_rotation_21_6.md)대로 계속 NO-GO다.
+macOS의 합성 regular file에서 승인·취소, active lock, 같은 내용의 inode 교체, config 교체, symlink·malformed·missing checkpoint, 동시 reset, 삭제 뒤 `fsync` 장애와 실제 CLI→loopback 서버 종료→파일 교체→재시작 거부→reset→새 FROM_END 시작을 검증했다. 이후 [Phase 21.8 Linux 감사](live_checkpoint_epoch_reset_21_8_linux_audit.md)는 시작 코드의 Ubuntu CI 전체 회귀와 신규 명시적 Linux CI gate를 분리해 기록한다. Old SSE cursor와 새 session의 gap 의미는 기존 transport 테스트에 의존하며 이번 단계의 Safari 수동 테스트는 없다. 전원 차단, 같은 UID의 악의적 최종-nanosecond swap, secure erase는 NOT_TESTED 또는 보장 밖이다. 자동 rotation, copytruncate, 두 세대 분석 연속성은 [Phase 21.6 gate](live_rotation_21_6.md)대로 계속 NO-GO다.

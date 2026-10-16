@@ -1,9 +1,11 @@
 """OS-temporary CLI → v2 loader → actual loopback runtime smoke."""
 
 from http.client import HTTPConnection
+import asyncio
 import json
 import os
 from pathlib import Path
+import selectors
 import signal
 import socket
 import subprocess
@@ -12,6 +14,7 @@ import time
 from urllib.request import Request, urlopen
 
 from app.live_monitoring.config import resolve_default_monitor_config_path
+from app.local_web import _live_runtime
 from app.monitor_setup import create_monitor_config
 
 
@@ -358,6 +361,75 @@ def test_cli_explicit_checkpoint_reset_starts_a_new_epoch(tmp_path: Path) -> Non
     assert str(source) not in restart_stdout + restart_stderr
     assert config.exists() and source.exists() and rotated.exists()
     assert list(tmp_path.rglob(".checkpoint-*")) == []
+
+
+def test_two_reset_processes_do_not_share_approval_lock(tmp_path: Path) -> None:
+    """An approval prompt holds the advisory lock across separate OS processes."""
+    home = tmp_path / "isolated-home"
+    home.mkdir(mode=0o700)
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = ""
+    source = tmp_path / "private-source.log"
+    source.write_text(APP_LINE, encoding="utf-8")
+    config = resolve_default_monitor_config_path(platform=sys.platform, home=home,
+                                                 xdg_config_home="")
+    create_monitor_config(source, config)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    asyncio.run(service.close())
+    checkpoint = config.parent / "checkpoint-source-000001.json"
+    lock = config.parent / "checkpoint-source-000001.lock"
+    assert checkpoint.is_file() and checkpoint.stat().st_mode & 0o777 == 0o600
+    assert lock.is_file() and lock.stat().st_mode & 0o777 == 0o600
+    assert config.parent.stat().st_mode & 0o777 == 0o700
+    original = checkpoint.read_bytes()
+    sibling = config.parent / "leave-alone.txt"
+    sibling.write_text("sentinel", encoding="utf-8")
+
+    first = subprocess.Popen(
+        [sys.executable, "-u", "-m", "app.monitor_setup", "--reset-checkpoint"],
+        env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        assert first.stdout is not None and first.stdin is not None
+        prompt = bytearray()
+        with selectors.DefaultSelector() as selector:
+            selector.register(first.stdout, selectors.EVENT_READ)
+            deadline = time.monotonic() + 8
+            while b"[y/N]" not in prompt and time.monotonic() < deadline:
+                if selector.select(timeout=0.1):
+                    chunk = os.read(first.stdout.fileno(), 4096)
+                    assert chunk, "first reset exited before approval prompt"
+                    prompt.extend(chunk)
+        assert b"[y/N]" in prompt and first.poll() is None
+        second = subprocess.run(
+            [sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
+            input="yes\n", env=env, capture_output=True, text=True, timeout=8,
+        )
+        assert second.returncode == 3
+        assert "CHECKPOINT_RESET_ACTIVE" in second.stderr
+        assert checkpoint.read_bytes() == original
+        first.stdin.write(b"no\n")
+        first.stdin.flush()
+        first_output, first_error = first.communicate(timeout=8)
+        assert first.returncode == 0 and checkpoint.read_bytes() == original
+        assert b"CHECKPOINT_RESET_ACTIVE" not in first_error
+        approved = subprocess.run(
+            [sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
+            input="yes\n", env=env, capture_output=True, text=True, timeout=8,
+        )
+        assert approved.returncode == 0 and not checkpoint.exists()
+        assert config.exists() and source.exists() and sibling.read_text(encoding="utf-8") == "sentinel"
+        for output in (bytes(prompt), first_output, first_error,
+                       second.stdout.encode(), second.stderr.encode(),
+                       approved.stdout.encode(), approved.stderr.encode()):
+            for canary in (str(source).encode(), str(config).encode(),
+                           b"synthetic", b"192.0.2.1"):
+                assert canary not in output
+    finally:
+        if first.poll() is None:
+            first.kill()
+            first.communicate(timeout=3)
 
 
 def test_checkpoint_restart_rebuilds_safe_analysis_without_republishing_old_events(

@@ -42,6 +42,11 @@ jobs:
       - name: Compile Python sources and tests
         run: uv run python -m compileall -q app tests main.py
 
+      - name: Verify Linux checkpoint reset and process restart
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run pytest -q tests/test_checkpoint_epoch_reset.py tests/test_monitor_setup_runtime.py::test_two_reset_processes_do_not_share_approval_lock tests/test_monitor_setup_runtime.py::test_cli_explicit_checkpoint_reset_starts_a_new_epoch
+
       - name: Run complete regression
         run: uv run pytest -q
 
