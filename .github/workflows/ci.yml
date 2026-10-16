@@ -37,7 +37,7 @@ jobs:
         run: uv lock --check
 
       - name: Install locked development environment
-        run: uv sync --dev --locked
+        run: uv sync --dev --locked --no-build-package hypothesis --no-build-package sortedcontainers
 
       - name: Compile Python sources and tests
         run: uv run python -m compileall -q app tests main.py
