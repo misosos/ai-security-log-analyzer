@@ -15,7 +15,7 @@ from app.live_monitoring.detection_accumulator import (
     LiveDetectionProposal,
 )
 from app.live_monitoring.analysis_accumulator import (
-    LiveAnalysisAccumulator, LiveAnalysisProposal, LiveAnalysisChangeSet,
+    ANALYSIS_ROLES, LiveAnalysisAccumulator, LiveAnalysisProposal, LiveAnalysisChangeSet,
     LiveAnalysisSnapshot, LiveRelationSummary, LiveRiskSummary, LiveCaseSummary,
 )
 
@@ -164,7 +164,7 @@ class LiveAnalysisPublicationEvent:
     def __post_init__(self) -> None:
         parsed = _parse_event_id(self.event_id)
         if (parsed is None or self.session_id != _session_id(parsed[0])
-            or self.event_type != "ANALYSIS_CHANGE" or self.source_role != "application"
+            or self.event_type != "ANALYSIS_CHANGE" or self.source_role not in ANALYSIS_ROLES
             or type(self.revision) is not int or not 1 <= self.revision <= MAX_COUNTER
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in (
                 self.active_relation_count, self.active_risk_count, self.active_case_count))
@@ -176,6 +176,8 @@ class LiveAnalysisPublicationEvent:
                    for change in group)
             or any(category not in _RELATION_CHANGES
                    or type(item) is not LiveRelationSummary
+                   or (self.source_role == "ssh" and
+                       item.relation_type == "successful_login_to_file_access")
                    or (category == "RELATION_NO_LONGER_MATCHES") !=
                       (item.state == "NO_LONGER_MATCHES_CURRENT_RESULT")
                    for category, item in self.relation_changes)
@@ -436,6 +438,7 @@ class LivePublicationBuffer:
         if analysis_accumulator is not None and (
             type(analysis_accumulator) is not LiveAnalysisAccumulator
             or analysis_accumulator._detection is not accumulator
+            or analysis_accumulator.snapshot().source_role != accumulator.source_role
             or analysis_accumulator.snapshot().closed
             or analysis_accumulator.snapshot().revision != 0):
             raise LivePublicationError("INVALID_BUFFER_ARGUMENT")
@@ -592,6 +595,8 @@ class LivePublicationBuffer:
             raise LivePublicationError("INVALID_CHANGE_SET")
         analysis = self._analysis
         if (analysis._active is not analysis_proposal or analysis._candidate is None
+            or analysis_proposal.source_role != self._accumulator.source_role
+            or analysis._candidate.snapshot.source_role != self._accumulator.source_role
             or analysis_proposal.target_revision != detection_proposal.proposal_revision
             or analysis._candidate_detection_state is not detection_proposal._committed_state):
             raise LivePublicationError("PROPOSAL_MISMATCH")
@@ -625,7 +630,7 @@ class LivePublicationBuffer:
                 next_number = _add(candidate.last_event_number, 1)
                 event = LiveAnalysisPublicationEvent(
                     _event_id(self._session_number, next_number), self._session_id,
-                    proposal.revision, "ANALYSIS_CHANGE", "application",
+                    proposal.revision, "ANALYSIS_CHANGE", self._accumulator.source_role,
                     relation_changes, risk_changes, case_changes,
                     snapshot.relation_count, snapshot.risk_count, snapshot.case_count)
                 encoded = serialize_live_analysis_publication_event(event)

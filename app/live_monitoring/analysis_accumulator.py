@@ -1,4 +1,4 @@
-"""Application-only, single-caller full-prefix correlation/risk/case state.
+"""Single-source application/SSH full-prefix correlation/risk/case state.
 
 Trusted production results remain private to this process. The frozen proposal,
 change set and snapshot contain only approved aggregate/ordinal values.
@@ -27,6 +27,7 @@ from app.live_monitoring.detection_accumulator import (
 MAX_HISTORY_RECORDS = 256
 MAX_HISTORY_BYTES = 256 * 1024
 MAX_IDENTITIES = 4096
+ANALYSIS_ROLES = frozenset(("application", "ssh"))
 _NEXT_OWNER_TOKEN = 0
 _CORRELATIONS = (
     ("authentication", "failed_to_successful_login"),
@@ -44,7 +45,7 @@ _LEVELS = frozenset(("LOW", "MEDIUM", "HIGH"))
 _RELATION_STATES = frozenset(("ACTIVE", "NO_LONGER_MATCHES_CURRENT_RESULT"))
 _MESSAGES = {
     "LIVE_ANALYSIS_INVALID_INPUT": "내부 분석 입력 계약을 확인하십시오.",
-    "LIVE_ANALYSIS_UNSUPPORTED_SOURCE": "application 로그만 지원합니다.",
+    "LIVE_ANALYSIS_UNSUPPORTED_SOURCE": "application 또는 SSH 로그만 지원합니다.",
     "LIVE_ANALYSIS_REVISION_MISMATCH": "분석 revision을 확인하십시오.",
     "LIVE_ANALYSIS_CORRELATION_FAILED": "관계 계산을 완료하지 못했습니다.",
     "LIVE_ANALYSIS_RISK_FAILED": "위험도 계산을 완료하지 못했습니다.",
@@ -210,12 +211,15 @@ class LiveAnalysisSnapshot:
     def __post_init__(self) -> None:
         counts = (self.revision, self.relation_count, self.risk_count,
                   self.case_count, self.independent_observation_count)
-        if (self.schema_version != "1" or self.source_role != "application"
+        if (self.schema_version != "1" or self.source_role not in ANALYSIS_ROLES
             or any(type(value) is not int or not 0 <= value <= MAX_COUNTER for value in counts)
             or type(self.relations) is not tuple or type(self.risks) is not tuple
             or type(self.cases) is not tuple or type(self.fixed_warning_codes) is not tuple
             or self.fixed_warning_codes
             or any(type(item) is not LiveRelationSummary for item in self.relations)
+            or (self.source_role == "ssh" and any(
+                item.relation_type == "successful_login_to_file_access"
+                for item in self.relations))
             or any(type(item) is not LiveRiskSummary for item in self.risks)
             or any(type(item) is not LiveCaseSummary for item in self.cases)
             or self.relation_count != sum(item.state == "ACTIVE" for item in self.relations)
@@ -237,7 +241,7 @@ class LiveAnalysisProposal:
         if (type(self.base_revision) is not int or not 0 <= self.base_revision < MAX_COUNTER
             or type(self.target_revision) is not int
             or self.target_revision != self.base_revision + 1
-            or self.source_role != "application"
+            or self.source_role not in ANALYSIS_ROLES
             or type(self._proposal_id) is not int or not 1 <= self._proposal_id <= MAX_COUNTER
             or type(self._owner_token) is not int or not 1 <= self._owner_token <= MAX_COUNTER):
             raise LiveAnalysisError("LIVE_ANALYSIS_INVALID_INPUT")
@@ -351,7 +355,7 @@ def _case_safe(public_id: str, revision: int, state: str, meaning: tuple) -> Liv
 
 
 class LiveAnalysisAccumulator:
-    """One application detection accumulator and an injected metadata snapshot.
+    """One application or SSH detection accumulator and injected metadata.
 
     No worker, publication, parser, filesystem, or clock calls occur here.
     The caller serializes operations and supplies metadata matching its batch oracle.
@@ -365,7 +369,7 @@ class LiveAnalysisAccumulator:
                  account_metadata: tuple[tuple[str, str], ...]):
         if type(detection_accumulator) is not LiveDetectionAccumulator:
             raise LiveAnalysisError("LIVE_ANALYSIS_INVALID_INPUT")
-        if detection_accumulator.source_role != "application":
+        if detection_accumulator.source_role not in ANALYSIS_ROLES:
             raise LiveAnalysisError("LIVE_ANALYSIS_UNSUPPORTED_SOURCE")
         snapshot = detection_accumulator.snapshot()
         if snapshot.closed or snapshot.revision != 0 or snapshot.active_proposal:
@@ -379,7 +383,7 @@ class LiveAnalysisAccumulator:
             raise LiveAnalysisError("LIVE_ANALYSIS_INVALID_INPUT")
         self._detection = detection_accumulator
         self._metadata = {account: {"privilege": privilege} for account, privilege in account_metadata}
-        empty_snapshot = LiveAnalysisSnapshot("1", 0, "application", 0, 0, 0, 0,
+        empty_snapshot = LiveAnalysisSnapshot("1", 0, detection_accumulator.source_role, 0, 0, 0, 0,
                                                (), (), (), False, False)
         self._state = _State(0, (), (), (), 0, 0, 0, empty_snapshot,
                              LiveAnalysisChangeSet(0, ()), {}, (), None, None)
@@ -416,7 +420,7 @@ class LiveAnalysisAccumulator:
         detector = self._detection
         if (type(detection_proposal) is not LiveDetectionProposal
             or detector._active is not detection_proposal
-            or detection_proposal.source_role != "application"):
+            or detection_proposal.source_role != detector.source_role):
             raise LiveAnalysisError("LIVE_ANALYSIS_INVALID_INPUT")
         if (detector.snapshot().revision != self._state.revision
             or detection_proposal.proposal_revision != self._state.revision + 1):
@@ -447,6 +451,10 @@ class LiveAnalysisAccumulator:
                 }
             except Exception:
                 raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED") from None
+            if (detector.source_role == "ssh"
+                and correlations["post_authentication"]["is_correlated"]):
+                # SSH authentication telemetry has no file-access fact.
+                raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED")
             results[subject] = {"features": entry["features"],
                                 "detections": entry["detections"], "correlation": correlations}
         try:
@@ -498,7 +506,7 @@ class LiveAnalysisAccumulator:
             changes = relation_changes + risk_changes + case_changes
             change_set = LiveAnalysisChangeSet(detection_proposal.proposal_revision, changes)
             safe = LiveAnalysisSnapshot(
-                "1", detection_proposal.proposal_revision, "application",
+                "1", detection_proposal.proposal_revision, detector.source_role,
                 sum(item.state == "ACTIVE" for item in relations),
                 sum(item.state == "ACTIVE" for item in risks),
                 sum(item.state == "ACTIVE" for item in cases),
@@ -513,7 +521,7 @@ class LiveAnalysisAccumulator:
             raise
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_INVALID_INPUT") from None
-        proposal = LiveAnalysisProposal(self._state.revision, candidate.revision, "application",
+        proposal = LiveAnalysisProposal(self._state.revision, candidate.revision, detector.source_role,
                                         self._next_proposal_id, self._owner_token)
         self._next_proposal_id = _next(self._next_proposal_id)
         self._candidate = candidate
@@ -527,7 +535,7 @@ class LiveAnalysisAccumulator:
             raise LiveAnalysisError("LIVE_ANALYSIS_PROPOSAL_MISMATCH")
         if (proposal._owner_token != self._owner_token or proposal.base_revision != self._state.revision
             or proposal.target_revision != self._state.revision + 1
-            or proposal.source_role != "application" or self._candidate is None
+            or proposal.source_role != self._detection.source_role or self._candidate is None
             or self._candidate.revision != proposal.target_revision):
             raise LiveAnalysisError("LIVE_ANALYSIS_REVISION_MISMATCH")
 

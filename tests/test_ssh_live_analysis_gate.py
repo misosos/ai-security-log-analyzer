@@ -105,7 +105,7 @@ def test_ssh_nearest_tie_boundary_and_source_isolation_remain_batch_meaning():
         "authentication"]["time_delta_seconds"] == 60
 
 
-def test_ssh_parser_outcomes_and_current_analysis_boundary_are_explicit():
+def test_ssh_parser_outcomes_and_initial_analysis_boundary_are_explicit():
     lines = (" ", "not a timestamp", "2026-01-02 03:04:01 sshd: unrelated message",
              _ssh(2, "Failed"))
     detector, outcomes, prefixes = _prefixes(lines)
@@ -115,7 +115,7 @@ def test_ssh_parser_outcomes_and_current_analysis_boundary_are_explicit():
         "authentication"]["is_correlated"]
     with pytest.raises(LiveAnalysisError) as caught:
         LiveAnalysisAccumulator(detector, ())
-    assert caught.value.code == "LIVE_ANALYSIS_UNSUPPORTED_SOURCE"
+    assert caught.value.code == "LIVE_ANALYSIS_REVISION_MISMATCH"
 
 
 def test_ssh_spray_is_independent_and_raw_microseconds_are_not_supported():
@@ -132,7 +132,7 @@ def test_ssh_spray_is_independent_and_raw_microseconds_are_not_supported():
     assert outcomes == ("REJECTED",)
 
 
-def test_ssh_worker_is_still_detection_only_and_public_state_is_private(tmp_path):
+def test_ssh_worker_analysis_public_state_is_private(tmp_path):
     source = tmp_path / "SSH_PATH_CANARY.log"
     source.write_text(_ssh(0, "Failed") + "\n", encoding="utf-8")
     session = open_live_tail_session(LiveMonitorConfig("ssh", source.resolve()))
@@ -145,12 +145,12 @@ def test_ssh_worker_is_still_detection_only_and_public_state_is_private(tmp_path
                                   ip="198.51.100.7") + "\n")
         result = worker.step()
         assert result.accumulator_revision == 1
-        assert worker._analysis is None
+        assert worker._analysis is not None
         snapshot = worker.publication_buffer.snapshot()
-        assert snapshot.analysis is None
+        assert snapshot.analysis is not None
         safe = json.dumps(asdict(snapshot), default=str) + repr(worker) + repr(result)
         wire = serialize_live_publication_snapshot(snapshot).decode("utf-8")
-        assert json.loads(wire)["analysis"]["analysis_available"] is False
+        assert json.loads(wire)["analysis"]["analysis_available"] is True
         safe += wire
         for canary in ("SSH_ACCOUNT_CANARY", "198.51.100.7", "SSH_PATH_CANARY"):
             assert canary not in safe

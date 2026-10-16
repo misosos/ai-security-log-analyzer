@@ -58,7 +58,8 @@ def test_research_and_roadmap_do_not_claim_implementation():
         assert required in text
     assert "docs/live_analysis_correlation_case_design.md" in readme
     assert "설계만 완료" in readme
-    assert "worker의 queue ack 이후 detection commit과 함께 확정" in readme
+    assert "Phase 22.3은 기존 SSH parser·detector·batch correlation/risk/case 의미" in readme
+    assert "queue ack 성공 후에만 탐지 후보를 commit" in readme
 
 
 def test_phase_16_1_scope_and_phase_16_3_publication_are_distinguished():
@@ -90,7 +91,7 @@ def test_phase_16_2_worker_boundary_and_phase_16_3_safe_projection():
         assert required in text
     assert "safe DTO" in text
     assert "원래 subject, 계정, IP" in text
-    assert "기존 `observation_changes`는 유지" in readme
+    assert "기존 `observation_changes` schema는 유지" in readme
 
 
 def test_phase_16_2_verification_records_each_fault_and_measurement_limit():

@@ -58,7 +58,7 @@ def _live_runtime(config_path: Path, *, checkpoint_default: bool = False):
     try:
         accumulator = LiveDetectionAccumulator(config.role, 256, 256 * 1024)
         analysis = None
-        if config.role == "application":
+        if config.role in ("application", "ssh"):
             metadata = load_account_metadata()
             analysis = LiveAnalysisAccumulator(
                 accumulator, tuple((account, value["privilege"])

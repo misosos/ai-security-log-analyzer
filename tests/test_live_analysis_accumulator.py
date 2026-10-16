@@ -45,7 +45,7 @@ def _commit(detection, analysis, lines, start):
     return snapshot
 
 
-def test_empty_and_application_only_contract():
+def test_empty_and_supported_source_contract():
     detection, analysis = _setup()
     assert analysis.snapshot().revision == 0
     assert analysis.snapshot().relation_count == 0
@@ -56,10 +56,12 @@ def test_empty_and_application_only_contract():
     with pytest.raises(LiveAnalysisError) as raised:
         analysis.prepare(None)
     assert raised.value.code == "LIVE_ANALYSIS_CLOSED"
-    for role in ("ssh", "access"):
-        with pytest.raises(LiveAnalysisError) as raised:
-            LiveAnalysisAccumulator(LiveDetectionAccumulator(role, 4, 4096), _metadata())
-        assert raised.value.code == "LIVE_ANALYSIS_UNSUPPORTED_SOURCE"
+    ssh = LiveAnalysisAccumulator(LiveDetectionAccumulator("ssh", 4, 4096), _metadata())
+    assert ssh.snapshot().source_role == "ssh"
+    ssh.close()
+    with pytest.raises(LiveAnalysisError) as raised:
+        LiveAnalysisAccumulator(LiveDetectionAccumulator("access", 4, 4096), _metadata())
+    assert raised.value.code == "LIVE_ANALYSIS_UNSUPPORTED_SOURCE"
 
 
 @pytest.mark.parametrize("metadata", (

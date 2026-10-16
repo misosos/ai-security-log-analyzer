@@ -236,15 +236,35 @@ async function main() {
 
   const sshStatus = status();
   sshStatus.source_role = "ssh";
-  sshStatus.analysis_available = false;
-  sshStatus.analysis_revision = null;
-  sshStatus.analysis_state = "UNAVAILABLE";
   const sshApp = await app(200, sshStatus);
-  const sshSnapshot = snapshot();
-  sshSnapshot.analysis.analysis_available = false;
-  sshSnapshot.analysis.revision = null;
-  sshApp.streams[0].send("snapshot", sshSnapshot);
-  assert.match(sshApp.nodes["live-relations-empty"].textContent, /지원하지 않습니다/);
+  sshApp.streams[0].send("snapshot", snapshot());
+  const sshAnalysis = analysisEvent(1, 1);
+  sshAnalysis.source_role = "ssh";
+  sshApp.streams[0].send("analysis_changes", sshAnalysis, eventId(1));
+  assert.equal(sshApp.nodes["live-relations"].children.length, 0);
+  sshApp.nodes["live-show-pending"].click();
+  assert.equal(sshApp.nodes["live-relations"].children.length, 1);
+  const wrongSource = await app(200, sshStatus);
+  wrongSource.streams[0].send("analysis_changes", analysisEvent(1, 1), eventId(1));
+  assert.equal(wrongSource.streams[0].closed, true);
+  const sshFileAccess = await app(200, sshStatus);
+  const invalidRelation = analysisEvent(1, 1);
+  invalidRelation.source_role = "ssh";
+  invalidRelation.relation_changes[0].relation_type = "successful_login_to_file_access";
+  sshFileAccess.streams[0].send("analysis_changes", invalidRelation, eventId(1));
+  assert.equal(sshFileAccess.streams[0].closed, true);
+
+  const accessStatus = status();
+  accessStatus.source_role = "access";
+  accessStatus.analysis_available = false;
+  accessStatus.analysis_revision = null;
+  accessStatus.analysis_state = "UNAVAILABLE";
+  const accessApp = await app(200, accessStatus);
+  const accessSnapshot = snapshot();
+  accessSnapshot.analysis.analysis_available = false;
+  accessSnapshot.analysis.revision = null;
+  accessApp.streams[0].send("snapshot", accessSnapshot);
+  assert.match(accessApp.nodes["live-relations-empty"].textContent, /지원하지 않습니다/);
 
   const overflow = await app();
   for (let n = 1; n <= 33 && !overflow.streams[0].closed; n += 1)

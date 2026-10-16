@@ -14,7 +14,9 @@ from app.live_monitoring.parser_adapter import (
 from app.live_monitoring.detection_accumulator import (
     LiveDetectionAccumulator, LiveDetectionSnapshot,
 )
-from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator, LiveAnalysisSnapshot
+from app.live_monitoring.analysis_accumulator import (
+    ANALYSIS_ROLES, LiveAnalysisAccumulator, LiveAnalysisSnapshot,
+)
 from app.live_monitoring.publication import LivePublicationBuffer, LivePublicationSnapshot
 
 
@@ -246,7 +248,7 @@ class LiveProcessingWorker:
             raise LiveWorkerError("INVALID_ACCUMULATOR")
         if detection_accumulator._worker_bound:
             raise LiveWorkerError("ACCUMULATOR_ALREADY_OWNED")
-        if session.source_role == "application":
+        if session.source_role in ANALYSIS_ROLES:
             if analysis_accumulator is None:
                 try:
                     metadata = load_account_metadata()
@@ -373,7 +375,7 @@ class LiveProcessingWorker:
                 or publication_proposal._change_set is not proposal._change_set
                 or (self._analysis is not None and (
                     analysis_proposal is None
-                    or self._session.source_role != "application"
+                    or self._session.source_role not in ANALYSIS_ROLES
                     or analysis_proposal.source_role != self._session.source_role
                     or analysis_proposal.base_revision != self._accumulator._revision
                     or analysis_proposal.base_revision != self._analysis.snapshot().revision

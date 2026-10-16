@@ -253,8 +253,8 @@ def test_empty_revision_updates_analysis_snapshot_without_event(tmp_path):
         worker.close()
 
 
-@pytest.mark.parametrize("role", ["ssh", "access"])
-def test_non_application_snapshot_marks_analysis_unavailable(tmp_path, role):
+@pytest.mark.parametrize("role,available", [("ssh", True), ("access", False)])
+def test_source_snapshot_marks_analysis_availability(tmp_path, role, available):
     path = tmp_path / "source.log"
     path.write_bytes(b"")
     session = open_live_tail_session(LiveMonitorConfig(role, path.resolve()))
@@ -262,8 +262,8 @@ def test_non_application_snapshot_marks_analysis_unavailable(tmp_path, role):
     worker = LiveProcessingWorker(session, detection, 8, 4096)
     try:
         payload = json.loads(serialize_live_publication_snapshot(worker.publication_buffer.snapshot()))
-        assert payload["analysis"]["analysis_available"] is False
-        assert payload["analysis"]["revision"] is None
+        assert payload["analysis"]["analysis_available"] is available
+        assert payload["analysis"]["revision"] == (0 if available else None)
         assert worker.step().status == "NO_DATA"
     finally:
         worker.close()

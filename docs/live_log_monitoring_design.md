@@ -1,5 +1,7 @@
 # v0.2.0 Phase 11 — bounded 로컬 로그 모니터링 설계
 
+> Phase 22.3 현재 범위: [SSH live analysis 결합 기록](ssh_live_analysis_integration_22_3.md)에 따라 단일 SSH v1 source도 기존 batch 관계·위험도·조사 사례를 안전한 snapshot/`analysis_changes`로 제공한다. `observation_changes`의 닫힌 schema와 access detection-only는 유지된다. SSH checkpoint 재시작, rotation/copytruncate handoff, cross-source 분석은 여전히 지원하지 않는다. 아래 Phase 11~21의 SSH detection-only 문장은 해당 시점의 역사적 계약이다.
+
 > Phase 21 현재 경계: 아래 과거 Phase 12~16 섹션에서 "checkpoint 없음" 또는 "재시작은 항상 FROM_END"라고 서술한 부분은 당시 계약이다. 신규 기본 private v2 설정의 `BOUNDED_REPLAY_V1`은 [동일 파일 bounded checkpoint 계약](live_checkpoint_21.md)에 따라 원본의 제한된 구간을 다시 읽어 내부 탐지·분석 prefix를 구성한다. 명시적 `--monitor-config`와 기존 `DISABLED` 설정은 여전히 `FROM_END`다. 과거 SSE publication·event ID는 복구되지 않는다. Rotation/truncation 자동 복구, exactly-once와 무유실은 지원하지 않는다.
 
 > Phase 21.4 현재 경계: [ack 직전 source 재검증](live_rotation_21_4.md)은 관찰 가능한 파일 교체·축소를 proposal 확정 전에 중단한다. 아래 과거 transaction 서술의 prepare 뒤에는 이 probe가 추가됐다. 마지막 probe와 ack 사이의 race 및 빠른 동일-inode truncate·재성장은 해결되지 않았다.

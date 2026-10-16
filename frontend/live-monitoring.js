@@ -44,6 +44,7 @@
     web_scanning_like: "다중 웹 대상 탐색 관찰"
   });
   const ROLES = Object.freeze({application: "애플리케이션 인증 로그", ssh: "SSH 인증 로그", access: "웹 접근 로그"});
+  const ANALYSIS_ROLES = new Set(["application", "ssh"]);
   const SERVICE_STATES = new Set(["READY", "RUNNING", "DEGRADED", "FAILED", "STOPPING", "STOPPED"]);
   const WORKER_STATES = new Set(["READY", "RUNNING_STEP", "DEGRADED", "FAILED", "STOPPING", "STOPPED"]);
   const CHANGE_TYPES = new Set(["CREATED", "UPDATED", "NO_LONGER_MATCHES"]);
@@ -129,7 +130,7 @@
         value.published_total < value.evicted_total + value.available_event_count) fail();
     if (typeof value.analysis_available !== "boolean" ||
         !["AVAILABLE", "UNAVAILABLE", "FAILED"].includes(value.analysis_state) ||
-        value.analysis_available !== (value.source_role === "application")) fail();
+        value.analysis_available !== ANALYSIS_ROLES.has(value.source_role)) fail();
     ["active_relation_count", "active_risk_count", "active_case_count"].forEach((key) => count(value[key]));
     if (value.analysis_available) {
       count(value.analysis_revision);
@@ -171,6 +172,7 @@
         if (change && !allowed.has(row.change_type)) fail();
         if (snapshotKey === "relations") {
           if (!Object.hasOwn(RELATION_TYPES, row.relation_type) ||
+              (source === "ssh" && row.relation_type === "successful_login_to_file_access") ||
               !["ACTIVE", "NO_LONGER_MATCHES_CURRENT_RESULT"].includes(row.state) ||
               typeof row.delta_seconds !== "number" || !Number.isFinite(row.delta_seconds) ||
               row.delta_seconds <= 0 || row.delta_seconds > 60 ||
@@ -267,7 +269,8 @@
   }
   function validateAnalysisEvent(value, wireId) {
     object(value, ANALYSIS_KEYS);
-    if (value.event_type !== "ANALYSIS_CHANGE" || value.source_role !== "application" ||
+    if (value.event_type !== "ANALYSIS_CHANGE" || value.source_role !== source ||
+        !ANALYSIS_ROLES.has(value.source_role) ||
         value.session_id !== sessionId || !Array.isArray(value.bounded_warnings) ||
         value.bounded_warnings.length !== 0) fail();
     const numbers = validateCursor(value.event_id, value.revision, wireId, "analysis_changes");
@@ -354,7 +357,7 @@
     cases = new Map(snapshot.cases.map((item) => [item.case_id, item]));
     renderAnalysis(snapshot.analysis_available);
   }
-  function renderAnalysis(available = source === "application") {
+  function renderAnalysis(available = ANALYSIS_ROLES.has(source)) {
     const changeText = (item) => item.change_type ? ANALYSIS_CHANGE_LABELS[item.change_type] : "현재 요약";
     const sections = [
       [relations, "live-relations", "live-relations-empty", (item) =>
@@ -440,7 +443,7 @@
       if (message.type === "snapshot") {
         const snapshot = validateSnapshot(data(message, SNAPSHOT_KEYS, MAX_ANALYSIS_SNAPSHOT_BYTES + 2048));
         if (snapshot.session_id !== sessionId || snapshot.latest_committed_detection_revision < latestSnapshotRevision ||
-            snapshot.analysis.analysis_available !== (source === "application")) fail();
+            snapshot.analysis.analysis_available !== ANALYSIS_ROLES.has(source)) fail();
         if (lastEventNumber === 0) setAnalysisSnapshot(snapshot.analysis);
         summary(snapshot); return;
       }
@@ -456,7 +459,7 @@
         const value = data(message, ["code", "snapshot", "earliest_event_id", "latest_event_id", "recovery_action"], MAX_ANALYSIS_SNAPSHOT_BYTES + 4096);
         const snapshot = validateSnapshot(value.snapshot);
         if (!GAP_CODES.has(value.code) || snapshot.session_id !== sessionId ||
-            snapshot.analysis.analysis_available !== (source === "application") ||
+            snapshot.analysis.analysis_available !== ANALYSIS_ROLES.has(source) ||
             value.earliest_event_id !== snapshot.earliest_available_event_id ||
             value.latest_event_id !== snapshot.latest_available_event_id ||
             typeof value.recovery_action !== "string" || value.recovery_action.length > 160) fail();

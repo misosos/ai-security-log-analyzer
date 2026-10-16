@@ -1,4 +1,4 @@
-"""Synthetic SSH FROM_END smoke; batch analysis is intentionally separate."""
+"""Synthetic SSH FROM_END smoke with live analysis and a batch oracle."""
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -30,12 +30,18 @@ def main() -> None:
                     "for synthetic from 192.0.2.10 port 5001 ssh2\n"
                 )
             result = worker.step()
-            assert result.accumulator_revision == 1
+            assert result.accumulator_revision == result.analysis_revision == 1
             assert detector.snapshot().history_record_count == 6
-            assert worker._analysis is None
+            assert worker._analysis.snapshot().relation_count == 2
+            assert worker._analysis.snapshot().case_count == 1
             assert session.snapshot().queue_item_count == 0
             assert session.snapshot().active_lease is False
             assert detector.snapshot().active_proposal is False
+            assert worker._analysis.snapshot().active_proposal is False
+            assert worker.publication_buffer._active is None
+            assert tuple(event.event_type for event in
+                         worker.publication_buffer.replay_after(None).events) == (
+                             "DETECTION_CHANGE", "ANALYSIS_CHANGE")
             events = detector._history  # trusted synthetic test oracle only
             detection = detect_attacks(events)
             analysis = assess_risk_with_metadata(correlate_attacks(events, detection), {})
@@ -47,10 +53,12 @@ def main() -> None:
             assert subject["risk_level"] in {"LOW", "MEDIUM", "HIGH"}
             assert any(case.rule_code == "CASE-BRUTE-SUCCESS-01"
                        for case in projection.cases)
+            assert worker._analysis._state._results == analysis["results"]
+            assert worker._analysis._state._projection == projection
         finally:
             worker.close()
         assert session._fd == -1
-    print("SSH_GATE_SMOKE_PASS detection_live analysis_batch_only cleanup_complete")
+    print("SSH_LIVE_SMOKE_PASS detection_analysis_publication cleanup_complete")
 
 
 if __name__ == "__main__":

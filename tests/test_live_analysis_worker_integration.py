@@ -89,15 +89,11 @@ def test_ignored_and_rejected_only_commit_empty_analysis_change(tmp_path):
         worker.close()
 
 
-@pytest.mark.parametrize("role,entry", (
-    ("ssh", "2026-01-02 03:04:05 sshd: Failed password for synthetic from 192.0.2.11"),
-    ("access", '192.0.2.11 - - [02/Jan/2026:03:04:05 +0900] "GET / HTTP/1.1" 200 1'),
-))
-def test_ssh_access_remain_detection_only(tmp_path, role, entry):
-    path, _, _, analysis, worker = setup(tmp_path, role)
+def test_access_remains_detection_only(tmp_path):
+    path, _, _, analysis, worker = setup(tmp_path, "access")
     try:
         assert analysis is None
-        append(path, entry)
+        append(path, '192.0.2.11 - - [02/Jan/2026:03:04:05 +0900] "GET / HTTP/1.1" 200 1')
         result = worker.step()
         assert result.analysis_revision is None
         assert worker.snapshot().analysis is None
