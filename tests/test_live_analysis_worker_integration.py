@@ -33,6 +33,8 @@ def setup(tmp_path, role="application", *, analysis=None):
         analysis = LiveAnalysisAccumulator(detector, ())
     worker = LiveProcessingWorker(session, detector, 16, 4096,
                                   analysis_accumulator=analysis)
+    if role == "ssh":
+        analysis = worker._analysis
     return path, session, detector, analysis, worker
 
 
@@ -355,10 +357,14 @@ _FAULT_POINTS = (
 )
 
 
+@pytest.mark.parametrize("role", ("application", "ssh"))
 @pytest.mark.parametrize("point", _FAULT_POINTS, ids=_FAULT_POINTS)
-def test_individual_fault_boundary(tmp_path, monkeypatch, point):
-    path, session, detection, analysis, worker = setup(tmp_path)
-    append(path, *(line(index) for index in range(1, 6)))
+def test_individual_fault_boundary(tmp_path, monkeypatch, point, role):
+    path, session, detection, analysis, worker = setup(tmp_path, role)
+    entries = (line(index) for index in range(1, 6)) if role == "application" else (
+        f"2026-01-02 03:04:{index:02d} sshd: Failed password for synthetic "
+        "from 192.0.2.11 port 5001 ssh2" for index in range(1, 6))
+    append(path, *entries)
     calls = {"ack": 0, "release": 0}
     original_ack = LiveTailSession.acknowledge_lease
     original_release = LiveTailSession.release_lease

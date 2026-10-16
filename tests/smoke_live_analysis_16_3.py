@@ -51,6 +51,8 @@ def _safari_script(session_id: str, script: str):
 
 
 def main() -> None:
+    role = os.environ.get("LIVE_SMOKE_ROLE", "application")
+    assert role in ("application", "ssh")
     port = _free_port()
     with tempfile.TemporaryDirectory(prefix="live-analysis-smoke-") as root:
         source = Path(root) / "source.log"
@@ -58,7 +60,7 @@ def main() -> None:
         config = Path(root) / "monitor.json"
         config.write_text(json.dumps({
             "schema_version": "1", "start_policy": "FROM_END",
-            "source": {"role": "application", "path": str(source.resolve())},
+            "source": {"role": role, "path": str(source.resolve())},
         }), encoding="utf-8")
         config.chmod(0o600)
         process = subprocess.Popen(
@@ -86,6 +88,7 @@ def main() -> None:
             assert b"live-monitoring.js" in _get(base + "/")
             initial = json.loads(_get(base + "/api/v1/live/status"))
             assert initial["schema_version"] == "2"
+            assert initial["source_role"] == role
             assert initial["analysis_available"] is True
             assert initial["latest_detection_revision"] == 0
             if os.environ.get("LIVE_SAFARI_WEBDRIVER") == "1":
@@ -107,10 +110,18 @@ def main() -> None:
                 append_started = time.perf_counter()
                 with source.open("ab") as output:
                     for second in range(5):
-                        output.write((f"2026-01-02 03:04:{second:02d} INFO login_failed "
-                                      "user=PRIVATE_ACCOUNT_CANARY ip=192.0.2.123\n").encode())
-                    output.write(b"2026-01-02 03:04:06 INFO user_login "
-                                 b"user=PRIVATE_ACCOUNT_CANARY ip=192.0.2.123\n")
+                        if role == "ssh":
+                            output.write((f"2026-01-02 03:04:{second:02d} sshd: Failed password "
+                                          "for PRIVATE_ACCOUNT_CANARY from 192.0.2.123 "
+                                          "port 5001 ssh2\n").encode())
+                        else:
+                            output.write((f"2026-01-02 03:04:{second:02d} INFO login_failed "
+                                          "user=PRIVATE_ACCOUNT_CANARY ip=192.0.2.123\n").encode())
+                    output.write((b"2026-01-02 03:04:06 sshd: Accepted password for "
+                                  b"PRIVATE_ACCOUNT_CANARY from 192.0.2.123 port 5001 ssh2\n")
+                                 if role == "ssh" else
+                                 (b"2026-01-02 03:04:06 INFO user_login "
+                                  b"user=PRIVATE_ACCOUNT_CANARY ip=192.0.2.123\n"))
                 frames = []
                 for _ in range(8):
                     frame = _frame(stream)
@@ -178,7 +189,7 @@ def main() -> None:
         assert process.returncode == 0
         with socket.socket() as probe:
             assert probe.connect_ex(("127.0.0.1", port)) != 0
-    print("loopback HTTP/SSE smoke PASS; Safari WebDriver tested=" +
+    print("loopback HTTP/SSE smoke PASS; role=" + role + "; Safari WebDriver tested=" +
           str(os.environ.get("LIVE_SAFARI_WEBDRIVER") == "1") +
           "; append-to-analysis-SSE one sample ms=" +
           str(round(append_to_analysis_sse_ms, 3)) +

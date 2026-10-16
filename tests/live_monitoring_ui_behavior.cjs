@@ -242,8 +242,14 @@ async function main() {
   sshAnalysis.source_role = "ssh";
   sshApp.streams[0].send("analysis_changes", sshAnalysis, eventId(1));
   assert.equal(sshApp.nodes["live-relations"].children.length, 0);
+  assert.equal(sshApp.nodes["live-risks"].children.length, 0);
+  assert.equal(sshApp.nodes["live-cases"].children.length, 0);
   sshApp.nodes["live-show-pending"].click();
   assert.equal(sshApp.nodes["live-relations"].children.length, 1);
+  assert.equal(sshApp.nodes["live-risks"].children.length, 1);
+  assert.equal(sshApp.nodes["live-cases"].children.length, 1);
+  sshApp.streams[0].send("analysis_changes", sshAnalysis, eventId(1));
+  assert.equal(sshApp.nodes["live-relations"].children.length, 1, "SSH duplicate event ID is ignored");
   const wrongSource = await app(200, sshStatus);
   wrongSource.streams[0].send("analysis_changes", analysisEvent(1, 1), eventId(1));
   assert.equal(wrongSource.streams[0].closed, true);
