@@ -61,6 +61,8 @@ Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkp
 
 [Phase 24.1 로컬 공급망 pilot](docs/software_supply_chain_pilot_24_1.md)은 OSV-Scanner 2.7.0의 검증된 임시 binary와 오프라인 DB로 합성 입력 및 현재 공개 의존성을 검사했습니다. uv CycloneDX export에는 artifact hash·license가 빠져 완전한 SBOM gate로 채택하지 않았습니다. 스캐너·DB·생성 SBOM은 project dependency, CI 또는 릴리스 asset에 포함하지 않습니다.
 
+[Phase 24.2 locked dependency evidence bundle](docs/dependency_evidence_bundle_24_2.md)은 `uv.lock` digest, runtime/dev requirements의 artifact hash, 원본 CycloneDX graph를 **분리된 private 임시 증거**로 대조합니다. `uv run python -m scripts.dependency_evidence_bundle_24_2`로 안전한 count·digest prefix만 확인할 수 있습니다. CycloneDX 원본의 UUID·timestamp는 비결정적이고 license·vulnerability 결과는 별도 검토 대상입니다. Ubuntu 검증 및 공식 vulnerability/release gate는 아직 완료되지 않았습니다.
+
 ## 요구 사항과 설치
 
 - Python 3.12 이상(`pyproject.toml`의 `requires-python = ">=3.12"`)
