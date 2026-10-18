@@ -1,6 +1,7 @@
 """Guard the design-only Phase 23.4 OpenAPI fuzzing decision."""
 
 from pathlib import Path
+import tomllib
 
 from app.api import create_app
 
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "docs" / "schemathesis_api_fuzzing_gate_23_4.md"
 
 
-def test_gate_records_supply_chain_and_no_install_boundary():
+def test_gate_records_supply_chain_and_historical_no_install_boundary():
     text = GATE.read_text(encoding="utf-8")
     for phrase in (
         "4.31.1", "MIT", "Python 3.12", "6.170.0", "jsonschema-rs",
@@ -17,9 +18,11 @@ def test_gate_records_supply_chain_and_no_install_boundary():
         "CONDITIONAL GO", "Semgrep", "SUPPLY_CHAIN_BLOCKED",
     ):
         assert phrase in text
-    for forbidden in ("schemathesis", "jsonschema-rs"):
-        assert forbidden not in (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower()
-        assert forbidden not in (ROOT / "uv.lock").read_text(encoding="utf-8").lower()
+    # Phase 23.4 was design-only. The later Phase 23.5 pilot may add a dev
+    # dependency, but the production dependency boundary remains unchanged.
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert all("schemathesis" not in item.lower() and "jsonschema-rs" not in item.lower()
+               for item in project["project"]["dependencies"])
 
 
 def test_gate_distinguishes_real_openapi_from_runtime_guards():
