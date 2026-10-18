@@ -275,7 +275,7 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
-향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제, 경로 없는 실행, 동일 파일 bounded checkpoint core는 구현됐습니다. [Phase 25.0 외부 로컬 collector 상호운용 gate](docs/local_collector_interop_gate_25_0.md)는 Fluent Bit/Vector를 검토했지만 실행·연계하지 않았습니다. rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 운영 무유실은 약속하지 않습니다.
+향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제, 경로 없는 실행, 동일 파일 bounded checkpoint core는 구현됐습니다. [Phase 25.0 외부 로컬 collector 상호운용 gate](docs/local_collector_interop_gate_25_0.md)에 이어 [Phase 25.1 격리형 Vector 합성 SSH 실험](docs/vector_collector_pilot_25_1.md)을 수행했으나, 긴 줄 누락·rotation 순서 변경·copytruncate/연결 종료 gap과 analyzer ack 부재로 production 연계는 NO-GO입니다. Vector는 설치·자동 실행·CI 필수 단계에 포함되지 않습니다. 기존 tailer는 유지하며 rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 운영 무유실은 약속하지 않습니다.
 
 ## 오프라인 탐지 평가 기준선
 
