@@ -59,6 +59,8 @@ Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkp
 로그 → 로딩·정규화 → 탐지 → 상관관계 → IP별 위험도 → CLI·HTML·API
 ```
 
+[Phase 24.1 로컬 공급망 pilot](docs/software_supply_chain_pilot_24_1.md)은 OSV-Scanner 2.7.0의 검증된 임시 binary와 오프라인 DB로 합성 입력 및 현재 공개 의존성을 검사했습니다. uv CycloneDX export에는 artifact hash·license가 빠져 완전한 SBOM gate로 채택하지 않았습니다. 스캐너·DB·생성 SBOM은 project dependency, CI 또는 릴리스 asset에 포함하지 않습니다.
+
 ## 요구 사항과 설치
 
 - Python 3.12 이상(`pyproject.toml`의 `requires-python = ">=3.12"`)
