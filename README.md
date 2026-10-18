@@ -61,7 +61,7 @@ Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkp
 
 [Phase 24.1 로컬 공급망 pilot](docs/software_supply_chain_pilot_24_1.md)은 OSV-Scanner 2.7.0의 검증된 임시 binary와 오프라인 DB로 합성 입력 및 현재 공개 의존성을 검사했습니다. uv CycloneDX export에는 artifact hash·license가 빠져 완전한 SBOM gate로 채택하지 않았습니다. 스캐너·DB·생성 SBOM은 project dependency, CI 또는 릴리스 asset에 포함하지 않습니다.
 
-[Phase 24.2 locked dependency evidence bundle](docs/dependency_evidence_bundle_24_2.md)은 `uv.lock` digest, runtime/dev requirements의 artifact hash, 원본 CycloneDX graph를 **분리된 private 임시 증거**로 대조합니다. `uv run python -m scripts.dependency_evidence_bundle_24_2`로 안전한 count·digest prefix만 확인할 수 있습니다. CycloneDX 원본의 UUID·timestamp는 비결정적이고 license·vulnerability 결과는 별도 검토 대상입니다. Ubuntu 검증 및 공식 vulnerability/release gate는 아직 완료되지 않았습니다.
+[Phase 24.2 locked dependency evidence bundle](docs/dependency_evidence_bundle_24_2.md)은 `uv.lock` digest, runtime/dev requirements의 artifact hash, 원본 CycloneDX graph를 **분리된 private 임시 증거**로 대조합니다. `uv run python -m scripts.dependency_evidence_bundle_24_2`로 안전한 count·digest prefix만 확인할 수 있습니다. CycloneDX 원본의 UUID·timestamp는 비결정적이고 license·vulnerability 결과는 별도 검토 대상입니다. Ubuntu 전체 회귀에서 bundle 계약은 통과했지만, 공식 vulnerability/release gate로는 아직 사용하지 않습니다.
 
 ## 요구 사항과 설치
 
@@ -275,7 +275,7 @@ docs/                               설계, 배포 경계와 시연 문서
 
 `frontend/`는 합성 샘플 Landing, loopback-only 실제 로그 업로드, 결과 개요와 사례·Timeline 상세 및 HTML 다운로드, 명시적으로 설정한 단일 파일의 bounded 로컬 실시간 모니터링 화면을 지원합니다. `docs/architecture.md`, `docs/evaluation.md`, `app/detector/suspicious_file.py`는 비어 있는 placeholder이며 지원 기능이 아닙니다. 인증된 hosted upload, 원격·다중 source 수집, database, 자동 차단, 자동 incident verdict와 보호된 상세 증거 API는 구현되어 있지 않습니다.
 
-향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제, 경로 없는 실행, 동일 파일 bounded checkpoint core는 구현됐습니다. rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 운영 무유실은 약속하지 않습니다.
+향후 v0.3 방향은 [안전한 로컬 설정·Collector 설계](docs/local_collector_v030_design.md)에 구분해 기록했습니다. 단일 application 로그의 trusted CLI 설정 마법사와 기본 설정 조회·삭제, 경로 없는 실행, 동일 파일 bounded checkpoint core는 구현됐습니다. [Phase 25.0 외부 로컬 collector 상호운용 gate](docs/local_collector_interop_gate_25_0.md)는 Fluent Bit/Vector를 검토했지만 실행·연계하지 않았습니다. rotation 자동 복구·다중 source·별도 최소 권한 collector는 후속 gate입니다. 운영 무유실은 약속하지 않습니다.
 
 ## 오프라인 탐지 평가 기준선
 

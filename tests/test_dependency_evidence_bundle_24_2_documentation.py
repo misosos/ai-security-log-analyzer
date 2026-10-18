@@ -17,4 +17,5 @@ def test_bundle_documentation_contract() -> None:
     ):
         assert phrase in document
     assert "docs/dependency_evidence_bundle_24_2.md" in readme
-    assert "공식 vulnerability/release gate는 아직 완료되지 않았습니다" in readme
+    assert "Ubuntu 전체 회귀에서 bundle 계약은 통과" in readme
+    assert "공식 vulnerability/release gate로는 아직 사용하지 않습니다" in readme
