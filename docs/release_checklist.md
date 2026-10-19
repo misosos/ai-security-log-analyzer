@@ -147,3 +147,11 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 - [ ] 사용자·유지관리자의 최종 tag/Release 승인과 새로운 blocker 부재를 확인한다. v0.1.0 tag·Release는 변경하지 않는다.
 
 단일 application source의 live analysis, SSH/access detection-only, process-local bounded replay만 포함한다. Cross-source, crash recovery, exactly-once, hosted/multi-tenant, 운영 SLA, WCAG 2.2 AA 완전 준수와 wheel/PyPI 배포는 후보 범위 밖이다.
+
+## 후속 v0.3 SSH checkpoint 수용 후보 — Phase 26.1
+
+이 항목은 위 v0.2.0 역사적 판정이나 공개 Release를 변경하지 않는다. [Phase 26.1 독립 검증 기록](ssh_checkpoint_linux_acceptance_26_1.md)의 새 커밋이 원격에 push된 후에만 다음을 판정한다.
+
+- [ ] Ubuntu 24.04에서 SSH focused와 별도 두 프로세스 lock·재시작·reset CLI smoke 성공.
+- [ ] 실제 0700/0600 mode, source/config/sibling 보존, fail-closed 오류·개인정보 비노출 확인.
+- [ ] 정확한 최종 SHA의 전체 CI·기존 경고·자원 정리 확인. Mac 수치나 기존 SHA의 CI를 Ubuntu 독립 수용으로 대체하지 않는다.

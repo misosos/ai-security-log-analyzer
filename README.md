@@ -1,5 +1,7 @@
 # AI Security Log Analyzer
 
+현재 개발 branch의 [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)는 별도 프로세스 advisory lock·권한·재시작·reset smoke를 CI에 추가했지만, 해당 새 단계의 Ubuntu 결과는 다음 push 이후에만 확인할 수 있습니다. 기존 원격 전체 회귀 성공을 이 독립 검증의 PASS로 해석하지 않습니다.
+
 > 보안 계약 변경: deprecated `/api/analyze`의 상위 구조는 유지하지만 중첩 탐지·상관관계·위험도·전체 상관관계는 개인정보 안전 projection으로 변경되었습니다. 기존 raw nested 값 소비자는 [migration 안내](docs/public_analysis_privacy.md)를 확인하세요. 새 로컬 개발에는 `POST /api/v1/investigations`를 사용하세요. 인증 없는 공개 업로드는 지원하지 않습니다.
 
 AI Security Log Analyzer는 애플리케이션 인증 로그, OpenSSH 인증 로그, 웹 접근 로그와 선택적인 Linux Audit 레코드를 정규화한 뒤, 결정적인 규칙으로 탐지·상관관계·IP별 위험도를 계산하는 방어 목적의 배치 분석 프로젝트입니다. 보안 로그 조사 흐름을 학습하거나 소규모 환경에서 초기 검토하는 데 사용할 수 있습니다.

@@ -47,6 +47,12 @@ jobs:
           uv run python -c "import sys; assert sys.platform == 'linux'"
           uv run pytest -q tests/test_checkpoint_epoch_reset.py tests/test_monitor_setup_runtime.py::test_two_reset_processes_do_not_share_approval_lock tests/test_monitor_setup_runtime.py::test_cli_explicit_checkpoint_reset_starts_a_new_epoch
 
+      - name: Verify Linux SSH checkpoint recovery and process ownership
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run pytest -q tests/test_ssh_checkpoint_26_0.py
+          uv run python tests/smoke_ssh_checkpoint_26_0.py
+
       - name: Verify bounded OpenAPI property pilot
         run: uv run pytest -q tests/test_schemathesis_api_pilot_23_5.py
 

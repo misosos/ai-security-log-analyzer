@@ -167,7 +167,8 @@ def test_recovered_ssh_prefix_matches_uninterrupted_and_batch(
 
 
 @pytest.mark.parametrize("damage", (
-    "malformed", "role", "semantic", "mode", "source_replace", "source_shrink", "symlink",
+    "malformed", "schema", "role", "offset", "semantic", "mode",
+    "source_replace", "source_shrink", "source_missing", "symlink",
 ))
 def test_ssh_corruption_never_falls_back_to_from_end(tmp_path: Path, damage: str):
     source, config = _fixture(tmp_path)
@@ -178,12 +179,16 @@ def test_ssh_corruption_never_falls_back_to_from_end(tmp_path: Path, damage: str
     finally:
         _close(service)
     checkpoint = config.parent / CHECKPOINT_NAME
-    if damage in ("malformed", "role", "semantic"):
+    if damage in ("malformed", "schema", "role", "offset", "semantic"):
         document = json.loads(checkpoint.read_text(encoding="utf-8"))
         if damage == "malformed":
             document["unexpected"] = "NO"
+        elif damage == "schema":
+            document["schema_version"] = "unknown"
         elif damage == "role":
             document["source_role"] = "application"
+        elif damage == "offset":
+            document["committed_offset"] = document["committed_file_size"] + 1
         else:
             document["semantic_digest"] = "0" * 64
         checkpoint.write_text(json.dumps(document), encoding="utf-8")
@@ -196,6 +201,8 @@ def test_ssh_corruption_never_falls_back_to_from_end(tmp_path: Path, damage: str
     elif damage == "source_shrink":
         with source.open("r+b") as stream:
             stream.truncate(0)
+    elif damage == "source_missing":
+        source.rename(tmp_path / "unavailable-synthetic.log")
     else:
         other = config.parent / "other.txt"
         other.write_text("synthetic", encoding="utf-8")
@@ -207,12 +214,70 @@ def test_ssh_corruption_never_falls_back_to_from_end(tmp_path: Path, damage: str
         "CHECKPOINT_CORRUPT", "CHECKPOINT_REPLAY_MISMATCH", "CHECKPOINT_SOURCE_CHANGED",
         "CHECKPOINT_UNSAFE",
     }
-    if damage == "source_shrink":
+    if damage in ("source_shrink", "source_missing"):
         allowed.add("INTERNAL_FAILURE")
+    if damage == "source_missing":
+        allowed.add("SOURCE_UNAVAILABLE")
     assert caught.value.code in allowed
     rendered = str(caught.value) + repr(caught.value)
     for canary in ("SSH_ACCOUNT_CANARY", "198.51.100.23", str(source), str(config)):
         assert canary not in rendered
+
+
+def test_ssh_invalid_partial_utf8_does_not_advance_checkpoint(tmp_path: Path):
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    checkpoint = config.parent / CHECKPOINT_NAME
+    before = checkpoint.read_bytes()
+    try:
+        with source.open("ab") as stream:
+            stream.write(b"\xc3")
+        assert service._worker.step().status == "NO_DATA"
+        assert checkpoint.read_bytes() == before
+        with source.open("ab") as stream:
+            stream.write(b"\n")
+        with pytest.raises(LiveWorkerError):
+            service._worker.step()
+        assert service._worker.snapshot().state is LiveWorkerState.FAILED
+        assert checkpoint.read_bytes() == before
+    finally:
+        _close(service)
+
+
+def test_ssh_257th_parsed_event_fails_before_ack_without_advancing_checkpoint(tmp_path: Path):
+    source, config = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    worker = service._worker
+    try:
+        for group in range(16):
+            _append(source, *(_line((group * 16 + index) % 60) for index in range(16)))
+            assert worker.step().status == "PROCESSED"
+        prior_detection = worker._accumulator.snapshot()
+        prior_analysis = worker._analysis.snapshot()
+        checkpoint = (config.parent / CHECKPOINT_NAME).read_bytes()
+        _append(source, _line(17))
+        with pytest.raises(LiveWorkerError):
+            worker.step()
+        assert worker.snapshot().state is LiveWorkerState.DEGRADED
+        assert worker._accumulator.snapshot() == prior_detection
+        assert worker._analysis.snapshot() == prior_analysis
+        assert (config.parent / CHECKPOINT_NAME).read_bytes() == checkpoint
+        assert worker._session.snapshot().available_item_count == 1
+    finally:
+        _close(service)
+
+
+@pytest.mark.parametrize("target", ("source", "config"))
+def test_ssh_private_monitor_rejects_path_symlink_before_checkpoint(tmp_path: Path, target: str):
+    source, config = _fixture(tmp_path)
+    path = source if target == "source" else config
+    original = path.with_name("synthetic-original" + path.suffix)
+    path.rename(original)
+    path.symlink_to(original)
+    with pytest.raises((LiveMonitorError, LiveCheckpointError)) as caught:
+        _live_runtime(config, checkpoint_default=True)
+    assert caught.value.code == "SYMLINK_REJECTED"
+    assert not (config.parent / CHECKPOINT_NAME).exists()
 
 
 def test_ssh_active_lock_blocks_second_monitor_and_reset(tmp_path: Path):

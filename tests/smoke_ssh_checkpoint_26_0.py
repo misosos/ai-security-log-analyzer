@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import signal
 import socket
+import stat
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -77,6 +78,21 @@ def _no_listener(port: int) -> None:
         assert probe.connect_ex(("127.0.0.1", port)) != 0
 
 
+def _mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def _management(env: dict, *args: str, answer: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-m", "app.monitor_setup", *args],
+                          cwd=ROOT, env=env, input=answer, capture_output=True,
+                          text=True, timeout=10)
+
+
+def _assert_private_output(result: subprocess.CompletedProcess, *canaries: str) -> None:
+    for canary in canaries:
+        assert canary not in result.stdout + result.stderr
+
+
 def main() -> None:
     process = None
     scratch = "/private/tmp" if sys.platform == "darwin" else "/tmp"
@@ -97,6 +113,9 @@ def main() -> None:
         }]}
         config.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
         config.chmod(0o600)
+        sibling = config.parent / "unrelated-synthetic.txt"
+        sibling.write_text("unrelated fixture", encoding="utf-8")
+        source_before = source.read_bytes()
         env = {"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                "PYTHONPATH": str(ROOT), "PYTHONDONTWRITEBYTECODE": "1", "TMPDIR": str(root)}
         port = _port()
@@ -104,6 +123,27 @@ def main() -> None:
             process = _start(port, env, root / "stdout.log", root / "stderr.log")
             first = _status(port)
             assert first["latest_detection_revision"] == 0
+            checkpoint = config.parent / "checkpoint-source-000001.json"
+            lock = config.parent / "checkpoint-source-000001.lock"
+            assert (_mode(config.parent), _mode(config), _mode(checkpoint), _mode(lock)) == (
+                0o700, 0o600, 0o600, 0o600)
+            assert source.read_bytes() == source_before
+            competing_port = _port()
+            second = subprocess.run(
+                [sys.executable, "-m", "app.local_web", "--monitor", "--no-browser",
+                 "--port", str(competing_port)], cwd=ROOT, env=env,
+                capture_output=True, text=True, timeout=10)
+            assert second.returncode != 0
+            assert "CHECKPOINT_ALREADY_OWNED" in second.stderr
+            _assert_private_output(second, str(source), str(config), str(checkpoint),
+                                   "SYNTHETIC_ACCOUNT", "192.0.2.33")
+            _no_listener(competing_port)
+            active_reset = _management(env, "--reset-checkpoint", answer="yes\n")
+            assert active_reset.returncode != 0
+            assert "CHECKPOINT_RESET_ACTIVE" in active_reset.stderr
+            _assert_private_output(active_reset, str(source), str(config), str(checkpoint),
+                                   "SYNTHETIC_ACCOUNT", "192.0.2.33")
+            assert checkpoint.exists()
             with source.open("a", encoding="utf-8") as stream:
                 stream.writelines(_line(index) for index in range(1, 6))
             _wait(port, lambda status: status["latest_detection_revision"] >= 1)
@@ -119,14 +159,18 @@ def main() -> None:
             _stop(process)
             process = None
             _no_listener(port)
-            show = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--show"],
-                                  cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
+            source_before_reset = source.read_bytes()
+            config_before_reset = config.read_bytes()
+            show = _management(env, "--show")
             assert show.returncode == 0 and "ssh" in show.stdout
-            reset = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--reset-checkpoint"],
-                                   cwd=ROOT, env=env, input="yes\n", capture_output=True,
-                                   text=True, timeout=10)
+            cancelled = _management(env, "--reset-checkpoint", answer="no\n")
+            assert cancelled.returncode == 0 and checkpoint.exists()
+            reset = _management(env, "--reset-checkpoint", answer="yes\n")
             assert reset.returncode == 0
-            assert not (config.parent / "checkpoint-source-000001.json").exists()
+            assert not checkpoint.exists()
+            assert lock.exists() and sibling.read_text(encoding="utf-8") == "unrelated fixture"
+            assert source.read_bytes() == source_before_reset
+            assert config.read_bytes() == config_before_reset
             port = _port()
             process = _start(port, env, root / "stdout3.log", root / "stderr3.log")
             fresh = _status(port)
@@ -136,8 +180,15 @@ def main() -> None:
             process = None
             _no_listener(port)
             assert source.exists() and config.exists()
-            assert not any(canary in show.stdout + show.stderr + reset.stdout + reset.stderr
-                           for canary in (str(source), str(config), "SYNTHETIC_ACCOUNT", "192.0.2.33"))
+            for result in (show, cancelled, reset):
+                _assert_private_output(result, str(source), str(config), str(checkpoint),
+                                       "SYNTHETIC_ACCOUNT", "192.0.2.33")
+            assert lock.read_bytes() == b""
+            for capture in root.glob("std*.log"):
+                content = capture.read_text(encoding="utf-8", errors="replace")
+                assert not any(canary in content for canary in (
+                    str(source), str(config), str(checkpoint), "SYNTHETIC_ACCOUNT",
+                    "192.0.2.33", _line(1).strip()))
         finally:
             if process is not None:
                 process.terminate()
