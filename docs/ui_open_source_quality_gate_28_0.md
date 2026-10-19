@@ -1,0 +1,41 @@
+# Phase 28.0 — UI 오픈소스 품질 강화 설계 gate
+
+2026-10-19 조사. 이 문서는 도입 결정과 다음 실험의 경계다. 이 단계에서 패키지·브라우저를 설치하거나 production JS/CSS, API/SSE schema, CI, Python/Node lock을 바꾸지 않는다. 공개 v0.3.0 및 이전 tag/Release도 그대로 둔다.
+
+## 현재 계약과 기준선
+
+- 시작 `main`/`origin/main`: `a1b779ae857b885212352394ed72bc24ee5ce0b2`, `origin/main...HEAD` 0/0, clean. [CI run 39251780375](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39251780375)은 이 SHA에서 completed/success다. 로컬 변경 전 `uv run pytest -q`: **2,348 passed, 기존 경고 2개**. 현재 UI 계약은 `tests/test_web_ui.py`, `tests/test_live_monitoring_ui.py`와 `tests/live_monitoring_ui_behavior.cjs`; 실제 Safari 수용 기록은 `docs/live_monitoring_acceptance_17.md` 및 v0.3 수용 기록이다.
+- `frontend/index.html`은 vanilla JS `app.js`, `linux-audit.js`, `live-monitoring.js`와 `style.css`만 같은 출처 `/assets/`에서 로드한다. `app/web_ui.py`는 고정 파일명, 128 KiB 상한, symlink 거부, `nosniff`, `no-store`를 적용한다. CSP는 `default-src 'none'`, `script-src 'self'`, `style-src 'self'`, `connect-src 'self'`, `img-src 'none'`, `font-src 'none'`, `worker-src 'none'`, inline attribute 차단이다. 외부 CDN·원격 폰트·runtime telemetry·외부 분석 서비스는 금지한다.
+- 분석 pipeline의 안전 public projection만 UI에 전달한다. 합성 sample, loopback upload, 단일 source live의 `/api/v1/live/status`·`events`가 기존 경계다. `live-monitoring.js`는 `textContent`를 쓰고 `EventSource` 하나와 최대 32 item/16 KiB pending을 관리하며 사용자의 **새 결과 N건 보기** 뒤에 표시한다. Raw event, 계정, IP, hostname, path/query, 파일 경로, 원문, exception을 새 UI나 테스트 artifact에 추가하지 않는다. 탐지·상관분석·risk·case 의미와 API/SSE schema는 유지한다.
+- Python production dependencies는 `pyproject.toml`, dev group은 Hypothesis·pytest·Schemathesis, 잠금은 `uv.lock`이다. Node package manifest/lock과 frontend build pipeline은 현재 없다. 로컬 Node는 v26.9.0이나 CI에는 Node 설치 단계가 없다. 새 npm 종속성은 별도 dev lock과 감사가 필요하다. 실제 로그·기본 monitor config·checkpoint·사용자 HOME은 실험 입력으로 쓰지 않는다.
+
+## 후보 판정
+
+여기서 버전은 **검토 후보**이며 설치 확정이 아니다. 직접 의존성과 저장소 개발 의존성을 구별한다. 모든 전이 의존성, native artifact, lifecycle script, 실제 network 동작은 배포 tarball과 잠금 그래프를 확인하기 전까지 **미검증**으로 둔다. 런타임 의존성 목록이 비어 있어도 브라우저 다운로드가 없다는 뜻은 아니다.
+
+| 후보·버전·라이선스 | 적용과 의존성 경계 | 판정 |
+| --- | --- | --- |
+| [`@axe-core/playwright` 4.14.0](https://github.com/dequelabs/axe-core-npm/blob/v4.14.0/packages/playwright/package.json) MPL-2.0 + [`@playwright/test` 1.64.1](https://github.com/microsoft/playwright/blob/v1.64.1/packages/playwright-test/package.json) Apache-2.0 | **dev/test만**. axe 래퍼의 직접 의존성 `axe-core ~4.14.0`, peer `playwright-core >=1`; runner는 [`playwright =1.64.1`](https://github.com/microsoft/playwright/blob/v1.64.1/packages/playwright/package.json)을 직접 의존하고 이것이 [`playwright-core =1.64.1`](https://github.com/microsoft/playwright/blob/v1.64.1/packages/playwright-core/package.json)에 의존한다. 래퍼 저장소의 `prepare`는 개발 소스 빌드 맥락에서 browser install을 호출하므로 공개 tarball의 lifecycle script는 별도 검증한다. Playwright 브라우저 바이너리는 [`playwright install`](https://playwright.dev/docs/browsers)에서 내려받고 OS별 native 실행물과 system library가 필요하다. 초기 pilot 1개로 선정하되 설치 전 공급망 gate 필수. | **지금 설계상 도입 가능, 실제 설치는 공급망 검증 후** |
+| [GOV.UK Design System](https://design-system.service.gov.uk/components/error-summary/) 패턴 / [`govuk-frontend` 6.5.1](https://github.com/alphagov/govuk-frontend/blob/v6.5.1/packages/govuk-frontend/package.json) MIT | 오류 요약의 heading·오류 링크·focus 이동, 경고문, 상태 tag, 파일 입력의 label/error 관계를 **의미 구조와 상호작용 참고**로 사용 가능. 현재 디자인·CSS·브랜드 전체를 가져오지 않는다. MIT 코드 복사 시 copyright/license notice 보존; 디자인 문구·브랜드·로고 복제는 별도 권리 확인. 배포 package의 직접 runtime dependency는 manifest에 없으나 Sass·폰트·이미지·JS 도입은 현재 `font-src 'none'` 및 asset allowlist와 충돌한다. | **패턴 참고는 지금 가능; 배포물 도입은 보류** |
+| [Lucide release 1.59.0](https://github.com/lucide-icons/lucide/releases/tag/1.59.0), [`lucide-static`의 이 tag 내 manifest는 0.0.1](https://github.com/lucide-icons/lucide/blob/1.59.0/packages/lucide-static/package.json); [ISC + 일부 Feather 파생 SVG MIT](https://github.com/lucide-icons/lucide/blob/1.59.0/LICENSE) | **후보는 source release 1.59.0의 선별 SVG**다. npm `lucide-static` 배포 version과 source manifest의 0.0.1 차이를 해결하기 전 package 설치 후보로 간주하지 않는다. 필요한 SVG만 고정 source에서 검토해 저장소에 포함하고 해당 notice를 유지한다. 외부 CDN/runtime fetch/아이콘 폰트는 금지. 현재 CSP `img-src 'none'`이므로 외부 SVG 파일 사용은 CSP 재설계가 필요하며, inline SVG는 `script-src`/SVG 안전성 검토가 필요하다. 아이콘은 장식 또는 보조 정보이며 텍스트 상태를 유지한다. package 직접·전이 의존성, install script, native 여부는 배포 metadata 검증 전 미확인. | **공급망·CSP 검증 후 가능; 28.1 제외** |
+| [`chart.js` 4.5.1](https://github.com/chartjs/Chart.js/blob/v4.5.1/package.json) MIT / [`uplot` 1.6.32](https://github.com/leeoniya/uPlot/blob/1.6.32/package.json) MIT | Chart.js 직접 runtime dependency `@kurkle/color ^0.3.0`; uPlot manifest에는 runtime dependency 없음. 두 도구 모두 canvas 기반. 탐지 유형·위험도 분포는 Chart.js가 범주/막대에 적합하고 uPlot은 시간대별 시계열에 적합하다. 브라우저에는 승인된 count/시간 bucket만 전달하고 새 결과 버튼을 선택한 후 갱신한다. 현재 public schema에 필요한 집계가 없으면 차트 도입을 멈춘다. 원본 IP·계정·path/query·로그 전달이나 client 재집계는 금지. [Chart.js 공식 접근성 문서](https://www.chartjs.org/docs/latest/general/accessibility.html)는 canvas 대체 설명이 필요하다고 명시한다. 표·텍스트 동등 정보, Safari 성능·CSP·200% 확인이 선행 조건이다. | **지금 구조의 28.1 pilot에는 부적합; 장래 공급망·data gate 후** |
+| [`@awesome.me/webawesome` 3.14.0](https://github.com/shoelace-style/webawesome/blob/v3.14.0/packages/webawesome/package.json) MIT / [Shoelace 2.20.1](https://github.com/shoelace-style/shoelace/blob/next/package.json) MIT | Shoelace는 공식 manifest에 sunset/후속 Web Awesome을 명시한다. Web Awesome은 유지관리 중이나 `lit`, Floating UI, localize 등 다수 직접 runtime dependency와 전이 그래프가 있다. Web Components/Shadow DOM은 기존 DOM validator·focus·접근성 검사 범위, style/asset loading, Safari 검증을 바꾼다. package의 CDN loader를 쓰지 않는다. 전체 도입은 현재 작은 vanilla UI에 과하다. 단일 component pilot도 현 시점의 28.1보다 비용이 크다. | **전면 도입 부적합; 단일 component는 별도 제안과 공급망 검증 후** |
+
+GOV.UK의 [warning text](https://design-system.service.gov.uk/components/warning-text/), [tag](https://design-system.service.gov.uk/components/tag/), [file upload](https://design-system.service.gov.uk/components/file-upload/) 패턴은 현재 한국어 UI에 맞게 의미를 재검토한다. 오류 요약은 사용자의 오류 위치로 돌아갈 수 있어야 하고, 단순 상태 안내에 과도한 alert/focus 이동을 적용하지 않는다. GOV.UK 공식 focus 관례를 그대로 복사해 현재 live 알림의 조작 흐름을 깨지 않는다.
+
+## Phase 28.1 최소 pilot — 하나만
+
+`@axe-core/playwright` + `@playwright/test`를 **dev/test 전용**으로 검토한다. 합성 data와 격리된 임시 HOME/XDG_CONFIG_HOME, loopback server만 사용한다. 자동 테스트는 초기 화면, 새 결과 대기, 명시적 결과 적용, DEGRADED, FAILED, replay gap의 렌더링 상태를 각각 만들고 axe를 테스트 page에만 주입한다. `frontend/`나 production JS/CSS/API에는 axe 코드를 포함하지 않는다. Chromium과 Playwright WebKit은 별도 결과로 기록한다. WebKit 실행은 실제 Safari 18.6 사용자의 수동 검증을 대신하지 않는다.
+
+Fail 조건은 해당 상태의 자동 검출 가능한 **critical/serious** 위반, 수집 실패, 예상 상태 불일치, CSP/개인정보 위반이다. Moderate/minor와 `incomplete`는 검토 대상으로 별도 기록하고 근거 없이 무시하지 않는다. axe의 WCAG 2.2 태그가 포함된 규칙도 자동으로 판별 가능한 일부에만 적용된다. [W3C WAI](https://www.w3.org/WAI/test-evaluate/tools/selecting/)에 따라 자동 결과를 WCAG 2.2 AA 준수나 수동 Safari 검수 완료로 쓰지 않는다. Keyboard-only, 실제 Safari, 200% 확대/최소 폭, VoiceOver 상세, 문구·상태의 의미 적절성, 오류에서의 회복 가능성은 별도 수동 gate다.
+
+공급망 선행 조건: 정확한 npm tarball integrity와 publisher/release 대응, 직접·전이 dependency/license inventory, install/prepare/postinstall script, native/browser binary 및 다운로드 출처·hash, Node engine, lockfile, 오프라인 재현성을 기록한다. browser download가 필요한 경우 격리된 CI cache와 네트워크 범위를 명시하고 CI 시간·bundle 크기·실행 비용을 실제 측정한다. 현재는 **측정값 없음**이며 증가량 추측을 수치로 쓰지 않는다. 라이선스 고지 방식은 배포/복사 방식별 확인한다. 차단 조건은 미확인 스크립트·binary·전이 라이선스, 허용되지 않은 네트워크, production bundle 유입, 실제 사용자 자료 접근, canary 유출, CSP 완화, schema/보안 의미 변경, flaky 상태 재시도로 숨김이다.
+
+테스트 출력은 규칙 ID·impact·상태 이름·건수 중심으로 제한한다. Axe failure node의 DOM text, HTML snippet, selector, 합성 canary 및 Playwright trace/screenshot/video/HAR에는 민감 내용이 남을 수 있다. 원본 JSON/HTML report와 trace 등은 기본 생성·저장·CI 업로드하지 않는다. 실패 artifact가 꼭 필요하면 합성 입력만 썼는지 확인하고 canary 검사·마스킹·로컬 임시 보관·삭제를 거쳐 별도 승인한다. 테스트와 리포트 경로에 기본 config/checkpoint/user HOME을 넣지 않는다. 브라우저 context·서버·socket·임시 파일은 종료 시 정리한다.
+
+## 이 gate의 결론
+
+- **지금 도입 가능한 것:** GOV.UK의 공개 의미/상호작용 패턴 참고와 axe+Playwright의 dev/test 범위 설계. 이 문서 단계에서 도구 설치는 없다.
+- **공급망 검증 후 가능한 것:** axe+Playwright 최소 pilot, 선별 Lucide SVG; 차트는 추가로 승인된 집계 schema와 동등 텍스트가 필요하다.
+- **현재 구조에 부적합한 것:** React/Vue/MUI SPA 전면 재작성, GOV.UK 전체 CSS/브랜드, Shoelace 신규 도입, Web Awesome 전면 도입, raw data 차트, CDN/runtime fetch.
+- **자동 검증 범위:** 고정 합성 상태에서 axe가 판별하는 serious/critical 규칙과 기존 Node/pytest 계약. **수동 Safari 범위:** 실제 keyboard/focus, zoom·최소 폭, Web Inspector, VoiceOver 선택 검수, 사용자 문구 의미. 자동 PASS를 수동 PASS로 확대하지 않는다.
