@@ -14,5 +14,5 @@ def test_phase_21_7_contract_is_linked_and_bounded() -> None:
         "TOCTOU", "secure erase", "backup", "crash dump", "동시", "승인",
     ):
         assert term.lower() in contract.lower()
-    for file in ("README.md", "docs/monitor_setup_20.md", "docs/live_checkpoint_21.md"):
+    for file in ("docs/index.md", "docs/monitor_setup_20.md", "docs/live_checkpoint_21.md"):
         assert "live_checkpoint_epoch_reset_21_7.md" in (ROOT / file).read_text(encoding="utf-8")

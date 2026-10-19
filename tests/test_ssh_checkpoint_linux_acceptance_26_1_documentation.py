@@ -34,5 +34,5 @@ def test_audit_does_not_promote_unrun_ubuntu_smoke_to_pass() -> None:
         "0700", "0600", "FROM_END", "NO-GO", "Secure erase",
     ):
         assert required in document
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "docs/ssh_checkpoint_linux_acceptance_26_1.md" in readme
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    assert "ssh_checkpoint_linux_acceptance_26_1.md" in index

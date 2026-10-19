@@ -9,16 +9,16 @@ DOC = ROOT / "docs" / "vector_collector_pilot_25_1.md"
 
 def test_vector_pilot_documented_as_test_only_no_go():
     document = DOC.read_text(encoding="utf-8")
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
     for term in (
         "NO-GO", "합성 SSH", "긴 줄", "rename", "copytruncate", "receiver",
         "checkpoint", "ack", "SO_PEERCRED", "macOS", "Ubuntu", "secure erase",
         "production", "Phase 25.0",
     ):
         assert term in document
-    assert "docs/vector_collector_pilot_25_1.md" in readme
-    assert "production 연계는 NO-GO" in readme
-    assert "Vector는 설치·자동 실행·CI 필수 단계에 포함되지 않습니다" in readme
+    assert "vector_collector_pilot_25_1.md" in index
+    assert "NO-GO — 현 구성의 production 연계 및 연속성 주장 금지" in document
+    assert "Vector를 CI/pytest에서 자동 다운로드·실행하지 않는다" in document
 
 
 def test_vector_pilot_never_changes_runtime_dependency_or_ci():

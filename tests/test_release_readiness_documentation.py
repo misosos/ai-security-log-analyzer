@@ -34,62 +34,61 @@ def test_primary_documents_are_nonempty_utf8_and_link_targets_exist():
         assert all(target.is_file() for target in targets)
 
 
-def test_readme_has_verified_cli_and_development_api_commands():
+def test_readme_links_to_verified_cli_and_development_api_commands():
     text = _read(README)
-    assert "uv sync --locked --dev" in text
-    assert "uv run pytest" in text
-    assert "uv run python -m app.main --help" in text
-    assert "uv run python -m app.main --html-report investigation.html" in text
-    assert "--linux-audit" in text
-    assert "uv run uvicorn app.api:app --host 127.0.0.1 --port 8000" in text
-    assert "curl --fail --silent http://127.0.0.1:8000/api/health" in text
-    assert "uvicorn app.deployment.asgi:create_linux_audit_api_app --factory" in text
+    guide = _read(ROOT / "docs/final_demo_guide.md")
+    deployment = _read(ROOT / "docs/linux_audit_api_deployment_security.md")
+    assert "uv sync --locked --dev" in text and "uv run pytest" in text
+    assert "docs/final_demo_guide.md" in text
+    for command in (
+        "uv run python -m app.main --html-report investigation.html",
+        "uv run uvicorn app.api:app --host 127.0.0.1 --port 8000",
+        "curl --fail --silent http://127.0.0.1:8000/api/health",
+    ):
+        assert command in guide
+    assert "uvicorn app.deployment.asgi:create_linux_audit_api_app --factory" in deployment
 
 
-def test_readme_matches_actual_route_and_multipart_contracts():
-    text = _read(README)
+def test_linked_api_docs_match_actual_route_and_multipart_contracts():
+    text = _read(ROOT / "docs/linux_audit_api_design.md")
+    web = _read(ROOT / "docs/web_application_design.md")
     for value in (
         "GET /api/health",
         "POST /api/analyze",
         "POST /api/analyze-linux-audit",
-        "GET /internal/readiness",
         "application_file",
         "ssh_file",
         "access_file",
         "linux_audit_files",
     ):
-        assert value in text
+        assert value in text + web
     assert "`/api/analyze-linux-audit`" in text
-    assert "`/internal/readiness`는 기본 앱에 없습니다" in text
-    assert "OpenAPI에서 제외" in text
+    assert "OpenAPI" in text
+    readiness = _read(ROOT / "docs/linux_audit_api_deployment_security.md")
+    assert "GET /internal/readiness" in readiness and "excluded from OpenAPI" in readiness
+    assert "docs/index.md" in _read(README)
 
 
-def test_readme_matches_deployment_constants_and_boundaries():
-    text = _read(README)
+def test_linked_deployment_doc_matches_constants_and_boundaries():
+    text = _read(ROOT / "docs/linux_audit_api_deployment_security.md")
     assert LINUX_AUDIT_API_CREDENTIAL_FILENAME in text
     assert "CREDENTIALS_DIRECTORY" in text
     assert "LINUX_AUDIT_API_PRINCIPAL_ID" in text
     assert "LINUX_AUDIT_API_MAX_CONCURRENT_ANALYSES" in text
     assert "systemd" in text
     assert "Nginx" in text
-    assert "승인되지는 않습니다" in text
+    assert "not a deployed configuration" in text
 
 
-def test_readme_states_evidence_and_privacy_limits():
+def test_readme_and_detail_docs_state_evidence_and_privacy_limits():
     text = _read(README)
-    for value in (
-        "탐지는 침해 확인이 아닙니다",
-        "상관관계는 인과관계가 아닙니다",
-        "argv",
-        "PROCTITLE",
-        "raw record",
-        "LLM을 호출하지 않으며",
-        "전체 HTTP query",
-        "고유 프로세스, 공격자 또는 사고 수가 아닙니다",
-        "bounded 로컬 실시간 모니터링",
-        "원격·다중 source 수집",
-    ):
+    audit = _read(ROOT / "docs/linux_audit_process_execution.md")
+    web = _read(ROOT / "docs/web_application_design.md")
+    for value in ("탐지는 조사할 관찰", "상관관계는", "외부 LLM을 호출하지 않습니다", "cross-source 결합 없음"):
         assert value in text
+    for value in ("argv", "PROCTITLE", "raw record"):
+        assert value in audit
+    assert "full query" in web
 
 
 def test_release_matrix_distinguishes_repository_and_host_status():

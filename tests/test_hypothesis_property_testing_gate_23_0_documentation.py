@@ -34,6 +34,6 @@ def test_gate_selects_nonduplicative_bounded_properties_and_private_failures():
 
 
 def test_gate_is_linked_without_claiming_feature_support():
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "hypothesis_property_testing_gate_23_0.md" in readme
-    assert "Hypothesis" in readme
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    assert "hypothesis_property_testing_gate_23_0.md" in index
+    assert "Hypothesis" in index

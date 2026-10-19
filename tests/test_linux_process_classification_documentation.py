@@ -28,6 +28,6 @@ def test_phase9_contract_and_release_boundaries_documented():
         assert token in design
     assert "79/79" in evaluation and "21/21" in evaluation
     assert "실제 운영환경" in evaluation
-    assert "Linux Audit 집계·조사 후보" in readme
+    assert "Linux Audit 프로세스 실행 기록에서 조사 후보" in readme
     assert "21개" in changelog and "21/21" in release
     assert "[ ] Phase 9" in checklist

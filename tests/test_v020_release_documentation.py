@@ -48,10 +48,11 @@ def test_readme_and_checklist_keep_release_execution_separate():
     readme = _read("README.md")
     checklist = _read("docs/release_checklist.md")
     gate = _read("docs/live_monitoring_release_gate_18.md")
-    assert "`pyproject.toml`의 `0.3.0`" in readme
-    assert "[릴리스 노트](docs/releases/v0.2.0.md)" in readme
-    assert "[이전 릴리스 노트](docs/releases/v0.1.0.md)" in readme
-    assert "화면 업데이트 일시 정지" in readme and "서버 수집을 멈추지" in readme
+    assert "v0.3.0 Release" in readme
+    index = _read("docs/index.md")
+    assert "releases/v0.2.0.md" in index
+    assert "releases/v0.1.0.md" in index
+    assert "화면 표시 일시 정지" in readme and "서버 수집을 멈추지" in readme
     assert "## v0.2.0 로컬 릴리스 후보 준비" in checklist
     assert "최종 준비 커밋을 push한 뒤" in checklist
     assert "asset이 **0개**" in checklist

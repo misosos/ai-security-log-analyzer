@@ -30,7 +30,7 @@ def test_phase_17_records_environment_scoped_results_and_release_gate():
 
 def test_phase_17_links_and_v02_release_gate_do_not_rewrite_v01_history():
     for name in (
-        "README.md", "docs/live_log_monitoring_design.md",
+        "docs/index.md", "docs/live_log_monitoring_design.md",
         "docs/live_analysis_16_4_audit.md", "docs/release_checklist.md",
     ):
         assert "live_monitoring_acceptance_17.md" in (ROOT / name).read_text(encoding="utf-8")

@@ -15,5 +15,5 @@ def test_process_restart_acceptance_contract() -> None:
         "Safari", "전원 손실",
     ):
         assert term in contract
-    for name in ("README.md", "docs/live_log_monitoring_design.md"):
+    for name in ("docs/index.md", "docs/live_log_monitoring_design.md"):
         assert "live_checkpoint_21_3.md" in (ROOT / name).read_text(encoding="utf-8")

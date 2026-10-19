@@ -97,8 +97,8 @@ def test_live_ui_node_behavior():
 
 def test_phase_15_1_acceptance_record_separates_actual_and_untested_checks():
     record = ACCEPTANCE.read_text(encoding="utf-8")
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "docs/live_monitoring_acceptance_15_1.md" in readme
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    assert "live_monitoring_acceptance_15_1.md" in index
     for label in ("PASS", "FAIL", "NOT_TESTED", "BLOCKED", "CONDITIONAL GO"):
         assert label in record
     assert "WebDriver" in record

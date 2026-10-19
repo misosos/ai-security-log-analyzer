@@ -33,7 +33,7 @@ def test_pilot_does_not_present_unrun_checks_as_passed():
     ):
         assert boundary in text
     assert "Semgrep scan PASS" not in text
-    assert "semgrep_security_pilot_23_3.md" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "semgrep_security_pilot_23_3.md" in (ROOT / "docs/index.md").read_text(encoding="utf-8")
 
 
 def test_project_dependency_and_ci_remain_semgrep_free():

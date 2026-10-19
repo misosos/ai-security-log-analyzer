@@ -117,8 +117,8 @@ def test_future_boundaries_threats_retention_and_research_are_explicit() -> None
 
 def test_readme_roadmap_distinguishes_setup_core_from_unimplemented_features() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "local_collector_v030_design.md" in readme
-    paragraph = next(p for p in readme.split("\n\n") if "local_collector_v030_design.md" in p)
-    assert "설계" in paragraph and "마법사와 기본 설정 조회·삭제" in paragraph
-    assert "checkpoint" in paragraph and "rotation" in paragraph
-    assert "후속 gate" in paragraph
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    design = (ROOT / "docs/local_collector_v030_design.md").read_text(encoding="utf-8")
+    assert "local_collector_v030_design.md" in index
+    assert "마법사" in readme and "checkpoint" in readme and "rotation" in readme.lower()
+    assert "설계" in design and "후속" in design

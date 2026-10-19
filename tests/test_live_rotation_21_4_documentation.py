@@ -16,6 +16,6 @@ def test_pre_ack_rotation_boundary_is_documented() -> None:
         assert term.lower() in contract.lower()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     design = (ROOT / "docs/live_log_monitoring_design.md").read_text(encoding="utf-8")
-    assert "docs/live_rotation_21_4.md" in readme
+    assert "live_rotation_21_4.md" in (ROOT / "docs/index.md").read_text(encoding="utf-8")
     assert "live_rotation_21_4.md" in design
-    assert "자동 rotation 복구" in readme
+    assert "Rotation·copytruncate의 자동 연결은 없습니다" in readme

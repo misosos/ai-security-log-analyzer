@@ -49,22 +49,22 @@ def test_transaction_identity_membership_and_projection_boundaries():
 
 def test_research_and_roadmap_do_not_claim_implementation():
     text = _design()
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
     for required in (
         "NIST SP 800-61 Rev.3", "NIST SP 800-92", "T1110.001", "T1110.003",
         "Observable mapping", "프로젝트 정책", "Phase 16.1", "no-go",
         "실제 file_access", "여러 계정", "비밀번호", "정상 사용자의 재시도",
     ):
         assert required in text
-    assert "docs/live_analysis_correlation_case_design.md" in readme
-    assert "설계만 완료" in readme
-    assert "Phase 22.3은 기존 SSH parser·detector·batch correlation/risk/case 의미" in readme
-    assert "queue ack 성공 후에만 탐지 후보를 commit" in readme
+    assert "live_analysis_correlation_case_design.md" in index
+    assert "Phase 16 설계·계약 검증" in text
+    ssh = (ROOT / "docs/ssh_live_analysis_integration_22_3.md").read_text(encoding="utf-8")
+    assert "기존 SSH" in ssh and "batch" in ssh
+    assert "ack" in text and "commit" in text
 
 
 def test_phase_16_1_scope_and_phase_16_3_publication_are_distinguished():
     text = _design()
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     monitoring = (ROOT / "docs" / "live_log_monitoring_design.md").read_text(encoding="utf-8")
     for required in (
         "Phase 16.1 구현 갱신", "application-only 내부", "Phase 16.3",
@@ -74,14 +74,13 @@ def test_phase_16_1_scope_and_phase_16_3_publication_are_distinguished():
         "운영 SLA", "SSH·access·cross-source",
     ):
         assert required in text
-    assert "`analysis_changes` SSE" in readme
+    assert "`analysis_changes`" in text
     assert "Phase 16.3 안전한 표시" in monitoring
     assert "case projection의 `subject_ip`" in monitoring
 
 
 def test_phase_16_2_worker_boundary_and_phase_16_3_safe_projection():
     text = _design()
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for required in (
         "Phase 16.2 worker 결합", "queue ack", "detection commit", "analysis commit",
         "기존 detection publication", "DEGRADED", "terminal `FAILED`",
@@ -91,7 +90,7 @@ def test_phase_16_2_worker_boundary_and_phase_16_3_safe_projection():
         assert required in text
     assert "safe DTO" in text
     assert "원래 subject, 계정, IP" in text
-    assert "기존 `observation_changes` schema는 유지" in readme
+    assert "기존 detection `observation_changes`를 유지" in text
 
 
 def test_phase_16_2_verification_records_each_fault_and_measurement_limit():

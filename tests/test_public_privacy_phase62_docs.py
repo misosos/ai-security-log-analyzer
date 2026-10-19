@@ -12,7 +12,8 @@ def test_public_privacy_migration_notice_is_linked_and_bounded():
     evaluation = (ROOT / "docs/detection_evaluation.md").read_text(encoding="utf-8")
 
     assert "docs/public_analysis_privacy.md" in readme
-    assert "deprecated" in readme
+    assert "이전 응답의 변경 사항" in readme
+    assert "deprecated" in privacy
     assert "nested-value breaking change" in privacy
     assert "Deprecation: true" in privacy
     assert "POST /api/v1/investigations" in privacy

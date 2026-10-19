@@ -12,6 +12,6 @@ def test_checkpoint_21_2_contract_is_linked_and_bounded() -> None:
                  "FIFO", "atomic replace", "parent fsync", "post-read",
                  "과거 publication 억제", "NOT_TESTED", "exactly-once"):
         assert term.lower() in contract.lower()
-    for name in ("README.md", "docs/live_checkpoint_21.md",
+    for name in ("docs/index.md", "docs/live_checkpoint_21.md",
                  "docs/local_collector_v030_design.md"):
         assert "live_checkpoint_21_2.md" in (ROOT / name).read_text(encoding="utf-8")

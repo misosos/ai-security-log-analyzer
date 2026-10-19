@@ -16,15 +16,14 @@ def test_historical_v010_note_and_locked_source_checkout_commands():
     assert _text("docs/releases/v0.1.0.md").startswith("# v0.1.0 로컬 릴리스 노트\n")
     assert project["project"]["license"] == "MIT"
     assert project["project"]["requires-python"].startswith(">=3.12")
-    for path in ("README.md", "docs/releases/v0.1.0.md"):
-        text = _text(path)
-        assert "uv sync --locked --dev" in text
-        assert "uv run python -m app.local_web" in text
-        assert "http://127.0.0.1:8000/" in text
-        assert "Ctrl+C" in text
-        assert "git pull --ff-only" in text
-        assert "source checkout" in text
-        assert "schema version" in text
+    readme = _text("README.md")
+    note = _text("docs/releases/v0.1.0.md")
+    for text in (readme, note):
+        for term in ("uv sync --locked --dev", "uv run python -m app.local_web",
+                     "http://127.0.0.1:8000/", "Ctrl+C", "source checkout"):
+            assert term in text
+    assert "git pull --ff-only" in note
+    assert "schema version" in note
 
 
 def test_release_scope_privacy_limits_and_support_are_explicit():
@@ -137,14 +136,17 @@ def test_readme_release_guidance_is_durable_and_checklist_is_historical():
         "Safari 수동 키보드/확대/screen-reader 검증은 미완료",
     ):
         assert temporary_claim not in readme
+    index = _text("docs/index.md")
+    note = _text("docs/releases/v0.1.0.md")
+    assert "releases/v0.1.0.md" in index
     for verified_or_limited in (
-        "[이전 릴리스 노트](docs/releases/v0.1.0.md)",
         "keyboard-only 주요 흐름", "visible focus", "실제 200% 확대",
         "가능한 최소 창 너비", "콘솔 오류 부재", "정확한 320 CSS px",
-        "VoiceOver 읽기는 미검증", "실제 운영환경 탐지율",
-        "WCAG 2.2 AA 준수", "hosted 배포",
+        "VoiceOver", "WCAG 2.2 AA 준수를 주장하지 않는다",
     ):
-        assert verified_or_limited in readme
+        assert verified_or_limited in note
+    for boundary in ("실제 운영환경 탐지율", "WCAG 2.2 AA", "hosted"):
+        assert boundary in readme
     assert "push 전까지 미검증" not in readiness.split("Historical repository", 1)[0]
     assert "역사적 기록" in checklist
     assert "공개 배포 여부의 현재 상태를 나타내지 않는다" in checklist

@@ -22,7 +22,7 @@ def test_ssh_integration_record_states_exact_scope_and_transaction() -> None:
 def test_current_entry_points_do_not_claim_ssh_is_detection_only() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     design = (ROOT / "docs/live_log_monitoring_design.md").read_text(encoding="utf-8")
-    assert "SSH live 관계·위험도·조사 사례" in readme
-    assert "`access`는 detection-only" in readme
+    assert "application·SSH 파일 하나" in readme
+    assert "access live는 detection-only" in readme
     assert "ssh_live_analysis_integration_22_3.md" in design
     assert "SSH/access detection-only 수동 v1 설정" not in readme

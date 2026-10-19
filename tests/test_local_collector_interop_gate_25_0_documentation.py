@@ -44,8 +44,8 @@ def test_data_and_recovery_boundaries_remain_explicit() -> None:
 
 
 def test_roadmap_and_dependencies_are_unchanged_by_design_gate() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "docs/local_collector_interop_gate_25_0.md" in readme
+    index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    assert "local_collector_interop_gate_25_0.md" in index
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     all_dependencies = project["project"]["dependencies"] + project["dependency-groups"]["dev"]
     assert not any("fluent-bit" in item.lower() or "vector" in item.lower() for item in all_dependencies)

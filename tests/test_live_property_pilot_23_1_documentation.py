@@ -28,4 +28,4 @@ def test_pilot_documents_real_boundaries_and_does_not_claim_unverified_linux():
     ):
         assert phrase in text
     assert "hypothesis_property_testing_pilot_23_1.md" in (
-        ROOT / "README.md").read_text(encoding="utf-8")
+        ROOT / "docs/index.md").read_text(encoding="utf-8")

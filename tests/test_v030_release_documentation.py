@@ -38,7 +38,7 @@ def test_release_note_is_durable_and_states_supported_boundary() -> None:
 def test_readme_and_checklist_do_not_promote_unverified_release_gates() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     checklist = (ROOT / "docs/release_checklist.md").read_text(encoding="utf-8")
-    assert "`pyproject.toml`의 `0.3.0`" in readme
+    assert "v0.3.0 Release" in readme
     assert "docs/releases/v0.3.0.md" in readme
     assert "docs/v030_safari_acceptance_27_1.md" in readme
     assert "## v0.3.0 로컬 릴리스 후보" in checklist

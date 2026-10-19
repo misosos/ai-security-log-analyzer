@@ -15,6 +15,6 @@ def test_two_generation_recovery_gate_is_explicit() -> None:
         "file_device", "file_inode", "replay_start_offset", "committed_offset",
     ):
         assert term.lower() in contract.lower()
-    assert "live_rotation_21_6.md" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "live_rotation_21_6.md" in (ROOT / "docs/index.md").read_text(encoding="utf-8")
     assert "live_rotation_21_6.md" in (
         ROOT / "docs/live_log_monitoring_design.md").read_text(encoding="utf-8")

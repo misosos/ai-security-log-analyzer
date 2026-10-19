@@ -11,7 +11,7 @@ def test_current_rotation_boundary_is_explicit_and_linked() -> None:
     for term in ("SOURCE_TRUNCATED", "read offset", "checkpoint", "ack",
                  "copytruncate", "재성장", "fail-closed", "자동 rotation"):
         assert term.lower() in contract.lower()
-    for name in ("README.md", "docs/local_collector_v030_design.md",
+    for name in ("docs/index.md", "docs/local_collector_v030_design.md",
                  "docs/live_checkpoint_21.md"):
         assert "live_rotation_21_1.md" in (ROOT / name).read_text(encoding="utf-8")
     assert "무유실" in contract and "보장 없음" in contract

@@ -13,10 +13,11 @@ def test_readme_has_simple_default_flow_and_explicit_limits() -> None:
     assert "uv run python -m app.monitor_setup\nuv run python -m app.local_web --monitor" in readme
     assert "uv run python -m app.monitor_setup --show" in readme
     assert "uv run python -m app.monitor_setup --delete" in readme
-    for boundary in ("원본 경로나 JSON을 표시하지", "기본 설정", "원본 로그", "사용자 지정",
-                     "실행 중에는 삭제를 거부", "secure erase", "자동 활성화되지",
-                     "checkpoint", "rotation"):
+    for boundary in ("경로를 숨긴", "원본 로그", "secure erase", "checkpoint", "Rotation"):
         assert boundary in readme
+    guide = (ROOT / "docs/monitor_setup_20.md").read_text(encoding="utf-8")
+    for boundary in ("기본 설정", "사용자 지정", "삭제는 거부", "자동 활성화되지"):
+        assert boundary in guide
 
 
 def test_guide_distinguishes_default_and_explicit_config() -> None:

@@ -22,6 +22,6 @@ def test_ssh_checkpoint_documented_scope_and_privacy() -> None:
 def test_readme_keeps_manual_ssh_setup_and_legacy_runtime_distinct() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "docs/ssh_checkpoint_recovery_26_0.md" in readme
-    assert "마법사는 아직 SSH 설정을 생성하지 않습니다" in readme
-    assert "SSH의 명시적 v1 설정은 checkpoint 없이" in readme
-    assert "rotation·truncation은 자동 복구하지 않고 중단" in readme
+    assert "설정 마법사는 아직 SSH 설정을 만들지 않습니다" in readme
+    assert "명시적 v1 SSH" in (ROOT / "docs/ssh_checkpoint_recovery_26_0.md").read_text(encoding="utf-8")
+    assert "Rotation·copytruncate의 자동 연결은 없습니다" in readme

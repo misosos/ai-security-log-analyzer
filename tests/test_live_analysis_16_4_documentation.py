@@ -24,7 +24,7 @@ def test_audit_has_traceability_and_non_success_states():
 
 
 def test_current_docs_link_to_audit_without_declaring_broader_live_scope():
-    for name in ("README.md", "docs/live_log_monitoring_design.md",
+    for name in ("docs/index.md", "docs/live_log_monitoring_design.md",
                  "docs/live_analysis_correlation_case_design.md"):
         text = (ROOT / name).read_text(encoding="utf-8")
         assert "live_analysis_16_4_audit.md" in text

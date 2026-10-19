@@ -60,23 +60,22 @@ def test_environment_help_and_documented_paths_match_current_contract():
 
     assert project["requires-python"] == ">=3.12"
     assert "Python 3.12 이상" in readme
+    for command in ("uv sync --locked --dev", "uv run python -m app.local_web", "uv run pytest"):
+        assert command in readme
     for command in (
-        "uv sync --locked --dev",
-        "uv run python -m app.main --help",
-        "uv run python -m app.main",
         "uv run python -m app.main --html-report investigation.html",
         "open investigation.html",
         "uv run uvicorn app.api:app --host 127.0.0.1 --port 8000",
         "curl --fail --silent http://127.0.0.1:8000/api/health",
-        "uv run pytest",
     ):
-        assert command in readme
+        assert command in demo
     for path in (*DEFAULT_SAMPLES, LINUX_AUDIT_SAMPLE):
         assert path.is_file()
     assert "docs/final_demo_guide.md" in readme
     assert DEMO.is_file()
-    assert "GEMINI_API_KEY" in readme
-    assert "선택적 개발 경계" in readme
+    assert "외부 LLM을 호출하지 않습니다" in readme
+    assert "GEMINI_API_KEY" in (ROOT / "app/analyzer/llm.py").read_text(encoding="utf-8")
+    assert "GEMINI_API_KEY" in (ROOT / "docs/linux_audit_api_security_design.md").read_text(encoding="utf-8")
     assert "실제 credential, 사용자 로그, LLM 또는 외부 네트워크는 필요하지 않습니다" in demo
     for obsolete in (
         "uvicorn main:app",

@@ -14,6 +14,6 @@ def test_rotation_handoff_gate_is_explicit() -> None:
         "inotify", "FSEvents", "exactly-once", "개인정보", "macOS", "Linux",
     ):
         assert term.lower() in contract.lower()
-    for name in ("README.md", "docs/live_log_monitoring_design.md",
+    for name in ("docs/index.md", "docs/live_log_monitoring_design.md",
                  "docs/local_collector_v030_design.md"):
         assert "live_rotation_21_5.md" in (ROOT / name).read_text(encoding="utf-8")

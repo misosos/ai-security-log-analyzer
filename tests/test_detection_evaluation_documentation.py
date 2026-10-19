@@ -21,5 +21,5 @@ def test_evaluation_documented_contract():
     ):
         assert term in document
     assert "docs/detection_evaluation.md" in readme
-    assert "운영 환경 탐지율" in readme
-    assert "여러 로그인 성공 후보" in readme
+    assert "실제 운영환경 탐지율" in readme
+    assert "여러 성공 후보" in document

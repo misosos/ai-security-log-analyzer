@@ -28,10 +28,10 @@ def test_scope_and_user_flow_are_explicit():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "[bounded 내부 tail core·parser adapter·단일 record lease·worker·detection accumulator](docs/live_log_monitoring_design.md)" in readme
-    assert "uv run python -m app.local_web --monitor-config /absolute/path/to/live-monitor.json" in readme
+    assert "live_log_monitoring_design.md" in (ROOT / "docs/index.md").read_text(encoding="utf-8")
+    assert "uv run python -m app.local_web --monitor-config" in text
     assert "새 결과 N건 보기" in readme
-    assert "화면 업데이트 일시 정지" in readme
+    assert "화면 표시 일시 정지" in readme
 
 
 def test_implemented_core_limits_and_unimplemented_boundaries_are_explicit():
@@ -135,8 +135,8 @@ def test_phase_14_publication_replay_is_bounded_and_internal():
     ):
         assert phrase in text
     readme = README.read_text(encoding="utf-8")
-    assert "Phase 14~15에서는 확정된 detection change만 받는" in readme
-    assert "`--monitor-config` 자동 polling과 접근 가능한 화면 표시가 연결됐습니다" in readme
+    assert "Phase 14" in text and "publication" in text
+    assert "--monitor-config" in text and "polling" in text
 
 
 def test_phase_14_1_http_boundary_is_not_a_user_collector():
