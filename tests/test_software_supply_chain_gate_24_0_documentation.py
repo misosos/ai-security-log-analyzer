@@ -1,8 +1,9 @@
 """Keep the Phase 24.0 supply-chain gate tied to this checkout's scope."""
 
-from pathlib import Path
+import json
 import re
 import tomllib
+from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +57,12 @@ def test_current_project_is_source_checkout_without_new_scanner_dependency():
         for item in runtime + dev
         for scanner in ("osv-scanner", "pip-audit", "syft", "grype", "trivy", "cyclonedx")
     )
-    assert not (ROOT / "package.json").exists()
+    node = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert node["private"] is True
+    assert not node.get("dependencies")
+    assert node["devDependencies"] == {
+        "@axe-core/playwright": "4.14.0", "@playwright/test": "1.64.1",
+    }
     assert not (ROOT / "Dockerfile").exists()
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in workflow

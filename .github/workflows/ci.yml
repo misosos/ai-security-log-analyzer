@@ -59,6 +59,33 @@ jobs:
       - name: Run complete regression
         run: uv run pytest -q
 
+      - name: Install pinned Node for development-only accessibility checks
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.10.0"
+          package-manager-cache: false
+
+      - name: Install locked Node test dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install pinned Chromium headless shell only
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/playwright-browsers
+        run: ./node_modules/.bin/playwright install chromium --only-shell
+
+      - name: Verify browser and FFmpeg executable hashes
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/playwright-browsers
+        run: |
+          printf '%s  %s\n' '2b1a87b7d808c989193887d24c2e7cfc74fc775629443eda629b72687585b95423f85ac180209d95ff3b562805c26a8b63afabb068dfa92b715da1246c0426b8' "$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell" | sha512sum --check --status
+          printf '%s  %s\n' '7d5a4bd12741d3a62137f7702a5c754aad7ce24df2e3ca2e6af3cff67e2a59424d497353e6e8989d544b5a5f3d3213c0dcc0cab74bae89a0ef3f3cf2fb365217' "$PLAYWRIGHT_BROWSERS_PATH/ffmpeg-1013/ffmpeg-linux" | sha512sum --check --status
+
+      - name: Run bounded Chromium accessibility pilot
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/playwright-browsers
+          TZ: UTC
+        run: npm run test:a11y --silent
+
       - name: Verify tests did not modify tracked files
         run: |
           git diff --exit-code

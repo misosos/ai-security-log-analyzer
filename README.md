@@ -260,6 +260,8 @@ uv run pytest
 
 테스트는 합성 fixture를 사용합니다. 실제 운영 호스트의 TLS, 방화벽, systemd credential 전달, journald 지속성, Nginx 동작, 보존 정책 또는 부하 용량을 승인하지 않습니다.
 
+UI 개발용 접근성 자동 회귀는 [Phase 28.1 pilot](docs/ui_accessibility_axe_pilot_28_1.md)에 기록했습니다. 잠긴 Node dev dependency를 `npm ci --ignore-scripts --no-audit --no-fund`로 설치하고 고정 Chromium headless shell을 설치한 뒤 `npm run test:a11y`로 합성 화면을 검사합니다. 이는 실제 Safari·키보드·200% 확대 수동 검수 또는 WCAG 2.2 AA 준수 선언이 아닙니다.
+
 ## 프로젝트 구조
 
 ```text
