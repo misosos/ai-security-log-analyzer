@@ -1,6 +1,6 @@
 # AI Security Log Analyzer
 
-현재 개발 branch의 [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)는 별도 프로세스 advisory lock·권한·재시작·reset smoke를 CI에 추가했지만, 해당 새 단계의 Ubuntu 결과는 다음 push 이후에만 확인할 수 있습니다. 기존 원격 전체 회귀 성공을 이 독립 검증의 PASS로 해석하지 않습니다.
+현재 개발 branch의 [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)는 별도 프로세스 advisory lock·권한·재시작·reset smoke를 CI에 추가했습니다. 첫 Ubuntu 실행은 smoke의 플랫폼별 기본 config 경로 오류로 중단되어 해당 프로세스 경계를 검증하지 못했습니다. 수정 커밋의 정확한 SHA에서 원격 CI가 성공하기 전까지 Linux 독립 수용을 PASS로 해석하지 않습니다.
 
 > 보안 계약 변경: deprecated `/api/analyze`의 상위 구조는 유지하지만 중첩 탐지·상관관계·위험도·전체 상관관계는 개인정보 안전 projection으로 변경되었습니다. 기존 raw nested 값 소비자는 [migration 안내](docs/public_analysis_privacy.md)를 확인하세요. 새 로컬 개발에는 `POST /api/v1/investigations`를 사용하세요. 인증 없는 공개 업로드는 지원하지 않습니다.
 

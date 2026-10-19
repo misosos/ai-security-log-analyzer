@@ -2,8 +2,18 @@
 
 from pathlib import Path
 
+from smoke_ssh_checkpoint_26_0 import _default_config_for
+
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_smoke_config_path_matches_platform_resolver_without_host_xdg() -> None:
+    home = Path("/tmp/synthetic-home")
+    assert _default_config_for(home, "linux") == (
+        home / ".config/ai-security-log-analyzer/monitoring.json")
+    assert _default_config_for(home, "darwin") == (
+        home / "Library/Application Support/ai-security-log-analyzer/monitoring.json")
 
 
 def test_ubuntu_gate_has_a_real_process_smoke_step() -> None:

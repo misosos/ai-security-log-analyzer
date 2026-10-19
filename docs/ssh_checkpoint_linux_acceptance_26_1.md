@@ -2,6 +2,8 @@
 
 **판정: CONDITIONAL GO.** Phase 26.0의 원격 SHA `fc6f74a726c0d83dc93ff6b33e5dd6721daf817b`에 대한 [Ubuntu 24.04 CI run](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39201600155)은 completed/success였고 전체 pytest는 **2,333 passed, 기존 deprecation 경고 2개**였다. SSH checkpoint 테스트는 전체 suite에 포함됐고 새 파일에는 skip/xfail·OS별 우회가 없다. 하지만 해당 run의 명시적 Linux 단계 17건은 기존 application reset/process 계약이며, **SSH 별도 프로세스 lock·CLI restart smoke를 실행하지 않았다.** 따라서 이 run 하나로 Phase 26.1의 독립 Ubuntu 수용을 PASS라고 표시하지 않는다.
 
+Phase 26.1 SHA `6a0146321d7b74d0fbabaffad138a0c5097f68a3`의 [첫 Ubuntu CI run](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39202433190)은 **completed/failure**였다. SSH focused는 **30 passed**였으나 후속 실제 process smoke가 `SMOKE_SERVER_START_FAILED:DEFAULT_CONFIG_MISSING`으로 첫 서버 시작 전에 실패했다. 따라서 process lock·권한·재시작·reset 및 전체 회귀 단계는 그 run에서 **NOT_TESTED**다. 원인은 테스트 harness가 macOS의 `Library/Application Support`에 config를 하드코딩한 반면 Linux launcher는 `~/.config`의 기본 경로를 사용한 것이다. Production resolver·checkpoint 동작의 결함으로 판단할 증거는 없다. 실패를 CI 재실행이나 skip으로 숨기지 않고, Linux/macOS 기본 위치를 고정하는 수정 전 실패 테스트를 기록한 다음 smoke에서 production resolver를 그대로 재사용하도록 고쳤다. 수정 커밋의 Ubuntu 결과는 아직 확인되지 않았다.
+
 ## 실행 경계와 증거
 
 | 항목 | 현재 증거 | 판정 |
@@ -9,8 +11,8 @@
 | SSH v2 private config·동일 파일 replay·batch prefix parity | 이전 Ubuntu 전체 pytest에 포함된 SSH focused 테스트, 로컬 macOS 재실행 | PASS (그 테스트 범위) |
 | malformed/schema/role/offset/digest, file replace/shrink/missing, permission/symlink | SSH focused의 실제 임시 regular file과 mode bit 검사; 기존 일부만 이전 Ubuntu 전체 suite에 포함 | PASS (로컬), 추가분 Ubuntu CI 대기 |
 | 257번째 parsed event·partial UTF-8/LF | 신규 SSH focused에서 ack/checkpoint가 앞서지 않음을 검사 | PASS (로컬), Ubuntu CI 대기 |
-| 실제 두 프로세스 advisory lock·active reset 거부 | 확장된 합성 CLI smoke에서 첫 server·경쟁 server·관리 CLI를 별도 PID로 실행 | PASS (macOS), Ubuntu CI 대기 |
-| 정상 종료→중지 중 append→재시작→관계/사례→cancel/approved reset→새 `FROM_END` epoch | 합성 CLI smoke, private HOME 및 loopback listener 사용 | PASS (macOS), Ubuntu CI 대기 |
+| 실제 두 프로세스 advisory lock·active reset 거부 | 확장된 합성 CLI smoke에서 첫 server·경쟁 server·관리 CLI를 별도 PID로 실행 | PASS (macOS), 첫 Ubuntu smoke는 경로 오류로 미도달; 수정 CI 대기 |
+| 정상 종료→중지 중 append→재시작→관계/사례→cancel/approved reset→새 `FROM_END` epoch | 합성 CLI smoke, private HOME 및 loopback listener 사용 | PASS (macOS), 첫 Ubuntu smoke는 경로 오류로 미도달; 수정 CI 대기 |
 | 0700 config parent, 0600 config/checkpoint/lock, sibling·원본 보존 | CLI smoke의 실제 `stat` mode bit와 파일 내용 검사 | PASS (macOS), Ubuntu CI 대기 |
 | 과거 SSE 미재게시·새 append만 publication | SSH worker/publication focused 테스트; 별도 프로세스 SSE framing 재검사는 하지 않음 | PARTIAL |
 | 전체 transaction fault matrix, ack 전 release·ack 후 terminal | 기존 application fault matrix와 SSH checkpoint write-failure/257 테스트 | PARTIAL: 모든 지점의 별도 SSH subprocess fault는 미실행 |

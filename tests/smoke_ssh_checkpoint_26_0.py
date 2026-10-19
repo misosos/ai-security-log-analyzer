@@ -13,8 +13,15 @@ from tempfile import TemporaryDirectory
 import time
 from urllib.request import urlopen
 
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.live_monitoring.config import resolve_default_monitor_config_path
+
+
+def _default_config_for(home: Path, platform: str) -> Path:
+    return resolve_default_monitor_config_path(
+        platform=platform, home=home, xdg_config_home="")
 
 
 def _line(second: int, outcome: str = "Failed") -> str:
@@ -102,7 +109,7 @@ def main() -> None:
         home.mkdir(mode=0o700)
         source = root / "synthetic-ssh.log"
         source.write_text(_line(0), encoding="utf-8")
-        config = home / "Library/Application Support/ai-security-log-analyzer/monitoring.json"
+        config = _default_config_for(home, sys.platform)
         config.parent.mkdir(parents=True, mode=0o700)
         config.parent.chmod(0o700)
         document = {"schema_version": "2", "sources": [{
