@@ -1,6 +1,6 @@
 # Phase 21 — 동일 파일 bounded checkpoint 계약
 
-상태: 단일 `application` source의 기본 private v2 설정에 구현된 경계. 이 문서는 기존 `FROM_END`와 worker transaction을 바꾸지 않는 복구 계약을 정의한다.
+상태: 최초에는 단일 `application` source의 기본 private v2 설정에 구현된 경계. [Phase 26.0](ssh_checkpoint_recovery_26_0.md)은 같은 schema·private metadata·worker transaction을 단일 SSH 기본 v2 설정으로 확장했다. 아래 Phase 21 수치와 application 전용 설명은 당시 검증 기록으로 읽는다.
 
 후속 Phase 21.1은 [관찰 가능한 파일 크기 감소의 fail-closed 검사](live_rotation_21_1.md)를 추가했다. 자동 rotation 추종이나 checkpoint 세대 전환은 여전히 없다.
 

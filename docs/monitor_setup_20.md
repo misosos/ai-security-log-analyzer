@@ -4,6 +4,8 @@ Phase 21 갱신: 아래 Phase 20/20.1 당시 설명의 `checkpoint_policy=DISABL
 
 Phase 21.7 갱신: [새 분석 epoch reset](live_checkpoint_epoch_reset_21_7.md)은 기본 checkpoint JSON 하나만 별도 `--reset-checkpoint` 명령으로 승인 삭제한다. Config 삭제 명령과 다르며 설정·원본 로그는 유지한다. 자동 rotation 복구는 아니다.
 
+Phase 26.0 갱신: [SSH 동일 파일 복구](ssh_checkpoint_recovery_26_0.md)는 사용자가 명시적으로 준비한 private 기본 v2 SSH config의 `BOUNDED_REPLAY_V1`만 추가한다. 이 문서의 Phase 20 마법사 생성·dry-run 절차는 여전히 **application 전용**이다. `--show`·`--reset-checkpoint`는 SSH 기본 v2도 안전한 역할 요약과 연결 checkpoint 하나의 승인 reset만 처리한다. 명시적 v1 SSH `--monitor-config`는 재시작마다 `FROM_END`다.
+
 상태: **구현됨**. 다음 명령은 trusted 로컬 CLI이며 브라우저·웹 API·detector·LLM을 실행하지 않는다.
 
 ```bash

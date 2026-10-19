@@ -318,7 +318,7 @@ def delete_default_config(path: Path | None = None, *,
                         raise MonitorSetupError("CHECKPOINT_DELETE_FAILED") from None
                 emit("기본 설정 삭제 완료. 원본 로그는 삭제하지 않았습니다.")
                 emit("다시 설정하려면 uv run python -m app.monitor_setup 을 실행하십시오.")
-                return SetupResult("DELETED", "application")
+                return SetupResult("DELETED", config.source_role)
             finally:
                 if checkpoint is not None:
                     checkpoint.close()
@@ -376,7 +376,7 @@ def reset_default_checkpoint(path: Path | None = None, *,
                 emit("복구 자료 1개를 삭제했습니다. 원본 로그와 설정은 삭제하지 않았습니다.")
                 emit("모니터링은 자동 시작하지 않습니다. uv run python -m app.local_web --monitor 로 새 분석 epoch를 시작하십시오.")
                 emit("이 삭제는 secure erase가 아니며 backup·filesystem snapshot·crash dump에 이전 자료가 남을 수 있습니다.")
-                return SetupResult("RESET", "application")
+                return SetupResult("RESET", guard.config.source_role)
             finally:
                 checkpoint.close()
     except LiveMonitorError as error:

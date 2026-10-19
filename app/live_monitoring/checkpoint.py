@@ -101,7 +101,7 @@ class Checkpoint:
                    self.committed_offset, self.committed_file_size, self.write_sequence,
                    self.history_count, self.history_bytes)
         if (self.schema_version != "1" or self.config_schema_version != "2"
-            or self.source_id != "SOURCE-000001" or self.source_role != "application"
+            or self.source_id != "SOURCE-000001" or self.source_role not in ("application", "ssh")
             or self.start_position != "FROM_END" or self.parser_timezone != "Asia/Seoul"
             or self.checkpoint_policy != "BOUNDED_REPLAY_V1"
             or any(type(n) is not int or n < 0 for n in numbers)
@@ -231,6 +231,7 @@ class LiveCheckpointManager:
             parsed["batches"] = tuple(parsed["batches"])
             checkpoint = Checkpoint(**parsed)
             if (checkpoint.source_id != self._config.source_id
+                or checkpoint.source_role != self._config.source_role
                 or checkpoint.parser_timezone != self._config.parser_timezone):
                 raise LiveCheckpointError("CHECKPOINT_CORRUPT")
             if with_identity:
@@ -328,7 +329,8 @@ class LiveCheckpointManager:
     def initialize_or_restore(self, worker) -> None:
         self._verify_lock_identity()
         session = worker._session
-        if session.source_role != "application" or worker._analysis is None:
+        if (session.source_role != self._config.source_role
+            or session.source_role not in ("application", "ssh") or worker._analysis is None):
             raise LiveCheckpointError("CHECKPOINT_CORRUPT")
         try:
             session._probe_identity()
@@ -340,7 +342,7 @@ class LiveCheckpointManager:
         checkpoint = self._checkpoint
         if checkpoint is None:
             start = session._offset
-            initial = Checkpoint("1", "2", self._config.source_id, "application", "FROM_END",
+            initial = Checkpoint("1", "2", self._config.source_id, self._config.source_role, "FROM_END",
                                  self._config.parser_timezone, "BOUNDED_REPLAY_V1",
                                  opened.st_dev, opened.st_ino, start, start, opened.st_size,
                                  0, (), 0, 0, False, _semantic_digest(worker))
@@ -378,11 +380,12 @@ class LiveCheckpointManager:
                 if len(line) > 2048 or b"\x00" in line or b"\r" in line[:-1]:
                     raise LiveCheckpointError("CHECKPOINT_REPLAY_MISMATCH")
                 payload = (line[:-1] if line.endswith(b"\r") else line).decode("utf-8")
-                records.append(LiveTailRecord("application", sequence, payload,
+                records.append(LiveTailRecord(self._config.source_role, sequence, payload,
                                               len(payload.encode("utf-8")), end_offset=offset))
             index = 0
             for count in checkpoint.batches:
-                batch = parse_live_records("application", tuple(records[index:index + count]))
+                batch = parse_live_records(self._config.source_role,
+                                           tuple(records[index:index + count]))
                 index += count
                 detection = worker._accumulator.prepare(batch)
                 analysis = worker._analysis.prepare(detection)
@@ -443,7 +446,7 @@ class LiveCheckpointManager:
             raise LiveCheckpointError("CHECKPOINT_SOURCE_CHANGED")
         snapshot = worker._accumulator.snapshot()
         checkpoint = Checkpoint(
-            "1", "2", prior.source_id, "application", "FROM_END", prior.parser_timezone,
+            "1", "2", prior.source_id, prior.source_role, "FROM_END", prior.parser_timezone,
             "BOUNDED_REPLAY_V1", opened.st_dev, opened.st_ino, prior.replay_start_offset,
             end_offset, opened.st_size, prior.write_sequence + 1,
             prior.batches + (record_count,), snapshot.history_record_count,

@@ -122,8 +122,10 @@ class LiveMonitorConfigV2:
         if type(self.schema_version) is not str or self.schema_version != "2":
             raise LiveMonitorError("UNSUPPORTED_SCHEMA")
         if (type(self.source_id) is not str or self.source_id != "SOURCE-000001"
-            or type(self.source_role) is not str or self.source_role != "application"
-            or type(self.display_alias) is not str or self.display_alias != "애플리케이션 로그 1"
+            or type(self.source_role) is not str or self.source_role not in ("application", "ssh")
+            or type(self.display_alias) is not str
+            or self.display_alias != {"application": "애플리케이션 로그 1",
+                                      "ssh": "SSH 로그 1"}.get(self.source_role)
             or type(self.enabled) is not bool
             or type(self.start_position) is not str or self.start_position != "FROM_END"
             or type(self.parser_timezone) is not str or self.parser_timezone != "Asia/Seoul"
@@ -151,7 +153,7 @@ class LiveMonitorConfigV2:
     def to_runtime(self) -> LiveMonitorConfig:
         if not self.enabled:
             raise LiveMonitorError("SOURCE_DISABLED")
-        return LiveMonitorConfig("application", self.source_path)
+        return LiveMonitorConfig(self.source_role, self.source_path)
 
 
 def _validate_absolute_path(value: str) -> None:
