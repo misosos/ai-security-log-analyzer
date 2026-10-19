@@ -169,10 +169,14 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 | 최종 커밋의 detached clean checkout | **PASS** | 별도 detached checkout에서 `uv sync --locked --dev`, `uv lock --check`, 전체 2,347 passed·기존 경고 2개, 세 합성 평가, evidence bundle 37/57, application·SSH CLI/loopback smoke, Safari WebDriver 자동 smoke를 검증. 문서 보정 후 같은 commit 내용으로 재확인 |
 | `uv build`와 배포 방식 | **PASS** | 기존 flat-layout 다중 top-level package 발견으로 빌드 실패(exit 2)를 재확인; 지원 방식은 source checkout만이며 wheel/PyPI asset 금지 |
 | Safari v0.3.0 application·SSH live 자동 smoke | **PASS** | 실제 Safari WebDriver에서 두 역할 모두 live 영역, 새 결과 적용 전 목록 불변·적용 후 네 영역·pause·개인정보 비노출 확인. Synthetic explicit v1 흐름이며 checkpoint 재시작 화면까지 검증한 것은 아님 |
-| Safari v0.3.0 수동 사용자 흐름 | **NOT_TESTED** | 새 SSH live·checkpoint 재시작·reset 이후 화면의 keyboard-only, 200% 확대, 최소 폭, Web Inspector console/CSP/Network, VoiceOver 상세는 v0.2 결과를 승계하지 않음 |
-| 최종 SHA 원격 CI: **BLOCKED** | **BLOCKED** | 후보 커밋 push 이후 바로 그 SHA의 CI 성공을 확인해야 함 |
+| Safari v0.3.0 수동 사용자 흐름 | **CONDITIONAL GO** | [Phase 27.1 수용 기록](v030_safari_acceptance_27_1.md): SSH live·재시작·reset과 Option+Tab 조작 PASS. 200%·최소 폭·Web Inspector는 사용자 일괄 확인 범위의 PASS. VoiceOver 상세·정확한 320 CSS px·fault 뒤 확대/Inspector 세부는 NOT_TESTED |
+| 최종 후보 SHA 원격 CI | **PASS** | `a3c753a396dbdcd4991212be276caa90f55641e9`의 [CI run 39205243243](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39205243243) 완료·성공. 전체 2,347 passed·기존 경고 2개, Ubuntu SSH focused 30 passed 및 별도 process `SSH_CHECKPOINT_CLI_SMOKE_PASS` 확인 |
 | 기존 v0.1.0·v0.2.0 tag/Release 보존, v0.3.0 부재 | **PASS** | 준비 시작 시 확인; 실제 tag/Release 전 다시 확인 |
 | Release asset 첨부 | **NOT_APPLICABLE** | 이번 단계에서는 wheel, binary, SBOM, report를 업로드하지 않음; 별도 승인 필요 |
 | 영속 릴리스 노트·SECURITY·LICENSE | **PASS** | 노트와 MIT 저작권 확인. GitHub API `enabled: true`와 공개 Security 화면의 **Report a vulnerability** 진입점 확인. 게시 전 유지관리자 검토는 별도 |
 
-후속 판정은 최종 clean checkout·privacy·lock 검증 결과에 따라 갱신한다. 정확한 최종 SHA 원격 CI와 Safari 수동 검수는 push 전 PASS로 표시할 수 없다. Source checkout 외 설치, 자동 rotation/copytruncate, 다중·cross-source, exactly-once, 무유실, hosted 배포, WCAG 2.2 AA는 후보 범위 밖이다.
+Phase 27.1 Safari 수동 검수의 범위와 결과는 별도 수용 기록에서 추적한다. 후보 SHA의 CI는 통과했지만 이 문서 커밋의 로컬·원격 검증과 tag/Release 게시 gate는 구분한다. Source checkout 외 설치, 자동 rotation/copytruncate, 다중·cross-source, exactly-once, 무유실, hosted 배포, WCAG 2.2 AA는 후보 범위 밖이다.
+
+## Phase 27.1 — Safari 수동 수용과 정리
+
+[독립 수용 기록](v030_safari_acceptance_27_1.md)의 최종 판정은 **CONDITIONAL GO**다. 실제 Safari 18.6에서 단일 합성 SSH v2의 live·checkpoint 복구·명시적 reset·새 epoch와 합성 truncation 실패 화면을 검수했고, application v2 사전 환경은 별도 임시 HOME에서 health/status/SSE로 확인했다. Option+Tab 기본 조작은 직접 항목별 PASS를 받았다. 200%·최소 창 너비·Web Inspector는 사용자의 실제 확인이라는 일괄 응답에 기반하며, 세부 계측 자료는 없다. VoiceOver 상세·정확한 320 CSS px·fault 주입 후 확대 및 Inspector 재검수는 `NOT_TESTED`다. 네 서버는 정상 종료했고 네 listener와 임시 검수 트리는 제거했다. 이 결과는 WCAG 2.2 AA 주장이나 게시 승인이 아니다.

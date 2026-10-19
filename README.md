@@ -1,6 +1,6 @@
 # AI Security Log Analyzer
 
-v0.3.0은 단일 application·SSH source의 로컬 live 분석과 동일 파일 bounded checkpoint 재시작을 포함합니다. [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)의 수정 커밋에서 별도 프로세스 advisory lock·권한·재시작·reset smoke 및 전체 회귀가 원격 CI를 통과했습니다. 새 릴리스 후보 커밋 자체의 CI와 v0.3.0 Safari 수동 수용은 별도 gate입니다.
+v0.3.0은 단일 application·SSH source의 로컬 live 분석과 동일 파일 bounded checkpoint 재시작을 포함합니다. [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)의 수정 커밋과 v0.3.0 후보 커밋에서 별도 프로세스 재시작·reset smoke 및 전체 회귀가 원격 CI를 통과했습니다. [Phase 27.1 Safari 수동 수용 기록](docs/v030_safari_acceptance_27_1.md)은 새 SSH 흐름의 확인 범위와 미검증 세부를 구분합니다.
 
 > 보안 계약 변경: deprecated `/api/analyze`의 상위 구조는 유지하지만 중첩 탐지·상관관계·위험도·전체 상관관계는 개인정보 안전 projection으로 변경되었습니다. 기존 raw nested 값 소비자는 [migration 안내](docs/public_analysis_privacy.md)를 확인하세요. 새 로컬 개발에는 `POST /api/v1/investigations`를 사용하세요. 인증 없는 공개 업로드는 지원하지 않습니다.
 
