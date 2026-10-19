@@ -155,3 +155,24 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 - [ ] Ubuntu 24.04에서 SSH focused와 별도 두 프로세스 lock·재시작·reset CLI smoke 성공.
 - [ ] 실제 0700/0600 mode, source/config/sibling 보존, fail-closed 오류·개인정보 비노출 확인.
 - [ ] 정확한 최종 SHA의 전체 CI·기존 경고·자원 정리 확인. Mac 수치나 기존 SHA의 CI를 Ubuntu 독립 수용으로 대체하지 않는다.
+
+## v0.3.0 로컬 릴리스 후보 — Phase 27
+
+이 절이 v0.3.0의 현재 gate다. 위 절은 당시 판단 이력이며 [릴리스 노트](releases/v0.3.0.md)의 지원 범위가 우선한다. 준비 커밋은 tag·Release 실행 승인이 아니다.
+
+| Gate | 판정 | 근거와 남은 일 |
+| --- | --- | --- |
+| Phase 26.1 Ubuntu SSH focused·별도 CLI/server 프로세스 | **PASS** | `9bf8efc2ff998932d7043e2c6e916e24a0cb26b6`의 [원격 CI](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39202932840): SSH focused 30 passed, 별도 재시작·reset smoke 성공, 전체 2,343 passed·기존 경고 2개 |
+| Ubuntu application checkpoint | **PASS** | 같은 CI의 application checkpoint 17 passed; 실제 전원 차단을 검증한 것은 아님 |
+| macOS application·SSH checkpoint | **PASS** | Phase 21·26의 로컬 합성 테스트 범위; 다른 filesystem 일반화 금지 |
+| Config/checkpoint upgrade·privacy·dependency lock | **PASS** | macOS 전체 2,346 passed·기존 경고 2개, checkpoint/property/API/evidence focused 114 passed, UTC/KST focused 각 77 passed, 합성 79/79·21/21·70/70, bundle runtime 37/dev 57, `uv lock --check` 및 synthetic loopback SSH/application 통과. 최종 clean checkout은 별도 gate |
+| 최종 커밋의 detached clean checkout | **PASS** | 별도 detached checkout에서 `uv sync --locked --dev`, `uv lock --check`, 전체 2,347 passed·기존 경고 2개, 세 합성 평가, evidence bundle 37/57, application·SSH CLI/loopback smoke, Safari WebDriver 자동 smoke를 검증. 문서 보정 후 같은 commit 내용으로 재확인 |
+| `uv build`와 배포 방식 | **PASS** | 기존 flat-layout 다중 top-level package 발견으로 빌드 실패(exit 2)를 재확인; 지원 방식은 source checkout만이며 wheel/PyPI asset 금지 |
+| Safari v0.3.0 application·SSH live 자동 smoke | **PASS** | 실제 Safari WebDriver에서 두 역할 모두 live 영역, 새 결과 적용 전 목록 불변·적용 후 네 영역·pause·개인정보 비노출 확인. Synthetic explicit v1 흐름이며 checkpoint 재시작 화면까지 검증한 것은 아님 |
+| Safari v0.3.0 수동 사용자 흐름 | **NOT_TESTED** | 새 SSH live·checkpoint 재시작·reset 이후 화면의 keyboard-only, 200% 확대, 최소 폭, Web Inspector console/CSP/Network, VoiceOver 상세는 v0.2 결과를 승계하지 않음 |
+| 최종 SHA 원격 CI: **BLOCKED** | **BLOCKED** | 후보 커밋 push 이후 바로 그 SHA의 CI 성공을 확인해야 함 |
+| 기존 v0.1.0·v0.2.0 tag/Release 보존, v0.3.0 부재 | **PASS** | 준비 시작 시 확인; 실제 tag/Release 전 다시 확인 |
+| Release asset 첨부 | **NOT_APPLICABLE** | 이번 단계에서는 wheel, binary, SBOM, report를 업로드하지 않음; 별도 승인 필요 |
+| 영속 릴리스 노트·SECURITY·LICENSE | **PASS** | 노트와 MIT 저작권 확인. GitHub API `enabled: true`와 공개 Security 화면의 **Report a vulnerability** 진입점 확인. 게시 전 유지관리자 검토는 별도 |
+
+후속 판정은 최종 clean checkout·privacy·lock 검증 결과에 따라 갱신한다. 정확한 최종 SHA 원격 CI와 Safari 수동 검수는 push 전 PASS로 표시할 수 없다. Source checkout 외 설치, 자동 rotation/copytruncate, 다중·cross-source, exactly-once, 무유실, hosted 배포, WCAG 2.2 AA는 후보 범위 밖이다.

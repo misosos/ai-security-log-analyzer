@@ -1,6 +1,6 @@
 # AI Security Log Analyzer
 
-현재 개발 branch의 [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)는 별도 프로세스 advisory lock·권한·재시작·reset smoke를 CI에 추가했습니다. 첫 Ubuntu 실행은 smoke의 플랫폼별 기본 config 경로 오류로 중단되어 해당 프로세스 경계를 검증하지 못했습니다. 수정 커밋의 정확한 SHA에서 원격 CI가 성공하기 전까지 Linux 독립 수용을 PASS로 해석하지 않습니다.
+v0.3.0은 단일 application·SSH source의 로컬 live 분석과 동일 파일 bounded checkpoint 재시작을 포함합니다. [Phase 26.1 Ubuntu SSH checkpoint 수용 gate](docs/ssh_checkpoint_linux_acceptance_26_1.md)의 수정 커밋에서 별도 프로세스 advisory lock·권한·재시작·reset smoke 및 전체 회귀가 원격 CI를 통과했습니다. 새 릴리스 후보 커밋 자체의 CI와 v0.3.0 Safari 수동 수용은 별도 gate입니다.
 
 > 보안 계약 변경: deprecated `/api/analyze`의 상위 구조는 유지하지만 중첩 탐지·상관관계·위험도·전체 상관관계는 개인정보 안전 projection으로 변경되었습니다. 기존 raw nested 값 소비자는 [migration 안내](docs/public_analysis_privacy.md)를 확인하세요. 새 로컬 개발에는 `POST /api/v1/investigations`를 사용하세요. 인증 없는 공개 업로드는 지원하지 않습니다.
 
@@ -70,7 +70,7 @@ Phase 21.7은 [사용자 승인 기반 새 분석 epoch 준비](docs/live_checkp
 - Python 3.12 이상(`pyproject.toml`의 `requires-python = ">=3.12"`)
 - [uv](https://docs.astral.sh/uv/)
 
-저장소를 받은 뒤 프로젝트 루트에서 검증된 잠금 파일로 개발 의존성까지 동기화합니다. 프로젝트 버전의 단일 출처는 `pyproject.toml`의 `0.2.0`이며 API/평가 schema version과 별개입니다. 이 버전의 공식 설치 방식은 source checkout입니다. 현재 `uv build`는 flat-layout package discovery 오류로 실패하므로 wheel/PyPI 설치를 지원한다고 주장하지 않습니다.
+저장소를 받은 뒤 프로젝트 루트에서 검증된 잠금 파일로 개발 의존성까지 동기화합니다. 프로젝트 버전의 단일 출처는 `pyproject.toml`의 `0.3.0`이며 API/평가 schema version과 별개입니다. 이 버전의 공식 설치 방식은 source checkout입니다. 현재 `uv build`는 flat-layout package discovery 오류로 실패하므로 wheel/PyPI 설치를 지원한다고 주장하지 않습니다.
 
 ```bash
 uv sync --locked --dev
@@ -111,7 +111,7 @@ uv run python -m app.local_web
 | Hosted server | 지원 안 함 | 인증·인가·tenant isolation 없음 |
 | Public internet | 노출 금지 | 실제 로그 업로드 보안 gate 미충족 |
 
-`v0.2.0`의 범위와 제한은 [변경 이력](CHANGELOG.md), [릴리스 노트](docs/releases/v0.2.0.md), [릴리스 체크리스트](docs/release_checklist.md)에 기록했다. v0.1.0은 [이전 릴리스 노트](docs/releases/v0.1.0.md)에 보존한다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 사용자가 활성화를 확인한 GitHub `Report a vulnerability` 경로를 따른다([SECURITY](SECURITY.md)). 릴리스 후보의 원격 CI와 Safari WebDriver 주요 흐름을 확인했다. 실제 운영환경 탐지율·WCAG 2.2 AA 준수·hosted 배포를 주장하지 않는다.
+`v0.3.0`의 범위와 제한은 [변경 이력](CHANGELOG.md), [v0.3.0 릴리스 노트](docs/releases/v0.3.0.md), [릴리스 체크리스트](docs/release_checklist.md)에 기록했다. v0.2.0은 [릴리스 노트](docs/releases/v0.2.0.md), v0.1.0은 [이전 릴리스 노트](docs/releases/v0.1.0.md)에 보존한다. 라이선스는 [MIT](LICENSE)이며 저작권 표기는 `Copyright (c) 2026 misosos`다. 비공개 취약점 신고는 [SECURITY](SECURITY.md)의 GitHub `Security → Report a vulnerability` 경로를 따른다. 공개 Issue에 실제 로그·credential·개인정보를 올리지 않는다. 이전 버전의 Safari 수동 수용을 새 v0.3.0 live·재시작 UX의 검증으로 간주하지 않는다. 실제 운영환경 탐지율·WCAG 2.2 AA 준수·hosted 배포를 주장하지 않는다.
 
 ### 업데이트와 삭제
 

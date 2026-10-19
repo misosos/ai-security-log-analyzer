@@ -1,5 +1,20 @@
 # 변경 이력
 
+## [0.3.0] - 2026-10-19
+
+### 추가
+
+- 한국어 설정 마법사로 단일 application 로그의 private 기본 설정을 생성하고, `--show`로 안전한 요약을 조회하거나 명시적 승인 후 `--delete`로 기본 설정을 삭제할 수 있다. `--monitor`는 기본 설정을 명시적으로 사용한다.
+- Application과 SSH의 동일 파일 재시작에 bounded checkpoint replay를 제공한다. 파일 교체·축소로 중단됐을 때 `--reset-checkpoint` 승인 후 현재 EOF의 새 분석 epoch를 시작할 수 있다. 기존 설정·로그를 자동 변경하거나 삭제하지 않는다.
+- 단일 SSH source의 live 탐지·실패 후 성공 관계·risk·조사 사례를 기존 batch 의미로 계산하고, application/SSH 화면에서 탐지 관찰·관계·위험도·사례를 분리해 단계적으로 표시한다.
+- 개발 검증에 bounded Hypothesis 내부 property, Schemathesis API property, deterministic dependency evidence bundle을 추가했다. 이는 운영 탐지율·취약점 부재의 증명이 아니다.
+
+### 보안과 한계
+
+- Private 설정·checkpoint의 권한, 파일 identity, advisory lock을 확인하고 복구 불확실성은 fail closed한다. 공개 API·SSE·UI는 원래 경로·계정·IP·로그 원문 대신 안전한 projection을 사용한다. macOS와 Ubuntu 합성 검증 범위만 확인했다.
+- Rotation/copytruncate 자동 복구, 두 파일 세대 replay, 다중 source, cross-source 분석, 외부 collector 연계, hosted 업로드는 지원하지 않는다. 강제 종료·전원 차단의 무유실, exactly-once, 운영 SLA도 보장하지 않는다.
+- 공식 설치는 source checkout이다. Wheel/PyPI 배포와 WCAG 2.2 AA 준수를 주장하지 않는다. REA·Semgrep·Vector·OSV 실험은 제품·공식 릴리스 gate에 채택하지 않았다.
+
 ## [0.2.0] - 2026-10-14
 
 ### 추가

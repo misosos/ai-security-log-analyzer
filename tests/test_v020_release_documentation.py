@@ -16,7 +16,7 @@ def test_version_and_lock_metadata_have_one_project_source():
     lock = tomllib.loads(_read("uv.lock"))
     own = [package for package in lock["package"] if package["name"] == project["name"]]
     assert len(own) == 1
-    assert project["version"] == own[0]["version"] == "0.2.0"
+    assert project["version"] == own[0]["version"] == "0.3.0"
     assert project["license"] == "MIT"
     assert _read("docs/releases/v0.1.0.md").startswith("# v0.1.0 로컬 릴리스 노트\n")
 
@@ -48,7 +48,7 @@ def test_readme_and_checklist_keep_release_execution_separate():
     readme = _read("README.md")
     checklist = _read("docs/release_checklist.md")
     gate = _read("docs/live_monitoring_release_gate_18.md")
-    assert "`pyproject.toml`의 `0.2.0`" in readme
+    assert "`pyproject.toml`의 `0.3.0`" in readme
     assert "[릴리스 노트](docs/releases/v0.2.0.md)" in readme
     assert "[이전 릴리스 노트](docs/releases/v0.1.0.md)" in readme
     assert "화면 업데이트 일시 정지" in readme and "서버 수집을 멈추지" in readme
