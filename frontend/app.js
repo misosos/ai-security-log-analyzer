@@ -80,15 +80,15 @@
     "계정 침해 여부는 확인되지 않았습니다.", "NAT, proxy 또는 공유 시스템의 영향은 확인되지 않았습니다.",
     "승인된 자동화 또는 관리 작업 여부는 확인되지 않았습니다."
   ]);
-  const INDEPENDENT_REASONS = new Set([
-    "V1에서 지원되는 관계가 없어 독립 관찰로 유지되었습니다.",
-    "검증된 시간 정보가 부족하여 자동 시간 결합에서 제외되었습니다.",
-    "인증 사례와 안전하게 결합할 관계를 입증하지 못했습니다.",
-    "V1 조사 사례 지원 범위 밖의 관찰이라 독립적으로 유지되었습니다.",
-    "Password Spraying-like 관찰은 유지되었지만 성공 로그인 계정이 탐지 대상에 포함됨을 형식이 보장된 내부 계약으로 입증하지 못해 자동 사례 결합을 수행하지 않았습니다.",
-    "Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다.",
-    "웹 요청 관찰은 인증 사례나 다른 웹 관찰과 자동 결합하지 않습니다.",
-    "모호한 관계라 자동 사례 결합을 수행하지 않았습니다."
+  const INDEPENDENT_REASON_COPY = new Map([
+    ["V1에서 지원되는 관계가 없어 독립 관찰로 유지되었습니다.", "함께 묶을 수 있는 관계가 확인되지 않았습니다."],
+    ["검증된 시간 정보가 부족하여 자동 시간 결합에서 제외되었습니다.", "시간 정보가 부족해 다른 결과와 묶지 않았습니다."],
+    ["인증 사례와 안전하게 결합할 관계를 입증하지 못했습니다.", "인증 결과와 연결할 근거가 부족합니다."],
+    ["V1 조사 사례 지원 범위 밖의 관찰이라 독립적으로 유지되었습니다.", "현재 지원 범위에서는 사례로 묶지 않습니다."],
+    ["Password Spraying-like 관찰은 유지되었지만 성공 로그인 계정이 탐지 대상에 포함됨을 형식이 보장된 내부 계약으로 입증하지 못해 자동 사례 결합을 수행하지 않았습니다.", "성공 로그인 계정이 앞선 시도의 대상인지 확인되지 않아 사례로 묶지 않았습니다."],
+    ["Path Traversal은 V1 인증 사례와 자동 결합하지 않습니다.", "웹 경로 탐색 기록은 인증 사례와 자동으로 묶지 않습니다."],
+    ["웹 요청 관찰은 인증 사례나 다른 웹 관찰과 자동 결합하지 않습니다.", "웹 요청 기록은 다른 결과와 자동으로 묶지 않습니다."],
+    ["모호한 관계라 자동 사례 결합을 수행하지 않았습니다.", "관계가 명확하지 않아 사례로 묶지 않았습니다."]
   ]);
   const SAMPLE_ERRORS = Object.freeze({
     NON_EMPTY_BODY: ["요청 본문을 받을 수 없습니다.", "본문 없이 다시 요청하십시오.", false],
@@ -96,9 +96,9 @@
     RATE_LIMITED: ["요청 횟수 한도에 도달했습니다.", "잠시 후 다시 시도하십시오.", true],
     CONCURRENCY_LIMIT: ["현재 처리 가능한 요청 수를 넘었습니다.", "잠시 후 다시 시도하십시오.", true],
     ANALYSIS_TIMEOUT: ["분석 응답 시간이 초과되었습니다.", "잠시 후 다시 시도하십시오.", true],
-    FIXTURE_UNAVAILABLE: ["합성 샘플을 사용할 수 없습니다.", "잠시 후 다시 시도하십시오.", true],
+    FIXTURE_UNAVAILABLE: ["예시 데이터를 사용할 수 없습니다.", "잠시 후 다시 시도하십시오.", true],
     ANALYSIS_FAILED: ["샘플 분석을 완료하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
-    CASE_PROJECTION_FAILED: ["조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
+    CASE_PROJECTION_FAILED: ["조사 사례를 표시하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
     RESPONSE_INVALID: ["결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true],
     REPORT_GENERATION_FAILED: ["HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true]
   });
@@ -163,6 +163,8 @@
   const reportButton = document.getElementById("report-button");
   const localForm = document.getElementById("local-form");
   const localSection = document.getElementById("local-upload");
+  const localChoiceButton = document.getElementById("local-choice-button");
+  const localChoiceDetails = document.getElementById("local-choice-details");
   const localButton = document.getElementById("local-button");
   const localStatus = document.getElementById("local-status");
   const resultsHeading = document.getElementById("results-heading");
@@ -172,6 +174,12 @@
   let currentReportMode = null;
   const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
   localSection.hidden = !loopbackPage;
+  localChoiceButton.hidden = !loopbackPage;
+  localChoiceButton.addEventListener("click", () => {
+    localChoiceDetails.open = true;
+    localSection.scrollIntoView({block: "start"});
+    document.getElementById("application-file").focus();
+  });
 
   class PublicFailure extends Error {
     constructor(message, recovery, retryable = null) {
@@ -353,7 +361,7 @@
     if (item.review_order !== index + 1 || item.label !== "독립 관찰") failContract();
     ["category_label", "display_type", "subject", "reason"].forEach((key) => boundedText(item[key]));
     if (!["관찰된 사실", "탐지 관찰", "지원되는 관계"].includes(item.category_label) ||
-        !INDEPENDENT_NAMES.has(item.display_type) || !INDEPENDENT_REASONS.has(item.reason)) failContract();
+        !INDEPENDENT_NAMES.has(item.display_type) || !INDEPENDENT_REASON_COPY.has(item.reason)) failContract();
     risk(item.existing_risk_level);
     risk(item.existing_confidence);
     const startKey = timestamp(item.start_time);
@@ -672,14 +680,10 @@
 
   function renderSummary(data) {
     const cards = [
-      ["분석 대상 수", data.analysis_summary.analyzed_subject_count],
-      ["지원 탐지 관찰 수", data.analysis_summary.supported_detection_count],
-      ["지원 관계 관찰 수", data.analysis_summary.supported_relation_count],
-      ["조사 사례 수", data.case_summary.case_count],
-      ["독립 관찰 수", data.case_summary.independent_observation_count],
-      ["HIGH", data.case_summary.high_case_count],
-      ["MEDIUM", data.case_summary.medium_case_count],
-      ["LOW", data.case_summary.low_case_count]
+      ["확인할 활동", data.analysis_summary.supported_detection_count],
+      ["관련된 활동", data.analysis_summary.supported_relation_count],
+      ["조사 사례", data.case_summary.case_count],
+      ["별도 확인", data.case_summary.independent_observation_count]
     ];
     cards.forEach(([label, value]) => {
       const card = document.createElement("div");
@@ -696,7 +700,6 @@
     cases.forEach((item) => {
       const card = document.createElement("details");
       card.className = "case-card";
-      card.open = item.included_highest_risk === "HIGH" || item.included_highest_risk === "MEDIUM";
       const summary = document.createElement("summary");
       summary.className = "case-summary";
       summary.append(element("h4", item.case_label),
@@ -713,12 +716,12 @@
 
   function renderIndependentObservations(observations) {
     if (observations.length === 0) {
-      independentList.append(element("p", "별도로 표시할 독립 관찰이 없습니다."));
+      independentList.append(element("p", "별도로 확인할 활동이 없습니다. 결과가 없다는 것은 안전을 뜻하지 않습니다."));
     }
     observations.forEach((item) => {
       const card = document.createElement("article");
       card.className = "independent-card";
-      card.append(element("h4", `${item.label} ${item.review_order}: ${item.display_type}`));
+      card.append(element("h4", `별도로 확인할 활동 ${item.review_order}: ${item.display_type}`));
       const meta = document.createElement("dl");
       meta.className = "card-meta";
       detail(meta, "분석 대상", item.subject);
@@ -733,7 +736,7 @@
       const time = document.createElement("div");
       time.className = "independent-time";
       appendTime(time, item.start_time, item.end_time);
-      card.append(time, element("p", item.reason));
+      card.append(time, element("p", INDEPENDENT_REASON_COPY.get(item.reason)));
       if (item.limitation !== null) card.append(element("p", `해석 한계: ${item.limitation}`));
       if (item.next_step !== null) card.append(element("p", `다음 조사 단계: ${item.next_step}`));
       if (item.evidence.length > 0) {
@@ -808,7 +811,7 @@
     button.textContent = "분석 요청 중";
     clearFieldErrors();
     clearPreviousResult();
-    status.textContent = "합성 샘플 분석을 요청하고 있습니다. 조사 결과를 준비하고 있습니다.";
+    status.textContent = "예시 데이터의 조사 결과를 준비하고 있습니다.";
     try {
       const response = await fetch(ENDPOINT, {
         method: "POST", headers: {Accept: "application/json"}, credentials: "omit"
@@ -820,7 +823,7 @@
       }
       const data = validateInvestigationResponse(payload);
       renderResult(data, "sample");
-      status.textContent = "합성 샘플 분석이 완료되었습니다.";
+      status.textContent = "예시 데이터 분석이 완료되었습니다.";
     } catch (failure) {
       clearPreviousResult();
       renderError(failure);
@@ -828,14 +831,14 @@
       pending = false;
       button.disabled = false;
       localButton.disabled = false;
-      button.textContent = "샘플로 체험하기";
+      button.textContent = "예시 데이터로 둘러보기";
     }
   }
 
   function renderResult(data, mode) {
-    resultsHeading.textContent = mode === "sample" ? "합성 샘플 결과" : "로컬 실제 로그 분석 결과";
+    resultsHeading.textContent = mode === "sample" ? "예시 데이터 결과" : "내 로그 분석 결과";
     resultContext.textContent = mode === "sample" ?
-      "합성 샘플을 사용합니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
+      "예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
       "사용자가 제공한 로그를 로컬에서 분석했습니다. 탐지와 관계는 침해 확정이 아닙니다.";
     renderSummary(data);
     renderCaseOverview(data.cases);

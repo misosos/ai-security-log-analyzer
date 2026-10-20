@@ -16,19 +16,16 @@
   </header>
   <main id="main" class="shell">
     <section class="hero" aria-labelledby="page-title">
-      <p class="eyebrow">설명 가능한 보안 로그 조사</p>
-      <h1 id="page-title">로그의 관찰을 조사 사례로 정리합니다</h1>
-      <p class="lead">보안 로그에서 지원되는 탐지 관찰과 관계를 분석하고, 함께 검토할 조사 사례와 다음 조사 단계를 보여줍니다.</p>
-      <div class="sample-notice">
-        <strong>합성 샘플을 사용합니다.</strong>
-        <p>실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
-        <p>사용자 파일은 업로드되지 않으며 LLM도 호출하지 않습니다. 이 결과는 보안 점검 인증서가 아닙니다.</p>
-      </div>
+      <p class="eyebrow">로컬 보안 로그 조사</p>
+      <h1 id="page-title">로그에서 확인할 활동을 찾고 조사하세요</h1>
+      <p class="lead">로컬에서 보안 로그를 분석하고, 확인할 결과와 다음 조사 단계를 보여줍니다.</p>
+      <p class="first-visit-note">결과는 침해 확정이나 공격 성공의 증거가 아닙니다. 예시 데이터는 실제 보안 상태를 나타내지 않습니다.</p>
       <div class="action-row">
-        <button id="sample-button" type="button">샘플로 체험하기</button>
+        <button id="sample-button" type="button">예시 데이터로 둘러보기</button>
+        <button id="local-choice-button" class="secondary-button" type="button" hidden>내 로그 분석하기</button>
         <a id="result-jump" href="#results-heading" hidden>결과 요약으로 이동</a>
       </div>
-      <p id="sample-status" class="status" aria-live="polite">샘플 분석을 시작할 수 있습니다.</p>
+      <p id="sample-status" class="status" aria-live="polite">예시를 보거나 내 로그를 선택하세요.</p>
       <div id="error-summary" class="error-summary" tabindex="-1" hidden>
         <h2>분석을 완료하지 못했습니다</h2>
         <p id="error-message"></p>
@@ -39,17 +36,15 @@
 
     <section id="live-monitoring" class="live-monitoring" aria-labelledby="live-heading" hidden>
       <h2 id="live-heading">실시간 로그 모니터링</h2>
-      <p>설정에서 승인한 로그 파일에 새로 추가되는 줄만 확인합니다. 서버 시작 전에 존재하던 로그 줄은 읽지 않습니다.</p>
-      <p>탐지 관찰은 침해나 공격 성공을 확정하지 않습니다. 프로세스를 종료하면 현재 세션과 재연결 기록은 사라집니다.</p>
-      <p>모니터링을 종료하려면 실행한 터미널에서 Ctrl+C를 누르세요. 화면 업데이트 일시 정지는 서버 수집을 멈추지 않습니다.</p>
-      <h3>현재 상태와 감시 범위</h3>
+      <p>새로 추가된 로그만 확인합니다. 시작 전 줄은 처리하지 않습니다.</p>
       <p id="live-service-state">상태를 확인하고 있습니다.</p>
-      <p id="live-connection-state" role="status" aria-live="polite">연결 확인 중</p>
-      <p id="live-processing-state"></p>
       <p id="live-source-role"></p>
       <p id="live-summary"></p>
-      <h3>새 결과 알림</h3>
-      <p>화면 표시를 멈춰도 서버의 로그 수집은 계속될 수 있습니다.</p>
+      <details class="secondary-details">
+        <summary>연결과 처리 세부</summary>
+        <p id="live-connection-state" role="status" aria-live="polite">연결 확인 중</p>
+        <p id="live-processing-state"></p>
+      </details>
       <div class="action-row">
         <button id="live-show-pending" type="button" hidden>새 결과 보기</button>
         <button id="live-pause" type="button">화면 업데이트 일시 정지</button>
@@ -57,10 +52,12 @@
       </div>
       <p id="live-pending-status" role="status" aria-live="polite">현재 표시할 관찰 변경 없음</p>
       <div id="live-error" class="error-summary" role="alert" hidden></div>
-      <h3>최근 변경 목록</h3>
-      <p>‘현재 탐지 결과에는 더 이상 일치하지 않음’은 현재 누적 탐지 결과의 상태만 뜻하며, 과거 관찰의 해소나 시스템의 안전을 의미하지 않습니다.</p>
-      <p id="live-empty">아직 새 로그 줄이 없습니다. 관찰이 없다는 것은 안전하다는 뜻이 아닙니다.</p>
-      <ol id="live-observations" class="live-observations" aria-label="현재 표시 중인 탐지 관찰"></ol>
+      <details id="live-result-details" class="secondary-details">
+        <summary>확인할 결과 상세: 활동·관계·위험도·사례</summary>
+        <p>표시가 일시 정지돼도 서버 수집은 계속됩니다. 결과가 줄거나 현재 조건과 더 이상 일치하지 않아도 안전이나 해결을 뜻하지 않습니다.</p>
+        <h3>최근 확인할 활동</h3>
+        <p id="live-empty">아직 새 로그 줄이 없습니다. 결과가 없다는 것은 안전하다는 뜻이 아닙니다.</p>
+        <ol id="live-observations" class="live-observations" aria-label="현재 표시 중인 탐지 관찰"></ol>
       <section aria-labelledby="live-relations-heading">
         <h3 id="live-relations-heading">지원되는 관계</h3>
         <p>시간·주체 조건이 일치한 관찰이며 인과관계나 계정 침해를 확정하지 않습니다.</p>
@@ -79,12 +76,14 @@
         <p id="live-cases-empty">아직 조사 사례가 없습니다.</p>
         <ol id="live-cases" class="live-observations"></ol>
       </section>
-      <p>현재 분석 결과에 더 이상 일치하지 않아도 과거 관찰이 해결됐거나 시스템이 안전하다는 뜻은 아닙니다.</p>
+      </details>
       <p id="live-stale" class="local-warning" hidden>이전 목록은 최신 상태가 아닐 수 있습니다. 현재 요약을 기준으로 다시 확인해 주세요.</p>
     </section>
 
     <section id="local-upload" class="local-upload" aria-labelledby="local-heading" hidden>
       <h2 id="local-heading">내 로그 분석하기</h2>
+      <details id="local-choice-details" class="secondary-details">
+        <summary>파일 선택과 분석 안내</summary>
       <p class="local-warning">직접 실행한 로컬 서버에서만 사용하세요. 공개 서버에는 민감한 로그를 업로드하지 마세요.</p>
       <p>애플리케이션 인증·SSH 인증·웹 접근 로그를 각각 해당 입력칸에 선택해야 합니다. 세 파일 모두 필요합니다.</p>
       <p>이 분석은 외부 LLM을 호출하지 않으며 로그·결과·보고서를 서버에 영구 저장하지 않습니다. 비정상 종료 뒤 임시 파일이 남을 수 있습니다.</p>
@@ -114,6 +113,7 @@
         <button id="local-button" type="submit">실제 로그 분석하기</button>
       </form>
       <p id="local-status" class="status" aria-live="polite">로컬 서버에서 파일을 선택해 분석할 수 있습니다.</p>
+      </details>
     </section>
 
     <section id="linux-audit-upload" class="local-upload" aria-labelledby="linux-audit-heading" hidden>
@@ -154,6 +154,8 @@
       <div id="linux-audit-warnings"></div>
     </section>
 
+    <details class="first-visit-details secondary-details">
+      <summary>지원 범위와 결과 안내</summary>
     <section class="info-grid" aria-label="체험 안내">
       <div class="info-panel">
         <h2>지원되는 관찰</h2>
@@ -162,14 +164,15 @@
       </div>
       <div class="info-panel">
         <h2>결과에서 볼 수 있는 것</h2>
-        <p>포함된 최고 위험도, 조사 사례 목록, 함께 묶인 이유와 독립 관찰 요약을 확인할 수 있습니다.</p>
+        <p>위험도, 조사 사례, 함께 묶인 이유와 별도로 확인할 활동을 볼 수 있습니다.</p>
         <p>사례 상세를 펼치면 시간순 조사 흐름, 관찰 근거, 해석 한계와 다음 조사 단계를 확인할 수 있습니다.</p>
       </div>
     </section>
+    </details>
 
     <section id="results" class="results" aria-labelledby="results-heading" hidden>
-      <h2 id="results-heading">합성 샘플 결과</h2>
-      <p id="result-context" class="result-notice"><strong>합성 샘플을 사용합니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
+      <h2 id="results-heading">분석 결과</h2>
+      <p id="result-context" class="result-notice"><strong>예시 데이터 결과입니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
       <p>탐지는 침해 확인이 아니며, 상관관계는 인과관계가 아닙니다. 로그인 성공도 공격 성공을 입증하지 않습니다. 조사 사례는 확정된 사고가 아닙니다.</p>
       <section aria-labelledby="summary-heading">
         <h3 id="summary-heading">결과 요약</h3>
@@ -180,11 +183,11 @@
         <p>이 순서는 새로운 보안 점수가 아닌 검토 순서입니다.</p>
         <div id="case-list" class="card-stack"></div>
       </section>
-      <section aria-labelledby="independent-heading">
-        <h3 id="independent-heading">독립 관찰</h3>
-        <p>다른 관찰과 안전하게 결합할 근거가 부족해 별도로 표시한 항목입니다. 독립 관찰은 중요하지 않거나 안전하다는 의미가 아닙니다.</p>
+      <details id="independent-details" class="secondary-details">
+        <summary id="independent-heading">별도로 확인할 활동</summary>
+        <p>다른 결과와 묶을 근거가 부족한 기록입니다. 중요하지 않거나 안전하다는 뜻은 아닙니다.</p>
         <div id="independent-list" class="card-stack"></div>
-      </section>
+      </details>
       <section aria-labelledby="capabilities-heading">
         <h3 id="capabilities-heading">현재 제공 범위</h3>
         <p id="capability-message"></p>
@@ -199,13 +202,13 @@
       <p class="result-action">새 분석을 시작하려면 위의 샘플 버튼 또는 로컬 로그 입력을 사용하세요. 이전 결과는 현재 탭에서 교체됩니다.</p>
     </section>
 
-    <section class="boundaries" aria-labelledby="boundary-heading">
-      <h2 id="boundary-heading">해석과 개인정보 경계</h2>
+    <details class="boundaries secondary-details">
+      <summary id="boundary-heading">해석과 개인정보 안내</summary>
       <p>탐지는 침해 확정이 아닙니다. 상관관계는 인과관계가 아닙니다. 같은 IP가 같은 사람이나 공격자임을 뜻하지 않으며 NAT, 프록시, 공유 시스템일 수 있습니다.</p>
       <p id="privacy">샘플 체험에는 사용자 로그를 업로드하지 않습니다. 실제 로그 입력은 loopback 연결에서만 처리합니다. 결과는 현재 탭 메모리에만 있고 새로고침하면 사라집니다. 원래 계정명, 원시 로그와 전체 쿼리는 화면에 표시하지 않습니다.</p>
       <p>로컬 업로드는 인증·방화벽·호스팅 보안의 대체 수단이 아닙니다. 인증 없는 공개 웹 업로드는 제공하지 않습니다. <a href="/docs">개발 API 문서</a>와 프로젝트 README에서 사용 범위를 확인하세요.</p>
-    </section>
+    </details>
   </main>
-  <footer class="site-footer"><div class="shell"><p>결정적 관찰을 설명하는 학습·초기 조사 도구입니다. 확정 사고 판정이나 보안 인증이 아닙니다.</p></div></footer>
+  <footer class="site-footer"><div class="shell"><p>로컬 조사 보조 도구 · source checkout으로 실행</p></div></footer>
 </body>
 </html>

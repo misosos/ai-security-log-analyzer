@@ -28,6 +28,7 @@ class Node {
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   focus() { this.focused = true; }
+  scrollIntoView() { this.scrolled = true; }
   addEventListener(name, listener) { this.listener = listener; }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
@@ -38,7 +39,7 @@ const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
   "error-recovery", "error-retry", "results", "result-jump", "summary-cards",
   "case-list", "independent-list", "capability-message", "report-download", "report-button",
-  "local-form", "local-upload", "local-button", "local-status", "results-heading", "result-context",
+  "local-form", "local-upload", "local-choice-button", "local-choice-details", "local-button", "local-status", "results-heading", "result-context",
   "application-file", "ssh-file", "access-file",
   "application-error", "ssh-error", "access-error"
 ];
@@ -139,11 +140,16 @@ async function main() {
   await remote.submit();
   assert.equal(remote.fetchCount(), 0, "remote landing cannot submit local files");
   const app = makeApp(copy());
+  app.nodes["local-choice-button"].listener();
+  assert.equal(app.nodes["local-choice-details"].open, true);
+  assert.equal(app.nodes["application-file"].focused, true);
+  assert.equal(app.nodes["local-upload"].scrolled, true);
   await app.click();
   const nodes = app.nodes;
   assert.equal(nodes.results.hidden, false);
   assert.equal(nodes["error-summary"].hidden, true);
   assert.equal(nodes["case-list"].children.length, 2);
+  assert.equal(nodes["summary-cards"].children.length, 4);
   assert.equal(nodes["independent-list"].children.length, 4);
   assert.equal(nodes["report-download"].hidden, false);
   assert.equal(app.downloads.length, 0, "no automatic download");
@@ -160,7 +166,7 @@ async function main() {
   assert.equal(app.body.children.length, 0, "temporary anchor removed");
   const [high, low] = nodes["case-list"].children;
   assert.equal(high.tagName, "details");
-  assert.equal(high.open, true);
+  assert.equal(high.open, false, "case detail starts collapsed");
   assert.equal(low.open, false);
   assert.equal(nodesOf(high, "summary").length, 1);
   assert.equal(nodesOf(high, "time").length > 0, true);
@@ -203,6 +209,7 @@ async function main() {
   assert.equal(nodes["independent-list"].textContent.includes("SQL Injection-like"), true);
   assert.equal(nodes["independent-list"].textContent.includes("SQL 결합 조회 구문"), true);
   assert.equal(nodes["independent-list"].textContent.includes("UNION SELECT"), false);
+  assert.equal(nodes["independent-list"].textContent.includes("V1"), false);
   assert.equal(nodesOf(nodes["independent-list"], "dt").some((item) => item.textContent === "실패 횟수"), true);
 
   const medium = copy();
@@ -211,7 +218,7 @@ async function main() {
   medium.case_summary.low_case_count = 0;
   app.setResponse(medium);
   await app.click();
-  assert.equal(nodes["case-list"].children[1].open, true, "MEDIUM disclosure");
+  assert.equal(nodes["case-list"].children[1].open, false, "MEDIUM detail also starts collapsed");
 
   const microseconds = copy();
   const firstTime = microseconds.cases[0].timeline[0].start_time;
@@ -279,7 +286,7 @@ async function main() {
   await app.click();
   assert.equal(nodes.results.hidden, false);
   assert.equal(nodes["case-list"].textContent.includes("보안 문제가 없다는 의미가 아닙니다"), true);
-  assert.equal(nodes["independent-list"].textContent, "별도로 표시할 독립 관찰이 없습니다.");
+  assert.equal(nodes["independent-list"].textContent, "별도로 확인할 활동이 없습니다. 결과가 없다는 것은 안전을 뜻하지 않습니다.");
   if (supplied.local) {
     const local = makeApp(supplied.local);
     const selected = {name: "browser-only-name.log"};
@@ -288,7 +295,7 @@ async function main() {
     });
     await local.submit();
     assert.equal(local.nodes.results.hidden, false);
-    assert.equal(local.nodes["results-heading"].textContent, "로컬 실제 로그 분석 결과");
+    assert.equal(local.nodes["results-heading"].textContent, "내 로그 분석 결과");
     assert.equal(local.nodes["result-context"].textContent.includes("합성 샘플"), false);
     assert.equal(local.nodes["case-list"].children.length, 2);
     assert.equal(local.nodes["independent-list"].children.length, 4);

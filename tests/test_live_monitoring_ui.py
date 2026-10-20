@@ -42,9 +42,9 @@ def test_live_area_is_separate_accessible_and_hidden_until_status():
     }
     assert by_id["live-pending-status"][1]["aria-live"] == "polite"
     assert by_id["live-observations"][0] == "ol"
-    assert "화면 표시를 멈춰도 서버의 로그 수집은 계속될 수 있습니다" in source
-    assert "실행한 터미널에서 Ctrl+C" in source
-    assert "침해나 공격 성공을 확정하지 않습니다" in source
+    assert "표시가 일시 정지돼도 서버 수집은 계속됩니다" in source
+    assert "안전이나 해결을 뜻하지 않습니다" in source
+    assert "침해 확정이나 공격 성공의 증거가 아닙니다" in source
     assert 'src="/assets/live-monitoring.js"' in source
 
 

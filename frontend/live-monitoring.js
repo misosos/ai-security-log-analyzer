@@ -64,7 +64,7 @@
   const RISK_KEYS = ["risk_id", "revision", "state", "risk_level", "confidence"];
   const CASE_KEYS = ["case_id", "revision", "state", "rule_id", "included_highest_risk", "included_highest_confidence", "relation_count", "observation_count", "supporting_relation_count", "account_reference_status"];
   const CHANGE_KEYS = ["observation_id", "observation_revision", "change_type", "state", "detection_type", "accumulator_revision"];
-  const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-empty", "live-observations", "live-relations", "live-risks", "live-cases", "live-relations-empty", "live-risks-empty", "live-cases-empty", "live-stale"];
+  const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-result-details", "live-empty", "live-observations", "live-relations", "live-risks", "live-cases", "live-relations-empty", "live-risks-empty", "live-cases-empty", "live-stale"];
   const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
   if (ids.some((id) => !dom[id])) return;
 
@@ -299,10 +299,10 @@
   }
   function state(value) {
     const messages = {
-      READY: "시작 준비", RUNNING: "모니터링 중 — 새로 추가되는 로그 줄을 확인하고 있습니다.",
-      DEGRADED: "모니터링 확인 필요 — 자동 처리가 멈췄습니다. 터미널 안내를 확인하고 서버를 다시 시작해 주세요.",
-      FAILED: "모니터링 중단 — 서버를 종료한 뒤 설정과 로그 파일을 확인해 주세요.",
-      STOPPING: "모니터링 종료 중", STOPPED: "모니터링 종료"
+      READY: "모니터링 준비 중", RUNNING: "모니터링 중 — 새 로그를 확인하고 있습니다.",
+      DEGRADED: "연결에 문제가 있음 — 터미널 안내를 확인하고 서버를 다시 시작해 주세요.",
+      FAILED: "모니터링 종료됨 — 서버를 종료한 뒤 설정과 로그 파일을 확인해 주세요.",
+      STOPPING: "모니터링 종료 중", STOPPED: "모니터링 종료됨"
     };
     dom["live-service-state"].textContent = messages[value];
     if (value === "DEGRADED" || value === "FAILED") {
@@ -313,7 +313,7 @@
   }
   function summary(value) {
     latestSnapshotRevision = value.latest_committed_detection_revision;
-    dom["live-summary"].textContent = `현재 활성 관찰 ${value.active_observation_count}건 · 게시 기록 ${value.published_total}건 · 재연결 기록 누락 ${value.evicted_total}건`;
+    dom["live-summary"].textContent = `확인할 활동 ${value.active_observation_count}건`;
     if (value.latest_committed_detection_revision > 0 && value.active_observation_count === 0 && visible.size === 0 && !stale)
       dom["live-empty"].textContent = "새 로그 줄은 처리됐지만 현재 탐지 관찰은 없습니다. 안전을 뜻하지 않습니다.";
   }
@@ -321,8 +321,8 @@
     dom["live-show-pending"].hidden = stale || paused || pending.length === 0;
     dom["live-show-pending"].textContent = `새 결과 ${pending.length}건 보기`;
     dom["live-pending-status"].textContent = stale ? "일부 기록을 이어받지 못해 최신 요약만 표시 중" :
-      pending.length ? `새 결과 변경 ${pending.length}건${paused ? " — 화면 표시 일시 정지 중" : ""}` :
-      "현재 표시할 결과 변경 없음";
+      pending.length ? `새로 확인할 결과 ${pending.length}건${paused ? " — 화면 표시 일시 정지 중" : ""}` :
+      "새로 확인할 결과 없음";
   }
   function gap(snapshot) {
     closeSource(); pending = []; pendingBytes = 0; stale = true;
@@ -344,7 +344,7 @@
       const heading = document.createElement("strong");
       heading.textContent = `${TYPES[item.detection_type]} — ${item.observation_id}`;
       const detail = document.createElement("p");
-      detail.textContent = `${item.change_type === "CREATED" ? "새 관찰" : item.change_type === "UPDATED" ? "관찰 변경" : "현재 탐지 결과에는 더 이상 일치하지 않음"} · revision ${item.observation_revision}`;
+      detail.textContent = item.change_type === "CREATED" ? "새 활동" : item.change_type === "UPDATED" ? "활동 변경" : "현재 탐지 결과에는 더 이상 일치하지 않음 — 해결이나 안전을 뜻하지 않음";
       row.append(heading, detail);
       return row;
     });
@@ -362,10 +362,10 @@
     const sections = [
       [relations, "live-relations", "live-relations-empty", (item) =>
         `${RELATION_TYPES[item.relation_type]} — ${item.relation_id}`,
-       (item) => `${changeText(item)} · ${item.state === "ACTIVE" ? "현재 관계" : "현재 분석 결과에는 더 이상 일치하지 않음"} · 시간 차이 ${item.delta_seconds}초 · revision ${item.revision}`],
+       (item) => `${changeText(item)} · ${item.state === "ACTIVE" ? "현재 관계" : "현재 분석 결과에는 더 이상 일치하지 않음 — 해결을 뜻하지 않음"} · 시간 차이 ${item.delta_seconds}초`],
       [risks, "live-risks", "live-risks-empty", (item) =>
         `위험도 ${item.risk_id}`,
-       (item) => `${changeText(item)} · ${item.state === "CURRENT" ? "현재 평가" : "현재 분석 결과에는 더 이상 포함되지 않음"} · ${RISK_LABELS[item.risk_level]} (${item.risk_level}) · 신뢰도 ${item.confidence} · revision ${item.revision}`],
+       (item) => `${changeText(item)} · ${item.state === "CURRENT" ? "현재 평가" : "현재 분석 결과에는 더 이상 포함되지 않음 — 해결을 뜻하지 않음"} · ${RISK_LABELS[item.risk_level]} (${item.risk_level}) · 신뢰도 ${item.confidence}`],
       [cases, "live-cases", "live-cases-empty", (item) =>
         `${CASE_RULES[item.rule_id]} — ${item.case_id}`,
        (item) => `${changeText(item)} · ${item.state === "CURRENT" ? "현재 사례" : "현재 분석 결과에는 더 이상 일치하지 않음"} · 포함된 최고 위험도 ${RISK_LABELS[item.included_highest_risk]} (${item.included_highest_risk}) · 관찰 ${item.observation_count}건 · 관계 ${item.relation_count}건 · 지원 관계 ${item.supporting_relation_count}건 · 계정 별칭을 표시할 수 없음. 원래 계정 정보는 개인정보 보호를 위해 결과에 포함되지 않습니다.`]
@@ -416,6 +416,7 @@
     }
     visible = candidate; relations = nextRelations; risks = nextRisks; cases = nextCases;
     pending = []; pendingBytes = 0; render(); renderAnalysis(); pendingStatus();
+    dom["live-result-details"].open = true;
   }
   function queueChange(checked, message) {
     if (checked.duplicate) return;
@@ -535,7 +536,7 @@
       source = value.source_role;
       dom["live-monitoring"].hidden = false;
       dom["live-source-role"].textContent = `로그 유형: ${ROLES[value.source_role]}`;
-      dom["live-processing-state"].textContent = `처리 상태: ${{
+      dom["live-processing-state"].textContent = `로그 처리: ${{
         READY: "다음 로그 줄 대기", RUNNING_STEP: "로그 처리 중", DEGRADED: "처리 확인 필요",
         FAILED: "처리 중단", STOPPING: "종료 중", STOPPED: "종료됨"
       }[value.worker_state]}`;

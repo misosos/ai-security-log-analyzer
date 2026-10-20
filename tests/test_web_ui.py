@@ -68,8 +68,8 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
     for phrase in (
-        "샘플로 체험하기", "합성 샘플을 사용합니다", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
-        "탐지는 침해 확인이 아니며", "독립 관찰", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
+        "예시 데이터로 둘러보기", "내 로그 분석하기", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
+        "침해 확정", "별도로 확인할 활동", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
         "HTML 보고서 다운로드", "현재 형식: 대상별 결정적 조사 보고서", "민감한 조사 자료",
         "서버에 영구 저장되지 않으며", "Timeline이 포함되지 않습니다",
     ):
@@ -138,7 +138,8 @@ def test_case_detail_source_uses_native_ordered_semantics_and_fixed_mappings():
     assert 'UTC: ${' not in js
     assert '${start.display_kst} ~ ${end.display_kst}' not in js
     assert 'item.append(evidenceList(entry.evidence))' in js
-    assert 'item.included_highest_risk === "HIGH" || item.included_highest_risk === "MEDIUM"' in js
+    assert 'card.className = "case-card"' in js
+    assert 'card.open = item.included_highest_risk' not in js
     assert 'caseItem.timeline.forEach' in js
     assert 'caseItem.next_steps.map' in js
     assert 'item.evidence' in js

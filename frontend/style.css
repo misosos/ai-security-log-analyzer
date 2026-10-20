@@ -23,19 +23,26 @@ h3 { font-size: 1.16rem; }
 p { max-width: 75ch; }
 .eyebrow { color: #174d86; font-weight: 750; margin: 0; }
 .lead { font-size: 1.12rem; }
-.hero, .info-panel, .local-upload, .results, .boundaries, .live-monitoring { background: #fff; border: 1px solid #d3dce7; border-radius: .75rem; padding: clamp(1rem, 3vw, 2rem); }
+.hero, .info-panel, .local-upload, .results, .boundaries, .live-monitoring, .first-visit-details { background: #fff; border: 1px solid #d3dce7; border-radius: .75rem; padding: clamp(1rem, 3vw, 2rem); }
+.first-visit-note { max-width: 56ch; margin-block: .8rem; font-weight: 600; }
+.secondary-details { margin-top: 1.25rem; }
+.secondary-details summary { cursor: pointer; font-weight: 700; }
+.secondary-details summary:focus-visible { outline: 3px solid #0758ab; outline-offset: 3px; }
+.secondary-details[open] > summary { margin-bottom: 1rem; }
 .sample-notice, .result-notice { border-left: .3rem solid #225b9b; background: #eef5fc; padding: .8rem 1rem; }
 .sample-notice p { margin: .25rem 0; }
 .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1.3rem; }
 button { min-height: 2.75rem; padding: .65rem 1rem; border: 2px solid #153e73; border-radius: .35rem; background: #164c89; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 button:hover { background: #0b3565; }
+.secondary-button { background: #fff; color: #153e73; }
+.secondary-button:hover { background: #eaf2fb; }
 button:disabled { background: #596b80; border-color: #596b80; cursor: progress; }
 a { color: #064f96; text-underline-offset: .2em; }
 .status { min-height: 1.5em; }
 .error-summary { border: 2px solid #a12828; background: #fff5f5; padding: 1rem; margin-top: 1rem; }
 .error-summary h2 { margin-bottom: .4rem; }
 .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
-.local-upload, .results, .boundaries, .live-monitoring { margin-top: 1.5rem; }
+.local-upload, .results, .boundaries, .live-monitoring, .first-visit-details { margin-top: 1.5rem; }
 .live-monitoring { min-width: 0; }
 .live-monitoring .action-row button { max-width: 100%; white-space: normal; }
 .live-observations { display: grid; gap: .75rem; padding-inline-start: 1.5rem; min-width: 0; }
@@ -54,6 +61,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 .file-field input { display: block; width: 100%; max-width: 100%; font: inherit; }
 .field-error { color: #8a1515; font-weight: 650; }
 .results > section { border-top: 1px solid #d3dce7; margin-top: 1.5rem; padding-top: 1.25rem; }
+.results > details { border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; }
 .summary-card, .case-card, .independent-card { border: 1px solid #bccbdb; border-radius: .5rem; background: #fff; padding: 1rem; min-width: 0; }
 .summary-card p { margin: 0; }

@@ -246,6 +246,18 @@ async function main() {
         requireSafe(await page.locator('#live-monitoring').isHidden(), 'HIDDEN_LIVE_FAILED');
         requireSafe(await page.getByRole('heading', {name: '실시간 로그 모니터링'}).count() === 0,
           'HIDDEN_LIVE_ACCESSIBILITY_TREE');
+        await page.locator('#local-choice-button').focus();
+        await page.keyboard.press('Enter');
+        requireSafe(await page.locator('#local-choice-details').evaluate((node) => node.open) &&
+          await page.evaluate(() => document.activeElement.id === 'application-file'),
+          'LOCAL_CHOICE_KEYBOARD_FAILED');
+        await page.locator('#local-choice-details summary').focus();
+        await page.keyboard.press('Enter');
+        requireSafe(!(await page.locator('#local-choice-details').evaluate((node) => node.open)),
+          'DISCLOSURE_KEYBOARD_FAILED');
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        requireSafe(await page.locator('#sample-button').evaluate((node) =>
+          getComputedStyle(node).transitionDuration === '0s'), 'REDUCED_MOTION_FAILED');
       } else if (['live-empty', 'pending', 'applied', 'paused', 'no-longer-matches',
         'private-event-rejected', 'replay-gap'].includes(stateName)) {
         await emit(page, 'snapshot', snapshot());
@@ -267,6 +279,8 @@ async function main() {
             requireSafe(await page.locator('#live-observations li').count() === 0, 'PENDING_AUTO_APPLIED');
             if (stateName === 'applied' || stateName === 'no-longer-matches') {
               await page.locator('#live-show-pending').click();
+              requireSafe(await page.locator('#live-result-details').evaluate((node) => node.open),
+                'APPLIED_DETAIL_HIDDEN');
               for (const id of ['live-observations', 'live-relations', 'live-risks', 'live-cases'])
                 requireSafe(await page.locator(`#${id} li`).count() === 1, 'APPLIED_RESULT_MISSING');
             }
@@ -290,7 +304,7 @@ async function main() {
               await page.locator('#live-show-pending').click();
               const words = await page.locator('#live-monitoring').textContent();
               requireSafe(words.includes('현재 탐지 결과에는 더 이상 일치하지 않음') &&
-                words.includes('위험도 하향은 해결이나 안전을 뜻하지 않습니다') &&
+                words.includes('안전이나 해결을 뜻하지 않습니다') &&
                 !words.includes('해결됐습니다'), 'NO_LONGER_MATCHES_SEMANTICS_FAILED');
             }
             if (stateName === 'paused') {
@@ -308,7 +322,7 @@ async function main() {
       } else if (stateName === 'degraded' || stateName === 'failed') {
         requireSafe(await page.locator('#live-error').isVisible(), 'TERMINAL_RECOVERY_MISSING');
         const text = await page.locator('#live-service-state').textContent();
-        requireSafe(text.includes(stateName === 'failed' ? '모니터링 중단' : '모니터링 확인 필요'),
+        requireSafe(text.includes(stateName === 'failed' ? '모니터링 종료됨' : '연결에 문제가 있음'),
           'TERMINAL_AS_ZERO');
       } else if (stateName === 'checkpoint-reset-explanation') {
         // Reset is CLI-only in v0.3; this test-only equivalent never claims to be shipped UI.
@@ -324,6 +338,7 @@ async function main() {
           document.querySelector('main').append(section);
         });
       } else if (stateName === 'three-file-error') {
+        await page.locator('#local-choice-button').click();
         await page.locator('#local-form').evaluate((form) => form.requestSubmit());
         requireSafe(await page.locator('#error-summary').isVisible() &&
           await page.locator('#application-file').getAttribute('aria-invalid') === 'true' &&
@@ -333,6 +348,11 @@ async function main() {
         requireSafe(await page.locator('#linux-audit-error').isVisible() &&
           await page.locator('#linux-audit-file').getAttribute('aria-invalid') === 'true' &&
           await page.locator('#linux-audit-field-error').isVisible(), 'LINUX_ERROR_LINK_FAILED');
+      }
+      for (const width of [320, 640, 1024]) {
+        await page.setViewportSize({width, height: 900});
+        requireSafe(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          'HORIZONTAL_OVERFLOW');
       }
       requireSafe(!(await page.locator('body').textContent()).includes(CANARY), 'DOM_CANARY_LEAK');
       await scan(page, stateName);

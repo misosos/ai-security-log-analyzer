@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const script = fs.readFileSync("frontend/live-monitoring.js", "utf8");
 const id = "LIVE-SESSION-000001";
 const eventId = (n) => `LIVE-EVENT-000001-${String(n).padStart(6, "0")}`;
-const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-empty", "live-observations", "live-relations", "live-risks", "live-cases", "live-relations-empty", "live-risks-empty", "live-cases-empty", "live-stale"];
+const ids = ["live-monitoring", "live-service-state", "live-connection-state", "live-processing-state", "live-source-role", "live-summary", "live-show-pending", "live-pause", "live-reconnect", "live-pending-status", "live-error", "live-result-details", "live-empty", "live-observations", "live-relations", "live-risks", "live-cases", "live-relations-empty", "live-risks-empty", "live-cases-empty", "live-stale"];
 
 class Node {
   constructor(tag = "p") { this.tagName = tag; this.children = []; this._text = ""; this.hidden = false; this.listeners = {}; }
@@ -140,6 +140,7 @@ async function main() {
   assert.equal(current.nodes["live-show-pending"].textContent, "새 결과 1건 보기");
   current.nodes["live-show-pending"].click();
   assert.equal(current.nodes["live-observations"].children.length, 1);
+  assert.equal(current.nodes["live-result-details"].open, true, "user applies and reveals details");
   assert.match(current.nodes["live-observations"].textContent, /반복 인증 실패 관찰/);
   current.nodes["live-pause"].click();
   stream.send("observation_changes", event(2, "UPDATED"), eventId(2));
@@ -152,7 +153,7 @@ async function main() {
   current.nodes["live-show-pending"].click();
   assert.match(current.nodes["live-observations"].textContent, /현재 탐지 결과에는 더 이상 일치하지 않음/);
   stream.send("heartbeat", {status: "CONNECTED"});
-  assert.equal(current.nodes["live-pending-status"].textContent, "현재 표시할 결과 변경 없음");
+  assert.equal(current.nodes["live-pending-status"].textContent, "새로 확인할 결과 없음");
   stream.send("observation_changes", event(3, "NO_LONGER_MATCHES"), eventId(3));
   assert.equal(stream.closed, false, "same event ID is ignored once");
   stream.send("observation_changes", event(2, "UPDATED"), eventId(2));
@@ -180,7 +181,7 @@ async function main() {
   const terminal = await app();
   terminal.streams[0].send("service_status", {state: "FAILED", code: "LIVE_RUNNER_FAILED",
     recovery_action: "프로세스를 종료하고 로그와 설정을 확인한 뒤 다시 시작하십시오."});
-  assert.match(terminal.nodes["live-service-state"].textContent, /모니터링 중단/);
+  assert.match(terminal.nodes["live-service-state"].textContent, /모니터링 종료됨/);
   assert.equal(terminal.streams[0].closed, true);
 
   const ended = await app();
@@ -301,13 +302,13 @@ async function main() {
   const degraded = await app();
   degraded.streams[0].send("service_status", {state: "DEGRADED", code: "LIVE_RUNNER_DEGRADED",
     recovery_action: "프로세스를 종료하고 다시 시작하십시오."});
-  assert.match(degraded.nodes["live-service-state"].textContent, /확인 필요/);
+  assert.match(degraded.nodes["live-service-state"].textContent, /연결에 문제가 있음/);
   assert.equal(degraded.streams[0].closed, true);
   assert.equal(degraded.nodes["live-reconnect"].hidden, true);
 
   const stopping = await app();
   stopping.streams[0].send("service_status", {state: "STOPPED"});
-  assert.equal(stopping.nodes["live-service-state"].textContent, "모니터링 종료");
+  assert.equal(stopping.nodes["live-service-state"].textContent, "모니터링 종료됨");
   stopping.streams[0].send("stream_end", {code: "LIVE_STREAM_ENDED"});
   assert.equal(stopping.nodes["live-reconnect"].hidden, false);
 
