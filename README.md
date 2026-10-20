@@ -96,7 +96,7 @@ npm run test:a11y
 | 탐지·평가 | [탐지 평가](docs/detection_evaluation.md) |
 | 개인정보·API | [개인정보 projection](docs/public_analysis_privacy.md) |
 | Linux Audit | [프로세스 실행 조사](docs/linux_audit_process_execution.md) |
-| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [Safari 수용 기록](docs/v030_safari_acceptance_27_1.md) |
+| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [대시보드 비교안](docs/ui_dashboard_prototype_28_2.md), [Safari 수용 기록](docs/v030_safari_acceptance_27_1.md) |
 | 릴리스 | [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
 | 개발·보안 검증 기록 | [전체 문서 지도](docs/index.md) |
 
