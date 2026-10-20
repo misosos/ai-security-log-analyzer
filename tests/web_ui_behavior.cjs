@@ -38,10 +38,13 @@ class Node {
 const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
   "error-recovery", "error-retry", "results", "result-jump", "summary-cards",
-  "case-list", "independent-list", "capability-message", "report-download", "report-button",
+  "case-list", "case-section", "independent-list", "independent-details", "result-empty",
+  "capability-message", "report-download", "report-button",
   "local-form", "local-upload", "local-choice-button", "local-choice-details", "local-button", "local-status", "results-heading", "result-context",
   "application-file", "ssh-file", "access-file",
   "application-error", "ssh-error", "access-error"
+  ,"local-action-card", "audit-action-card", "audit-choice-button", "linux-audit-file",
+  "workspace-current-title", "workspace-current-description"
 ];
 
 function nodesOf(root, tag) {
@@ -84,7 +87,9 @@ function makeApp(initial, hostname = "127.0.0.1") {
         downloads.at(-1).filename = node.download;
       };
       return node;
-    }
+    },
+    createElementNS: (_namespace, tag) => new Node(tag),
+    createTextNode: (value) => { const node = new Node("#text"); node.textContent = value; return node; }
   };
   class FormDataStub {
     constructor() { this.entries = []; }
@@ -143,7 +148,7 @@ async function main() {
   app.nodes["local-choice-button"].listener();
   assert.equal(app.nodes["local-choice-details"].open, true);
   assert.equal(app.nodes["application-file"].focused, true);
-  assert.equal(app.nodes["local-upload"].scrolled, true);
+  assert.equal(app.nodes["local-upload"].scrolled, undefined, "workspace choice does not jump down the page");
   await app.click();
   const nodes = app.nodes;
   assert.equal(nodes.results.hidden, false);
@@ -168,7 +173,13 @@ async function main() {
   assert.equal(high.tagName, "details");
   assert.equal(high.open, false, "case detail starts collapsed");
   assert.equal(low.open, false);
-  assert.equal(nodesOf(high, "summary").length, 1);
+  assert.equal(nodesOf(high, "summary").length, 2);
+  assert.equal(nodesOf(high, "details").length, 2, "timeline has its own closed disclosure");
+  assert.equal(nodesOf(high, "summary")[0].textContent.includes("상세 보기"), true);
+  assert.equal(nodesOf(high, "summary")[0].textContent.includes("관련된 활동"), true);
+  assert.equal(nodesOf(high, "summary")[0].textContent.includes("2건"), true);
+  assert.equal(nodesOf(high, "summary")[0].textContent.includes("KST"), true);
+  assert.equal(nodesOf(high, "summary")[0].textContent.includes("UTC"), false);
   assert.equal(nodesOf(high, "time").length > 0, true);
   assert.equal(nodesOf(high, "time")[0].attributes.datetime.endsWith("Z"), true);
   assert.equal(nodesOf(high, "time")[0].textContent.includes("KST"), true);
@@ -285,8 +296,9 @@ async function main() {
   app.setResponse(empty);
   await app.click();
   assert.equal(nodes.results.hidden, false);
-  assert.equal(nodes["case-list"].textContent.includes("보안 문제가 없다는 의미가 아닙니다"), true);
-  assert.equal(nodes["independent-list"].textContent, "별도로 확인할 활동이 없습니다. 결과가 없다는 것은 안전을 뜻하지 않습니다.");
+  assert.equal(nodes["case-section"].hidden, true);
+  assert.equal(nodes["independent-details"].hidden, true);
+  assert.equal(nodes["result-empty"].hidden, false, "one empty state carries the safety limit");
   if (supplied.local) {
     const local = makeApp(supplied.local);
     const selected = {name: "browser-only-name.log"};

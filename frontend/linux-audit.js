@@ -73,7 +73,8 @@
   const outcomes = document.getElementById("linux-audit-outcomes");
   const warnings = document.getElementById("linux-audit-warnings");
   const loopback = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
-  section.hidden = !loopback;
+  if (window.workspaceNavigation) window.workspaceNavigation.setAvailable("audit", loopback);
+  else section.hidden = !loopback;
   let pending = false;
 
   function invalid() { throw new Error("invalid_linux_response"); }
@@ -220,6 +221,7 @@
     data.bounded_warnings.forEach((item) => warnings.append(node("p", item)));
     results.hidden = false;
     status.textContent = "Linux Audit 실행 관찰 분류가 완료되었습니다.";
+    if (window.workspaceNavigation) window.workspaceNavigation.showResult("audit");
   }
   async function submit(event) {
     event.preventDefault();

@@ -47,7 +47,7 @@ def test_landing_has_semantic_static_accessible_contract():
     assert ("html", {"lang": "ko"}) in nodes
     assert any(tag == "meta" and attrs.get("charset") == "utf-8" for tag, attrs in nodes)
     assert any(tag == "meta" and attrs.get("name") == "viewport" for tag, attrs in nodes)
-    assert {"header", "main", "footer"}.issubset({tag for tag, _ in nodes})
+    assert {"nav", "header", "main"}.issubset({tag for tag, _ in nodes})
     assert [tag for tag, _ in nodes].count("h1") == 1
     assert all(
         int(next_tag[1]) <= int(current_tag[1]) + 1
@@ -93,6 +93,8 @@ def test_frontend_source_has_no_unsafe_sinks_or_persistence():
     js = (FRONTEND / "app.js").read_text(encoding="utf-8")
     css = (FRONTEND / "style.css").read_text(encoding="utf-8")
     all_source = "\n".join((html, js, css))
+    assert all_source.count("http://") == all_source.count("http://www.w3.org/2000/svg")
+    all_source = all_source.replace("http://www.w3.org/2000/svg", "")
     for forbidden in (
         "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(",
         "new Function", "localStorage", "sessionStorage", "indexedDB", "document.cookie",
@@ -154,7 +156,7 @@ def test_case_detail_source_uses_native_ordered_semantics_and_fixed_mappings():
     assert '.time-range' in css and '.time-row' in css
     assert '.time-line' in css and '.time-utc' in css
     assert 'overflow-wrap: anywhere' in css
-    assert '@media (max-width: 42rem)' in css
+    assert '@media (max-width: 47.9375rem)' in css
 
 
 def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):

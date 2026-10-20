@@ -158,6 +158,9 @@
   const summaryCards = document.getElementById("summary-cards");
   const caseList = document.getElementById("case-list");
   const independentList = document.getElementById("independent-list");
+  const caseSection = document.getElementById("case-section");
+  const independentDetails = document.getElementById("independent-details");
+  const resultEmpty = document.getElementById("result-empty");
   const capabilityMessage = document.getElementById("capability-message");
   const reportDownload = document.getElementById("report-download");
   const reportButton = document.getElementById("report-button");
@@ -173,13 +176,120 @@
   let currentReport = null;
   let currentReportMode = null;
   const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
-  localSection.hidden = !loopbackPage;
+  const workspaceNav = document.getElementById("workspace-nav");
+  const workspaceNavigation = (() => {
+    if (!workspaceNav) return {
+      show: () => {}, showResult: () => {}, setAvailable: () => {}, setPending: () => {}
+    };
+    const panels = {
+      start: document.getElementById("workspace-start"),
+      local: localSection,
+      audit: document.getElementById("linux-audit-upload"),
+      live: document.getElementById("live-monitoring"),
+      results: document.getElementById("workspace-results")
+    };
+    const buttons = Object.fromEntries(Object.keys(panels).map((key) =>
+      [key, document.getElementById(`nav-${key}`)]));
+    const navDetails = document.getElementById("workspace-nav-details");
+    const navToggle = document.getElementById("workspace-nav-toggle");
+    const compact = window.matchMedia ? window.matchMedia("(max-width: 47.9375rem)") : null;
+    const labels = {start: "시작", local: "내 로그 분석", audit: "Linux Audit", live: "실시간 모니터링", results: "결과"};
+    const descriptions = {
+      start: "로그에서 확인할 활동을 찾고 조사하세요.",
+      local: "내 로그를 로컬에서 분석합니다.",
+      audit: "Linux Audit 실행 기록을 확인합니다.",
+      live: "새 기록과 연결 상태를 확인합니다.",
+      results: "확인할 결과와 다음 조사 단계를 살펴보세요."
+    };
+    const auditResults = document.getElementById("linux-audit-results");
+    const liveResults = document.getElementById("live-results");
+    const liveDetails = document.getElementById("live-result-details");
+    panels.start.append(document.getElementById("first-visit-details"), document.getElementById("boundaries"));
+    panels.results.append(results, auditResults);
+    liveResults.append(liveDetails);
+    const available = {start: true, local: loopbackPage, audit: loopbackPage, live: false, results: false};
+    let current = "start";
+    let resultKind = "batch";
+    const resultPanels = {batch: results, audit: auditResults, live: liveResults};
+    const headings = {
+      start: document.getElementById("page-title"), local: document.getElementById("local-heading"),
+      audit: document.getElementById("linux-audit-heading"), live: document.getElementById("live-heading")
+    };
+    function showView(view, focus = false) {
+      if (!available[view]) return;
+      current = view;
+      for (const key of Object.keys(panels)) {
+        const panel = panels[key];
+        panel.hidden = key !== view;
+        if (key === view) buttons[key].setAttribute("aria-current", "page");
+        else buttons[key].removeAttribute("aria-current");
+      }
+      if (view === "results") {
+        for (const key of Object.keys(resultPanels)) resultPanels[key].hidden = key !== resultKind;
+      }
+      if (view === "local") localChoiceDetails.open = true;
+      document.getElementById("workspace-current-title").textContent = labels[view];
+      document.getElementById("workspace-current-description").textContent = descriptions[view];
+      navToggle.textContent = `현재 영역: ${labels[view]} · 작업 영역 선택`;
+      if (focus) {
+        const heading = view === "results" ? {
+          batch: resultsHeading, audit: document.getElementById("linux-audit-results-heading"),
+          live: document.getElementById("live-results-heading")
+        }[resultKind] : headings[view];
+        heading.tabIndex = -1;
+        heading.focus();
+      }
+      if (compact && compact.matches) navDetails.open = false;
+    }
+    function setAvailable(view, allowed) {
+      available[view] = allowed;
+      buttons[view].hidden = !allowed;
+      if (!allowed && current === view) showView("start");
+    }
+    function showResult(kind) {
+      resultKind = kind;
+      setAvailable("results", true);
+      showView("results", true);
+    }
+    function setPending(count) {
+      const badge = document.getElementById("nav-live-badge");
+      badge.hidden = count === 0;
+      badge.textContent = count ? `새 결과 ${count}` : "";
+    }
+    for (const key of Object.keys(buttons)) {
+      buttons[key].addEventListener("click", () => showView(key, true));
+    }
+    function syncCompact() { navDetails.open = !compact || !compact.matches; }
+    if (compact) compact.addEventListener("change", syncCompact);
+    navDetails.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && compact && compact.matches && navDetails.open) {
+        navDetails.open = false;
+        navToggle.focus();
+      }
+    });
+    syncCompact();
+    setAvailable("local", loopbackPage);
+    setAvailable("audit", loopbackPage);
+    showView("start");
+    return {show: showView, showResult, setAvailable, setPending};
+  })();
+  window.workspaceNavigation = workspaceNavigation;
+  localSection.hidden = workspaceNav ? true : !loopbackPage;
   localChoiceButton.hidden = !loopbackPage;
+  document.getElementById("local-action-card").hidden = !loopbackPage;
+  const auditChoiceButton = document.getElementById("audit-choice-button");
+  auditChoiceButton.hidden = !loopbackPage;
+  document.getElementById("audit-action-card").hidden = !loopbackPage;
+  auditChoiceButton.addEventListener("click", () => {
+    workspaceNavigation.show("audit");
+    document.getElementById("linux-audit-file").focus();
+  });
   localChoiceButton.addEventListener("click", () => {
+    workspaceNavigation.show("local");
     localChoiceDetails.open = true;
-    localSection.scrollIntoView({block: "start"});
     document.getElementById("application-file").focus();
   });
+  resultJump.addEventListener("click", () => workspaceNavigation.show("results", true));
 
   class PublicFailure extends Error {
     constructor(message, recovery, retryable = null) {
@@ -514,6 +624,20 @@
     return node;
   }
 
+  const ICON_NAMES = new Set(["search", "link", "folder-search", "circle-help", "shield-alert"]);
+  function icon(name, className = "icon") {
+    if (!ICON_NAMES.has(name)) throw new Error("Unsupported fixed icon");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#icon-${name}`);
+    svg.append(use);
+    return svg;
+  }
+
   function detail(list, label, value) {
     const pair = document.createElement("div");
     pair.append(element("dt", label), element("dd", value));
@@ -567,6 +691,14 @@
     endRow.append(element("dt", "종료"), endValue);
     range.append(startRow, endRow);
     parent.append(range);
+  }
+
+  function shortKstRange(start, end) {
+    if (!start) return "시간 정보 없음";
+    const first = start.display_kst.slice(0, 19);
+    if (!end || end.display_utc === start.display_utc) return `${first} KST`;
+    const last = end.display_kst.slice(0, 19);
+    return `${first}~${last.slice(0, 10) === first.slice(0, 10) ? last.slice(11) : last} KST`;
   }
 
   function detailSection(title) {
@@ -649,12 +781,20 @@
     const meta = document.createElement("dl");
     meta.className = "card-meta";
     detail(meta, "관찰 수", String(caseItem.observation_count));
+    detail(meta, "분석 대상", caseItem.subject);
     body.append(meta);
     const range = detailSection("시간 범위");
     const time = document.createElement("div");
     appendTime(time, caseItem.start_time, caseItem.end_time);
     range.append(time);
-    body.append(range, renderTimeline(caseItem),
+    const timelineDisclosure = document.createElement("details");
+    timelineDisclosure.className = "timeline-disclosure";
+    timelineDisclosure.append(element("summary", `시간순 기록 ${caseItem.timeline.length}건 보기`), renderTimeline(caseItem));
+    const relationNames = detailSection("지원 관계 유형 전체");
+    textList(relationNames, caseItem.supported_relations, false, "표시할 지원되는 관계가 없습니다.");
+    const detectionNames = detailSection("주요 활동 유형 전체");
+    textList(detectionNames, caseItem.supported_detections, false, "표시할 지원 탐지 관찰이 없습니다.");
+    body.append(range, detectionNames, relationNames, timelineDisclosure,
       renderObservedSection(caseItem, "DETECTION_OBSERVATION", "탐지 관찰", "표시할 지원 탐지 관찰이 없습니다."),
       renderObservedSection(caseItem, "SUPPORTED_RELATION", "지원되는 관계", "표시할 지원되는 관계가 없습니다."));
     const assessment = detailSection("위험도 평가");
@@ -680,44 +820,62 @@
 
   function renderSummary(data) {
     const cards = [
-      ["확인할 활동", data.analysis_summary.supported_detection_count],
-      ["관련된 활동", data.analysis_summary.supported_relation_count],
-      ["조사 사례", data.case_summary.case_count],
-      ["별도 확인", data.case_summary.independent_observation_count]
+      ["확인할 활동", data.analysis_summary.supported_detection_count, "search"],
+      ["관련된 활동", data.analysis_summary.supported_relation_count, "link"],
+      ["조사 사례", data.case_summary.case_count, "folder-search"],
+      ["별도 확인", data.case_summary.independent_observation_count, "circle-help"]
     ];
-    cards.forEach(([label, value]) => {
+    cards.forEach(([label, value, symbol]) => {
       const card = document.createElement("div");
       card.className = "summary-card";
-      card.append(element("p", label), element("p", String(value), "summary-value"));
+      const top = document.createElement("div");
+      top.className = "summary-top";
+      top.append(icon(symbol, "icon summary-icon"), element("p", label));
+      card.append(top, element("p", String(value), "summary-value"));
       summaryCards.append(card);
     });
   }
 
   function renderCaseOverview(cases) {
-    if (cases.length === 0) {
-      caseList.append(element("p", "지원되는 규칙으로 구성된 조사 사례가 없습니다. 이 결과는 보안 문제가 없다는 의미가 아닙니다."));
-    }
+    caseSection.hidden = cases.length === 0;
     cases.forEach((item) => {
       const card = document.createElement("details");
       card.className = "case-card";
       const summary = document.createElement("summary");
       summary.className = "case-summary";
-      summary.append(element("h4", item.case_label),
-        element("span", `조사 순서 ${item.review_order} · 분석 대상 ${item.subject}`, "summary-subject"));
-      summary.append(riskBadge(item.included_highest_risk),
-        element("span", `신뢰도 ${item.included_highest_confidence}`, "summary-confidence"),
-        element("span", `주요 탐지: ${item.supported_detections.join(", ") || "표시할 지원 탐지 관찰이 없습니다."}`, "summary-line"),
-        element("span", `지원 관계: ${item.supported_relations.join(", ") || "표시할 지원되는 관계가 없습니다."}`, "summary-line"),
-        element("span", "기존 지원 관계에 따라 함께 검토합니다.", "summary-line"));
+      const headingRow = document.createElement("div");
+      headingRow.className = "case-heading-row";
+      const lead = document.createElement("div");
+      lead.className = "case-lead";
+      const caseHeading = document.createElement("h4");
+      caseHeading.append(icon("folder-search"), document.createTextNode(item.case_label));
+      lead.append(caseHeading, element("p", `주요 활동: ${item.supported_detections[0] || "표시할 지원 탐지 관찰이 없습니다."}`));
+      const state = document.createElement("div");
+      state.className = "case-state";
+      const riskMarker = document.createElement("span");
+      riskMarker.className = "risk-marker";
+      riskMarker.append(icon("shield-alert"), riskBadge(item.included_highest_risk));
+      state.append(element("span", "위험도"), riskMarker,
+        element("span", `신뢰도 ${item.included_highest_confidence}`));
+      headingRow.append(lead, state);
+      const meta = document.createElement("dl");
+      meta.className = "case-summary-meta";
+      detail(meta, "관찰", `${item.observation_count}건`);
+      const loginAfterFailures = item.supported_relations.some((name) => RELATION_NAMES.has(name));
+      detail(meta, "관련된 활동", `${item.supporting_relation_count}건${loginAfterFailures ? " · 로그인 실패 후 성공 기록 포함" : ""}`);
+      const timePair = document.createElement("div");
+      const timeValue = document.createElement("dd");
+      timeValue.append(element("span", shortKstRange(item.start_time, item.end_time), "case-short-time"));
+      timePair.append(element("dt", "관찰 시간"), timeValue);
+      meta.append(timePair);
+      summary.append(headingRow, meta, element("span", "상세 보기", "case-disclosure-label"));
       card.append(summary, renderCaseDetail(item));
       caseList.append(card);
     });
   }
 
   function renderIndependentObservations(observations) {
-    if (observations.length === 0) {
-      independentList.append(element("p", "별도로 확인할 활동이 없습니다. 결과가 없다는 것은 안전을 뜻하지 않습니다."));
-    }
+    independentDetails.hidden = observations.length === 0;
     observations.forEach((item) => {
       const card = document.createElement("article");
       card.className = "independent-card";
@@ -757,6 +915,8 @@
     reportDownload.hidden = true;
     results.hidden = true;
     resultJump.hidden = true;
+    resultEmpty.hidden = true;
+    workspaceNavigation.setAvailable("results", false);
     errorSummary.hidden = true;
     summaryCards.replaceChildren();
     caseList.replaceChildren();
@@ -764,7 +924,7 @@
     capabilityMessage.textContent = "";
   }
 
-  function renderError(failure) {
+  function renderError(failure, mode = "sample") {
     const publicFailure = failure instanceof PublicFailure ? failure :
       new PublicFailure("분석 결과를 가져오지 못했습니다.", "연결 상태를 확인한 뒤 다시 시도하십시오.");
     status.textContent = "분석을 완료하지 못했습니다.";
@@ -776,6 +936,10 @@
       publicFailure.retryable === false ?
         "같은 요청을 그대로 재시도하지 마세요. 위 안내를 확인한 뒤 다시 진행하세요." :
         "연결 또는 응답 상태를 확인한 뒤 다시 시도하세요.";
+    if (workspaceNav) {
+      const holder = mode === "local" ? localSection : document.getElementById("workspace-start");
+      holder.prepend(errorSummary);
+    }
     errorSummary.hidden = false;
     errorSummary.focus();
   }
@@ -843,6 +1007,7 @@
     renderSummary(data);
     renderCaseOverview(data.cases);
     renderIndependentObservations(data.independent_observations);
+    resultEmpty.hidden = data.cases.length !== 0 || data.independent_observations.length !== 0;
     capabilityMessage.textContent = mode === "sample" ?
       "실제 로그 웹 업로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다." :
       "실제 로그는 이 로컬 요청에서만 분석합니다. LLM 설명과 Linux Audit 집계는 제공되지 않습니다.";
@@ -851,6 +1016,7 @@
     reportDownload.hidden = false;
     results.hidden = false;
     resultJump.hidden = false;
+    window.workspaceNavigation.showResult("batch");
   }
 
   function clearFieldErrors() {
@@ -883,7 +1049,7 @@
     if (missing) {
       const failure = new PublicFailure("필수 로그가 누락되었습니다.", "표시된 세 로그 파일을 각각 선택하십시오.", false);
       fieldError(missing[0], failure.publicMessage);
-      renderError(failure);
+      renderError(failure, "local");
       return;
     }
     pending = true;
@@ -908,7 +1074,7 @@
       localStatus.textContent = "로컬 실제 로그 분석이 완료되었습니다.";
     } catch (failure) {
       clearPreviousResult();
-      renderError(failure);
+      renderError(failure, "local");
     } finally {
       pending = false;
       button.disabled = false;

@@ -164,7 +164,9 @@ async function scan(page, state) {
     const ids = [...document.querySelectorAll('[id]')].map((node) => node.id);
     return {
       title: Boolean(document.title.trim()), h1: document.querySelectorAll('h1').length,
-      landmarks: ['header', 'main', 'footer'].every((tag) => document.querySelector(tag)),
+      landmarks: ['nav', 'header', 'main'].every((tag) => document.querySelector(tag)) &&
+        document.querySelector('nav').compareDocumentPosition(document.querySelector('header')) === Node.DOCUMENT_POSITION_FOLLOWING &&
+        document.querySelector('header').compareDocumentPosition(document.querySelector('main')) === Node.DOCUMENT_POSITION_FOLLOWING,
       labels: inputs.every((node) => document.querySelector(`label[for="${node.id}"]`)),
       buttons: buttons.every((node) => Boolean(node.textContent.trim() || node.getAttribute('aria-label'))),
       idsUnique: ids.length === new Set(ids).size,
@@ -174,7 +176,7 @@ async function scan(page, state) {
       pendingLive: document.querySelector('#live-pending-status').getAttribute('aria-live') === 'polite',
     };
   });
-  const hiddenExpected = ['base', 'checkpoint-reset-explanation',
+  const hiddenExpected = ['base', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
     'three-file-error', 'linux-audit-error'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
@@ -240,9 +242,31 @@ async function main() {
       const page = await context.newPage();
       await page.addInitScript(eventSourceStub);
       await page.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
-      if (stateForPage !== 'DISABLED')
+      if (stateForPage !== 'DISABLED') {
+        await page.locator('#nav-live').waitFor({state: 'visible'});
+        await page.locator('#nav-live').click();
         await page.waitForFunction(() => !document.querySelector('#live-monitoring').hidden);
+        const expectedIcon = stateForPage === 'DEGRADED' ? '#icon-triangle-alert' :
+          stateForPage === 'FAILED' ? '#icon-circle-x' : '#icon-activity';
+        requireSafe(await page.locator('#live-state-icon-use').getAttribute('href') === expectedIcon &&
+          await page.locator('#live-state-cell').getAttribute('data-service-state') === stateForPage,
+          'LIVE_STATE_VISUAL_TEXT_CONTRACT_FAILED');
+      }
       if (stateName === 'base') {
+        requireSafe(await page.locator('#nav-start').getAttribute('aria-current') === 'page' &&
+          await page.locator('#nav-live').isHidden() && await page.locator('#nav-results').isHidden(),
+          'WORKSPACE_INITIAL_STATE_FAILED');
+        await page.locator('#nav-local').focus();
+        await page.keyboard.press('Enter');
+        requireSafe(await page.locator('#local-upload').isVisible() &&
+          await page.locator('#nav-local').getAttribute('aria-current') === 'page' &&
+          await page.locator('.workspace-panel:visible').count() === 1,
+          'WORKSPACE_KEYBOARD_NAV_FAILED');
+        await page.locator('#nav-audit').click();
+        requireSafe(await page.locator('#linux-audit-upload').isVisible() &&
+          await page.locator('.workspace-panel:visible').count() === 1,
+          'WORKSPACE_AUDIT_SELECTION_FAILED');
+        await page.locator('#nav-start').click();
         requireSafe(await page.locator('#live-monitoring').isHidden(), 'HIDDEN_LIVE_FAILED');
         requireSafe(await page.getByRole('heading', {name: '실시간 로그 모니터링'}).count() === 0,
           'HIDDEN_LIVE_ACCESSIBILITY_TREE');
@@ -260,6 +284,13 @@ async function main() {
           getComputedStyle(node).transitionDuration === '0s'), 'REDUCED_MOTION_FAILED');
       } else if (['live-empty', 'pending', 'applied', 'paused', 'no-longer-matches',
         'private-event-rejected', 'replay-gap'].includes(stateName)) {
+        if (stateName === 'pending') {
+          const count = await page.evaluate(() => window.__syntheticStreams.length);
+          await page.locator('#nav-start').click();
+          await page.locator('#nav-live').click();
+          requireSafe(await page.evaluate(() => window.__syntheticStreams.length) === count && count === 1,
+            'WORKSPACE_DUPLICATE_EVENTSOURCE');
+        }
         await emit(page, 'snapshot', snapshot());
         if (stateName !== 'live-empty' && stateName !== 'replay-gap') {
           if (stateName === 'pending' || stateName === 'applied')
@@ -279,6 +310,14 @@ async function main() {
             requireSafe(await page.locator('#live-observations li').count() === 0, 'PENDING_AUTO_APPLIED');
             if (stateName === 'applied' || stateName === 'no-longer-matches') {
               await page.locator('#live-show-pending').click();
+              requireSafe(await page.locator('#workspace-results').isVisible() &&
+                await page.locator('#live-results-heading').isVisible() &&
+                await page.locator('#nav-results').getAttribute('aria-current') === 'page',
+                'WORKSPACE_RESULT_NOT_SELECTED');
+              requireSafe(await page.locator('#live-results-heading').evaluate((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.top >= 0 && rect.top < innerHeight;
+              }), 'WORKSPACE_RESULT_REQUIRES_SCROLL');
               requireSafe(await page.locator('#live-result-details').evaluate((node) => node.open),
                 'APPLIED_DETAIL_HIDDEN');
               for (const id of ['live-observations', 'live-relations', 'live-risks', 'live-cases'])
@@ -301,8 +340,9 @@ async function main() {
               riskUpdate.risk_changes[0].change_type = 'RISK_UPDATED';
               await emit(page, 'observation_changes', update, eventId(3));
               await emit(page, 'analysis_changes', riskUpdate, eventId(4));
+              await page.locator('#nav-live').click();
               await page.locator('#live-show-pending').click();
-              const words = await page.locator('#live-monitoring').textContent();
+              const words = await page.locator('#live-results').textContent();
               requireSafe(words.includes('현재 탐지 결과에는 더 이상 일치하지 않음') &&
                 words.includes('안전이나 해결을 뜻하지 않습니다') &&
                 !words.includes('해결됐습니다'), 'NO_LONGER_MATCHES_SEMANTICS_FAILED');
@@ -344,12 +384,13 @@ async function main() {
           await page.locator('#application-file').getAttribute('aria-invalid') === 'true' &&
           await page.locator('#application-error').isVisible(), 'THREE_FILE_ERROR_LINK_FAILED');
       } else if (stateName === 'linux-audit-error') {
+        await page.locator('#nav-audit').click();
         await page.locator('#linux-audit-form').evaluate((form) => form.requestSubmit());
         requireSafe(await page.locator('#linux-audit-error').isVisible() &&
           await page.locator('#linux-audit-file').getAttribute('aria-invalid') === 'true' &&
           await page.locator('#linux-audit-field-error').isVisible(), 'LINUX_ERROR_LINK_FAILED');
       }
-      for (const width of [320, 640, 1024]) {
+      for (const width of [320, 640, 1024, 1440]) {
         await page.setViewportSize({width, height: 900});
         requireSafe(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           'HORIZONTAL_OVERFLOW');

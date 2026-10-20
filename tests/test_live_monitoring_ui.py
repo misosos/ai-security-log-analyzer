@@ -84,7 +84,7 @@ def test_live_script_has_no_unsafe_dom_storage_or_remote_resource():
     assert ":focus-visible" in css
     assert "prefers-reduced-motion" in css
     assert "overflow-wrap: anywhere" in css
-    assert re.search(r"@media \(max-width: 42rem\)", css)
+    assert re.search(r"@media \(max-width: 47\.9375rem\)", css)
 
 
 def test_live_ui_node_behavior():

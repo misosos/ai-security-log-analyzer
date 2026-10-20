@@ -11,20 +11,116 @@
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
-  <header class="site-header">
-    <div class="shell"><p class="brand">AI Security Log Analyzer</p></div>
-  </header>
-  <main id="main" class="shell">
-    <section class="hero" aria-labelledby="page-title">
+  <!-- Lucide static 1.59.0; ISC and Feather MIT notices: docs/licenses/lucide-static-1.59.0-LICENSE -->
+  <svg id="icon-sprite" class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="icon-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+      <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+    </symbol>
+    <symbol id="icon-flask-conical" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"></path>
+      <path d="M6.453 15h11.094"></path>
+      <path d="M8.5 2h7"></path>
+    </symbol>
+    <symbol id="icon-files" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"></path>
+      <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"></path>
+      <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"></path>
+    </symbol>
+    <symbol id="icon-scan-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+      <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+      <path d="M7 12h10"></path>
+    </symbol>
+    <symbol id="icon-clipboard-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+      <path d="M12 11h4"></path>
+      <path d="M12 16h4"></path>
+      <path d="M8 11h.01"></path>
+      <path d="M8 16h.01"></path>
+    </symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path>
+    </symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m21 21-4.34-4.34"></path>
+      <circle cx="11" cy="11" r="8"></circle>
+    </symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+    </symbol>
+    <symbol id="icon-shield-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path>
+      <path d="M12 8v4"></path>
+      <path d="M12 16h.01"></path>
+    </symbol>
+    <symbol id="icon-folder-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"></path>
+      <path d="m21 21-1.9-1.9"></path>
+      <circle cx="17" cy="17" r="3"></circle>
+    </symbol>
+    <symbol id="icon-circle-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+      <path d="M12 17h.01"></path>
+    </symbol>
+    <symbol id="icon-triangle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+      <path d="M12 9v4"></path>
+      <path d="M12 17h.01"></path>
+    </symbol>
+    <symbol id="icon-circle-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="m15 9-6 6"></path>
+      <path d="m9 9 6 6"></path>
+    </symbol>
+  </svg>
+  <div class="app-shell">
+    <nav id="workspace-nav" class="workspace-nav app-sidebar" aria-label="작업 영역">
+      <p class="brand">AI Security Log Analyzer</p>
+      <p class="workspace-nav-title">로컬 조사 · 작업 영역</p>
+      <details id="workspace-nav-details" open>
+        <summary id="workspace-nav-toggle">현재 영역: 시작 · 작업 영역 선택</summary>
+        <div class="workspace-nav-list">
+        <button id="nav-start" type="button" aria-controls="workspace-start" aria-current="page"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-house"></use></svg> 시작</button>
+        <button id="nav-local" type="button" aria-controls="local-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-files"></use></svg> 내 로그 분석</button>
+        <button id="nav-audit" type="button" aria-controls="linux-audit-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-scan-line"></use></svg> Linux Audit</button>
+        <button id="nav-live" type="button" aria-controls="live-monitoring" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-activity"></use></svg> 실시간 모니터링 <span id="nav-live-badge" hidden></span></button>
+        <button id="nav-results" type="button" aria-controls="workspace-results" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg> 결과</button>
+        </div>
+      </details>
+      <p class="sidebar-note">로컬 조사 보조 도구<br>source checkout으로 실행</p>
+    </nav>
+    <div class="app-area">
+    <header class="site-header">
+      <h1 id="workspace-current-title">시작</h1>
+      <p id="workspace-current-description">로그에서 확인할 활동을 찾고 조사하세요.</p>
+    </header>
+    <main id="main" class="app-content">
+    <section id="workspace-start" class="workspace-panel" aria-labelledby="page-title">
       <p class="eyebrow">로컬 보안 로그 조사</p>
-      <h1 id="page-title">로그에서 확인할 활동을 찾고 조사하세요</h1>
+      <h2 id="page-title">로그에서 확인할 활동을 찾고 조사하세요</h2>
       <p class="lead">로컬에서 보안 로그를 분석하고, 확인할 결과와 다음 조사 단계를 보여줍니다.</p>
       <p class="first-visit-note">결과는 침해 확정이나 공격 성공의 증거가 아닙니다. 예시 데이터는 실제 보안 상태를 나타내지 않습니다.</p>
-      <div class="action-row">
-        <button id="sample-button" type="button">예시 데이터로 둘러보기</button>
-        <button id="local-choice-button" class="secondary-button" type="button" hidden>내 로그 분석하기</button>
-        <a id="result-jump" href="#results-heading" hidden>결과 요약으로 이동</a>
+      <section id="analysis-flow" class="analysis-flow" aria-labelledby="analysis-flow-heading">
+        <h3 id="analysis-flow-heading">분석 흐름</h3>
+        <ol>
+          <li class="flow-step"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-files"></use></svg><div><strong>로그 선택</strong><span>예시 또는 내 파일</span></div></li>
+          <li class="flow-step"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-search"></use></svg><div><strong>활동 확인</strong><span>확인할 기록 찾기</span></div></li>
+          <li class="flow-step"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-link"></use></svg><div><strong>관계·위험도 검토</strong><span>근거와 우선순위</span></div></li>
+          <li class="flow-step"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-folder-search"></use></svg><div><strong>조사 사례 확인</strong><span>다음 조사 단계</span></div></li>
+        </ol>
+      </section>
+      <div class="start-actions">
+        <article class="action-card"><span class="action-icon"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-flask-conical"></use></svg></span><h3>예시 데이터</h3><p>준비된 예시로 결과와 조사 흐름을 살펴보세요.</p><button id="sample-button" type="button">예시 데이터로 둘러보기</button></article>
+        <article class="action-card" id="local-action-card"><span class="action-icon"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-files"></use></svg></span><h3>내 로그 분석</h3><p>세 가지 로그 파일을 로컬 서버에서 분석합니다.</p><button id="local-choice-button" class="secondary-button" type="button" hidden>내 로그 분석하기</button></article>
+        <article class="action-card" id="audit-action-card"><span class="action-icon"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-scan-line"></use></svg></span><h3>Linux Audit</h3><p>프로세스 실행 기록에서 확인할 활동을 찾습니다.</p><button id="audit-choice-button" class="secondary-button" type="button" hidden>Linux Audit 확인하기</button></article>
       </div>
+      <button id="result-jump" class="secondary-button" type="button" hidden>결과 요약으로 이동</button>
       <p id="sample-status" class="status" aria-live="polite">예시를 보거나 내 로그를 선택하세요.</p>
       <div id="error-summary" class="error-summary" tabindex="-1" hidden>
         <h2>분석을 완료하지 못했습니다</h2>
@@ -34,12 +130,12 @@
       </div>
     </section>
 
-    <section id="live-monitoring" class="live-monitoring" aria-labelledby="live-heading" hidden>
+    <section id="live-monitoring" class="live-monitoring workspace-panel" aria-labelledby="live-heading" hidden>
       <h2 id="live-heading">실시간 로그 모니터링</h2>
-      <p>새로 추가된 로그만 확인합니다. 시작 전 줄은 처리하지 않습니다.</p>
-      <p id="live-service-state">상태를 확인하고 있습니다.</p>
+      <p>새로 추가된 로그만 확인합니다. 시작 전 줄은 처리하지 않습니다. 새 결과를 직접 적용하면 결과 화면에서 확인할 수 있습니다.</p>
+      <div class="live-status-strip"><div id="live-state-cell" class="live-state-cell"><svg class="icon live-state-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use id="live-state-icon-use" href="#icon-activity"></use></svg><p id="live-service-state">상태를 확인하고 있습니다.</p></div>
       <p id="live-source-role"></p>
-      <p id="live-summary"></p>
+      <p id="live-summary"></p></div>
       <details class="secondary-details">
         <summary>연결과 처리 세부</summary>
         <p id="live-connection-state" role="status" aria-live="polite">연결 확인 중</p>
@@ -80,7 +176,7 @@
       <p id="live-stale" class="local-warning" hidden>이전 목록은 최신 상태가 아닐 수 있습니다. 현재 요약을 기준으로 다시 확인해 주세요.</p>
     </section>
 
-    <section id="local-upload" class="local-upload" aria-labelledby="local-heading" hidden>
+    <section id="local-upload" class="local-upload workspace-panel" aria-labelledby="local-heading" hidden>
       <h2 id="local-heading">내 로그 분석하기</h2>
       <details id="local-choice-details" class="secondary-details">
         <summary>파일 선택과 분석 안내</summary>
@@ -116,7 +212,7 @@
       </details>
     </section>
 
-    <section id="linux-audit-upload" class="local-upload" aria-labelledby="linux-audit-heading" hidden>
+    <section id="linux-audit-upload" class="local-upload workspace-panel" aria-labelledby="linux-audit-heading" hidden>
       <h2 id="linux-audit-heading">Linux Audit 프로세스 실행 확인</h2>
       <p>Linux Audit 로그에서 검토할 프로세스 실행 관찰을 분류합니다. 악성 행위, 침해 성공 또는 행위자 식별을 의미하지 않으며 인증·웹 조사 사례와 자동으로 결합하지 않습니다.</p>
       <p class="local-warning">직접 실행한 로컬 서버에서만 사용하세요. 공개 서버에는 민감한 Linux Audit 로그를 업로드하지 마세요.</p>
@@ -154,7 +250,7 @@
       <div id="linux-audit-warnings"></div>
     </section>
 
-    <details class="first-visit-details secondary-details">
+    <details id="first-visit-details" class="first-visit-details secondary-details">
       <summary>지원 범위와 결과 안내</summary>
     <section class="info-grid" aria-label="체험 안내">
       <div class="info-panel">
@@ -173,42 +269,64 @@
     <section id="results" class="results" aria-labelledby="results-heading" hidden>
       <h2 id="results-heading">분석 결과</h2>
       <p id="result-context" class="result-notice"><strong>예시 데이터 결과입니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
-      <p>탐지는 침해 확인이 아니며, 상관관계는 인과관계가 아닙니다. 로그인 성공도 공격 성공을 입증하지 않습니다. 조사 사례는 확정된 사고가 아닙니다.</p>
+      <p>확인할 활동과 조사 사례는 침해나 공격 성공의 확정이 아닙니다.</p>
       <section aria-labelledby="summary-heading">
         <h3 id="summary-heading">결과 요약</h3>
         <div id="summary-cards" class="summary-grid"></div>
       </section>
-      <section aria-labelledby="case-list-heading">
-        <h3 id="case-list-heading">조사 사례</h3>
-        <p>이 순서는 새로운 보안 점수가 아닌 검토 순서입니다.</p>
-        <div id="case-list" class="card-stack"></div>
-      </section>
-      <details id="independent-details" class="secondary-details">
-        <summary id="independent-heading">별도로 확인할 활동</summary>
-        <p>다른 결과와 묶을 근거가 부족한 기록입니다. 중요하지 않거나 안전하다는 뜻은 아닙니다.</p>
-        <div id="independent-list" class="card-stack"></div>
-      </details>
-      <section aria-labelledby="capabilities-heading">
-        <h3 id="capabilities-heading">현재 제공 범위</h3>
-        <p id="capability-message"></p>
-      </section>
-      <section id="report-download" aria-labelledby="report-heading" hidden>
-        <h3 id="report-heading">HTML 보고서</h3>
-        <p>현재 형식: 대상별 결정적 조사 보고서. 이 파일에는 조사 사례의 시간순 Timeline이 포함되지 않습니다.</p>
-        <p>보고서는 서버에 영구 저장되지 않으며, 현재 탭 메모리의 결과에서 다운로드용 파일을 만듭니다.</p>
-        <p class="report-warning">다운로드 파일은 민감한 조사 자료입니다. 저장·공유·삭제에 주의하십시오.</p>
-        <button id="report-button" type="button">HTML 보고서 다운로드</button>
-      </section>
-      <p class="result-action">새 분석을 시작하려면 위의 샘플 버튼 또는 로컬 로그 입력을 사용하세요. 이전 결과는 현재 탭에서 교체됩니다.</p>
+      <p id="result-empty" class="sample-notice" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-circle-help"></use></svg>확인할 항목이 없습니다. 지원 범위나 입력 내용을 다시 확인해 주세요. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
+      <div id="result-body" class="result-body">
+        <section id="case-section" aria-labelledby="case-list-heading">
+          <h3 id="case-list-heading">조사 사례</h3>
+          <p>이 순서는 새로운 보안 점수가 아닌 검토 순서입니다.</p>
+          <div id="case-list" class="card-stack"></div>
+        </section>
+        <div id="result-rail" class="result-rail">
+          <details id="independent-details" class="secondary-details">
+            <summary id="independent-heading">별도로 확인할 활동</summary>
+            <p>다른 결과와 묶을 근거가 부족한 기록입니다. 중요하지 않거나 안전하다는 뜻은 아닙니다.</p>
+            <div id="independent-list" class="card-stack"></div>
+          </details>
+          <details id="result-interpretation" class="secondary-details">
+            <summary>결과 해석 안내</summary>
+            <p>탐지는 침해 확인이 아니며, 상관관계는 인과관계가 아닙니다. 로그인 성공도 공격 성공을 입증하지 않습니다. 조사 사례는 확정된 사고가 아닙니다.</p>
+            <p>기본 관찰 시각은 한국 표준시(KST, UTC+09:00)입니다. 상세에서는 UTC 시각도 확인할 수 있습니다.</p>
+            <details id="capabilities-details" class="secondary-details">
+              <summary>현재 제공 범위</summary>
+              <section aria-labelledby="capabilities-heading">
+                <h3 id="capabilities-heading">지원 범위</h3>
+                <p id="capability-message"></p>
+              </section>
+            </details>
+            <p class="result-action">새 분석은 시작 또는 내 로그 분석에서 진행하세요. 이전 결과는 현재 탭에서 교체됩니다.</p>
+          </details>
+          <section id="report-download" aria-labelledby="report-heading" hidden>
+            <h3 id="report-heading">HTML 보고서</h3>
+            <details class="secondary-details"><summary>보고서 형식과 저장 안내</summary>
+              <p>현재 형식: 대상별 결정적 조사 보고서. 이 파일에는 조사 사례의 시간순 Timeline이 포함되지 않습니다.</p>
+              <p>보고서는 서버에 영구 저장되지 않으며, 현재 탭 메모리의 결과에서 다운로드용 파일을 만듭니다.</p>
+            </details>
+            <p class="report-warning">민감한 조사 자료입니다. 저장·공유·삭제에 주의하세요.</p>
+            <button id="report-button" type="button">HTML 보고서 다운로드</button>
+          </section>
+        </div>
+      </div>
     </section>
 
-    <details class="boundaries secondary-details">
+    <details id="boundaries" class="boundaries secondary-details">
       <summary id="boundary-heading">해석과 개인정보 안내</summary>
       <p>탐지는 침해 확정이 아닙니다. 상관관계는 인과관계가 아닙니다. 같은 IP가 같은 사람이나 공격자임을 뜻하지 않으며 NAT, 프록시, 공유 시스템일 수 있습니다.</p>
       <p id="privacy">샘플 체험에는 사용자 로그를 업로드하지 않습니다. 실제 로그 입력은 loopback 연결에서만 처리합니다. 결과는 현재 탭 메모리에만 있고 새로고침하면 사라집니다. 원래 계정명, 원시 로그와 전체 쿼리는 화면에 표시하지 않습니다.</p>
       <p>로컬 업로드는 인증·방화벽·호스팅 보안의 대체 수단이 아닙니다. 인증 없는 공개 웹 업로드는 제공하지 않습니다. <a href="/docs">개발 API 문서</a>와 프로젝트 README에서 사용 범위를 확인하세요.</p>
     </details>
-  </main>
-  <footer class="site-footer"><div class="shell"><p>로컬 조사 보조 도구 · source checkout으로 실행</p></div></footer>
+    <section id="workspace-results" class="workspace-panel results" aria-label="분석 결과 화면" hidden>
+      <section id="live-results" aria-labelledby="live-results-heading" hidden>
+        <h2 id="live-results-heading" tabindex="-1">실시간으로 확인한 결과</h2>
+        <p id="live-results-stale" class="local-warning" hidden>일부 기록을 이어받지 못했습니다. 아래 결과는 최신 상태가 아닐 수 있습니다. 실시간 모니터링에서 최신 상태로 다시 연결해 주세요.</p>
+      </section>
+    </section>
+    </main>
+    </div>
+  </div>
 </body>
 </html>

@@ -305,6 +305,11 @@
       STOPPING: "모니터링 종료 중", STOPPED: "모니터링 종료됨"
     };
     dom["live-service-state"].textContent = messages[value];
+    const stateCell = document.getElementById("live-state-cell");
+    const stateIcon = document.getElementById("live-state-icon-use");
+    if (stateCell) stateCell.setAttribute("data-service-state", value);
+    if (stateIcon) stateIcon.setAttribute("href", value === "FAILED" ? "#icon-circle-x" :
+      value === "DEGRADED" ? "#icon-triangle-alert" : "#icon-activity");
     if (value === "DEGRADED" || value === "FAILED") {
       closeSource(); connection("중단됨");
       error("실시간 처리를 계속할 수 없습니다.", "터미널 안내를 확인하고 서버를 다시 시작해 주세요.");
@@ -323,12 +328,18 @@
     dom["live-pending-status"].textContent = stale ? "일부 기록을 이어받지 못해 최신 요약만 표시 중" :
       pending.length ? `새로 확인할 결과 ${pending.length}건${paused ? " — 화면 표시 일시 정지 중" : ""}` :
       "새로 확인할 결과 없음";
+    if (window.workspaceNavigation) window.workspaceNavigation.setPending(pending.length);
+  }
+  function showStaleNotice(visible) {
+    dom["live-stale"].hidden = !visible;
+    const resultNotice = document.getElementById("live-results-stale");
+    if (resultNotice) resultNotice.hidden = !visible;
   }
   function gap(snapshot) {
     closeSource(); pending = []; pendingBytes = 0; stale = true;
     visible.clear(); dom["live-observations"].replaceChildren();
     setAnalysisSnapshot(snapshot.analysis);
-    dom["live-stale"].hidden = false;
+    showStaleNotice(true);
     dom["live-empty"].textContent = "일부 기록을 이어받지 못해 최신 요약만 표시 중";
     summary(snapshot); pendingStatus(); connection("연결 종료");
     error("일부 실시간 변경 기록을 이어받지 못했습니다.", "현재 요약을 기준으로 다시 확인해 주세요.");
@@ -405,7 +416,7 @@
     });
     if ([candidate, nextRelations, nextRisks, nextCases].some((items) => items.size > MAX_VISIBLE)) {
       closeSource(); pending = []; pendingBytes = 0; stale = true;
-      dom["live-stale"].hidden = false;
+      showStaleNotice(true);
       dom["live-empty"].textContent = "일부 기록을 이어받지 못해 최신 요약만 표시 중";
       pendingStatus();
       error("화면 표시 상한에 도달했습니다.", "최신 상태를 다시 조회한 뒤 확인해 주세요.");
@@ -417,6 +428,7 @@
     visible = candidate; relations = nextRelations; risks = nextRisks; cases = nextCases;
     pending = []; pendingBytes = 0; render(); renderAnalysis(); pendingStatus();
     dom["live-result-details"].open = true;
+    if (window.workspaceNavigation) window.workspaceNavigation.showResult("live");
   }
   function queueChange(checked, message) {
     if (checked.duplicate) return;
@@ -426,7 +438,7 @@
     lastEventType = checked.type;
     if (pending.length >= MAX_PENDING_ITEMS || pendingBytes + size > MAX_PENDING_BYTES) {
       closeSource(); stale = true; pending = []; pendingBytes = 0;
-      dom["live-stale"].hidden = false; pendingStatus();
+      showStaleNotice(true); pendingStatus();
       error("화면에 반영하지 못한 변경이 있습니다.", "최신 상태를 다시 조회한 뒤 확인해 주세요.");
       dom["live-reconnect"].textContent = "최신 상태로 다시 연결";
       dom["live-reconnect"].hidden = false;
@@ -534,7 +546,8 @@
       }
       sessionId = value.session_id;
       source = value.source_role;
-      dom["live-monitoring"].hidden = false;
+      if (window.workspaceNavigation) window.workspaceNavigation.setAvailable("live", true);
+      else dom["live-monitoring"].hidden = false;
       dom["live-source-role"].textContent = `로그 유형: ${ROLES[value.source_role]}`;
       dom["live-processing-state"].textContent = `로그 처리: ${{
         READY: "다음 로그 줄 대기", RUNNING_STEP: "로그 처리 중", DEGRADED: "처리 확인 필요",
@@ -544,7 +557,8 @@
       summary({latest_committed_detection_revision: value.latest_detection_revision, active_observation_count: value.active_observation_count, published_total: value.published_total, evicted_total: value.evicted_total});
       if (allowConnect && (value.service_state === "READY" || value.service_state === "RUNNING")) connect();
     } catch (_) {
-      dom["live-monitoring"].hidden = false;
+      if (window.workspaceNavigation) window.workspaceNavigation.setAvailable("live", true);
+      else dom["live-monitoring"].hidden = false;
       terminal("실시간 상태를 확인하지 못했습니다.", "서버를 확인한 뒤 다시 연결해 주세요.");
     }
   }
@@ -558,7 +572,7 @@
     closeSource(); pending = []; pendingBytes = 0; visible.clear(); relations.clear(); risks.clear(); cases.clear();
     dom["live-observations"].replaceChildren();
     renderAnalysis();
-    stale = false; dom["live-stale"].hidden = true;
+    stale = false; showStaleNotice(false);
     dom["live-reconnect"].hidden = true; clearError(); pendingStatus();
     refreshStatus();
   });

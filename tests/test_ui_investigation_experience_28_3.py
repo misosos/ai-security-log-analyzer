@@ -13,7 +13,7 @@ def test_first_choice_and_secondary_details_are_clear():
     assert 'id="local-choice-button"' in HTML
     assert "내 로그 분석하기" in HTML
     assert 'id="local-choice-details"' in HTML
-    assert '<details class="first-visit-details secondary-details"' in HTML
+    assert '<details id="first-visit-details" class="first-visit-details secondary-details"' in HTML
     assert "로컬에서" in HTML and "침해 확정" in HTML
     assert "합성 상태 표시" not in HTML
 
