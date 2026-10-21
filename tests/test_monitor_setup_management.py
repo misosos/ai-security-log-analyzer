@@ -57,12 +57,53 @@ def test_show_and_delete_default_config_are_explicit_and_path_free(tmp_path: Pat
     assert not config.exists() and source.exists() and config.parent.exists() and sibling.read_text() == "keep"
 
 
+@pytest.mark.parametrize("role,label", (
+    ("application", "애플리케이션 로그인 로그"),
+    ("ssh", "SSH 인증 로그"),
+))
+def test_delete_approval_names_only_user_facing_targets(
+    tmp_path: Path, role: str, label: str,
+) -> None:
+    source = tmp_path / "synthetic.log"
+    line = (
+        "2026-01-02 03:04:05 INFO login_failed user=secret_user ip=192.0.2.9\n"
+        if role == "application" else
+        "2026-01-02 03:04:05 sshd: Failed password for secret_user from 192.0.2.9\n"
+    )
+    source.write_text(line, encoding="utf-8")
+    config = tmp_path / "private" / "monitoring.json"
+    monitor_setup.create_monitor_config(source, config, role=role)
+    output: list[str] = []
+    prompts: list[str] = []
+
+    def cancel(prompt: str) -> str:
+        prompts.append(prompt)
+        return "no"
+
+    result = delete_default_config(config, ask=cancel, emit=output.append)
+    public = "\n".join([*output, *prompts])
+    if result.status != "CANCELLED" or not config.exists():
+        pytest.fail("DELETE_CANCEL_CONTRACT_FAILED", pytrace=False)
+    if any(phrase not in public for phrase in (
+        f"{label}용 기본 설정", "연결된 복구 자료", "원본 로그 파일은 삭제하지 않습니다",
+    )):
+        pytest.fail("DELETE_TARGETS_NOT_CLEAR", pytrace=False)
+    if any(internal in public for internal in (
+        "schema", "application", "FROM_END", "원본 로그와 결과",
+    )):
+        pytest.fail("DELETE_INTERNAL_OR_AMBIGUOUS_TERM_VISIBLE", pytrace=False)
+    if any(private in public for private in (
+        str(source), str(config), "secret_user", "192.0.2.9", line.strip(),
+    )):
+        pytest.fail("DELETE_PRIVATE_VALUE_EXPOSED", pytrace=False)
+
+
 def test_show_and_delete_cli_use_only_default_resolver(tmp_path: Path, monkeypatch, capsys) -> None:
     source, config = _fixture(tmp_path)
     monkeypatch.setattr(monitor_setup, "resolve_default_monitor_config_path", lambda: config)
     assert monitor_setup.main(["--show"]) == 0
     shown = capsys.readouterr()
-    assert "application" in shown.out and "FROM_END" in shown.out
+    assert "애플리케이션 로그인 로그" in shown.out and "새 줄부터 시작" in shown.out
     for private in (str(source), str(config), "secret_user", "192.0.2.9", "source-canary"):
         assert private not in shown.out + shown.err
     assert monitor_setup.main(["--delete"], ask=lambda _: "NO") == 0

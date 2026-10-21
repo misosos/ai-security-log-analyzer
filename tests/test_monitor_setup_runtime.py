@@ -182,7 +182,8 @@ def test_default_setup_show_monitor_delete_lifecycle(tmp_path: Path) -> None:
     assert default.stat().st_mode & 0o777 == 0o600
     shown = subprocess.run([sys.executable, "-m", "app.monitor_setup", "--show"],
                            env=env, capture_output=True, text=True, timeout=8)
-    assert shown.returncode == 0 and "application" in shown.stdout
+    assert shown.returncode == 0 and "애플리케이션 로그인 로그" in shown.stdout
+    assert "(application)" not in shown.stdout
     assert str(source) not in shown.stdout + shown.stderr
     assert str(default) not in shown.stdout + shown.stderr
 

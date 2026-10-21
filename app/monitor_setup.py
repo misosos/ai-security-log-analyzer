@@ -336,8 +336,10 @@ def delete_default_config(path: Path | None = None, *,
             guard.check()
             config = guard.config
             checkpoint = None
-            emit(f"기본 설정 1개: schema {config.schema_version}, {config.source_role}, "
-                 f"{config.start_position}. 연결된 복구 자료도 삭제합니다. 원본 로그와 결과는 삭제하지 않습니다.")
+            role_name = {"application": "애플리케이션 로그인 로그",
+                         "ssh": "SSH 인증 로그"}[config.source_role]
+            emit(f"{role_name}용 기본 설정과 연결된 복구 자료를 삭제합니다. "
+                 "원본 로그 파일은 삭제하지 않습니다.")
             emit("삭제 후 --monitor는 설정을 다시 만들 때까지 실행되지 않습니다.")
             try:
                 if not _approved(ask("기본 모니터링 설정을 삭제하시겠습니까? [y/N] ")):
@@ -388,12 +390,11 @@ def reset_default_checkpoint(path: Path | None = None, *,
                     identity = checkpoint._reset_identity()
                 except LiveCheckpointError:
                     raise MonitorSetupError("CHECKPOINT_RESET_UNSAFE") from None
-                emit("연결된 복구 자료 1개만 삭제하고 새 분석 epoch를 준비합니다.")
-                emit("과거 탐지·관계·위험도·조사 사례와 SSE 변경 기록의 연속성은 이어지지 않습니다.")
-                emit("다음 실행은 현재 파일 끝(FROM_END)에서 시작합니다. 중단 기간의 로그를 복구하지 않으며 무유실·exactly-once를 보장하지 않습니다.")
+                emit("연결된 복구 자료 1개만 삭제합니다. 과거 분석 결과와 알림 연속성은 이어받지 않습니다.")
+                emit("다음 모니터링은 원본 로그의 현재 파일 끝에서 새 줄부터 시작합니다. 중단된 동안의 줄은 분석하지 않으며 누락 없는 처리를 보장하지 않습니다.")
                 emit("원본 로그와 모니터링 설정, 다른 파일은 삭제하지 않습니다. 설정을 다시 만들 필요는 없습니다.")
                 try:
-                    answer = ask("복구 자료 1개를 삭제하고 새 분석 epoch를 시작할 준비를 하시겠습니까? [y/N] ")
+                    answer = ask("복구 자료 1개를 삭제하고 다음 모니터링을 새로 시작하시겠습니까? [y/N] ")
                 except (EOFError, KeyboardInterrupt):
                     answer = ""
                 if not _approved(answer):
@@ -414,7 +415,7 @@ def reset_default_checkpoint(path: Path | None = None, *,
                 except LiveMonitorError:
                     raise MonitorSetupError("CHECKPOINT_RESET_POST_DELETE_FAILED") from None
                 emit("복구 자료 1개를 삭제했습니다. 원본 로그와 설정은 삭제하지 않았습니다.")
-                emit("모니터링은 자동 시작하지 않습니다. uv run python -m app.local_web --monitor 로 새 분석 epoch를 시작하십시오.")
+                emit("모니터링은 자동 시작하지 않습니다. uv run python -m app.local_web --monitor 로 새 분석을 시작하십시오.")
                 emit("이 삭제는 secure erase가 아니며 backup·filesystem snapshot·crash dump에 이전 자료가 남을 수 있습니다.")
                 return SetupResult("RESET", guard.config.source_role)
             finally:
@@ -695,21 +696,25 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             summary = show_default_config()
             role_name = {"application": "애플리케이션 로그인 로그",
                          "ssh": "SSH 인증 로그"}[summary.source_role]
-            emit(f"기본 설정 존재: schema {summary.schema_version}, 로그 종류 {role_name} ({summary.source_role}), "
-                 f"활성 {summary.enabled}, 시작 {summary.start_position}.")
-            emit(f"parser timezone {summary.parser_timezone}, checkpoint {summary.checkpoint_policy}, "
-                 f"rotation {summary.rotation_policy}, config 권한 적합 {summary.permission_ok}.")
-            emit(f"현재 source 사용 가능 {summary.source_available}, 실행 가능 {summary.runnable}.")
-            recovery_name = {"DISABLED": "복구 기능 꺼짐", "FIRST_START": "복구 자료 없음",
-                             "RECOVERABLE": "복구 자료 정상", "NEEDS_REVIEW": "복구 자료 검토 필요"}[
-                                 summary.recovery_state]
+            emit(f"기본 설정: 설정 버전: {summary.schema_version}, 로그 종류: {role_name}.")
+            emit(f"모니터링 설정: {'켜짐' if summary.enabled else '꺼짐'}. "
+                 "시작 방식: 기존 줄은 처리하지 않고 새 줄부터 시작합니다.")
+            recovery_policy = ("같은 파일의 제한된 이력 복구" if summary.checkpoint_policy == "BOUNDED_REPLAY_V1"
+                               else "재시작할 때 현재 파일 끝부터 새로 시작")
+            emit(f"시간 기준: {summary.parser_timezone}. 재시작: {recovery_policy}. "
+                 "파일 교체·길이 축소 시 자동 이어받지 않습니다.")
+            emit(f"설정 권한: {'적합' if summary.permission_ok else '검토 필요'}. "
+                 f"원본 로그: {'사용 가능' if summary.source_available else '확인 필요'}.")
             if summary.recovery_state == "NEEDS_REVIEW":
-                emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
-                     "존재·이력 확인 불가.")
+                emit("복구 자료: 검토 필요. 존재·이력 확인 불가.")
+            elif summary.recovery_state == "RECOVERABLE":
+                emit(f"복구 자료: 정상. 이전 분석 상태를 복구할 수 있습니다. "
+                     f"제한된 이력 {summary.bounded_history_count}건.")
+            elif summary.recovery_state == "FIRST_START":
+                emit("복구 자료: 없음. 첫 실행은 현재 파일의 새 줄부터 시작합니다.")
             else:
-                emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
-                     f"존재 {summary.checkpoint_exists}, bounded 이력 {summary.bounded_history_count}건.")
-            if summary.runnable:
+                emit("복구 자료: 사용하지 않음.")
+            if summary.runnable and summary.enabled:
                 emit("다음 행동: uv run python -m app.local_web --monitor")
             elif summary.recovery_state == "NEEDS_REVIEW":
                 emit("다음 행동: 복구 자료를 수동으로 확인하십시오. 자동 초기화하지 않습니다.")

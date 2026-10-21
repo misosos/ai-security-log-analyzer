@@ -169,7 +169,7 @@ def main() -> None:
             source_before_reset = source.read_bytes()
             config_before_reset = config.read_bytes()
             show = _management(env, "--show")
-            assert show.returncode == 0 and "ssh" in show.stdout
+            assert show.returncode == 0 and "SSH 인증 로그" in show.stdout
             cancelled = _management(env, "--reset-checkpoint", answer="no\n")
             assert cancelled.returncode == 0 and checkpoint.exists()
             reset = _management(env, "--reset-checkpoint", answer="yes\n")

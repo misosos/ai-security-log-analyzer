@@ -34,7 +34,7 @@ def main() -> None:
         assert config.exists() and (_mode(config.parent), _mode(config)) == (0o700, 0o600)
         _assert_private_output(setup, str(source), str(config), "SYNTHETIC_ACCOUNT", "192.0.2.33")
         show = _management(env, "--show")
-        assert show.returncode == 0 and "ssh" in show.stdout
+        assert show.returncode == 0 and "SSH 인증 로그" in show.stdout
         _assert_private_output(show, str(source), str(config), "SYNTHETIC_ACCOUNT", "192.0.2.33")
         port = _port()
         try:

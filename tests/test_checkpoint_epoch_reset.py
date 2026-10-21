@@ -145,9 +145,32 @@ def test_reset_messages_do_not_expose_private_values(tmp_path: Path) -> None:
     rendered = "\n".join(output)
     for canary in (str(source), str(config), "epoch_canary", "192.0.2.9", "source-canary.log"):
         assert canary not in rendered
-    assert "FROM_END" in rendered
+    assert "현재 파일 끝" in rendered
     assert "연속성" in rendered
     assert "원본 로그" in rendered
+
+
+def test_reset_approval_uses_plain_language_for_data_loss(tmp_path: Path) -> None:
+    _, config, checkpoint = _fixture(tmp_path)
+    service, _ = _live_runtime(config, checkpoint_default=True)
+    _close(service)
+    output: list[str] = []
+    prompts: list[str] = []
+
+    def cancel(prompt: str) -> str:
+        prompts.append(prompt)
+        return "no"
+
+    result = reset_default_checkpoint(config, ask=cancel, emit=output.append)
+    public = "\n".join([*output, *prompts])
+    if result.status != "CANCELLED" or not checkpoint.exists():
+        pytest.fail("RESET_CANCEL_CONTRACT_FAILED", pytrace=False)
+    if any(phrase not in public for phrase in (
+        "복구 자료 1개", "과거 분석", "알림", "현재 파일 끝", "원본 로그", "설정",
+    )):
+        pytest.fail("RESET_PLAIN_MEANING_MISSING", pytrace=False)
+    if any(internal in public for internal in ("epoch", "FROM_END", "SSE", "exactly-once")):
+        pytest.fail("RESET_INTERNAL_TERM_VISIBLE", pytrace=False)
 
 
 def test_reset_uses_no_recursive_deletion(tmp_path: Path, monkeypatch) -> None:

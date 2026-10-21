@@ -127,7 +127,7 @@ def _role_flow(role: str, choice: str) -> None:
         sibling.write_text("synthetic sibling", encoding="utf-8")
         initial_source = source.read_bytes()
         show = _management(env, "--show")
-        assert show.returncode == 0 and role in show.stdout and "FIRST_START" in show.stdout
+        assert show.returncode == 0 and "복구 자료: 없음" in show.stdout
         assert ("SSH 인증 로그" if role == "ssh" else "애플리케이션 로그인 로그") in show.stdout
         for result in (setup, show):
             _assert_private_output(result, str(source), str(config), str(checkpoint),
@@ -170,7 +170,7 @@ def _role_flow(role: str, choice: str) -> None:
             assert checkpoint.exists() and config.exists()
             recovered_show = _management(env, "--show")
             assert recovered_show.returncode == 0
-            assert "복구 자료 정상" in recovered_show.stdout
+            assert "복구 자료: 정상" in recovered_show.stdout
             _assert_private_output(recovered_show, str(source), str(config), str(checkpoint),
                                    "SYNTHETIC_ACCOUNT", "192.0.2.33")
             port = _port()

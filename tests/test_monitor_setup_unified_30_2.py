@@ -42,11 +42,17 @@ def test_cli_setup_and_show_use_safe_log_kind(
         [sys.executable, "-m", "app.monitor_setup", "--show"],
         text=True, capture_output=True, env=env, timeout=10,
     )
-    if show.returncode != 0 or label not in show.stdout or role not in show.stdout:
+    if show.returncode != 0 or label not in show.stdout:
         pytest.fail("UNIFIED_SHOW_ROLE_LABEL_FAILED", pytrace=False)
-    for required in ("schema 2", "BOUNDED_REPLAY_V1", "FAIL_CLOSED", "config 권한 적합 True",
-                     "현재 source 사용 가능 True", "FIRST_START"):
-        assert required in show.stdout
+    for required in ("설정 버전: 2", "같은 파일의 제한된 이력 복구",
+                     "파일 교체·길이 축소 시 자동 이어받지 않습니다", "설정 권한: 적합",
+                     "원본 로그: 사용 가능", "복구 자료: 없음"):
+        if required not in show.stdout:
+            pytest.fail("UNIFIED_SHOW_SAFE_SUMMARY_MISSING", pytrace=False)
+    if any(internal in show.stdout for internal in (
+        "(application)", "(ssh)", "BOUNDED_REPLAY_V1", "FAIL_CLOSED", "FIRST_START",
+    )):
+        pytest.fail("UNIFIED_SHOW_INTERNAL_CODE_VISIBLE", pytrace=False)
     public = setup.stdout + setup.stderr + show.stdout + show.stderr
     if any(private in public for private in (
         str(source), str(config), "SYNTHETIC_ACCOUNT", "192.0.2.33", line.strip(),
