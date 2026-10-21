@@ -15,9 +15,10 @@ def test_readme_usage_and_boundaries() -> None:
     assert "python -m app.local_web --monitor" in readme
     assert "python -m app.monitor_setup --show" in readme
     assert "python -m app.monitor_setup --delete" in readme
-    for boundary in ("application 파일 하나", "FROM_END", "Rotation·copytruncate", "마법사는 아직 SSH 설정을 만들지 않습니다"):
+    for boundary in ("애플리케이션 로그인 로그 또는 SSH 인증 로그", "FROM_END", "Rotation·copytruncate"):
         assert boundary in readme
     guide = (ROOT / "docs/monitor_setup_20.md").read_text(encoding="utf-8")
+    assert "Phase 20 마법사 생성·dry-run 절차는 여전히 **application 전용**" in guide
     checkpoint = (ROOT / "docs/live_checkpoint_21.md").read_text(encoding="utf-8")
     for boundary in ("dry-run", "--monitor-config", "자동 활성화되지"):
         assert boundary in guide

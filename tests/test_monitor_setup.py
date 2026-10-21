@@ -3,7 +3,6 @@
 from pathlib import Path
 import json
 import os
-import shlex
 import socket
 import sys
 import tempfile
@@ -32,7 +31,7 @@ def test_wizard_creates_private_v2_config_without_running_monitor(tmp_path: Path
     assert json.loads(output.read_text(encoding="utf-8"))["schema_version"] == "2"
     assert load_live_monitor_config(output).role == "application"
     assert str(source) not in "\n".join(lines)
-    assert str(output) not in "\n".join(lines[:-1])  # explicitly scoped interactive command only
+    assert str(output) not in "\n".join(lines)
     assert any("--output은 재시작 복구 대상이 아닙니다" in line for line in lines)
     assert output.read_bytes().endswith(b"\n")
     assert len(output.read_bytes()) < 4096
@@ -319,7 +318,7 @@ def test_cli_cancellation_and_fixed_error_exit(capsys, tmp_path: Path) -> None:
     assert "SETUP_INVALID_INPUT" in captured.err
 
 
-@pytest.mark.parametrize("role", ("ssh", "access", "linux-audit", "anything", ""))
+@pytest.mark.parametrize("role", ("access", "linux-audit", "anything", ""))
 def test_wizard_rejects_other_roles_without_fallback(role: str, tmp_path: Path) -> None:
     answers = iter(("yes", role))
     with pytest.raises(MonitorSetupError) as caught:
@@ -407,7 +406,7 @@ def test_unsupported_safe_open_is_fixed_failure(tmp_path: Path, monkeypatch) -> 
     assert caught.value.code == "SETUP_UNSUPPORTED_OS"
 
 
-def test_quoted_unicode_source_and_shell_quoted_command(tmp_path: Path) -> None:
+def test_quoted_unicode_source_and_private_custom_output(tmp_path: Path) -> None:
     source = tmp_path / "공백 ' 로그.log"
     source.write_text(APP_LINE, encoding="utf-8")
     output = tmp_path / "private" / "공백 ' 설정.json"
@@ -415,4 +414,5 @@ def test_quoted_unicode_source_and_shell_quoted_command(tmp_path: Path) -> None:
     lines: list[str] = []
     run_setup(output=output, ask=lambda _: next(answers), emit=lines.append)
     assert load_live_monitor_config(output).path == source
-    assert shlex.split(lines[-1])[-1] == str(output)
+    assert str(output) not in "\n".join(lines)
+    assert "--monitor-config" in "\n".join(lines)

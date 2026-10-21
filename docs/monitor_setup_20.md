@@ -1,5 +1,7 @@
 # Phase 20·20.1 — 로컬 application 모니터링 설정 마법사와 기본 설정 관리
 
+Phase 30.1 현재 사용법: 마법사에서 `1` 애플리케이션 로그인 로그 또는 `2` SSH 인증 로그를 명시적으로 선택한다. 예전 `application` 입력도 허용한다. 두 역할 중 하나의 파일만 private v2 설정에 저장하고, 기존 설정은 덮어쓰지 않는다. SSH dry-run은 기존 parser로 최대 4,096 byte·완성 16줄·줄당 2,048 byte를 검사해 인증 실패·성공 기록·기타 기록·무시·형식 미확인의 **건수만** 보여 준다. 형식 검사 결과는 탐지율이나 침해 여부를 뜻하지 않는다. 성공 후 기본 실행 명령은 `uv run python -m app.local_web --monitor`다. 명시적 `--output` 기능은 유지하지만 해당 config 경로를 안내 출력에 다시 표시하지 않는다. 상세 경계는 [SSH 설정 구현](monitor_setup_ssh_30_1.md)을 본다. 아래 Phase 20·21·26 설명은 각 시점의 기존 계약과 이력을 기록한다.
+
 Phase 21 갱신: 아래 Phase 20/20.1 당시 설명의 `checkpoint_policy=DISABLED`·"config 하나만 삭제"·"file lock 없음"은 기존 설정에만 해당한다. 새 설정은 `BOUNDED_REPLAY_V1`이며 기본 `--monitor`에서 동일 파일 bounded checkpoint를 사용한다. `--show`는 checkpoint 상태/이력 건수도 안전하게 표시한다. 승인 삭제는 연결 checkpoint도 검사해 config 먼저, checkpoint 다음으로 지운다. 활성 모니터링이 lock을 가진 동안 삭제는 거부된다. 두 파일 삭제는 원자적이지 않고 부분 실패 시 수동 확인이 필요하다. 명시적 `--monitor-config`와 기존 `DISABLED` 설정은 재시작 때 기존 `FROM_END`다. 자세한 현재 계약은 [Phase 21 문서](live_checkpoint_21.md)를 우선한다.
 
 Phase 21.7 갱신: [새 분석 epoch reset](live_checkpoint_epoch_reset_21_7.md)은 기본 checkpoint JSON 하나만 별도 `--reset-checkpoint` 명령으로 승인 삭제한다. Config 삭제 명령과 다르며 설정·원본 로그는 유지한다. 자동 rotation 복구는 아니다.

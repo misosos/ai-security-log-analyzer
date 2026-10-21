@@ -69,7 +69,7 @@ def test_readme_keeps_security_and_release_boundaries():
         "source checkout", "wheel·PyPI", "127.0.0.1",
         "외부 LLM을 호출하지 않습니다", "원본 로그·credential·개인정보",
         "공개 Issue", "secure erase", "exactly-once", "무유실",
-        "rotation·copytruncate", "cross-source", "SSH 설정 마법사 미지원",
+        "rotation·copytruncate", "cross-source", "애플리케이션 로그인 로그 또는 SSH 인증 로그",
         "Windows", "WCAG 2.2 AA", "SECURITY.md",
         "로그인 성공은 공격 성공", "HTTP 200", "결과가 없다고 안전한 것은 아닙니다",
     ):

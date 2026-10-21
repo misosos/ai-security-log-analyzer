@@ -1,4 +1,4 @@
-"""Trusted, bounded CLI setup for one application log; never starts a monitor."""
+"""Trusted, bounded CLI setup for one application or SSH log."""
 
 import argparse
 from dataclasses import dataclass
@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import shlex
 import stat
 import sys
 from typing import Callable
@@ -26,18 +25,19 @@ SAMPLE_LINES = 16
 _RECOVERY = {
     "SETUP_CANCELLED": ("설정 생성을 취소했습니다.", "다시 시작하려면 명령을 재실행하십시오.", True),
     "SETUP_INVALID_INPUT": ("입력을 확인하십시오.", "절대 경로와 지원 역할을 확인하십시오.", True),
-    "SETUP_UNSUPPORTED_ROLE": ("이 마법사는 application 로그만 지원합니다.", "지원 범위를 확인하십시오.", True),
+    "SETUP_UNSUPPORTED_ROLE": ("로그 종류를 선택하지 못했습니다.", "1 또는 2 중 하나만 선택하십시오.", True),
     "SETUP_PATH_MISSING": ("로그 파일을 찾을 수 없습니다.", "존재하는 일반 파일을 선택하십시오.", True),
     "SETUP_PERMISSION_DENIED": ("파일에 접근할 수 없습니다.", "현재 사용자의 권한을 확인하십시오.", True),
     "SETUP_SYMLINK_REJECTED": ("심볼릭 링크를 사용할 수 없습니다.", "일반 파일과 안전한 디렉터리를 선택하십시오.", True),
     "SETUP_NOT_REGULAR_FILE": ("일반 파일이 아닙니다.", "일반 텍스트 로그 파일을 선택하십시오.", True),
     "SETUP_SOURCE_CHANGED": ("검사 중 로그 파일이 교체되었습니다.", "파일 상태를 확인한 뒤 다시 시도하십시오.", True),
+    "SETUP_UNSAFE_SOURCE_PARENT": ("로그 파일의 상위 디렉터리가 안전하지 않습니다.", "쓰기 권한을 확인하십시오.", True),
     "SETUP_UNSUPPORTED_OS": ("필수 안전 파일 기능을 사용할 수 없습니다.", "지원 환경에서 다시 실행하십시오.", False),
     "SETUP_BINARY_INPUT": ("텍스트 로그 형식이 아닙니다.", "UTF-8 텍스트 로그를 선택하십시오.", True),
     "SETUP_INVALID_UTF8": ("UTF-8로 읽을 수 없습니다.", "UTF-8 로그를 선택하십시오.", True),
     "SETUP_LINE_TOO_LONG": ("검사 범위에 너무 긴 줄이 있습니다.", "줄 길이를 확인하십시오.", True),
-    "SETUP_UNSUPPORTED_FORMAT": ("애플리케이션 로그 형식을 확인하지 못했습니다.", "로그 유형을 확인하십시오.", True),
-    "SETUP_OUTPUT_EXISTS": ("설정 파일이 이미 있습니다.", "기존 파일을 유지하고 다른 저장 위치를 선택하십시오.", True),
+    "SETUP_UNSUPPORTED_FORMAT": ("선택한 로그 형식을 확인하지 못했습니다.", "로그 종류와 형식을 확인하십시오.", True),
+    "SETUP_OUTPUT_EXISTS": ("설정 파일이 이미 있습니다.", "기존 설정을 유지합니다. 조회: uv run python -m app.monitor_setup --show. 삭제: uv run python -m app.monitor_setup --delete. 복구 자료 초기화: uv run python -m app.monitor_setup --reset-checkpoint. 삭제와 초기화는 자동 실행하지 않습니다.", True),
     "SETUP_OUTPUT_SYMLINK": ("저장 대상에 심볼릭 링크가 있습니다.", "다른 안전한 저장 위치를 선택하십시오.", True),
     "SETUP_UNSAFE_PARENT": ("안전한 저장 디렉터리를 확인하지 못했습니다.", "사용자 전용 디렉터리를 선택하십시오.", True),
     "SETUP_SAVE_FAILED": ("설정 파일을 저장하지 못했습니다.", "디렉터리 권한과 저장 공간을 확인하십시오.", True),
@@ -86,6 +86,9 @@ class DryRunSummary:
     partial_line: bool
     empty_source: bool
     sample_limited: bool
+    auth_failure_count: int = 0
+    auth_success_count: int = 0
+    other_ssh_event_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +139,23 @@ def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
         right.st_mtime_ns, right.st_ctime_ns)
 
 
-def _source_descriptor(path: Path) -> tuple[int, os.stat_result]:
+def _ssh_source_permissions(path: Path, opened: os.stat_result) -> None:
+    if opened.st_uid not in (os.geteuid(), 0):
+        raise MonitorSetupError("SETUP_PERMISSION_DENIED")
+    for parent in path.parents:
+        try:
+            metadata = os.stat(parent, follow_symlinks=False)
+        except OSError:
+            raise MonitorSetupError("SETUP_UNSAFE_SOURCE_PARENT") from None
+        if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+            raise MonitorSetupError("SETUP_UNSAFE_SOURCE_PARENT")
+        if metadata.st_mode & 0o022:
+            # The system sticky temporary root can contain a private subtree.
+            if not (metadata.st_uid == 0 and metadata.st_mode & stat.S_ISVTX):
+                raise MonitorSetupError("SETUP_UNSAFE_SOURCE_PARENT")
+
+
+def _source_descriptor(path: Path, role: str = "application") -> tuple[int, os.stat_result]:
     try:
         before = os.stat(path, follow_symlinks=False)
     except FileNotFoundError:
@@ -162,6 +181,12 @@ def _source_descriptor(path: Path) -> tuple[int, os.stat_result]:
     if not _same_file(before, opened):
         os.close(fd)
         raise MonitorSetupError("SETUP_SOURCE_CHANGED")
+    if role == "ssh":
+        try:
+            _ssh_source_permissions(path, opened)
+        except MonitorSetupError:
+            os.close(fd)
+            raise
     return fd, opened
 
 
@@ -175,7 +200,8 @@ def _validate_source_unchanged(path: Path, fd: int, opened: os.stat_result) -> N
         raise MonitorSetupError("SETUP_SOURCE_CHANGED")
 
 
-def _inspect(fd: int, path: Path, opened: os.stat_result) -> DryRunSummary:
+def _inspect(fd: int, path: Path, opened: os.stat_result,
+             role: str = "application") -> DryRunSummary:
     try:
         sample = os.read(fd, SAMPLE_BYTES)
     except OSError:
@@ -203,23 +229,37 @@ def _inspect(fd: int, path: Path, opened: os.stat_result) -> DryRunSummary:
             decoded = line.decode("utf-8", errors="strict")
         except UnicodeError:
             raise MonitorSetupError("SETUP_INVALID_UTF8") from None
-        records.append(LiveTailRecord("application", sequence, decoded, len(line)))
+        records.append(LiveTailRecord(role, sequence, decoded, len(line)))
     if partial and opened.st_size <= SAMPLE_BYTES:
         try:
             partial.decode("utf-8", errors="strict")
         except UnicodeError:
             raise MonitorSetupError("SETUP_INVALID_UTF8") from None
     try:
-        batch = parse_live_records("application", tuple(records))
+        batch = parse_live_records(role, tuple(records))
     except Exception:
         raise MonitorSetupError("SETUP_UNSUPPORTED_FORMAT") from None
     _validate_source_unchanged(path, fd, opened)
     if complete and not batch.parsed_count and batch.rejected_count:
         raise MonitorSetupError("SETUP_UNSUPPORTED_FORMAT")
+    failures = successes = others = 0
+    if role == "ssh":
+        for outcome in batch.outcomes:
+            if outcome.status != "PARSED":
+                continue
+            authentication = outcome.event.authentication
+            kind = authentication.outcome if authentication is not None else None
+            if kind == "failure":
+                failures += 1
+            elif kind == "success":
+                successes += 1
+            else:
+                others += 1
     return DryRunSummary(len(sample), len(complete), batch.parsed_count,
                          batch.ignored_count, batch.rejected_count,
                          bool(partial), opened.st_size == 0,
-                         opened.st_size > SAMPLE_BYTES or line_limit_reached)
+                         opened.st_size > SAMPLE_BYTES or line_limit_reached,
+                         failures, successes, others)
 
 
 def dry_run_application(path: str | Path) -> DryRunSummary:
@@ -231,10 +271,10 @@ def dry_run_application(path: str | Path) -> DryRunSummary:
         os.close(fd)
 
 
-def _preview_source(path: Path) -> tuple[DryRunSummary, tuple[int, int, int, int, int]]:
-    fd, opened = _source_descriptor(path)
+def _preview_source(path: Path, role: str = "application") -> tuple[DryRunSummary, tuple[int, int, int, int, int]]:
+    fd, opened = _source_descriptor(path, role)
     try:
-        summary = _inspect(fd, path, opened)
+        summary = _inspect(fd, path, opened, role)
         return summary, (opened.st_dev, opened.st_ino, opened.st_size,
                          opened.st_mtime_ns, opened.st_ctime_ns)
     finally:
@@ -502,7 +542,7 @@ def _save_private(document: LiveMonitorConfigV2, output: Path,
             runtime = load_live_monitor_config(output)
         except LiveMonitorError:
             raise MonitorSetupError("SETUP_POST_WRITE_FAILED") from None
-        if verified != document or runtime.role != "application":
+        if verified != document or runtime.role != document.source_role:
             raise MonitorSetupError("SETUP_POST_WRITE_FAILED")
         final_stat = os.stat(output.name, dir_fd=parent_fd, follow_symlinks=False)
         if final_stat.st_uid != os.geteuid() or final_stat.st_mode & 0o777 != 0o600:
@@ -539,20 +579,33 @@ def _save_private(document: LiveMonitorConfigV2, output: Path,
 
 
 def create_monitor_config(source: str | Path, output: str | Path, *,
+                          role: str = "application",
                           _expected_identity: tuple[int, int, int, int, int] | None = None) -> DryRunSummary:
+    if type(role) is not str or role not in ("application", "ssh"):
+        raise MonitorSetupError("SETUP_UNSUPPORTED_ROLE")
     source_path = _safe_path(source)
     output_path = _safe_path(output)
-    fd, opened = _source_descriptor(source_path)
+    fd, opened = _source_descriptor(source_path, role)
     try:
         if (_expected_identity is not None and
             (opened.st_dev, opened.st_ino, opened.st_size,
              opened.st_mtime_ns, opened.st_ctime_ns) != _expected_identity):
             raise MonitorSetupError("SETUP_SOURCE_CHANGED")
-        summary = _inspect(fd, source_path, opened)
+        summary = _inspect(fd, source_path, opened, role)
         _validate_source_unchanged(source_path, fd, opened)
-        document = LiveMonitorConfigV2(source_path, checkpoint_policy="BOUNDED_REPLAY_V1")
-        _save_private(document, output_path,
-                      lambda: _validate_source_unchanged(source_path, fd, opened))
+        if role == "ssh":
+            _ssh_source_permissions(source_path, opened)
+        document = LiveMonitorConfigV2(
+            source_path, source_role=role,
+            display_alias="SSH 로그 1" if role == "ssh" else "애플리케이션 로그 1",
+            checkpoint_policy="BOUNDED_REPLAY_V1",
+        )
+        def source_guard() -> None:
+            _validate_source_unchanged(source_path, fd, opened)
+            if role == "ssh":
+                _ssh_source_permissions(source_path, opened)
+
+        _save_private(document, output_path, source_guard)
         return summary
     finally:
         os.close(fd)
@@ -571,36 +624,49 @@ def run_setup(*, output: str | Path | None = None,
     if not _approved(ask("계속하시겠습니까? [y/N] ")):
         emit("설정 생성을 취소했습니다.")
         return SetupResult("CANCELLED")
-    emit("지원 로그 유형: application (애플리케이션 인증 로그)만 가능합니다.")
-    if ask("로그 유형 [application]: ").strip() != "application":
+    emit("로그 종류를 하나 선택하십시오: 1 애플리케이션 로그인 로그, 2 SSH 인증 로그.")
+    choice = ask("로그 종류 [1/2]: ").strip()
+    role = {"1": "application", "2": "ssh", "application": "application", "ssh": "ssh"}.get(choice)
+    if role is None:
         raise MonitorSetupError("SETUP_UNSUPPORTED_ROLE")
     source = _safe_path(ask("로그 파일의 절대 경로: "))
-    summary, expected_identity = _preview_source(source)
+    summary, expected_identity = _preview_source(source, role)
     destination = _safe_path(output) if output is not None else _default_output()
-    emit("미리보기: schema 2, application, FROM_END, Asia/Seoul; 저장 위치: 사용자 전용 설정 파일.")
+    emit("선택한 로그 종류: " + ("SSH 인증 로그" if role == "ssh" else "애플리케이션 로그인 로그") + ".")
+    emit("기존 줄은 처리하지 않고 다음 새 줄부터 모니터링합니다. 설정은 사용자 전용 파일로 저장됩니다.")
     if output is None:
         emit("기본 --monitor 실행은 같은 파일의 bounded 재시작 복구를 사용합니다.")
     else:
         emit("사용자 지정 --output은 재시작 복구 대상이 아닙니다. 명시적 경로 실행은 매번 FROM_END입니다.")
-    emit(f"bounded 검사: {summary.inspected_bytes}B, {summary.inspected_lines}줄, "
-         f"parsed {summary.parsed_count}, ignored {summary.ignored_count}, "
-         f"rejected {summary.rejected_count}, partial {summary.partial_line}.")
+    emit(f"제한된 형식 검사: {summary.inspected_bytes} byte, 완성 {summary.inspected_lines}줄, "
+         f"형식 인식 {summary.parsed_count}건, 무시 {summary.ignored_count}건, "
+         f"형식 미확인 {summary.rejected_count}건.")
+    if role == "ssh":
+        emit(f"형식 검사: 인증 실패 {summary.auth_failure_count}건, 성공 기록 {summary.auth_success_count}건, "
+             f"그 밖의 SSH 기록 {summary.other_ssh_event_count}건, 무시 {summary.ignored_count}건, "
+             f"형식 미확인 {summary.rejected_count}건.")
+        if not summary.auth_failure_count and not summary.auth_success_count:
+            emit("검사 범위에서 인증 기록을 확인하지 못했습니다.")
+    emit("이 검사는 일부 기존 줄의 형식만 확인합니다. 탐지율, 공격 성공, 침해 여부나 운영 호환성을 보장하지 않습니다.")
     if summary.empty_source or not summary.inspected_lines:
         emit("완성된 기존 줄이 없어 형식을 확인하지 못했습니다. 새 줄이 생긴 뒤 확인하십시오.")
+    if summary.partial_line or summary.sample_limited:
+        emit("미완성 줄이나 검사 상한 밖의 내용은 확인하지 않았습니다.")
     emit("기존 줄은 분석하지 않으며, 로그 경로는 private config에 저장됩니다.")
     if not _approved(ask("이 설정을 저장하시겠습니까? [y/N] ")):
         emit("설정 생성을 취소했습니다.")
-        return SetupResult("CANCELLED", "application", summary)
-    saved = create_monitor_config(source, destination, _expected_identity=expected_identity)
-    emit("설정 생성 완료. application, FROM_END. 외부 LLM 자동 전송은 없습니다.")
+        return SetupResult("CANCELLED", role, summary)
+    saved = create_monitor_config(source, destination, role=role,
+                                  _expected_identity=expected_identity)
+    emit("설정 생성 완료. 새 줄부터 시작합니다. 외부 LLM 자동 전송은 없습니다.")
     emit("설정 파일을 공유하지 마세요. 서버 종료는 Ctrl+C입니다.")
-    emit("실행 명령 (현재 터미널에 경로가 남을 수 있음):")
     if output is None:
+        emit("실행 명령:")
         emit("uv run python -m app.local_web --monitor")
     else:
         emit("사용자 지정 --output은 기본 checkpoint 대상이 아닙니다. 명시적 경로 실행은 재시작 때 FROM_END입니다.")
-        emit("uv run python -m app.local_web --monitor-config " + shlex.quote(os.fspath(destination)))
-    return SetupResult("CREATED", "application", saved)
+        emit("실행하려면 명시적 --monitor-config 경로를 직접 지정하십시오. 경로는 shell history와 프로세스 목록에 남을 수 있습니다.")
+    return SetupResult("CREATED", role, saved)
 
 
 class _SetupParser(argparse.ArgumentParser):
@@ -611,7 +677,7 @@ class _SetupParser(argparse.ArgumentParser):
 def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
          emit: Callable[[str], None] = print) -> int:
     parser = _SetupParser(
-        description="단일 application 로그의 로컬 모니터링 설정 생성",
+        description="단일 application 또는 SSH 로그의 로컬 모니터링 설정 생성",
         epilog="예: uv run python -m app.monitor_setup --show | --delete | --reset-checkpoint",
     )
     parser.add_argument("--output", metavar="/absolute/path/to/monitoring.json")
@@ -649,7 +715,7 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
         return (2 if error.code in ("SETUP_INVALID_INPUT", "SETUP_UNSUPPORTED_ROLE") else
                 3 if error.code in ("SETUP_PATH_MISSING", "SETUP_PERMISSION_DENIED",
                                    "SETUP_SYMLINK_REJECTED", "SETUP_NOT_REGULAR_FILE",
-                                   "SETUP_SOURCE_CHANGED", "SETUP_UNSUPPORTED_OS",
+                                   "SETUP_SOURCE_CHANGED", "SETUP_UNSAFE_SOURCE_PARENT", "SETUP_UNSUPPORTED_OS",
                                    "SETUP_BINARY_INPUT", "SETUP_INVALID_UTF8", "SETUP_LINE_TOO_LONG",
                                    "SETUP_UNSUPPORTED_FORMAT") else
                 3 if error.code.startswith("DEFAULT_CONFIG_") and error.code not in (

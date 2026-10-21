@@ -27,7 +27,7 @@ uv run python -m app.local_web
 
 ## 실시간 모니터링
 
-application 파일 하나의 private 설정을 만들고 명시적으로 모니터링을 시작합니다.
+마법사에서 애플리케이션 로그인 로그 또는 SSH 인증 로그 **하나**를 선택해 private 설정을 만들고, 별도 명령으로 모니터링을 시작합니다.
 
 ```bash
 uv run python -m app.monitor_setup
@@ -40,14 +40,14 @@ uv run python -m app.local_web --monitor
 | `uv run python -m app.monitor_setup --delete` | 승인 후 기본 설정과 연결된 private checkpoint 삭제; 원본 로그는 보존 |
 | `uv run python -m app.monitor_setup --reset-checkpoint` | 승인 후 분석 연속성을 버리고 다음 실행을 새 epoch로 시작; 원본 로그·설정은 보존 |
 
-설정 마법사는 아직 SSH 설정을 만들지 않습니다. 새 설정은 현재 파일의 끝(`FROM_END`)부터 읽고, 이후 **같은 파일**의 bounded 구간을 이용해 분석 상태를 복구합니다. Rotation·copytruncate의 자동 연결은 없습니다. 화면의 **새 결과 N건 보기**는 대기 중인 결과를 적용하고, **화면 표시 일시 정지**는 서버 수집을 멈추지 않습니다. 자세한 사용법과 SSH 수동 설정 경계는 [설정 마법사](docs/monitor_setup_20.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)에 있습니다.
+마법사는 최대 4,096 byte·완성 16줄의 형식만 확인하며 탐지율을 보장하지 않습니다. 새 설정은 현재 파일의 끝(`FROM_END`)부터 읽고, 이후 **같은 파일**의 bounded 구간을 이용해 분석 상태를 복구합니다. Rotation·copytruncate의 자동 연결은 없습니다. 화면의 **새 결과 N건 보기**는 대기 중인 결과를 적용하고, **화면 표시 일시 정지**는 서버 수집을 멈추지 않습니다. 자세한 사용법은 [설정 마법사](docs/monitor_setup_20.md), [SSH 설정 구현](docs/monitor_setup_ssh_30_1.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)에 있습니다.
 
 ## 지원 입력과 관찰
 
 | 입력 | 배치 | Live | Checkpoint | 주요 관찰과 한계 |
 | --- | --- | --- | --- | --- |
 | application 인증 로그 | 지원 | 단일 파일 | 같은 파일 bounded 복구 | 인증 실패·성공 관찰과 지원 관계; 로그 밖의 사실은 판단하지 않음 |
-| OpenSSH 인증 로그 | 지원 | 단일 파일·수동 설정 | private v2 설정의 같은 파일 bounded 복구 | Brute Force·Spray-like 관찰과 지원 관계; 성공 기록이 계정 탈취 증거는 아님 |
+| OpenSSH 인증 로그 | 지원 | 단일 파일·마법사 설정 | private v2 설정의 같은 파일 bounded 복구 | Brute Force·Spray-like 관찰과 지원 관계; 성공 기록이 계정 탈취 증거는 아님 |
 | 웹 access 로그 | 지원 | 수동 설정에서 detection-only | 미지원 | 웹 요청 패턴 관찰; HTTP 응답만으로 exploit 성공을 판단하지 않음 |
 | Linux Audit | 별도 조사 흐름 | 미지원 | 미지원 | 프로세스 실행 category·건수와 조사 후보; 악성 실행 판정은 아님 |
 
@@ -73,7 +73,7 @@ HTML 보고서·private config·checkpoint와 CLI 출력에는 민감한 조사 
 | --- | --- |
 | Live·분석 | 단일 source live, cross-source 결합 없음, access live는 detection-only |
 | 파일 연속성 | rotation·copytruncate 자동 handoff 없음; 완전한 crash recovery·exactly-once·무유실 보장 없음 |
-| 설정·플랫폼 | SSH 설정 마법사 미지원; Windows 실제 업로드·브라우저 흐름 미검증 |
+| 설정·플랫폼 | 마법사는 application·SSH 단일 source만 지원; Windows 실제 업로드·브라우저 흐름 미검증 |
 | 설치·운영 | source checkout만 지원, wheel·PyPI 미지원; SIEM·EDR·WAF·자동 대응 시스템 아님 |
 | 접근성 | 자동 검사 결과를 WCAG 2.2 AA 준수로 주장하지 않음 |
 

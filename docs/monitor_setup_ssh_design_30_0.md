@@ -1,5 +1,7 @@
 # application·SSH 모니터링 설정 마법사 통합 설계
 
+**후속 구현:** Phase 30.1에서 역할 선택·SSH bounded dry-run·private v2 생성을 구현했다. 이 문서의 “현재”와 “제안”은 Phase 30.0 설계 당시 기준이다. 실제 사용 계약과 검증 결과는 [SSH 설정 구현](monitor_setup_ssh_30_1.md)을 참조한다.
+
 **상태: 설계 gate.** 이 문서는 구현·지원 완료 선언이 아니다. 기준은 v0.4.0 릴리스 커밋 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`이며, [CI run 39549559951](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39549559951)은 completed/success였다. 시작 `main`·`origin/main`은 같고 clean, behind/ahead 0/0이었다. 변경 전 전체 회귀는 2,384 passed·기존 경고 2개다. 공개 v0.1.0~v0.4.0 tag·Release는 그대로 둔다.
 
 ## 결정과 현재의 실무 공백
