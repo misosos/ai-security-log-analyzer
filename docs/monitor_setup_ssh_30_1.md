@@ -11,3 +11,5 @@ SSH source는 symlink·비정규 파일·group/world writable 파일을 거부�
 단일 source만 지원한다. Access·Linux Audit 설정 생성, 다중 source, cross-source 분석, rotation/copytruncate 자동 복구, exactly-once·무유실 보장은 범위 밖이다. 기존 줄은 최초 실행 때 분석하지 않으며 같은 파일의 제한된 checkpoint 구간만 재시작 복구한다. `--delete`는 원본 로그를 지우지 않고, `--reset-checkpoint`는 분석 연속성만 명시적으로 버린다.
 
 검증은 합성 파일과 임시 HOME에서만 한다. 기존 application 흐름, SSH parser 건수, bounded 입력, private 권한, no-clobber, loader round-trip, 파일 교체 거부, checkpoint 재시작과 관리 명령을 회귀로 확인한다. 실제 사용자 로그·기본 설정·checkpoint는 사용하지 않는다.
+
+후속 [application·SSH 관리 및 복구 통합 감사](monitor_setup_unified_audit_30_2.md)는 `--show`, monitor 재시작, reset, delete를 두 역할의 동일한 실제 CLI 흐름에서 검증한다. 정상 종료는 설정과 checkpoint를 유지하고, reset은 설정을 유지하면서 과거 분석 연속성만 버리며, delete는 기본 설정과 연결 checkpoint를 지운다. 어느 명령도 원본 로그를 삭제하지 않는다.

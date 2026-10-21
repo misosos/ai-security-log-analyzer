@@ -53,6 +53,12 @@ jobs:
           uv run pytest -q tests/test_ssh_checkpoint_26_0.py
           uv run python tests/smoke_ssh_checkpoint_26_0.py
 
+      - name: Verify Linux unified application and SSH setup management
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run pytest -q tests/test_monitor_setup_unified_30_2.py tests/test_monitor_setup_management.py tests/test_checkpoint_epoch_reset.py
+          uv run python tests/smoke_unified_monitor_management_30_2.py
+
       - name: Verify bounded OpenAPI property pilot
         run: uv run pytest -q tests/test_schemathesis_api_pilot_23_5.py
 

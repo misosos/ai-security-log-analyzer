@@ -693,12 +693,18 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             raise MonitorSetupError("SETUP_INVALID_INPUT")
         if args.show:
             summary = show_default_config()
-            emit(f"기본 설정 존재: schema {summary.schema_version}, 로그 유형 {summary.source_role}, "
+            role_name = {"application": "애플리케이션 로그인 로그",
+                         "ssh": "SSH 인증 로그"}[summary.source_role]
+            emit(f"기본 설정 존재: schema {summary.schema_version}, 로그 종류 {role_name} ({summary.source_role}), "
                  f"활성 {summary.enabled}, 시작 {summary.start_position}.")
             emit(f"parser timezone {summary.parser_timezone}, checkpoint {summary.checkpoint_policy}, "
                  f"rotation {summary.rotation_policy}, config 권한 적합 {summary.permission_ok}.")
             emit(f"현재 source 사용 가능 {summary.source_available}, 실행 가능 {summary.runnable}.")
-            emit(f"마지막 처리 위치: {summary.recovery_state}, bounded 이력 {summary.bounded_history_count}건.")
+            recovery_name = {"DISABLED": "복구 기능 꺼짐", "FIRST_START": "복구 자료 없음",
+                             "RECOVERABLE": "복구 자료 정상", "NEEDS_REVIEW": "복구 자료 검토 필요"}[
+                                 summary.recovery_state]
+            emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
+                 f"존재 {summary.checkpoint_exists}, bounded 이력 {summary.bounded_history_count}건.")
             emit("다음 행동: uv run python -m app.local_web --monitor" if summary.runnable else
                  "다음 행동: 원본 로그의 접근 가능 여부를 수동으로 확인하십시오.")
             return 0

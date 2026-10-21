@@ -40,6 +40,8 @@ uv run python -m app.local_web --monitor
 | `uv run python -m app.monitor_setup --delete` | 승인 후 기본 설정과 연결된 private checkpoint 삭제; 원본 로그는 보존 |
 | `uv run python -m app.monitor_setup --reset-checkpoint` | 승인 후 분석 연속성을 버리고 다음 실행을 새 epoch로 시작; 원본 로그·설정은 보존 |
 
+모니터를 정상 종료하면 설정과 checkpoint가 유지됩니다. `--delete`와 `--reset-checkpoint`도 원본 로그를 삭제하지 않습니다.
+
 마법사는 최대 4,096 byte·완성 16줄의 형식만 확인하며 탐지율을 보장하지 않습니다. 새 설정은 현재 파일의 끝(`FROM_END`)부터 읽고, 이후 **같은 파일**의 bounded 구간을 이용해 분석 상태를 복구합니다. Rotation·copytruncate의 자동 연결은 없습니다. 화면의 **새 결과 N건 보기**는 대기 중인 결과를 적용하고, **화면 표시 일시 정지**는 서버 수집을 멈추지 않습니다. 자세한 사용법은 [설정 마법사](docs/monitor_setup_20.md), [SSH 설정 구현](docs/monitor_setup_ssh_30_1.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)에 있습니다.
 
 ## 지원 입력과 관찰

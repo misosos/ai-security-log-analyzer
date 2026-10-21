@@ -10,7 +10,7 @@
 
 ## Live monitoring·checkpoint
 
-- [단일 파일 live 설계](live_log_monitoring_design.md) · [로컬 설정 마법사](monitor_setup_20.md) · [application·SSH 설정 통합 설계](monitor_setup_ssh_design_30_0.md) · [SSH 설정 구현](monitor_setup_ssh_30_1.md) · [checkpoint 계약](live_checkpoint_21.md)
+- [단일 파일 live 설계](live_log_monitoring_design.md) · [로컬 설정 마법사](monitor_setup_20.md) · [application·SSH 설정 통합 설계](monitor_setup_ssh_design_30_0.md) · [SSH 설정 구현](monitor_setup_ssh_30_1.md) · [관리·복구 통합 감사](monitor_setup_unified_audit_30_2.md) · [checkpoint 계약](live_checkpoint_21.md)
 - [분석 관계·위험도·사례 설계](live_analysis_correlation_case_design.md) · [SSH live 연결](ssh_live_analysis_integration_22_3.md) · [SSH 분석 감사](ssh_live_analysis_audit_22_4.md)
 - [SSH checkpoint 복구](ssh_checkpoint_recovery_26_0.md) · [Ubuntu SSH 수용 기록](ssh_checkpoint_linux_acceptance_26_1.md)
 - [checkpoint 잠금·장애 경계](live_checkpoint_21_2.md) · [별도 프로세스 재시작](live_checkpoint_21_3.md) · [명시적 epoch reset](live_checkpoint_epoch_reset_21_7.md) · [Linux reset 검증](live_checkpoint_epoch_reset_21_8_linux_audit.md)
