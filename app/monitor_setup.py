@@ -703,10 +703,20 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             recovery_name = {"DISABLED": "복구 기능 꺼짐", "FIRST_START": "복구 자료 없음",
                              "RECOVERABLE": "복구 자료 정상", "NEEDS_REVIEW": "복구 자료 검토 필요"}[
                                  summary.recovery_state]
-            emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
-                 f"존재 {summary.checkpoint_exists}, bounded 이력 {summary.bounded_history_count}건.")
-            emit("다음 행동: uv run python -m app.local_web --monitor" if summary.runnable else
-                 "다음 행동: 원본 로그의 접근 가능 여부를 수동으로 확인하십시오.")
+            if summary.recovery_state == "NEEDS_REVIEW":
+                emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
+                     "존재·이력 확인 불가.")
+            else:
+                emit(f"복구 자료 상태: {recovery_name} ({summary.recovery_state}), "
+                     f"존재 {summary.checkpoint_exists}, bounded 이력 {summary.bounded_history_count}건.")
+            if summary.runnable:
+                emit("다음 행동: uv run python -m app.local_web --monitor")
+            elif summary.recovery_state == "NEEDS_REVIEW":
+                emit("다음 행동: 복구 자료를 수동으로 확인하십시오. 자동 초기화하지 않습니다.")
+            elif not summary.source_available:
+                emit("다음 행동: 원본 로그의 접근 가능 여부를 수동으로 확인하십시오.")
+            else:
+                emit("다음 행동: 설정 상태를 수동으로 확인하십시오.")
             return 0
         if args.delete:
             delete_default_config(ask=ask, emit=emit)

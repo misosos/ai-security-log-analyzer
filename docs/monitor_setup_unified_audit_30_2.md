@@ -27,3 +27,5 @@
 ## 잔여 위험과 판정 경계
 
 Advisory lock을 따르지 않는 같은 UID 프로세스의 최종 교체 race를 완전히 막지 못한다. Config와 checkpoint의 삭제는 원자적 묶음도 secure erase도 아니다. 백업·snapshot·crash dump와 이미 읽힌 메모리의 잔존은 별개다. rotation/copytruncate 자동 handoff, crash recovery, exactly-once·무유실, 다중 source·cross-source 분석은 제공하지 않는다. macOS application/SSH 흐름과 개인정보·lock 경계가 통과해도 Ubuntu 새 단계의 원격 CI가 확인되기 전 판정은 최대 **CONDITIONAL GO**다.
+
+후속 [Ubuntu·사용자 수용 기록](monitor_setup_acceptance_30_3.md)에서 기준 커밋의 전용 Ubuntu CI 단계가 성공했음을 확인했다. 이 문단의 `NOT_TESTED`·`CONDITIONAL GO`는 Phase 30.2 로컬 커밋 시점의 판정이다. 사용자 직접 이해도는 자동 CI와 별도로 판단한다.
