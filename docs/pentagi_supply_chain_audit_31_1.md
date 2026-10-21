@@ -6,6 +6,8 @@
 
 **Phase 31.2 실행형 isolation proof: NO-GO.** Source와 일부 image metadata는 정적으로 확인했지만, v2.2.0에 고정된 공식 installer asset·checksum이 없고, 기본 Compose는 host Docker socket을 control plane에 직접 mount한다. Callback·egress 차단과 runtime image/tool download 통제, 저장 경계·모든 구성요소 라이선스는 실행 환경에서 아직 검증되지 않았다. 정적 감사 결과를 실행 안전성 PASS로 표현하지 않는다. PentAGI installer·container·Compose·penetration-testing tool을 실행하지 않았고 Docker socket을 mount하지 않았다. LLM/search 연결이나 대상 스캔도 하지 않았다. Production·dependency·lockfile·CI는 변경하지 않았다.
 
+후속 [Phase 31.2A 폐기형 VM 격리 설계](disposable_vm_isolation_31_2a.md)는 별도 VM을 확인하지 못해 `BLOCKED_NO_DISPOSABLE_VM`으로 남겼다. 이 정적 감사의 `SOURCE_IMAGE_BINDING_UNPROVEN` 및 PentAGI 실행 NO-GO를 해제하지 않는다.
+
 ## v2.2.0 release identity와 source archive
 
 공식 [`vxcontrol/pentagi` v2.2.0 Release](https://github.com/vxcontrol/pentagi/releases/tag/v2.2.0)는 2026-10-05 게시, draft=false, prerelease=false다. `refs/tags/v2.2.0`은 **lightweight tag**여서 별도 annotated tag object는 없으며 peeled source commit과 ref object가 모두 `b611fbebcf55b6deb88ad1fb7bf1f1ce7a357242`다. Commit tree는 `f3fb014f5d3e48d54f3a1dadff50eb40e5c3879e`이고 GitHub는 commit signature를 verified로 표시한다. 이는 source archive·container image의 독립 서명을 뜻하지 않는다. Release의 별도 업로드 asset은 **0개**다.

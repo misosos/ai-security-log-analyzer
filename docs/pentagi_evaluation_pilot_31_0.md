@@ -6,6 +6,8 @@
 
 후속 [Phase 31.1 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md)는 source·registry metadata를 추가 확인했지만 **Phase 31.2 실행형 isolation proof는 NO-GO**로 판정했다. 위 문단은 Phase 31.0 당시 설계 gate의 범위와 증거 수준을 보존한다.
 
+후속 [Phase 31.2A 폐기형 VM 격리 설계](disposable_vm_isolation_31_2a.md)는 기준 SHA의 CI 성공을 확인했으나 준비된 별도 Linux VM이 없어 `BLOCKED_NO_DISPOSABLE_VM`이다. PentAGI 실행 및 Phase 31.2B는 계속 NO-GO다.
+
 기준은 `34e215133428f249ee73994983e017be7e53f098`의 main과 [GitHub Actions run 39591982919](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39591982919) completed/success다. Ubuntu 통합 설정 관리와 전체 회귀가 성공했고 저장된 artifact는 0개였다. v0.4.0 공개 tag·Release는 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`에 유지된다. 보존용 `backup/phase-30-3a-amended` 로컬 브랜치는 존재하지 않아 삭제하지 않았다.
 
 Phase 30 최종 증거: Ubuntu application **PASS**, Ubuntu SSH **PASS**, 사용자 이해도 9개 항목 수정 후 **PASS**, `--show`·reset·delete 문구 수정 후 **PASS**. 여전히 rotation/copytruncate 자동 복구, SIGKILL·전원 차단 복구, exactly-once·무유실, 비협력적 동일 UID 교체 경쟁은 **NO-GO**다. [사용자 수용 기록](monitor_setup_acceptance_30_3.md)은 자동 증거와 실제 사용자 응답을 구분한다.
