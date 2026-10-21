@@ -4,6 +4,8 @@
 
 **CONDITIONAL GO — 설계 gate만 통과. PentAGI 실행은 NO-GO.** 이 문서는 별도 개발용 도구의 향후 정적 감사와 격리 가능성을 평가한다. PentAGI를 다운로드·설치·실행하지 않았고, installer·Compose·image pull·LLM/검색 연결·공격 명령·스캔을 수행하지 않았다. 제품 기능, production 코드, dependency, lockfile, CI에는 PentAGI가 없다. 실제 네트워크 격리, image digest, installer hash, 도구 다운로드 통제, 법적 조건은 아직 검증되지 않았다. 이 문서나 자동 테스트를 실행 승인으로 해석하지 않는다.
 
+후속 [Phase 31.1 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md)는 source·registry metadata를 추가 확인했지만 **Phase 31.2 실행형 isolation proof는 NO-GO**로 판정했다. 위 문단은 Phase 31.0 당시 설계 gate의 범위와 증거 수준을 보존한다.
+
 기준은 `34e215133428f249ee73994983e017be7e53f098`의 main과 [GitHub Actions run 39591982919](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39591982919) completed/success다. Ubuntu 통합 설정 관리와 전체 회귀가 성공했고 저장된 artifact는 0개였다. v0.4.0 공개 tag·Release는 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`에 유지된다. 보존용 `backup/phase-30-3a-amended` 로컬 브랜치는 존재하지 않아 삭제하지 않았다.
 
 Phase 30 최종 증거: Ubuntu application **PASS**, Ubuntu SSH **PASS**, 사용자 이해도 9개 항목 수정 후 **PASS**, `--show`·reset·delete 문구 수정 후 **PASS**. 여전히 rotation/copytruncate 자동 복구, SIGKILL·전원 차단 복구, exactly-once·무유실, 비협력적 동일 UID 교체 경쟁은 **NO-GO**다. [사용자 수용 기록](monitor_setup_acceptance_30_3.md)은 자동 증거와 실제 사용자 응답을 구분한다.

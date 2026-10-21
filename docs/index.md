@@ -36,7 +36,7 @@
 
 ## 개발·보안 검증 기록
 
-- [PentAGI 격리 평가 pilot 설계 gate](pentagi_evaluation_pilot_31_0.md) — 실행·설치 전 공급망·권한·평가 경계
+- [PentAGI 격리 평가 pilot 설계 gate](pentagi_evaluation_pilot_31_0.md) · [v2.2.0 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md) — 실행 전 권한·배포물·평가 경계
 - [Semgrep 설계](semgrep_security_gate_23_2.md) · [Semgrep 공급망 검토](semgrep_security_pilot_23_3.md)
 - [공급망 gate](software_supply_chain_gate_24_0.md) · [OSV pilot](software_supply_chain_pilot_24_1.md) · [dependency evidence bundle](dependency_evidence_bundle_24_2.md)
 - [REA 개발 pilot](rea_development_pilot_22_0.md) · [CLI pilot](rea_cli_pilot_22_1.md) · [정적 경로 감사](rea_static_path_audit_22_1a.md)
