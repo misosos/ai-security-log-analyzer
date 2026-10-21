@@ -16,7 +16,7 @@ def test_version_and_lock_metadata_have_one_project_source():
     lock = tomllib.loads(_read("uv.lock"))
     own = [package for package in lock["package"] if package["name"] == project["name"]]
     assert len(own) == 1
-    assert project["version"] == own[0]["version"] == "0.3.0"
+    assert project["version"] == own[0]["version"] == "0.4.0"
     assert project["license"] == "MIT"
     assert _read("docs/releases/v0.1.0.md").startswith("# v0.1.0 로컬 릴리스 노트\n")
 

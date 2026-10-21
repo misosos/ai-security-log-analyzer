@@ -1,18 +1,12 @@
 """Keep the v0.3 release candidate's durable public contract explicit."""
 
 from pathlib import Path
-import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_current_version_lock_and_changelog_match() -> None:
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
-    roots = [item for item in lock["package"] if item["name"] == project["name"]]
-    assert len(roots) == 1
-    assert project["version"] == roots[0]["version"] == "0.3.0"
+def test_historical_changelog_order() -> None:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert changelog.index("## [0.3.0]") < changelog.index("## [0.2.0]")
 

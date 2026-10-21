@@ -1,11 +1,12 @@
 # AI Security Log Analyzer
 
-AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 근거를 정리하는 **방어 목적의 로컬 조사 보조 도구**입니다. 탐지 결과는 침해나 공격 성공의 확정이 아닙니다. 최신 안정 버전은 [v0.3.0 Release](https://github.com/misosos/ai-security-log-analyzer/releases/tag/v0.3.0)입니다.
+AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 근거를 정리하는 **방어 목적의 로컬 조사 보조 도구**입니다. 탐지 결과는 침해나 공격 성공의 확정이 아닙니다. [v0.4.0 노트](docs/releases/v0.4.0.md)는 작업 화면의 변경 사항을 설명하며, [v0.3.0 Release](https://github.com/misosos/ai-security-log-analyzer/releases/tag/v0.3.0)는 이전 공개 버전입니다.
 
 ## 주요 기능
 
 - application·OpenSSH·웹 접근 로그를 배치 분석하고, application·SSH 파일 하나를 선택해 실시간 모니터링합니다.
 - 탐지 관찰, 지원 관계, 위험도, 조사 사례를 근거와 판정 한계와 함께 표시합니다.
+- 전체 폭 작업 화면에서 시작 행동·분석 결과를 구분하고 조사 사례의 상세 근거를 펼쳐 봅니다.
 - application·SSH의 동일 파일을 bounded checkpoint로 재시작할 수 있습니다.
 - Linux Audit 프로세스 실행 기록에서 조사 후보를 별도로 요약합니다.
 - API·SSE·HTML 보고서에는 개인정보를 제한한 projection을 사용합니다. CLI 출력과 다운로드 파일도 민감한 조사 자료로 취급하십시오.
@@ -22,7 +23,7 @@ uv sync --locked --dev
 uv run python -m app.local_web
 ```
 
-`http://127.0.0.1:8000/`에서 **샘플로 체험하기** 또는 **내 로그 분석하기**를 선택합니다. 실행한 터미널에서 `Ctrl+C`로 종료합니다. 기본 실행은 loopback·foreground이며 합성 sample과 사용자가 직접 고른 로컬 파일을 분석합니다. 공식 설치 방식은 **source checkout**이며 wheel·PyPI 배포는 지원하지 않습니다. 첫 사용 흐름은 [로컬 웹 시연 안내](docs/final_demo_guide.md)를 참조하십시오.
+`http://127.0.0.1:8000/`에서 **예시 데이터로 둘러보기** 또는 **내 로그 분석하기**를 선택합니다. 실행한 터미널에서 `Ctrl+C`로 종료합니다. 기본 실행은 loopback·foreground이며 합성 sample과 사용자가 직접 고른 로컬 파일을 분석합니다. 공식 설치 방식은 **source checkout**이며 wheel·PyPI 배포는 지원하지 않습니다. 첫 사용 흐름은 [로컬 웹 시연 안내](docs/final_demo_guide.md)를 참조하십시오.
 
 ## 실시간 모니터링
 
@@ -96,8 +97,8 @@ npm run test:a11y
 | 탐지·평가 | [탐지 평가](docs/detection_evaluation.md) |
 | 개인정보·API | [개인정보 projection](docs/public_analysis_privacy.md) |
 | Linux Audit | [프로세스 실행 조사](docs/linux_audit_process_execution.md) |
-| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [대시보드 비교안](docs/ui_dashboard_prototype_28_2.md), [Safari 수용 기록](docs/v030_safari_acceptance_27_1.md) |
-| 릴리스 | [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
+| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [작업 화면 Safari 수용 기록](docs/ui_safari_acceptance_28_5.md), [v0.3.0 Safari 수용 기록](docs/v030_safari_acceptance_27_1.md) |
+| 릴리스 | [v0.4.0 노트](docs/releases/v0.4.0.md), [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
 | 개발·보안 검증 기록 | [전체 문서 지도](docs/index.md) |
 
 ## 라이선스와 보안 신고

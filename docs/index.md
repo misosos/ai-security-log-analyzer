@@ -5,7 +5,7 @@
 ## 시작·사용·릴리스
 
 - [로컬 웹 시연](final_demo_guide.md) · [HTML 조사 보고서](html_investigation_report_design.md)
-- [v0.3.0 릴리스 노트](releases/v0.3.0.md) · [v0.2.0](releases/v0.2.0.md) · [v0.1.0](releases/v0.1.0.md)
+- [v0.4.0 릴리스 노트](releases/v0.4.0.md) · [v0.3.0](releases/v0.3.0.md) · [v0.2.0](releases/v0.2.0.md) · [v0.1.0](releases/v0.1.0.md)
 - [릴리스 체크리스트](release_checklist.md) · [release readiness](release_readiness.md)
 
 ## Live monitoring·checkpoint

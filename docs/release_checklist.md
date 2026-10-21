@@ -158,7 +158,7 @@ Phase 10 당시 go/no-go: 기준 기능 커밋의 clean checkout과 원격 CI는
 
 ## v0.3.0 로컬 릴리스 후보 — Phase 27
 
-이 절이 v0.3.0의 현재 gate다. 위 절은 당시 판단 이력이며 [릴리스 노트](releases/v0.3.0.md)의 지원 범위가 우선한다. 준비 커밋은 tag·Release 실행 승인이 아니다.
+이 절은 v0.3.0의 당시 gate다. 위 절은 당시 판단 이력이며 [릴리스 노트](releases/v0.3.0.md)의 지원 범위가 우선한다. 준비 커밋은 tag·Release 실행 승인이 아니다.
 
 | Gate | 판정 | 근거와 남은 일 |
 | --- | --- | --- |
@@ -180,3 +180,21 @@ Phase 27.1 Safari 수동 검수의 범위와 결과는 별도 수용 기록에�
 ## Phase 27.1 — Safari 수동 수용과 정리
 
 [독립 수용 기록](v030_safari_acceptance_27_1.md)의 최종 판정은 **CONDITIONAL GO**다. 실제 Safari 18.6에서 단일 합성 SSH v2의 live·checkpoint 복구·명시적 reset·새 epoch와 합성 truncation 실패 화면을 검수했고, application v2 사전 환경은 별도 임시 HOME에서 health/status/SSE로 확인했다. Option+Tab 기본 조작은 직접 항목별 PASS를 받았다. 200%·최소 창 너비·Web Inspector는 사용자의 실제 확인이라는 일괄 응답에 기반하며, 세부 계측 자료는 없다. VoiceOver 상세·정확한 320 CSS px·fault 주입 후 확대 및 Inspector 재검수는 `NOT_TESTED`다. 네 서버는 정상 종료했고 네 listener와 임시 검수 트리는 제거했다. 이 결과는 WCAG 2.2 AA 주장이나 게시 승인이 아니다.
+
+## v0.4.0 로컬 릴리스 후보 — Phase 29.0
+
+이 절은 [v0.4.0 릴리스 노트](releases/v0.4.0.md)의 후보 준비 기록이다. README와 [문서 지도](index.md)는 사용자 안내와 상세 수용 기록을 분리한다. 공개된 v0.1.0~v0.3.0 tag·Release와 해당 릴리스 노트는 변경하지 않는다.
+
+| Gate | 상태 | 근거 |
+| --- | --- | --- |
+| 시작 기준선 | PASS | `adbc890f8757407588050b1c9f0b870f33deaa6d`에서 main·origin/main 일치, clean tree, behind/ahead 0/0. [CI run 39547071832](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39547071832)는 completed/success |
+| 기존 공개 릴리스 | PASS | v0.3.0 annotated tag는 `a1b779ae857b885212352394ed72bc24ee5ce0b2`를 가리키고 공개 Release는 유지. v0.4.0 tag·Release는 준비 시작 시 없음 |
+| 버전·설치 범위 | PASS | `pyproject.toml`·`uv.lock`은 0.4.0. Lock diff는 프로젝트 버전 한 줄뿐이며 dependency 집합 불변. source checkout만 지원, wheel/PyPI 미지원 |
+| UI·접근성 범위 | PASS / NOT_TESTED 구분 | 전체 폭 탐색·간결한 조사 사례·self-hosted 아이콘, axe/Playwright 13개 상태 자동 검사와 [Safari 18.6 사용자 수용](ui_safari_acceptance_28_5.md)을 구분. 정확한 Safari 320 CSS px와 VoiceOver 전체 페이지 읽기는 NOT_TESTED. 자동 통과는 WCAG 2.2 AA 준수 증명이 아님 |
+| 후보 로컬 검증 | PASS | 문서 228 passed, UI·API·SSE·privacy focused 58 passed, 전체 2,384 passed·기존 경고 2개. 인증·웹 79/79, Linux Audit 21/21, risk/case 70/70. Locked Python·Node 설치와 axe 13개 상태·외부 요청 0건 통과. 별도 detached clean checkout에서 같은 전체 회귀·평가와 합성 application·SSH 별도 process loopback smoke, listener·임시 source 정리 확인 |
+
+### 게시 전 별도 gate — 이 준비 단계에서는 실행하지 않음
+
+- [ ] 후보 커밋을 push한 뒤 **정확한 새 후보 SHA의 원격 CI** completed/success를 확인한다.
+- [ ] clean main·origin/main 일치와 v0.4.0 tag/Release 부재를 재확인한 뒤 별도 공개 릴리스 판정을 한다.
+- [ ] 릴리스 노트 본문과 Release body, tag peeled commit, asset 0개를 검증한다. 기존 릴리스는 보존한다.
