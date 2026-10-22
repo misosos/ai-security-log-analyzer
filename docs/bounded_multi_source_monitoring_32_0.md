@@ -2,6 +2,8 @@
 
 **상태: 설계 gate. 구현·지원 완료가 아니다.** 기준은 `e7c15060fb22aa3c104d90492a10fd2988a3ebe7`의 main과 [CI run 39727916286](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39727916286) `completed/success`다. Ubuntu 통합 설정 관리, 전체 pytest, locked 설치, Node·axe가 성공했고 저장 artifact는 0개다. v0.4.0 공개 tag·Release는 기존 커밋에 유지한다. [Phase 31 최종 판정](disposable_vm_isolation_31_2a.md#phase-31-최종-판정)은 PentAGI 실행과 Phase 31.2B 모두 NO-GO다. 이 설계는 PentAGI와 연결되지 않는다.
 
+후속 [Phase 32.1A private v3 설정 구현](multi_source_private_config_32_1.md)은 경로 두 개와 역할별 checkpoint 연결 metadata의 생성·로드만 추가했다. Phase 32.1B 내부 runtime, Phase 32.2 publication·API·SSE, Phase 32.3 setup 관리 UX·UI·실제 사용자 검증은 미구현이다. 두 source 모니터링 지원 선언이 아니다.
+
 ## 목적과 닫힌 지원 범위
 
 한 로컬 프로세스에서 **application 최대 1개, SSH 최대 1개, 총 2개**의 로컬 파일을 함께 모니터링하는 후보를 설계한다. 두 역할의 기존 parser, detection, relation, risk, case는 **source 내부**에서만 계산한다. 동일 역할 중복, access 및 Linux Audit live, cross-source correlation, source 무제한 추가를 거부한다. 성공 로그인 기록이나 관계는 침해·공격 성공·인과관계 확정이 아니다. Phase 32.0에는 production 코드, 공개 API/SSE schema, frontend를 바꾸지 않는다.
@@ -65,6 +67,6 @@ Phase 32.1 측정 지표는 역할별 worker step p50/p95/max, cycle 총 시간,
 
 ## 단계와 명시적 NO-GO
 
-**Phase 32.1 최소 구현 후보:** 닫힌 v3 private 설정·역할별 비식별 checkpoint/lock·두 독립 worker와 공정한 단일 caller scheduler를 먼저 내부 계약과 합성 CLI smoke까지 구현한다. 공개 API/SSE/UI는 새 schema와 사용자 수용 검증을 함께 준비할 별도 단계에서만 전환한다. 두 source의 end-to-end 사용자 기능은 그 전까지 지원한다고 표시하지 않는다. 문제가 발견되면 수정 전 실패 테스트와 bounded 측정부터 진행한다.
+**구현 순서:** Phase 32.1A는 닫힌 v3 private 설정과 역할별 비식별 checkpoint·lock 연결 metadata만 다룬다. Phase 32.1B에서 두 독립 worker, 역할별 checkpoint 및 공정한 단일 caller scheduler를 내부 계약과 합성 CLI smoke로 검증한다. Phase 32.2에서 publication·API·SSE를, Phase 32.3에서 setup 관리 UX·UI·실제 사용자 검증을 다룬다. 두 source의 end-to-end 사용자 기능은 그 전까지 지원한다고 표시하지 않는다. 문제가 발견되면 수정 전 실패 테스트와 bounded 측정부터 진행한다.
 
 계속 **NO-GO**: cross-source correlation, 자동 rotation/copytruncate 복구, 무제한 source, silent eviction, 한 source 실패 은폐, raw event SSE 금지, 개인정보 기반 public ID, crash 이후 exactly-once·무유실 주장, PentAGI·REA·Vector 등 외부 실행 도구 연결. Phase 31의 PentAGI 실행 NO-GO는 이 설계와 독립적으로 유지한다.

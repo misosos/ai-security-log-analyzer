@@ -11,8 +11,10 @@ import sys
 from typing import Callable
 
 from app.live_monitoring.config import (
-    LiveMonitorConfigV2, LiveMonitorError, _open_regular, _validate_absolute_path,
-    load_live_monitor_config, load_live_monitor_setup_config, resolve_default_monitor_config_path,
+    PAIR_IDENTITIES, LiveMonitorConfigV2, LiveMonitorConfigV3, LiveMonitorSourceV3,
+    LiveMonitorError, _open_regular, _validate_absolute_path,
+    load_live_monitor_config, load_live_monitor_setup_config, load_live_monitor_pair_config,
+    resolve_default_monitor_config_path,
 )
 from app.live_monitoring.default_config import open_default_config, source_available
 from app.live_monitoring.checkpoint import LiveCheckpointManager, LiveCheckpointError, CHECKPOINT_NAME
@@ -484,7 +486,7 @@ def _parent_identity(path: Path, fd: int) -> None:
         raise MonitorSetupError("SETUP_UNSAFE_PARENT")
 
 
-def _save_private(document: LiveMonitorConfigV2, output: Path,
+def _save_private(document: LiveMonitorConfigV2 | LiveMonitorConfigV3, output: Path,
                   source_guard: Callable[[], None]) -> None:
     encoded = (json.dumps(document.as_document(), ensure_ascii=False, sort_keys=True,
                           separators=(",", ":")) + "\n").encode("utf-8")
@@ -505,9 +507,13 @@ def _save_private(document: LiveMonitorConfigV2, output: Path,
         else:
             raise MonitorSetupError("SETUP_OUTPUT_SYMLINK" if stat.S_ISLNK(existing.st_mode)
                                     else "SETUP_OUTPUT_EXISTS")
-        if document.checkpoint_policy == "BOUNDED_REPLAY_V1":
+        checkpoint_names = ((CHECKPOINT_NAME,) if type(document) is LiveMonitorConfigV2
+                            and document.checkpoint_policy == "BOUNDED_REPLAY_V1"
+                            else (CHECKPOINT_NAME,) + tuple(source.checkpoint_name for source in document.sources)
+                            if type(document) is LiveMonitorConfigV3 else ())
+        for checkpoint_name in checkpoint_names:
             try:
-                os.stat(CHECKPOINT_NAME, dir_fd=parent_fd, follow_symlinks=False)
+                os.stat(checkpoint_name, dir_fd=parent_fd, follow_symlinks=False)
             except FileNotFoundError:
                 pass
             else:
@@ -539,11 +545,15 @@ def _save_private(document: LiveMonitorConfigV2, output: Path,
         published_identity = (temporary.st_dev, temporary.st_ino)
         source_guard()
         try:
-            verified = load_live_monitor_setup_config(output)
-            runtime = load_live_monitor_config(output)
+            if type(document) is LiveMonitorConfigV3:
+                verified = load_live_monitor_pair_config(output)
+            else:
+                verified = load_live_monitor_setup_config(output)
+                runtime = load_live_monitor_config(output)
         except LiveMonitorError:
             raise MonitorSetupError("SETUP_POST_WRITE_FAILED") from None
-        if verified != document or runtime.role != document.source_role:
+        if verified != document or (type(document) is LiveMonitorConfigV2
+                                   and runtime.role != document.source_role):
             raise MonitorSetupError("SETUP_POST_WRITE_FAILED")
         final_stat = os.stat(output.name, dir_fd=parent_fd, follow_symlinks=False)
         if final_stat.st_uid != os.geteuid() or final_stat.st_mode & 0o777 != 0o600:
@@ -610,6 +620,41 @@ def create_monitor_config(source: str | Path, output: str | Path, *,
         return summary
     finally:
         os.close(fd)
+
+
+def create_monitor_pair_config(application: str | Path, ssh: str | Path,
+                               output: str | Path) -> None:
+    """Save exactly two private role-bound paths; the live runtime still rejects v3."""
+    application_path = _safe_path(application)
+    ssh_path = _safe_path(ssh)
+    output_path = _safe_path(output)
+    app_fd, app_opened = _source_descriptor(application_path, "application")
+    try:
+        ssh_fd, ssh_opened = _source_descriptor(ssh_path, "ssh")
+        try:
+            if (app_opened.st_dev, app_opened.st_ino) == (ssh_opened.st_dev, ssh_opened.st_ino):
+                raise MonitorSetupError("SETUP_INVALID_INPUT")
+            sources = tuple(
+                LiveMonitorSourceV3(
+                    source_role=role, source_path=path,
+                    source_id=PAIR_IDENTITIES[role][0], display_alias=PAIR_IDENTITIES[role][1],
+                    checkpoint_name=PAIR_IDENTITIES[role][2],
+                    checkpoint_lock_name=PAIR_IDENTITIES[role][3],
+                )
+                for role, path in (("application", application_path), ("ssh", ssh_path))
+            )
+            document = LiveMonitorConfigV3(sources)
+
+            def source_guard() -> None:
+                _validate_source_unchanged(application_path, app_fd, app_opened)
+                _validate_source_unchanged(ssh_path, ssh_fd, ssh_opened)
+                _ssh_source_permissions(ssh_path, ssh_opened)
+
+            _save_private(document, output_path, source_guard)
+        finally:
+            os.close(ssh_fd)
+    finally:
+        os.close(app_fd)
 
 
 def _approved(value: str) -> bool:

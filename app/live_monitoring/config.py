@@ -11,6 +11,13 @@ import sys
 
 CONFIG_MAX_BYTES = 4096
 ROLES = frozenset(("application", "ssh", "access"))
+PAIR_ROLES = ("application", "ssh")
+PAIR_IDENTITIES = {
+    "application": ("SOURCE-APPLICATION-000001", "애플리케이션 로그인 로그",
+                    "checkpoint-application-v3.json", "checkpoint-application-v3.lock"),
+    "ssh": ("SOURCE-SSH-000001", "SSH 인증 로그",
+            "checkpoint-ssh-v3.json", "checkpoint-ssh-v3.lock"),
+}
 
 
 _MESSAGES = {
@@ -154,6 +161,73 @@ class LiveMonitorConfigV2:
         if not self.enabled:
             raise LiveMonitorError("SOURCE_DISABLED")
         return LiveMonitorConfig(self.source_role, self.source_path)
+
+
+@dataclass(frozen=True, slots=True)
+class LiveMonitorSourceV3:
+    """One private source and its fixed, role-bound future checkpoint names."""
+
+    source_role: str
+    source_path: Path = field(repr=False)
+    source_id: str = ""
+    display_alias: str = ""
+    enabled: bool = True
+    start_position: str = "FROM_END"
+    parser_timezone: str = "Asia/Seoul"
+    checkpoint_policy: str = "BOUNDED_REPLAY_V1"
+    rotation_policy: str = "FAIL_CLOSED"
+    checkpoint_name: str = ""
+    checkpoint_lock_name: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_path, Path):
+            raise LiveMonitorError("NON_ABSOLUTE_PATH")
+        _validate_absolute_path(os.fspath(self.source_path))
+        expected = PAIR_IDENTITIES.get(self.source_role) if type(self.source_role) is str else None
+        if (expected is None
+            or (self.source_id, self.display_alias, self.checkpoint_name,
+                self.checkpoint_lock_name) != expected
+            or type(self.enabled) is not bool or not self.enabled
+            or self.start_position != "FROM_END"
+            or self.parser_timezone != "Asia/Seoul"
+            or self.checkpoint_policy != "BOUNDED_REPLAY_V1"
+            or self.rotation_policy != "FAIL_CLOSED"):
+            raise LiveMonitorError("INVALID_CONFIG")
+
+    def as_document(self) -> dict[str, object]:
+        return {
+            "source_role": self.source_role,
+            "source_path": os.fspath(self.source_path),
+            "source_id": self.source_id,
+            "display_alias": self.display_alias,
+            "enabled": self.enabled,
+            "start_position": self.start_position,
+            "parser_timezone": self.parser_timezone,
+            "checkpoint_policy": self.checkpoint_policy,
+            "rotation_policy": self.rotation_policy,
+            "checkpoint_name": self.checkpoint_name,
+            "checkpoint_lock_name": self.checkpoint_lock_name,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class LiveMonitorConfigV3:
+    """Two-source private configuration; not accepted by the current runtime."""
+
+    sources: tuple[LiveMonitorSourceV3, LiveMonitorSourceV3] = field(repr=False)
+    schema_version: str = "3"
+
+    def __post_init__(self) -> None:
+        if (type(self.schema_version) is not str or self.schema_version != "3"
+            or type(self.sources) is not tuple or len(self.sources) != 2
+            or any(type(source) is not LiveMonitorSourceV3 for source in self.sources)
+            or tuple(source.source_role for source in self.sources) != PAIR_ROLES
+            or self.sources[0].source_path == self.sources[1].source_path):
+            raise LiveMonitorError("INVALID_CONFIG")
+
+    def as_document(self) -> dict[str, object]:
+        return {"schema_version": "3",
+                "sources": [source.as_document() for source in self.sources]}
 
 
 def _validate_absolute_path(value: str) -> None:
@@ -326,6 +400,79 @@ def _parse_v2(parsed: object) -> LiveMonitorConfigV2:
 
 def load_live_monitor_setup_config(path: Path) -> LiveMonitorConfigV2:
     return _parse_v2(_read_config_document(path))
+
+
+def _parse_v3(parsed: object) -> LiveMonitorConfigV3:
+    if type(parsed) is not dict or set(parsed) != {"schema_version", "sources"}:
+        raise LiveMonitorError("INVALID_CONFIG")
+    if type(parsed["schema_version"]) is not str or parsed["schema_version"] != "3":
+        raise LiveMonitorError("UNSUPPORTED_SCHEMA")
+    sources = parsed["sources"]
+    if type(sources) is not list or len(sources) != 2:
+        raise LiveMonitorError("INVALID_CONFIG")
+    required = {"source_role", "source_path", "source_id", "display_alias", "enabled",
+                "start_position", "parser_timezone", "checkpoint_policy", "rotation_policy",
+                "checkpoint_name", "checkpoint_lock_name"}
+    result = []
+    for source in sources:
+        if type(source) is not dict or set(source) != required:
+            raise LiveMonitorError("INVALID_CONFIG")
+        if type(source["source_path"]) is not str:
+            raise LiveMonitorError("NON_ABSOLUTE_PATH")
+        result.append(LiveMonitorSourceV3(
+            source_role=source["source_role"], source_path=Path(source["source_path"]),
+            source_id=source["source_id"], display_alias=source["display_alias"],
+            enabled=source["enabled"], start_position=source["start_position"],
+            parser_timezone=source["parser_timezone"], checkpoint_policy=source["checkpoint_policy"],
+            rotation_policy=source["rotation_policy"], checkpoint_name=source["checkpoint_name"],
+            checkpoint_lock_name=source["checkpoint_lock_name"],
+        ))
+    return LiveMonitorConfigV3(tuple(result))
+
+
+def load_live_monitor_pair_config(path: Path) -> LiveMonitorConfigV3:
+    """Read a private v3 file by descriptor; do not enable the live runtime."""
+    from app.live_monitoring.default_config import _open_parent
+
+    if not isinstance(path, Path):
+        raise LiveMonitorError("NON_ABSOLUTE_PATH")
+    parent_fd = _open_parent(path)
+    file_fd = -1
+    try:
+        named = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (not stat.S_ISREG(named.st_mode) or stat.S_ISLNK(named.st_mode)
+            or named.st_uid != os.geteuid() or named.st_mode & 0o777 != 0o600):
+            raise LiveMonitorError("DEFAULT_CONFIG_PERMISSION")
+        file_fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK |
+                          os.O_CLOEXEC, dir_fd=parent_fd)
+        opened = os.fstat(file_fd)
+        identity = lambda value: (value.st_dev, value.st_ino, value.st_mode,
+                                  value.st_uid, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        if identity(named) != identity(opened):
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
+        result = _parse_v3(_read_config_document_from_fd(file_fd, opened))
+        named_after = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        parent_named = os.stat(path.parent, follow_symlinks=False)
+        parent_opened = os.fstat(parent_fd)
+        if (identity(named_after) != identity(opened)
+            or identity(os.fstat(file_fd)) != identity(opened)
+            or not stat.S_ISDIR(parent_named.st_mode)
+            or (parent_named.st_dev, parent_named.st_ino, parent_named.st_uid,
+                parent_named.st_mode) !=
+               (parent_opened.st_dev, parent_opened.st_ino, parent_opened.st_uid,
+                parent_opened.st_mode)
+            or parent_named.st_uid != os.geteuid()
+            or parent_named.st_mode & 0o777 != 0o700):
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
+        return result
+    except LiveMonitorError:
+        raise
+    except OSError:
+        raise LiveMonitorError("CONFIG_UNAVAILABLE") from None
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        os.close(parent_fd)
 
 
 def load_live_monitor_config(path: Path) -> LiveMonitorConfig:
