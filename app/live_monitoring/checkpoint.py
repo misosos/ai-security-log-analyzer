@@ -1,7 +1,7 @@
-"""Private, bounded same-file restart checkpoint for the default v2 config.
+"""Private, bounded same-file restart checkpoint for v2 and internal v3 sources.
 
-Only the default local launcher may construct this manager. It contains byte
-positions and OS file identity, never a copy or fingerprint of raw log data.
+The default launcher owns v2; the internal pair runtime owns role-bound v3.
+It contains byte positions and OS file identity, never raw log data.
 """
 
 from dataclasses import asdict, dataclass
@@ -17,7 +17,7 @@ try:
 except ImportError:  # Windows is not a supported checkpoint platform.
     fcntl = None
 
-from app.live_monitoring.config import LiveMonitorConfigV2, _open_regular
+from app.live_monitoring.config import LiveMonitorConfigV2, LiveMonitorSourceV3, PAIR_IDENTITIES, _open_regular
 from app.live_monitoring.core import LiveTailRecord
 from app.live_monitoring.default_config import _open_parent
 from app.live_monitoring.parser_adapter import parse_live_records
@@ -100,8 +100,14 @@ class Checkpoint:
         numbers = (self.file_device, self.file_inode, self.replay_start_offset,
                    self.committed_offset, self.committed_file_size, self.write_sequence,
                    self.history_count, self.history_bytes)
-        if (self.schema_version != "1" or self.config_schema_version != "2"
-            or self.source_id != "SOURCE-000001" or self.source_role not in ("application", "ssh")
+        expected_id = ("SOURCE-000001" if self.config_schema_version == "2"
+                       and type(self.source_role) is str
+                       and self.source_role in ("application", "ssh") else
+                       PAIR_IDENTITIES[self.source_role][0] if self.config_schema_version == "3"
+                       and type(self.source_role) is str
+                       and self.source_role in PAIR_IDENTITIES else None)
+        if (self.schema_version != "1" or expected_id is None
+            or self.source_id != expected_id
             or self.start_position != "FROM_END" or self.parser_timezone != "Asia/Seoul"
             or self.checkpoint_policy != "BOUNDED_REPLAY_V1"
             or any(type(n) is not int or n < 0 for n in numbers)
@@ -142,15 +148,22 @@ def _semantic_digest(worker) -> str:
 
 
 class LiveCheckpointManager:
-    __slots__ = ("_path", "_parent_fd", "_lock_fd", "_checkpoint", "_config", "_closed", "_readonly")
+    __slots__ = ("_path", "_parent_fd", "_lock_fd", "_checkpoint", "_config", "_closed",
+                 "_readonly", "_checkpoint_name", "_lock_name", "_config_schema_version")
 
-    def __init__(self, default_config_path: Path, config: LiveMonitorConfigV2, *, readonly: bool = False):
-        if (type(config) is not LiveMonitorConfigV2
+    def __init__(self, default_config_path: Path, config: LiveMonitorConfigV2 | LiveMonitorSourceV3,
+                 *, readonly: bool = False):
+        if (type(config) not in (LiveMonitorConfigV2, LiveMonitorSourceV3)
             or config.checkpoint_policy != "BOUNDED_REPLAY_V1"):
             raise LiveCheckpointError("CHECKPOINT_CORRUPT")
         if fcntl is None or not hasattr(os, "O_NOFOLLOW"):
             raise LiveCheckpointError("CHECKPOINT_UNSAFE")
-        self._path = default_config_path.parent / CHECKPOINT_NAME
+        self._checkpoint_name = (config.checkpoint_name if type(config) is LiveMonitorSourceV3
+                                 else CHECKPOINT_NAME)
+        self._lock_name = (config.checkpoint_lock_name if type(config) is LiveMonitorSourceV3
+                           else LOCK_NAME)
+        self._config_schema_version = "3" if type(config) is LiveMonitorSourceV3 else "2"
+        self._path = default_config_path.parent / self._checkpoint_name
         self._config = config
         self._parent_fd = -1
         self._lock_fd = -1
@@ -160,7 +173,7 @@ class LiveCheckpointManager:
         try:
             self._parent_fd = _open_parent(self._path)
             if not readonly:
-                self._lock_fd = os.open(LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW |
+                self._lock_fd = os.open(self._lock_name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW |
                                         os.O_CLOEXEC, 0o600, dir_fd=self._parent_fd)
                 locked = os.fstat(self._lock_fd)
                 if (not stat.S_ISREG(locked.st_mode) or locked.st_uid != os.geteuid()
@@ -190,7 +203,7 @@ class LiveCheckpointManager:
         if self._readonly or self._closed or self._lock_fd < 0:
             raise LiveCheckpointError("CHECKPOINT_UNSAFE")
         try:
-            named = os.stat(LOCK_NAME, dir_fd=self._parent_fd, follow_symlinks=False)
+            named = os.stat(self._lock_name, dir_fd=self._parent_fd, follow_symlinks=False)
             opened = os.fstat(self._lock_fd)
         except OSError:
             raise LiveCheckpointError("CHECKPOINT_UNSAFE") from None
@@ -204,7 +217,7 @@ class LiveCheckpointManager:
         self, *, with_identity: bool = False,
     ) -> Checkpoint | tuple[Checkpoint, tuple[int, ...]] | None:
         try:
-            named = os.stat(CHECKPOINT_NAME, dir_fd=self._parent_fd, follow_symlinks=False)
+            named = os.stat(self._checkpoint_name, dir_fd=self._parent_fd, follow_symlinks=False)
         except FileNotFoundError:
             return None
         except OSError:
@@ -214,7 +227,7 @@ class LiveCheckpointManager:
             raise LiveCheckpointError("CHECKPOINT_UNSAFE")
         fd = -1
         try:
-            fd = os.open(CHECKPOINT_NAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK |
+            fd = os.open(self._checkpoint_name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK |
                          os.O_CLOEXEC,
                          dir_fd=self._parent_fd)
             opened = os.fstat(fd)
@@ -230,12 +243,13 @@ class LiveCheckpointManager:
                 raise LiveCheckpointError("CHECKPOINT_CORRUPT")
             parsed["batches"] = tuple(parsed["batches"])
             checkpoint = Checkpoint(**parsed)
-            if (checkpoint.source_id != self._config.source_id
+            if (checkpoint.config_schema_version != self._config_schema_version
+                or checkpoint.source_id != self._config.source_id
                 or checkpoint.source_role != self._config.source_role
                 or checkpoint.parser_timezone != self._config.parser_timezone):
                 raise LiveCheckpointError("CHECKPOINT_CORRUPT")
             if with_identity:
-                named_after = os.stat(CHECKPOINT_NAME, dir_fd=self._parent_fd,
+                named_after = os.stat(self._checkpoint_name, dir_fd=self._parent_fd,
                                       follow_symlinks=False)
                 opened_after = os.fstat(fd)
                 if (_file_identity(named) != _file_identity(opened)
@@ -267,7 +281,7 @@ class LiveCheckpointManager:
         if self._reset_identity() != expected_identity:
             raise LiveCheckpointError("CHECKPOINT_IDENTITY_CHANGED")
         try:
-            os.unlink(CHECKPOINT_NAME, dir_fd=self._parent_fd)
+            os.unlink(self._checkpoint_name, dir_fd=self._parent_fd)
         except OSError:
             raise LiveCheckpointError("CHECKPOINT_WRITE_FAILED") from None
         try:
@@ -306,7 +320,7 @@ class LiveCheckpointManager:
             os.fsync(fd)
             os.close(fd)
             fd = -1
-            os.replace(name, CHECKPOINT_NAME, src_dir_fd=self._parent_fd,
+            os.replace(name, self._checkpoint_name, src_dir_fd=self._parent_fd,
                        dst_dir_fd=self._parent_fd)
             name = ""
             os.fsync(self._parent_fd)
@@ -342,7 +356,8 @@ class LiveCheckpointManager:
         checkpoint = self._checkpoint
         if checkpoint is None:
             start = session._offset
-            initial = Checkpoint("1", "2", self._config.source_id, self._config.source_role, "FROM_END",
+            initial = Checkpoint("1", self._config_schema_version, self._config.source_id,
+                                 self._config.source_role, "FROM_END",
                                  self._config.parser_timezone, "BOUNDED_REPLAY_V1",
                                  opened.st_dev, opened.st_ino, start, start, opened.st_size,
                                  0, (), 0, 0, False, _semantic_digest(worker))
@@ -446,7 +461,8 @@ class LiveCheckpointManager:
             raise LiveCheckpointError("CHECKPOINT_SOURCE_CHANGED")
         snapshot = worker._accumulator.snapshot()
         checkpoint = Checkpoint(
-            "1", "2", prior.source_id, prior.source_role, "FROM_END", prior.parser_timezone,
+            "1", self._config_schema_version, prior.source_id, prior.source_role,
+            "FROM_END", prior.parser_timezone,
             "BOUNDED_REPLAY_V1", opened.st_dev, opened.st_ino, prior.replay_start_offset,
             end_offset, opened.st_size, prior.write_sequence + 1,
             prior.batches + (record_count,), snapshot.history_record_count,
@@ -475,7 +491,7 @@ class LiveCheckpointManager:
         if self._checkpoint is None:
             return
         try:
-            os.unlink(CHECKPOINT_NAME, dir_fd=self._parent_fd)
+            os.unlink(self._checkpoint_name, dir_fd=self._parent_fd)
             os.fsync(self._parent_fd)
             if self._read_optional() is not None:
                 raise LiveCheckpointError("CHECKPOINT_WRITE_FAILED")
