@@ -1,16 +1,35 @@
-# Phase 31.2A — 폐기형 Linux VM 격리 기반 설계와 실행 보류
+# Phase 31.2A — 폐기형 Linux VM 격리 기반 설계와 제한된 실측
 
-## Gate와 판정
+## 실제 VMware Fusion 검증 (후속 사용자 제공 증거)
+
+기준 `3f3a86c4aebf7e6c99722d413e123319285d7875`의 [CI run 39628767130](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39628767130)은 `completed/success`다. 작업 시작 시 main·clean working tree·local/remote SHA 일치·behind 0/ahead 0을 확인했다. 아래 VM 결과는 **사용자 제공 요약**이며 이 작업에서 raw probe 출력이나 VMware 설정을 독립 재검증하지 않았다.
+
+| 항목 | 사용자 제공 결과 | 이 기록의 판정 |
+|---|---|---|
+| 환경 | 전용·폐기 가능한 VMware Fusion Ubuntu 24.04.5 LTS, aarch64; Docker Server 29.1.3 | 사용자 보고 기준. VM 종류·OS·architecture 확인 |
+| Host 공유 | Shared Folders, Copy/Paste, Drag/Drop, USB 자동 연결 차단; Bridged 미사용; 실제 로그·credential·host mount 없음 | 사용자 보고 기준. VM 전체 host 접근 차단 증명은 아님 |
+| 준비·복구 | `clean-before-phase-31-2a` snapshot 생성; 검증 시 Network Adapter 연결 해제; 종료 후 해당 snapshot으로 복구 | 사용자 보고 기준. snapshot·disk의 안전한 완전 삭제는 아님 |
+| Probe image | 고정 BusyBox ARM64 `sha256:d82c2ab94640ded77cf76514ce6a84870761105058a4a9e51b05a8a79be97a6c` 취득, architecture=arm64, os=linux 확인 | 이미지 식별·platform 확인 보고. PentAGI image와 무관 |
+| 무해한 probe | `--network none`, read-only root, non-root UID 65534, `--cap-drop=ALL`, `no-new-privileges`, PID·메모리·CPU 상한, 제한된 tmpfs; 동일 조건 3회 모두 isolated unprivileged container PASS (3/3) | 설정·반복 결과의 사용자 보고. resource limit 극한 동작은 NOT_TESTED |
+| 외부 통신·노출 | VM 외부 연결 차단 확인; port publish 없음; 실제 대상 접근 없음 | 보고된 검증 조건의 외부 연결 거부. VM 전체 host 접근 차단이나 모든 네트워크 경로 차단 증명은 아님 |
+| 별도 target·fault | 고정 합성 target을 사용하지 않았고 `--network none`으로 실행 | internal target 통신은 NOT_TESTED; target 부재·resource 초과·timeout·강제 종료·VM 재시작 후 잔존 fault도 NOT_TESTED |
+| 정리 | VM 종료 후 검증 전 snapshot으로 복구 | 사용자 보고 기준. 개별 container·network·volume 잔존 count는 별도 미확인 |
+
+이 실측은 기존 [오프라인 harness](../scripts/disposable_vm_probe_31_2a.py)가 출력한 **계획**과 다르다. Harness는 전용 internal network와 UID 65532의 검토용 명령을 출력하지만, 이번 실제 probe는 `--network none`과 UID 65534였다. Harness 자체가 실행됐거나 해당 계획의 internal target 허용·deny 검사가 완료됐다고 간주하지 않는다. Probe에서 Docker socket, PentAGI, 대상 스캔은 사용하지 않았다. BusyBox probe 3/3을 PentAGI 안전성이나 resource limit 우회 방지의 증거로 확대하지 않는다.
+
+**Phase 31.2B: NO-GO.** `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer 부재, PentAGI Docker socket 요구, runtime download 통제 미검증, LLM 없는 실행 가능성 미검증, prompt·terminal·report 데이터 보존 경계 미확인이 계속 남는다. 이번 결과만으로 PentAGI 다운로드·설치·실행을 승인하지 않는다.
+
+## 최초 gate와 당시 판정 (후속 실측 전)
 
 기준 commit `1e7288ceb7312a89ed253fab4ea595bfeecbd471`의 [CI push run 39625656698](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39625656698)은 `main`의 정확한 SHA에서 `completed/success`였다. 처음에는 조회되지 않았으나 나중에 생성된 기존 run을 확인했으며 **수동 dispatch는 하지 않았다**. Ubuntu 통합 설정 관리, 전체 pytest, locked Python 설치, Node 설치와 Chromium·axe 단계가 각각 성공했고 저장 artifact는 0개다. 시작 시 main·working tree clean·local/remote SHA 일치·behind 0/ahead 0을 확인했다. v0.4.0 tag·Release는 기존 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`을 유지한다.
 
-**실제 VM 검증: `BLOCKED_NO_DISPOSABLE_VM`. Phase 31.2B: NO-GO.** macOS 15.7.7에서 QEMU 실행 파일은 있지만 실행 중인 QEMU VM이나 저장소 안의 VM image는 확인되지 않았다. 사용 가능한 Docker context는 Docker Desktop의 Linux/aarch64 daemon이다. 별도 폐기형 Linux VM의 guest OS·독립 disk·host share·clipboard·route·snapshot 정책을 확인할 근거가 없으므로 Docker Desktop container 결과를 VM PASS로 대체하지 않았다. 새 VM 설치, OS image 또는 probe image layer 다운로드, container/network 생성은 하지 않았다. 사용자 HOME·실제 로그·설정·credential에는 접근하지 않았다. 이 문서와 [고정 오프라인 계획 harness](../scripts/disposable_vm_probe_31_2a.py)는 실행 안전성을 입증하지 않는다.
+**최초 판정: `BLOCKED_NO_DISPOSABLE_VM`. Phase 31.2B: NO-GO.** macOS 15.7.7에서 QEMU 실행 파일은 있지만 실행 중인 QEMU VM이나 저장소 안의 VM image는 확인되지 않았다. 사용 가능한 Docker context는 Docker Desktop의 Linux/aarch64 daemon이다. 별도 폐기형 Linux VM의 guest OS·독립 disk·host share·clipboard·route·snapshot 정책을 확인할 근거가 없으므로 Docker Desktop container 결과를 VM PASS로 대체하지 않았다. 새 VM 설치, OS image 또는 probe image layer 다운로드, container/network 생성은 하지 않았다. 사용자 HOME·실제 로그·설정·credential에는 접근하지 않았다. 이 문서와 [고정 오프라인 계획 harness](../scripts/disposable_vm_probe_31_2a.py)는 실행 안전성을 입증하지 않는다.
 
 [Phase 31.1 정적 감사](pentagi_supply_chain_audit_31_1.md)의 `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer 부재, PentAGI control plane의 Docker socket 요구, runtime download 통제 미검증, LLM 없는 실행 가능성 미검증은 그대로다. PentAGI image·installer·Compose·source build·도구 실행이나 대상 스캔은 수행하지 않았다.
 
 ## VM 준비 조건
 
-후속 실행 전에 운영자가 폐기 가능한 Linux VM의 종류, guest OS/version, 별도 가상 disk, 종료 후 전체 폐기 절차를 기록해야 한다. Host shared folder, clipboard, drag-and-drop, 사용자 HOME mount, credential 전달은 꺼져 있어야 한다. VM에 연결된 물리·가상 NIC, default route, DNS와 IPv4/IPv6 firewall 정책을 검토하되 raw route·host/LAN/VPN 주소·hostname을 저장소에 넣지 않는다. Snapshot·backup 잔존과 hypervisor/guest 간 공유의 잔여 위험을 별도로 기록한다. 이를 만족하는 기존 VM이 없으므로 현재는 OS image의 출처·크기·host 변경 범위와 사용자 승인을 확인하기 전 설치하지 않는다.
+최초 계획 당시, 후속 실행 전에 운영자가 폐기 가능한 Linux VM의 종류, guest OS/version, 별도 가상 disk, 종료 후 전체 폐기 절차를 기록해야 한다. Host shared folder, clipboard, drag-and-drop, 사용자 HOME mount, credential 전달은 꺼져 있어야 한다. VM에 연결된 물리·가상 NIC, default route, DNS와 IPv4/IPv6 firewall 정책을 검토하되 raw route·host/LAN/VPN 주소·hostname을 저장소에 넣지 않는다. Snapshot·backup 잔존과 hypervisor/guest 간 공유의 잔여 위험을 별도로 기록한다. 최초 계획 당시 이를 만족하는 기존 VM을 확인하지 못했으므로 OS image의 출처·크기·host 변경 범위와 사용자 승인을 확인하기 전 설치하지 않는다.
 
 [Docker bridge 문서](https://docs.docker.com/engine/network/drivers/bridge/)에 따르면 보통의 bridge는 외부 egress가 가능하고 host가 container에 접근할 수 있다. [`--internal` 문서](https://docs.docker.com/reference/cli/docker/network/create/)도 gateway와 적절히 설정된 host 서비스 통신 가능성을 명시한다. 따라서 Docker internal network **하나만으로** 인터넷·LAN·VPN·host 차단을 증명하지 않는다. VM 바깥 경계의 route/firewall 거부와 guest 내부 정책을 함께 관찰해야 한다. Published port와 직접 라우팅도 [Docker 문서](https://docs.docker.com/engine/network/port-publishing/)에 따라 별도 확인한다.
 
@@ -26,7 +45,7 @@
 
 각 연결 시도에는 짧은 bounded timeout과 고정 exit code를 부여한다. 열린 서비스가 없어서 TCP가 거부된 것과 route/firewall로 차단된 것을 혼동하지 않도록 guest firewall counter·route 정책·container exit code를 **함께** 확인한다. Host/LAN/VPN 대상은 VM이 이미 알고 있는 route·gateway만 이용하고 임의 주소를 탐색하지 않는다. 문서용 비사용 주소만으로 실제 LAN 차단을 입증하지 않는다. Raw route, 주소, packet capture는 보존하지 않는다.
 
-| 영역 | 이후 VM에서 필요한 증거 | 현재 결과 |
+| 영역 | 이후 VM에서 필요한 증거 | 최초 문서 작성 당시 결과; 후속 실측은 맨 위 참조 |
 |---|---|---|
 | Network deny | Public HTTP·DNS, 알려진 host gateway·macOS host service, 알려진 LAN·VPN route, metadata, allowlist 밖 IP/name의 거부; dedicated target만 허용; callback 외부 비노출 | **NOT_TESTED** |
 | Container privilege | Non-root, effective capability 0, no-new-privileges, privileged=false, host network=false, host path/device/socket mount 0 | **NOT_TESTED**; 오프라인 명령 계약만 검사 |
@@ -53,4 +72,4 @@
 
 ## Phase 31.2B 진입 gate
 
-폐기형 VM 존재와 host share 부재, 인터넷·LAN·VPN·metadata 차단, 내부 target만 허용, privilege/filesystem/resource 제한 강제, socket 미제공 probe, 외부 callback 비노출, 3회 결정성, fault와 cleanup, 개인정보 비노출이 **모두 실제 PASS**여야 다음 단계를 검토할 수 있다. 현재는 `BLOCKED_NO_DISPOSABLE_VM`이고 실제 network deny·resource·privilege·cleanup은 PASS가 아니다. VM proof가 통과해도 PentAGI 실행 승인은 별도 gate다. `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer 부재, Docker socket 요구, runtime download 통제와 LLM 없는 실행 가능성은 계속 NO-GO blocker다.
+폐기형 VM 존재와 host share 부재, 인터넷·LAN·VPN·metadata 차단, 내부 target만 허용, privilege/filesystem/resource 제한 강제, socket 미제공 probe, 외부 callback 비노출, 3회 결정성, fault와 cleanup, 개인정보 비노출이 **모두 실제 PASS**여야 다음 단계를 검토할 수 있다. 최초 문서에서는 `BLOCKED_NO_DISPOSABLE_VM`이었다. 후속 사용자 제공 실측으로 VM 존재와 제한된 `--network none` probe 3회는 확인됐지만 internal target 통신, 세부 network deny, fault, resource 극한 동작과 정리 count는 미검증이다. VM proof가 통과해도 PentAGI 실행 승인은 별도 gate다. `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer 부재, Docker socket 요구, runtime download 통제와 LLM 없는 실행 가능성은 계속 NO-GO blocker다.

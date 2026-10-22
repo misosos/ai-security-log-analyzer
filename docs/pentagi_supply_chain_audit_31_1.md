@@ -6,7 +6,7 @@
 
 **Phase 31.2 실행형 isolation proof: NO-GO.** Source와 일부 image metadata는 정적으로 확인했지만, v2.2.0에 고정된 공식 installer asset·checksum이 없고, 기본 Compose는 host Docker socket을 control plane에 직접 mount한다. Callback·egress 차단과 runtime image/tool download 통제, 저장 경계·모든 구성요소 라이선스는 실행 환경에서 아직 검증되지 않았다. 정적 감사 결과를 실행 안전성 PASS로 표현하지 않는다. PentAGI installer·container·Compose·penetration-testing tool을 실행하지 않았고 Docker socket을 mount하지 않았다. LLM/search 연결이나 대상 스캔도 하지 않았다. Production·dependency·lockfile·CI는 변경하지 않았다.
 
-후속 [Phase 31.2A 폐기형 VM 격리 설계](disposable_vm_isolation_31_2a.md)는 별도 VM을 확인하지 못해 `BLOCKED_NO_DISPOSABLE_VM`으로 남겼다. 이 정적 감사의 `SOURCE_IMAGE_BINDING_UNPROVEN` 및 PentAGI 실행 NO-GO를 해제하지 않는다.
+후속 [Phase 31.2A 폐기형 VM 격리 기록](disposable_vm_isolation_31_2a.md)은 최초에 별도 VM을 확인하지 못해 `BLOCKED_NO_DISPOSABLE_VM`이었다. 이후 사용자 제공 증거로 VMware Fusion Ubuntu ARM64의 무해한 `--network none` probe 3/3 성공을 기록했다. 이 정적 감사의 `SOURCE_IMAGE_BINDING_UNPROVEN` 및 PentAGI 실행 NO-GO를 해제하지 않는다.
 
 ## v2.2.0 release identity와 source archive
 

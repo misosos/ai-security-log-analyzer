@@ -33,7 +33,7 @@ def test_probe_scope_and_unverified_results_are_clear() -> None:
         "**NOT_TESTED**", "socket 미제공", "Host shared folder",
     ):
         assert required in text
-    assert "실제 VM 검증: `BLOCKED_NO_DISPOSABLE_VM`" in text
+    assert "최초 판정: `BLOCKED_NO_DISPOSABLE_VM`" in text
     assert "disposable_vm_isolation_31_2a.md" in (ROOT / "docs/index.md").read_text(encoding="utf-8")
     for target in re.findall(r"\]\(([^)]+)\)", text):
         if "://" not in target:
