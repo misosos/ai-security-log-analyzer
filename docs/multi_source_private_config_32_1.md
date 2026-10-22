@@ -1,6 +1,8 @@
 # Phase 32.1A — 두 로그용 private v3 설정
 
-**구현 범위:** `create_monitor_pair_config(application, ssh, output)`는 application 로그와 SSH 로그의 절대 경로를 각 하나씩 검증한 뒤 닫힌 private v3 JSON 설정을 저장한다. `load_live_monitor_pair_config(path)`는 해당 설정을 private parent와 file descriptor로 읽어 역할·checkpoint 연결을 검증한다. 이는 내부 Python 계약이며 CLI 마법사·`--monitor`·API·SSE·UI의 두 source 사용자 실행 지원을 뜻하지 않는다. 후속 [Phase 32.1B 내부 runtime](multi_source_runtime_32_1b.md)은 구현됐지만 공개 연결·사용자 검수는 미구현이다.
+**구현 범위:** `create_monitor_pair_config(application, ssh, output)`는 application 로그와 SSH 로그의 절대 경로를 각 하나씩 검증한 뒤 닫힌 private v3 JSON 설정을 저장한다. `load_live_monitor_pair_config(path)`는 해당 설정을 private parent와 file descriptor로 읽어 역할·checkpoint 연결을 검증한다. 이는 내부 Python 계약이며 CLI 마법사·`--monitor`·production UI의 두 source 사용자 실행 지원을 뜻하지 않는다. 후속 [Phase 32.1B 내부 runtime](multi_source_runtime_32_1b.md)과 [Phase 32.2 내부/test-only publication·API·SSE](multi_source_publication_32_2.md)는 구현됐지만 사용자 실행 연결·검수는 미구현이다.
+
+Phase 32.1A 자체에는 API·SSE·UI 연결이 없었다. 이후 32.2의 API·SSE는 내부/test-only 경로에 한정된다.
 
 | v3 항목 | 값과 보존 목적 |
 |---|---|
@@ -18,4 +20,4 @@
 
 **NO-GO 유지:** cross-source correlation, 자동 rotation/copytruncate 복구, exactly-once·무유실 보장, PentAGI 등 외부 실행 도구 연결. 이번 설정 파일의 경로는 사용자가 명시적으로 삭제할 때까지 private 영역에 남을 수 있으므로 공유·artifact 업로드 대상이 아니다.
 
-**후속 단계:** Phase 32.1B는 내부 두 source runtime·역할별 checkpoint와 bounded scheduler를 검증했다. Phase 32.2는 공개 publication·API·SSE 계약, Phase 32.3은 setup 관리 UX·UI·실제 사용자 검증을 각각 별도 gate에서 다룬다. Phase 32.1A 설정만으로 두 source 실행이나 사용자 지원을 뜻하지 않는다.
+**후속 단계:** Phase 32.1B는 내부 두 source runtime·역할별 checkpoint와 bounded scheduler를 검증했다. Phase 32.2는 명시적 내부 launcher의 안전한 publication·API·SSE 계약을, Phase 32.3은 setup 관리 UX·production UI·Safari 실제 사용자 검증을 각각 별도 gate에서 다룬다. Phase 32.1A 설정만으로 두 source 사용자 지원을 뜻하지 않는다.

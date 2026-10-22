@@ -1,6 +1,8 @@
 # Phase 32.1B — bounded internal multi-source runtime
 
-**상태:** application 1개와 SSH 1개를 내부 Python 호출에서만 함께 처리한다. [Phase 32.1A](multi_source_private_config_32_1.md)의 private v3 설정을 입력으로 읽는다. `app.local_web --monitor`는 v3를 계속 거부하며, 공개 API·SSE·UI와 setup/show/reset/delete 관리 흐름에 연결하지 않았다. Phase 32.2는 공개 publication·API·SSE 계약, Phase 32.3은 setup 관리 UX·UI·실제 사용자 검증이다. 두 source 모니터링을 사용자 지원 기능으로 선언하지 않는다.
+**상태:** application 1개와 SSH 1개를 내부 Python 호출에서 함께 처리한다. [Phase 32.1A](multi_source_private_config_32_1.md)의 private v3 설정을 입력으로 읽는다. `app.local_web --monitor`는 v3를 계속 거부한다. [Phase 32.2](multi_source_publication_32_2.md)는 별도 내부/test-only launcher로 publication·API·SSE를 검증한다. Production UI와 setup/show/reset/delete 관리 흐름은 연결하지 않았다. Phase 32.3은 setup 관리 UX·production UI·Safari 실제 사용자 검증이다. 두 source 모니터링을 사용자 지원 기능으로 선언하지 않는다.
+
+Phase 32.1B 단독 범위에는 API·SSE·UI 연결이 없었다. 이후 32.2에서 내부 launcher의 API·SSE만 추가했다.
 
 ## 닫힌 실행 계약
 
@@ -52,6 +54,6 @@
 
 서로 다른 실행·표본·계측 방법의 수치는 직접 비교할 수 없다. 합성 파일·개발 머신의 관측치이며 운영 SLA, 최악 지연, 모든 OS의 FD 동작이나 실제 사용자 검증을 뜻하지 않는다.
 
-## 남은 NO-GO
+## 후속 Phase 32.2와 남은 NO-GO
 
-공개 publication·API·SSE·UI, v3 `--monitor` 사용자 실행, v3 setup/show/reset/delete, cross-source correlation·risk·case, 자동 rotation/copytruncate, 두 파일 세대 replay, source 무제한 추가, silent eviction, crash 뒤 exactly-once·무유실은 구현하지 않았다. 한 역할의 실패를 다른 역할의 정상 상태로 숨기지 않는다. PentAGI 등 외부 실행 도구도 연결하지 않았다.
+Phase 32.2에서 안전한 공개 publication·API·SSE를 별도 내부/test-only launcher에 구현했다. Production UI, v3 `--monitor` 사용자 실행, v3 setup/show/reset/delete, cross-source correlation·risk·case, 자동 rotation/copytruncate, 두 파일 세대 replay, source 무제한 추가, silent eviction, crash 뒤 exactly-once·무유실은 구현하지 않았다. 한 역할의 실패를 다른 역할의 정상 상태로 숨기지 않는다. PentAGI 등 외부 실행 도구도 연결하지 않았다.

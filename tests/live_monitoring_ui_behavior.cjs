@@ -102,6 +102,12 @@ async function app(responseStatus = 200, body = status()) {
 }
 
 async function main() {
+  const pairStatus = status();
+  pairStatus.schema_version = "3";
+  pairStatus.roles = [{role: "application", source_path: "PRIVATE_PATH_CANARY"}, {role: "ssh"}];
+  const rejectedPair = await app(200, pairStatus);
+  assert.equal(rejectedPair.streams.length, 0, "v2 screen rejects private v3 status");
+  assert.equal(rejectedPair.nodes["live-monitoring"].textContent.includes("PRIVATE_PATH_CANARY"), false);
   const disabled = await app(404, {error_code: "LIVE_MONITORING_NOT_ENABLED",
     user_message: "로컬 모니터링이 활성화되지 않았습니다.",
     recovery_action: "명시적 로컬 설정으로 서버를 실행하십시오.", retryable: false});

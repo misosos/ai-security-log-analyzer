@@ -2,7 +2,7 @@
 
 **상태: 설계 gate. 구현·지원 완료가 아니다.** 기준은 `e7c15060fb22aa3c104d90492a10fd2988a3ebe7`의 main과 [CI run 39727916286](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39727916286) `completed/success`다. Ubuntu 통합 설정 관리, 전체 pytest, locked 설치, Node·axe가 성공했고 저장 artifact는 0개다. v0.4.0 공개 tag·Release는 기존 커밋에 유지한다. [Phase 31 최종 판정](disposable_vm_isolation_31_2a.md#phase-31-최종-판정)은 PentAGI 실행과 Phase 31.2B 모두 NO-GO다. 이 설계는 PentAGI와 연결되지 않는다.
 
-후속 [Phase 32.1A private v3 설정 구현](multi_source_private_config_32_1.md)은 경로 두 개와 역할별 checkpoint 연결 metadata를, [Phase 32.1B](multi_source_runtime_32_1b.md)는 내부 runtime·scheduler·checkpoint를 추가했다. Phase 32.2 공개 publication·API·SSE와 Phase 32.3 setup 관리 UX·UI·실제 사용자 검증은 미구현이다. 두 source 사용자 모니터링 지원 선언이 아니다.
+후속 [Phase 32.1A private v3 설정 구현](multi_source_private_config_32_1.md)은 경로 두 개와 역할별 checkpoint 연결 metadata를, [Phase 32.1B](multi_source_runtime_32_1b.md)는 내부 runtime·scheduler·checkpoint를 추가했다. [Phase 32.2](multi_source_publication_32_2.md)는 명시적 내부 launcher에 한해 공개 publication·API·SSE 계약을 추가했다. Phase 32.3 setup 관리 UX·production UI·Safari 사용자 검증은 미구현이다. 두 source 사용자 모니터링 지원 선언이 아니다.
 
 ## 목적과 닫힌 지원 범위
 
@@ -52,7 +52,7 @@ UI는 `애플리케이션 로그인 로그`와 `SSH 인증 로그` 각각의 RUN
 
 [application 256-prefix benchmark](live_analysis_16_4_audit.md)와 [SSH 256-prefix benchmark](ssh_live_analysis_audit_22_4.md)의 마지막 bounded worker step p95는 각각 약 **8.963 ms**, **9.033 ms**, status p95는 각각 **3.973 ms**, **2.475 ms**였다. 256-event prefix는 앞선 여러 step에서 쌓인 history이며 같은 poll에서 256개의 새 event가 들어온 뜻이 아니다. 두 source가 각각 256-event 근처에 도달한 **같은 polling 구간**에서 두 bounded step의 비용, serialization과 status 경쟁을 측정한다. 단일 source 수치를 더해 두 source p95나 0.5초 운영 SLA로 주장하지 않는다.
 
-Phase 32.1B는 내부 역할별 prefix·cycle·checkpoint·close 시간을 합성 macOS 환경에서 측정했다. 공개 status HTTP p95, safe SSE publish→client receipt latency, mixed replay eviction·gap, combined snapshot item/byte는 Phase 32.2의 공개 계약과 함께 측정한다. Ubuntu 별도 프로세스와 실제 사용자 검증은 Phase 32.3까지 미검증으로 남는다. 반복 표본·측정 환경·운영과의 차이는 [32.1B 기록](multi_source_runtime_32_1b.md)에 있다.
+Phase 32.1B는 내부 역할별 prefix·cycle·checkpoint·close 시간을 합성 macOS 환경에서 측정했다. Phase 32.2는 [별도 기록](multi_source_publication_32_2.md)에서 status HTTP, SSE snapshot, source별 publication, mixed replay·gap을 개발용 합성 benchmark로 측정한다. Ubuntu 별도 프로세스와 실제 사용자 검증은 Phase 32.3까지 미검증으로 남는다.
 
 ## Phase 32.1 수정 전 실패 테스트 후보
 
@@ -67,6 +67,6 @@ Phase 32.1B는 내부 역할별 prefix·cycle·checkpoint·close 시간을 합�
 
 ## 단계와 명시적 NO-GO
 
-**구현 순서:** Phase 32.1A는 닫힌 v3 private 설정과 역할별 비식별 checkpoint·lock 연결 metadata를, Phase 32.1B는 두 독립 worker, 역할별 checkpoint 및 공정한 단일 caller scheduler를 내부 계약과 합성 in-process smoke로 검증했다. Phase 32.2에서 공개 publication·API·SSE를, Phase 32.3에서 setup 관리 UX·UI·실제 사용자 검증을 다룬다. 두 source의 end-to-end 사용자 기능은 그 전까지 지원한다고 표시하지 않는다. 문제가 발견되면 수정 전 실패 테스트와 bounded 측정부터 진행한다.
+**구현 순서:** Phase 32.1A는 닫힌 v3 private 설정과 역할별 비식별 checkpoint·lock 연결 metadata를, Phase 32.1B는 두 독립 worker, 역할별 checkpoint 및 공정한 단일 caller scheduler를 내부 계약과 합성 in-process smoke로 검증했다. Phase 32.2는 내부/test-only launcher로 안전한 publication·API·SSE를 검증한다. Phase 32.3에서 setup 관리 UX·production UI·Safari 실제 사용자 검증을 다룬다. 두 source의 end-to-end 사용자 기능은 그 전까지 지원한다고 표시하지 않는다.
 
 계속 **NO-GO**: cross-source correlation, 자동 rotation/copytruncate 복구, 무제한 source, silent eviction, 한 source 실패 은폐, raw event SSE 금지, 개인정보 기반 public ID, crash 이후 exactly-once·무유실 주장, PentAGI·REA·Vector 등 외부 실행 도구 연결. Phase 31의 PentAGI 실행 NO-GO는 이 설계와 독립적으로 유지한다.
