@@ -19,6 +19,12 @@
 
 **Phase 31.2B: NO-GO.** `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer 부재, PentAGI Docker socket 요구, runtime download 통제 미검증, LLM 없는 실행 가능성 미검증, prompt·terminal·report 데이터 보존 경계 미확인이 계속 남는다. 이번 결과만으로 PentAGI 다운로드·설치·실행을 승인하지 않는다.
 
+## Phase 31 최종 판정
+
+기준 `e7c15060fb22aa3c104d90492a10fd2988a3ebe7`의 [CI run 39727916286](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39727916286)은 정확한 main SHA에서 `completed/success`다. Ubuntu 통합 관리, 전체 pytest, locked 설치, Node·axe 단계가 성공했고 저장 artifact는 0개다. v0.4.0 tag·Release는 기존 릴리스 SHA를 유지한다.
+
+폐기형 Ubuntu ARM64 VM의 무해한 BusyBox 격리 probe 3/3은 **사용자 제공 실측**으로 기록한다. 실제 PentAGI 실행은 없었다. BusyBox 결과는 PentAGI 안전성의 증거가 아니다. `SOURCE_IMAGE_BINDING_UNPROVEN`, versioned installer와 독립 provenance 부재, 기본 Compose의 root control plane·Docker socket 요구, runtime download·callback·LLM·egress·데이터 보존 경계 미검증이 남아 **Phase 31.2B: NO-GO 및 PentAGI 실행 최종 NO-GO**다. PentAGI를 production dependency, CI 단계, MCP 또는 사용자 기능에 넣지 않는다.
+
 ## 최초 gate와 당시 판정 (후속 실측 전)
 
 기준 commit `1e7288ceb7312a89ed253fab4ea595bfeecbd471`의 [CI push run 39625656698](https://github.com/misosos/ai-security-log-analyzer/actions/runs/39625656698)은 `main`의 정확한 SHA에서 `completed/success`였다. 처음에는 조회되지 않았으나 나중에 생성된 기존 run을 확인했으며 **수동 dispatch는 하지 않았다**. Ubuntu 통합 설정 관리, 전체 pytest, locked Python 설치, Node 설치와 Chromium·axe 단계가 각각 성공했고 저장 artifact는 0개다. 시작 시 main·working tree clean·local/remote SHA 일치·behind 0/ahead 0을 확인했다. v0.4.0 tag·Release는 기존 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`을 유지한다.
