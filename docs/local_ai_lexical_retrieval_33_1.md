@@ -111,7 +111,8 @@ Benchmark는 20회 warm-up 후 operation마다 200 표본을 기록한다. 2026-
 
 - **33.0:** 설계·위협 모델·기존 Gemini 감사. Gemini helper는 IP-containing projection과 자유 문자열 응답을 쓰며 여전히 별도·미연결이다.
 - **33.1:** safe evidence, approved static corpus, manifest pin, deterministic lexical retrieval/citation baseline. 현재 단계다.
-- **33.2:** embedding 후보를 격리 비교할지 검토한다. 어떤 embedding을 도입하더라도 이 lexical 결과·합성 평가를 기준선으로 유지한다.
+- **33.2A:** 정적 embedding/runtime 공급망 gate. [조사 기록](local_embedding_supply_chain_gate_33_2a.md)은 E5-small을 조건부 후보로만 선정했으며 다운로드·실행을 승인하지 않는다.
+- **33.2B:** 모든 사전 조건을 충족한 경우에만 합성 자료로 격리 비교한다. 어떤 후보를 시험해도 이 lexical 결과·합성 평가를 별도 기준선으로 유지한다.
 - **33.3:** 구조화 local LLM 설명 pilot은 별도 gate 이후다.
 
 Production API·SSE·UI, 자연어 답변, external AI, 사용자 로그 corpus/query, Gemini 교체, embedding, runtime install, automatic report generation은 미구현이다.

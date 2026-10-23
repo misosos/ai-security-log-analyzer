@@ -21,7 +21,7 @@ def test_phase_33_1_docs_keep_internal_only_and_ai_roadmap_boundaries():
         "검색 결과는 승인 문서의 근거 후보이며 AI 답변이나 권위 있는 분석 결과가 아니다",
         "k1 = 1.2", "91d498b9f40152dba3767371296a93f2fee682eb6bfc8742fd41859e6bf45115",
         "TRUSTED_CORPUS_DIGEST",
-        "citation precision", "33.2:", "Gemini helper",
+        "citation precision", "33.2A:", "33.2B:", "Gemini helper",
         "운영 SLA/최악 지연 보장이 아니다",
     ):
         assert text in record
