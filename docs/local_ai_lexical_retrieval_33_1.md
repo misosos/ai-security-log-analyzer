@@ -114,6 +114,6 @@ Benchmark는 20회 warm-up 후 operation마다 200 표본을 기록한다. 2026-
 - **33.2A:** 정적 embedding/runtime 공급망 gate. [조사 기록](local_embedding_supply_chain_gate_33_2a.md)은 E5-small을 조건부 후보로만 선정했으며 다운로드·실행을 승인하지 않는다.
 - **33.2B:** [E5-small 합성 pilot](local_embedding_retrieval_pilot_33_2b.md)은 완료했다. Embedding-only completeness가 lexical보다 낮았고 hybrid는 lexical을 개선하지 않아 lexical 기준선을 유지한다. Model/API/UI에는 연결하지 않는다.
 - **33.3A:** [구조화 local LLM gate](local_llm_supply_chain_gate_33_3a.md)는 정적 설계만 끝났다. 모델/runtime 실행은 없다.
-- **33.3B:** 조건을 충족하면 synthetic safe DTO와 33.1 lexical citation만 쓰는 별도 격리 pilot. Embedding/vector/hybrid는 금지다.
+- **33.3B:** [pilot 기록](local_llm_pilot_33_3b.md)은 `ISOLATION_BLOCKED`; 모델 실행 없음. Embedding/vector/hybrid는 금지다.
 
 Production API·SSE·UI, 자연어 답변, external AI, 사용자 로그 corpus/query, Gemini 교체, production embedding integration, runtime install, automatic report generation은 미구현이다. Phase 33.2B 모델/runtime은 test-only 임시 환경에서 실행한 합성 비교에 한정된다.
