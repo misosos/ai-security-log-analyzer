@@ -106,7 +106,7 @@ The helper tests fail-closed behavior for each missing attestation and demonstra
 
 ## Final disposition
 
-**`ISOLATION_BLOCKED`** — exact requested terminal verdict. Resume only after the existing disposable Ubuntu 24.04 ARM64 VMware guest is reachable and evidence verifies clean rollback, disabled host integrations, separation of artifact acquisition from OS-level network-denied inference, and guest inventory. Then perform a fresh exact artifact/converter/runtime supply-chain gate before any download. Do not restore/delete snapshots without explicit approval. Phase 33.4 and production use remain unstarted.
+**`ISOLATION_BLOCKED`** — exact result of this attempt. The later [Phase 33.3D retry](local_llm_pilot_33_3d.md) recorded user-provided VM facts but stopped before artifact transfer because the converter/runtime wheel closure and disk peak were not fully pinned. Resume only after guest isolation evidence and the exact artifact supply-chain/3 GiB disk-floor gate both pass. Do not restore/delete snapshots without explicit approval. Phase 33.4 and production use remain unstarted.
 
 ### Scope not tested
 
