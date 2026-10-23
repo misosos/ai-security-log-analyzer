@@ -152,6 +152,8 @@ Count는 observation occurrence의 bounded aggregate이며 unique process, 동�
 
 Linux Audit API route는 Gemini 또는 다른 LLM provider를 호출하지 않는다. Raw evidence뿐 아니라 process/session aggregate count도 별도 privacy·provider 승인 전에는 `build_llm_input()`, `generate_security_summary()` 또는 `generate_overall_summary()`에 전달하지 않는다. Prompt restriction은 data selection boundary를 대신하지 못한다.
 
+저장소의 `app.analyzer.llm` helper는 이 API에서 호출되지 않지만, 별도 호출 시 `build_llm_input()`의 legacy public projection에 대상 IP가 포함되고 `generate_security_summary()` / `generate_overall_summary()`는 그 projection을 Google Gemini에 보낸다. 응답은 plain string으로 반환되며 구조 검증을 하지 않는다. 따라서 위의 provider 승인 경계는 helper가 개인정보 안전하다는 뜻이 아니다. 새 로컬 AI 설계와 단계별 gate는 [Phase 33.0 설계](local_ai_investigation_assistant_33_0.md)를 참조한다.
+
 API response builder와 LLM input selection은 별도 allowlist다. Detailed evidence endpoint는 만들지 않는다. Existing deterministic canary를 raw/context에 둔 fixture로 response JSON, bounded error, protected log capture와 LLM mock 호출 여부를 검사한다. Provider network call은 test에서 수행하지 않는다.
 
 Frontend files는 현재 비어 있고 신규 endpoint를 소비하지 않는다. V1 API 추가가 Frontend 자동 rendering을 승인하지 않으며 별도 UI privacy review 전에는 연결하지 않는다.

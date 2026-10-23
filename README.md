@@ -77,6 +77,8 @@ Multi-source wizard는 역할별 bounded 형식 확인만 수행하고 detector/
 
 실제 로그는 기본 기능에서 로컬 처리하며 외부 LLM을 호출하지 않습니다. 선택적 개발용 설명 기능만 별도 설정을 요구합니다. 원본 로그·credential·개인정보를 저장소나 공개 Issue에 올리지 마십시오. 서버는 `127.0.0.1`에서만 사용하고 포트 포워딩하거나 인터넷에 공개하지 마십시오. 인증된 hosted 업로드 서비스가 아닙니다.
 
+향후 로컬 AI 조사 보조 기능은 아직 설계 단계입니다. Phase 33.1은 모델 없이 승인된 보안 문서의 결정적 lexical 검색과 citation 검증부터 평가합니다. 기존 Gemini helper는 현재 API·CLI·UI에 연결되지 않았지만 별도로 호출하면 IP가 포함된 projection을 Google Gemini로 보내며 자유 문자열 응답을 검증 없이 반환합니다. 새 safe AI 입력 계약이 이 경로를 승인하거나 대체하지 않습니다. 상세 경계와 계획은 [로컬 AI 조사 도우미 설계](docs/local_ai_investigation_assistant_33_0.md)를 참조하십시오.
+
 HTML 보고서·private config·checkpoint와 CLI 출력에는 민감한 조사 정보가 남을 수 있습니다. 요청 중 임시 자료는 정상 종료 시 정리되지만 비정상 종료 뒤 잔존할 수 있으며 secure erase를 보장하지 않습니다. Checkpoint·SSE에 exactly-once 또는 무유실 보장은 없습니다. 공개 API의 개인정보 경계와 이전 응답의 변경 사항은 [개인정보 projection](docs/public_analysis_privacy.md)을, 비공개 신고는 [SECURITY.md](SECURITY.md)를 참조하십시오.
 
 ## 주요 제한
