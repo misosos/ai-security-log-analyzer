@@ -6,8 +6,8 @@ from pathlib import Path
 import stat
 
 from app.live_monitoring.config import (
-    CONFIG_MAX_BYTES, LiveMonitorConfigV2, LiveMonitorError, _open_regular,
-    _parse_v2, _read_config_document_from_fd, _validate_absolute_path,
+    CONFIG_MAX_BYTES, LiveMonitorConfigV2, LiveMonitorConfigV3, LiveMonitorError, _open_regular,
+    _parse_v2, _parse_v3, _read_config_document_from_fd, _validate_absolute_path,
 )
 
 
@@ -143,11 +143,14 @@ def open_default_config(path: Path) -> DefaultConfigGuard:
             raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
         try:
             document = _read_config_document_from_fd(file_fd, opened)
+            if type(document) is dict and document.get("schema_version") == "3":
+                raise LiveMonitorError("PRIVATE_PAIR_SCHEMA")
             if type(document) is dict and document.get("schema_version") != "2":
                 raise LiveMonitorError("UNSUPPORTED_SCHEMA")
             config = _parse_v2(document)
         except LiveMonitorError as error:
-            code = ("DEFAULT_CONFIG_SCHEMA" if error.code == "UNSUPPORTED_SCHEMA"
+            code = ("PRIVATE_PAIR_SCHEMA" if error.code == "PRIVATE_PAIR_SCHEMA"
+                    else "DEFAULT_CONFIG_SCHEMA" if error.code == "UNSUPPORTED_SCHEMA"
                     else "DEFAULT_CONFIG_TOO_LARGE" if error.code == "CONFIG_TOO_LARGE"
                     else "DEFAULT_CONFIG_MALFORMED")
             raise LiveMonitorError(code) from None
@@ -167,6 +170,47 @@ def open_default_config(path: Path) -> DefaultConfigGuard:
             os.close(file_fd)
         os.close(parent_fd)
         raise LiveMonitorError("DEFAULT_CONFIG_CHANGED") from None
+
+
+def delete_private_pair_config(path: Path, expected: LiveMonitorConfigV3) -> None:
+    """Unlink only the same private v3 document that was explicitly approved."""
+    parent_fd = _open_parent(path)
+    file_fd = -1
+    try:
+        try:
+            named = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        except OSError:
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED") from None
+        if (stat.S_ISLNK(named.st_mode) or not stat.S_ISREG(named.st_mode)
+            or named.st_uid != os.geteuid() or named.st_mode & 0o777 != 0o600
+            or named.st_size > CONFIG_MAX_BYTES):
+            raise LiveMonitorError("DEFAULT_CONFIG_PERMISSION")
+        file_fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK |
+                          os.O_CLOEXEC, dir_fd=parent_fd)
+        opened = os.fstat(file_fd)
+        if _identity(opened) != _identity(named):
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
+        parsed = _parse_v3(_read_config_document_from_fd(file_fd, opened))
+        if parsed != expected:
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
+        current = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if _identity(current) != _identity(opened):
+            raise LiveMonitorError("DEFAULT_CONFIG_CHANGED")
+        os.unlink(path.name, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+        try:
+            os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        raise LiveMonitorError("DEFAULT_CONFIG_POST_DELETE_FAILED")
+    except LiveMonitorError:
+        raise
+    except Exception:
+        raise LiveMonitorError("DEFAULT_CONFIG_DELETE_FAILED") from None
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        os.close(parent_fd)
 
 
 def source_available(config: LiveMonitorConfigV2) -> bool:

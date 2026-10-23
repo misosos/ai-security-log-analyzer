@@ -45,6 +45,7 @@ from app.models.linux_audit_investigation import (
 )
 from app.web_ui import (
     serve_demo_index, serve_demo_script, serve_demo_styles, serve_live_monitoring_script,
+    serve_multi_source_live_script,
     serve_linux_audit_script,
 )
 from app.models.linux_audit_api import (
@@ -363,16 +364,22 @@ def create_app(
     live_monitoring_service: LiveMonitoringService | None = None,
     live_monitoring_runner: LiveMonitoringRunner | None = None,
 ) -> FastAPI:
+    from app.live_monitoring.pair_service import PairMonitoringService, PairRunner
+    from app.models.multi_source_live import PairStatusResponse
+    pair_service = type(live_monitoring_service) is PairMonitoringService
+    pair_runner = type(live_monitoring_runner) is PairRunner
     if type(enable_linux_audit_api) is not bool:
         raise TypeError("enable_linux_audit_api must be a bool")
     if (live_monitoring_service is not None
-        and (type(live_monitoring_service) is not LiveMonitoringService
+        and (type(live_monitoring_service) not in (LiveMonitoringService, PairMonitoringService)
              or enable_linux_audit_api)):
         raise TypeError("invalid local live monitoring service")
     if live_monitoring_runner is not None and (
-        type(live_monitoring_runner) is not LiveMonitoringRunner
+        type(live_monitoring_runner) not in (LiveMonitoringRunner, PairRunner)
         or live_monitoring_service is None
-        or live_monitoring_runner._service is not live_monitoring_service
+        or (live_monitoring_runner._service if type(live_monitoring_runner) is LiveMonitoringRunner
+            else live_monitoring_runner.service) is not live_monitoring_service
+        or pair_service != pair_runner
     ):
         raise TypeError("invalid local live monitoring runner")
 
@@ -415,7 +422,7 @@ def create_app(
         task = asyncio.create_task(live_monitoring_runner.run(), name="live-monitor-runner")
         try:
             await asyncio.sleep(0)
-            if live_monitoring_runner.state is not LiveRunnerState.RUNNING:
+            if live_monitoring_runner.state != LiveRunnerState.RUNNING:
                 raise RuntimeError("LIVE_RUNTIME_START_FAILED")
             yield
         finally:
@@ -451,6 +458,10 @@ def create_app(
             "/assets/live-monitoring.js", serve_live_monitoring_script, methods=["GET"],
             include_in_schema=False,
         )
+        configured_app.add_api_route(
+            "/assets/multi-source-live.js", serve_multi_source_live_script, methods=["GET"],
+            include_in_schema=False,
+        )
     configured_app.add_api_route(
         "/api/health",
         health_check,
@@ -467,7 +478,7 @@ def create_app(
     if live_monitoring_service is not None:
         configured_app.add_api_route(
             "/api/v1/live/status", create_live_status_endpoint(live_monitoring_service),
-            methods=["GET"], response_model=LiveStatusResponse,
+            methods=["GET"], response_model=PairStatusResponse if pair_service else LiveStatusResponse,
             responses={code: {"model": LiveErrorResponse} for code in (400, 403, 404, 503)},
         )
         configured_app.add_api_route(

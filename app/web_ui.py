@@ -80,3 +80,7 @@ def serve_linux_audit_script() -> Response:
 
 def serve_live_monitoring_script() -> Response:
     return _fixed_asset("live-monitoring.js", "text/javascript")
+
+
+def serve_multi_source_live_script() -> Response:
+    return _fixed_asset("multi-source-live.js", "text/javascript")

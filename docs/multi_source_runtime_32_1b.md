@@ -1,6 +1,8 @@
 # Phase 32.1B — bounded internal multi-source runtime
 
-**상태:** application 1개와 SSH 1개를 내부 Python 호출에서 함께 처리한다. [Phase 32.1A](multi_source_private_config_32_1.md)의 private v3 설정을 입력으로 읽는다. `app.local_web --monitor`는 v3를 계속 거부한다. [Phase 32.2](multi_source_publication_32_2.md)는 별도 내부/test-only launcher로 publication·API·SSE를 검증한다. Production UI와 setup/show/reset/delete 관리 흐름은 연결하지 않았다. Phase 32.3은 setup 관리 UX·production UI·Safari 실제 사용자 검증이다. 두 source 모니터링을 사용자 지원 기능으로 선언하지 않는다.
+**Phase 32.1B 당시 상태:** application 1개와 SSH 1개를 내부 Python 호출에서 함께 처리했다. [Phase 32.1A](multi_source_private_config_32_1.md)의 private v3 설정을 읽었고 `app.local_web --monitor`는 거부했다. [Phase 32.2](multi_source_publication_32_2.md)에서 별도 internal/test-only launcher를 통해 publication·API·SSE를 검증했다. Production UI와 setup/show/reset/delete 관리 흐름은 32.1B에 포함되지 않았다.
+
+**후속 상태:** [Phase 32.3](multi_source_user_monitoring_32_3.md)에서 v3 setup·관리 UX, 일반 `--monitor`, schema 3 production UI를 구현했다. macOS Safari와 실제 보조기술 사용자 수용은 아직 `NOT_TESTED`다. 아래 32.1B 경계와 기록은 그 단계의 역사적 구현·검증 내용을 보존한다.
 
 Phase 32.1B 단독 범위에는 API·SSE·UI 연결이 없었다. 이후 32.2에서 내부 launcher의 API·SSE만 추가했다.
 

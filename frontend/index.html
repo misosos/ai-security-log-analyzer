@@ -8,6 +8,7 @@
   <script src="/assets/app.js" defer></script>
   <script src="/assets/linux-audit.js" defer></script>
   <script src="/assets/live-monitoring.js" defer></script>
+  <script src="/assets/multi-source-live.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
@@ -174,6 +175,28 @@
       </section>
       </details>
       <p id="live-stale" class="local-warning" hidden>이전 목록은 최신 상태가 아닐 수 있습니다. 현재 요약을 기준으로 다시 확인해 주세요.</p>
+      <div id="live-pair" hidden>
+        <h2>전체 모니터링 상태</h2>
+        <p id="pair-overall" role="status" aria-live="polite"></p>
+        <p id="pair-recovery" class="local-warning" hidden>일부 기록을 이어받지 못했습니다. 최신 상태를 다시 조회해 주세요.</p>
+        <nav class="pair-role-nav" aria-label="로그 역할">
+          <button type="button" data-pair-role="application" aria-pressed="true">애플리케이션 로그인 로그 <span id="pair-app-badge"></span></button>
+          <button type="button" data-pair-role="ssh" aria-pressed="false">SSH 인증 로그 <span id="pair-ssh-badge"></span></button>
+        </nav>
+        <section aria-live="polite" aria-labelledby="pair-role-heading">
+          <h3 id="pair-role-heading">애플리케이션 로그인 로그</h3>
+          <p id="pair-role-state"></p>
+          <p id="pair-role-counts"></p>
+          <button id="pair-apply" type="button" hidden>새 결과 보기</button>
+          <button id="pair-pause" type="button">화면 업데이트 일시 정지</button>
+          <p id="pair-pending" role="status" aria-live="polite">현재 새 결과가 없습니다.</p>
+          <h4>탐지 관찰</h4><ol id="pair-observations"></ol>
+          <h4>지원되는 관계</h4><ol id="pair-relations"></ol>
+          <h4>위험도</h4><ol id="pair-risks"></ol>
+          <h4>조사 사례</h4><ol id="pair-cases"></ol>
+          <p id="pair-interpretation">로그에 기록된 로그인 성공은 침해 성공을 뜻하지 않습니다. 위험도 하향이나 관계 소멸은 해결·안전을 뜻하지 않습니다.</p>
+        </section>
+      </div>
     </section>
 
     <section id="local-upload" class="local-upload workspace-panel" aria-labelledby="local-heading" hidden>

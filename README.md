@@ -4,7 +4,7 @@ AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 
 
 ## 주요 기능
 
-- application·OpenSSH·웹 접근 로그를 배치 분석하고, application·SSH 파일 하나를 선택해 실시간 모니터링합니다.
+- application·OpenSSH·웹 접근 로그를 배치 분석하고, application 또는 SSH 단일 파일이나 private v3 application+SSH 쌍을 실시간 모니터링합니다.
 - 탐지 관찰, 지원 관계, 위험도, 조사 사례를 근거와 판정 한계와 함께 표시합니다.
 - 전체 폭 작업 화면에서 시작 행동·분석 결과를 구분하고 조사 사례의 상세 근거를 펼쳐 봅니다.
 - application·SSH의 동일 파일을 bounded checkpoint로 재시작할 수 있습니다.
@@ -27,11 +27,18 @@ uv run python -m app.local_web
 
 ## 실시간 모니터링
 
-마법사에서 애플리케이션 로그인 로그 또는 SSH 인증 로그 **하나**를 선택해 private 설정을 만들고, 별도 명령으로 모니터링을 시작합니다.
+단일 로그 설정은 기존 흐름을 사용합니다. 두 역할을 함께 설정하려면 명시적으로 multi-source wizard를 선택합니다. 두 설정 모두 별도 명령으로 모니터링을 시작합니다.
+기존 단일 설정 흐름에서는 애플리케이션 로그인 로그 또는 SSH 인증 로그 하나를 선택합니다.
 
 ```bash
 uv run python -m app.monitor_setup
 uv run python -m app.local_web --monitor
+```
+
+두 로그를 함께 설정하려면 wizard를 명시적으로 선택합니다:
+
+```bash
+uv run python -m app.monitor_setup --multi-source
 ```
 
 | 명령 | 의미 |
@@ -39,10 +46,13 @@ uv run python -m app.local_web --monitor
 | `uv run python -m app.monitor_setup --show` | 경로를 숨긴 설정·checkpoint 상태 요약 |
 | `uv run python -m app.monitor_setup --delete` | 승인 후 기본 설정과 연결된 private checkpoint 삭제; 원본 로그는 보존 |
 | `uv run python -m app.monitor_setup --reset-checkpoint` | 승인 후 분석 연속성을 버리고 다음 실행을 새 epoch로 시작; 원본 로그·설정은 보존 |
+| `uv run python -m app.monitor_setup --reset-checkpoint --role application\|ssh\|all` | v3 복구 자료를 선택한 역할만 초기화 |
 
 모니터를 정상 종료하면 설정과 checkpoint가 유지됩니다. `--delete`와 `--reset-checkpoint`도 원본 로그를 삭제하지 않습니다.
 
-마법사는 최대 4,096 byte·완성 16줄의 형식만 확인하며 탐지율을 보장하지 않습니다. 새 설정은 현재 파일의 끝(`FROM_END`)부터 읽고, 이후 **같은 파일**의 bounded 구간을 이용해 분석 상태를 복구합니다. Rotation·copytruncate의 자동 연결은 없습니다. 화면의 **새 결과 N건 보기**는 대기 중인 결과를 적용하고, **화면 표시 일시 정지**는 서버 수집을 멈추지 않습니다. 자세한 사용법은 [설정 마법사](docs/monitor_setup_20.md), [SSH 설정 구현](docs/monitor_setup_ssh_30_1.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)에 있습니다.
+Multi-source wizard는 역할별 bounded 형식 확인만 수행하고 detector/risk/case/LLM은 실행하지 않습니다. 새 설정은 두 로그의 현재 끝부터 읽습니다. 역할별 checkpoint와 상태는 분리됩니다. 한 역할 실패는 전체 수집을 멈춥니다. Rotation/copytruncate, 두 번째 파일 세대 replay, cross-source 분석, exactly-once는 지원하지 않습니다. 화면의 **새 결과 보기**는 선택한 역할의 staged 결과를 적용하고, 화면 표시 일시 정지는 서버 수집을 멈추지 않습니다. 설정·관리·UI 제한은 [Phase 32.3 안내](docs/multi_source_user_monitoring_32_3.md), 실제 Safari 사용자 점검은 [수용 체크리스트](docs/safari_multi_source_acceptance_32_3.md)를 참조하십시오.
+
+기존 v1/v2의 application·SSH 파일 하나 실행은 `FROM_END`부터 시작하고 bounded checkpoint로 같은 파일 복구를 유지합니다. Rotation·copytruncate의 자동 연결은 없습니다. 기존 화면에서 **새 결과 N건 보기**를 선택해야 대기 결과가 적용되며, 일시 정지는 서버 수집을 멈추지 않습니다. 단일 설정 상세는 [설정 마법사](docs/monitor_setup_20.md), [SSH 설정 구현](docs/monitor_setup_ssh_30_1.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)를 참조하십시오.
 
 ## 지원 입력과 관찰
 

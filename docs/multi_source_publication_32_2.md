@@ -1,6 +1,6 @@
 # Phase 32.2 — bounded multi-source publication, API, SSE
 
-**범위:** [32.1A private v3 설정](multi_source_private_config_32_1.md)과 [32.1B 내부 runtime](multi_source_runtime_32_1b.md)을 명시적 `create_internal_pair_app(config_path)` 호출로만 공개 transport에 연결한다. 일반 `--monitor`는 v3를 계속 거부한다. 기존 production 화면, v1/v2 경로, v0.4.0 tag·Release와 버전은 바꾸지 않는다. Phase 32.3에서 v3 setup 관리 UX, production 두 역할 UI, Safari 사용자 수용을 다룬다.
+**범위:** 당시 32.2 구현은 [32.1A private v3 설정](multi_source_private_config_32_1.md)과 [32.1B 내부 runtime](multi_source_runtime_32_1b.md)을 내부 launcher로 검증했다. **Phase 32.3 후속 구현**은 해당 schema 3 publication을 production `--monitor` 및 역할 선택 UI에 연결했다. 32.2 자체의 설계·테스트 범위는 변하지 않으며 사용자 수용은 아직 NOT_TESTED다. 단계 구분과 후속 gate는 [32.3 구현 기록](multi_source_user_monitoring_32_3.md)을 참조한다.
 
 ## 기존 단일 source 공개 계약과 확장 이유
 
@@ -14,7 +14,7 @@
 
 Global replay는 32 item·16 KiB를 넘지 않는다. Status DTO는 비식별 session/event ID 형식과 남은 event의 연속 ID 범위·count 일치를 검증한다. Eviction은 `EVICTED_EVENT_ID` gap이며 사라진 event의 역할을 추적해 영향을 받을 수 있는 역할을 포함한다. 입증할 수 없는 malformed/foreign/future/unknown cursor gap은 두 역할 모두를 포함한다. Gap frame은 `stale:true`와 최신 snapshot 재조회 안내를 보내며 stream을 닫는다. 같은 event ID는 cursor 이후에 다시 적용하지 않는다. URL query나 browser storage에 cursor를 넣는 경로는 만들지 않았다. SSE slot은 최대 2개이며 frame/snapshot은 JSON을 완전 직렬화한 다음 보낸다. 131072 byte status snapshot 상한을 적용한다.
 
-준비 실패는 기존 worker의 proposal abort·lease release 뒤 전체 scheduler DEGRADED/FAILED 중단으로 이어진다. Commit·notify 등 ack 이후 실패는 rollback하지 않으며 전체를 정상으로 표시하지 않는다. 일반 HTTP 오류·SSE 종료에는 고정 code와 일반 문구만 사용한다. 서비스 종료 시 두 runtime worker와 publication, SSE slot 및 listener를 정리한다. 이는 crash 이후 exactly-once·무유실이나 두 source transaction을 뜻하지 않는다.
+준비 실패는 기존 worker의 proposal abort·lease release 뒤 전체 scheduler DEGRADED/FAILED 중단으로 이어진다. Commit·notify 등 ack 이후 실패는 rollback하지 않으며 전체를 정상으로 표시하지 않는다. 일반 HTTP 오류·SSE 종료에는 고정 code와 일반 문구만 사용한다. 서비스 종료 시 두 runtime worker와 publication, SSE slot 및 listener를 정리한다. 이는 crash 이후 exactly-once·무유실이나 두 source transaction을 뜻하지 않는다. Phase 32.3은 기존 닫힌 DTO를 production 런처와 UI에서 소비하며 schema 2 경로를 별도로 유지한다.
 
 ## 재현과 검증
 

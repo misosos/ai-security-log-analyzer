@@ -539,7 +539,14 @@
         fail();
       }
       if (!response.ok) fail();
-      const value = validateStatus(await response.json());
+      const raw = await response.json();
+      if (raw && raw.schema_version === "3") {
+        if (!window.MultiSourceLive || !window.MultiSourceLive.start(raw)) fail();
+        if (window.workspaceNavigation) window.workspaceNavigation.setAvailable("live", true);
+        else dom["live-monitoring"].hidden = false;
+        return;
+      }
+      const value = validateStatus(raw);
       if (sessionId !== null && value.session_id !== sessionId) {
         stale = true; visible.clear(); relations.clear(); risks.clear(); cases.clear();
         dom["live-observations"].replaceChildren(); renderAnalysis();

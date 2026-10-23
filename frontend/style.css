@@ -223,3 +223,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
 }
+.pair-role-nav { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; }
+.pair-role-nav button[aria-pressed="true"] { outline: 2px solid #164c89; outline-offset: 2px; font-weight: 750; }
+#pair-role-state, #pair-overall { font-weight: 750; }
+@media (max-width: 640px) { .pair-role-nav { display: grid; grid-template-columns: 1fr; } }

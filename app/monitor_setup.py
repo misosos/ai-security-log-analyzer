@@ -16,7 +16,9 @@ from app.live_monitoring.config import (
     load_live_monitor_config, load_live_monitor_setup_config, load_live_monitor_pair_config,
     resolve_default_monitor_config_path,
 )
-from app.live_monitoring.default_config import open_default_config, source_available
+from app.live_monitoring.default_config import (
+    open_default_config, source_available, delete_private_pair_config,
+)
 from app.live_monitoring.checkpoint import LiveCheckpointManager, LiveCheckpointError, CHECKPOINT_NAME
 from app.live_monitoring.core import LiveTailRecord, MAX_LINE_BYTES
 from app.live_monitoring.parser_adapter import parse_live_records
@@ -65,6 +67,8 @@ _RECOVERY = {
     "CHECKPOINT_RESET_CHANGED": ("승인 전후 복구 자료가 변경되었습니다.", "상태를 확인한 뒤 다시 시도하십시오.", True),
     "CHECKPOINT_RESET_FAILED": ("복구 자료를 삭제하지 못했습니다.", "상태를 수동으로 확인하십시오.", False),
     "CHECKPOINT_RESET_POST_DELETE_FAILED": ("삭제 후 상태를 확인하지 못했습니다.", "자동으로 다시 시작하지 말고 수동으로 확인하십시오.", False),
+    "CHECKPOINT_ROLE_REQUIRED": ("초기화할 로그 역할을 선택해야 합니다.", "application, ssh 또는 all을 지정하십시오.", True),
+    "CHECKPOINT_RESET_PARTIAL": ("복구 자료 일부만 초기화되었습니다.", "상태를 확인하기 전 모니터링을 다시 시작하지 마십시오.", False),
 }
 
 
@@ -115,6 +119,20 @@ class DefaultConfigSummary:
     checkpoint_exists: bool = False
     recovery_state: str = "DISABLED"
     bounded_history_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class PairRoleSummary:
+    source_role: str
+    source_available: bool
+    recovery_state: str
+
+
+@dataclass(frozen=True, slots=True)
+class PairConfigSummary:
+    schema_version: str
+    roles: tuple[PairRoleSummary, PairRoleSummary]
+    runnable: bool
 
 
 def _safe_path(value: str | Path) -> Path:
@@ -296,12 +314,55 @@ def _management_path(path: Path | None) -> Path:
 
 
 def _management_error(error: LiveMonitorError) -> MonitorSetupError:
-    return MonitorSetupError(error.code)
+    return MonitorSetupError(error.code if error.code in _RECOVERY else "DEFAULT_CONFIG_MALFORMED")
+
+
+def _config_version(path: Path) -> str | None:
+    try:
+        with open_default_config(path) as guard:
+            return guard.config.schema_version
+    except LiveMonitorError as error:
+        if error.code == "PRIVATE_PAIR_SCHEMA":
+            return "3"
+        raise _management_error(error) from None
+
+
+def _pair_summary(path: Path) -> PairConfigSummary:
+    config = load_live_monitor_pair_config(path)
+    roles = []
+    for source in config.sources:
+        available = False
+        recovery = "FIRST_START"
+        try:
+            fd, opened = _source_descriptor(source.source_path, source.source_role)
+            os.close(fd)
+            available = True
+        except MonitorSetupError:
+            recovery = "NEEDS_REVIEW"
+        if available:
+            try:
+                manager = LiveCheckpointManager(path, source, readonly=True)
+                try:
+                    recovery = "RECOVERABLE" if manager._checkpoint is not None else "FIRST_START"
+                finally:
+                    manager.close()
+            except LiveCheckpointError:
+                recovery = "NEEDS_REVIEW"
+        roles.append(PairRoleSummary(source.source_role, available, recovery))
+    return PairConfigSummary("3", tuple(roles), all(r.source_available and
+                                                      r.recovery_state != "NEEDS_REVIEW"
+                                                      for r in roles))
 
 
 def show_default_config(path: Path | None = None) -> DefaultConfigSummary:
+    target = _management_path(path)
+    if _config_version(target) == "3":
+        try:
+            return _pair_summary(target)
+        except LiveMonitorError as error:
+            raise _management_error(error) from None
     try:
-        with open_default_config(_management_path(path)) as guard:
+        with open_default_config(target) as guard:
             available = source_available(guard.config)
             checkpoint_exists = False
             history_count = 0
@@ -333,8 +394,56 @@ def show_default_config(path: Path | None = None) -> DefaultConfigSummary:
 def delete_default_config(path: Path | None = None, *,
                           ask: Callable[[str], str] = input,
                           emit: Callable[[str], None] = print) -> SetupResult:
+    target = _management_path(path)
+    version = _config_version(target)
+    if version == "3":
+        try:
+            pair = load_live_monitor_pair_config(target)
+        except LiveMonitorError as error:
+            raise _management_error(error) from None
+        managers = []
+        try:
+            for source in pair.sources:
+                try:
+                    managers.append(LiveCheckpointManager(target, source))
+                except LiveCheckpointError as error:
+                    raise MonitorSetupError("CHECKPOINT_RESET_ACTIVE" if error.code == "CHECKPOINT_ALREADY_OWNED"
+                                            else "CHECKPOINT_DELETE_FAILED") from None
+            emit("다중 로그 설정과 연결된 두 역할의 복구 자료만 삭제 후보입니다.")
+            emit("원본 로그와 다른 파일은 삭제하지 않습니다. secure erase는 보장하지 않습니다.")
+            try:
+                approved = _approved(ask("다중 로그 설정과 복구 자료를 삭제하시겠습니까? [y/N] "))
+            except (EOFError, KeyboardInterrupt):
+                approved = False
+            if not approved:
+                emit("기본 설정 삭제를 취소했습니다.")
+                return SetupResult("CANCELLED")
+            if load_live_monitor_pair_config(target) != pair:
+                raise MonitorSetupError("DEFAULT_CONFIG_CHANGED")
+            for index, manager in enumerate(managers):
+                if manager._checkpoint is not None:
+                    try:
+                        manager.delete_after_config()
+                    except LiveCheckpointError:
+                        raise MonitorSetupError("CHECKPOINT_RESET_PARTIAL" if index else
+                                                "CHECKPOINT_DELETE_FAILED") from None
+            try:
+                delete_private_pair_config(target, pair)
+            except LiveMonitorError:
+                raise MonitorSetupError("CHECKPOINT_RESET_PARTIAL") from None
+            emit("설정과 연결된 복구 자료를 삭제했습니다. 원본 로그는 보존했습니다.")
+            return SetupResult("DELETED")
+        finally:
+            cleanup_failed = False
+            for manager in reversed(managers):
+                try:
+                    manager.close()
+                except Exception:
+                    cleanup_failed = True
+            if cleanup_failed:
+                raise MonitorSetupError("CHECKPOINT_RESET_PARTIAL") from None
     try:
-        with open_default_config(_management_path(path)) as guard:
+        with open_default_config(target) as guard:
             guard.check()
             config = guard.config
             checkpoint = None
@@ -372,10 +481,63 @@ def delete_default_config(path: Path | None = None, *,
 
 def reset_default_checkpoint(path: Path | None = None, *,
                              ask: Callable[[str], str] = input,
-                             emit: Callable[[str], None] = print) -> SetupResult:
+                             emit: Callable[[str], None] = print,
+                             role: str | None = None) -> SetupResult:
     """Explicitly abandon one default-config checkpoint; never start a monitor."""
+    target = _management_path(path)
+    version = _config_version(target)
+    if version == "3":
+        try:
+            pair = load_live_monitor_pair_config(target)
+        except LiveMonitorError as error:
+            raise _management_error(error) from None
+        if role not in ("application", "ssh", "all"):
+            raise MonitorSetupError("CHECKPOINT_ROLE_REQUIRED")
+        selected = tuple(source for source in pair.sources if role == "all" or source.source_role == role)
+        managers = []
+        try:
+            for source in selected:
+                try:
+                    managers.append(LiveCheckpointManager(target, source))
+                except LiveCheckpointError as error:
+                    raise MonitorSetupError("CHECKPOINT_RESET_ACTIVE" if error.code == "CHECKPOINT_ALREADY_OWNED"
+                                            else "CHECKPOINT_RESET_UNSAFE") from None
+            if any(manager._checkpoint is None for manager in managers):
+                raise MonitorSetupError("CHECKPOINT_RESET_MISSING")
+            identities = [manager._reset_identity() for manager in managers]
+            emit("선택한 로그 역할의 복구 자료만 삭제합니다. 해당 역할의 과거 분석 연속성이 끊깁니다.")
+            emit("설정과 두 원본 로그, 선택하지 않은 역할의 복구 자료는 보존됩니다.")
+            emit("다음 실행은 선택한 로그의 현재 파일 끝에서 새 줄부터 시작합니다.")
+            answer = ask("선택한 복구 자료를 초기화하시겠습니까? [y/N] ")
+            if not _approved(answer):
+                emit("복구 자료 초기화를 취소했습니다.")
+                return SetupResult("CANCELLED")
+            if load_live_monitor_pair_config(target) != pair:
+                raise MonitorSetupError("CHECKPOINT_RESET_CHANGED")
+            for index, (manager, identity) in enumerate(zip(managers, identities, strict=True)):
+                try:
+                    manager.reset_after_approval(identity)
+                except LiveCheckpointError:
+                    raise MonitorSetupError("CHECKPOINT_RESET_PARTIAL" if index else
+                                            "CHECKPOINT_RESET_FAILED") from None
+            if load_live_monitor_pair_config(target) != pair:
+                raise MonitorSetupError("CHECKPOINT_RESET_POST_DELETE_FAILED")
+            emit("선택한 복구 자료를 초기화했습니다. 모니터링은 자동 시작하지 않습니다.")
+            emit("이 작업은 secure erase가 아닙니다.")
+            return SetupResult("RESET", role)
+        finally:
+            cleanup_failed = False
+            for manager in reversed(managers):
+                try:
+                    manager.close()
+                except Exception:
+                    cleanup_failed = True
+            if cleanup_failed:
+                raise MonitorSetupError("CHECKPOINT_RESET_POST_DELETE_FAILED") from None
     try:
-        with open_default_config(_management_path(path)) as guard:
+        if role is not None:
+            raise MonitorSetupError("SETUP_INVALID_INPUT")
+        with open_default_config(target) as guard:
             guard.check()
             if guard.config.checkpoint_policy != "BOUNDED_REPLAY_V1":
                 raise MonitorSetupError("CHECKPOINT_RESET_UNAVAILABLE")
@@ -623,8 +785,10 @@ def create_monitor_config(source: str | Path, output: str | Path, *,
 
 
 def create_monitor_pair_config(application: str | Path, ssh: str | Path,
-                               output: str | Path) -> None:
-    """Save exactly two private role-bound paths; the live runtime still rejects v3."""
+                               output: str | Path, *,
+                               _expected_identities: tuple[tuple[int, int, int, int, int],
+                                                           tuple[int, int, int, int, int]] | None = None) -> None:
+    """Save exactly two private role-bound paths after rechecking preview identity."""
     application_path = _safe_path(application)
     ssh_path = _safe_path(ssh)
     output_path = _safe_path(output)
@@ -634,6 +798,11 @@ def create_monitor_pair_config(application: str | Path, ssh: str | Path,
         try:
             if (app_opened.st_dev, app_opened.st_ino) == (ssh_opened.st_dev, ssh_opened.st_ino):
                 raise MonitorSetupError("SETUP_INVALID_INPUT")
+            identities = tuple((item.st_dev, item.st_ino, item.st_size,
+                                item.st_mtime_ns, item.st_ctime_ns)
+                               for item in (app_opened, ssh_opened))
+            if _expected_identities is not None and identities != _expected_identities:
+                raise MonitorSetupError("SETUP_SOURCE_CHANGED")
             sources = tuple(
                 LiveMonitorSourceV3(
                     source_role=role, source_path=path,
@@ -655,6 +824,38 @@ def create_monitor_pair_config(application: str | Path, ssh: str | Path,
             os.close(ssh_fd)
     finally:
         os.close(app_fd)
+
+
+def run_pair_setup(*, output: str | Path | None = None,
+                   ask: Callable[[str], str] = input,
+                   emit: Callable[[str], None] = print) -> SetupResult:
+    emit("두 로그는 이 컴퓨터에서만 처리됩니다. 원문을 외부 AI로 자동 전송하지 않습니다.")
+    emit("설정에는 로그 경로가 저장됩니다. 결과 미리보기와 일반 오류에는 경로와 원문을 표시하지 않습니다.")
+    if not _approved(ask("두 로그의 다중 모니터링 설정을 시작하시겠습니까? [y/N] ")):
+        emit("설정 생성을 취소했습니다.")
+        return SetupResult("CANCELLED")
+    application = _safe_path(ask("애플리케이션 로그인 로그의 절대 경로: "))
+    app_summary, app_identity = _preview_source(application, "application")
+    emit(f"애플리케이션 로그인 로그 형식 검사: {app_summary.parsed_count}건 인식, "
+         f"{app_summary.rejected_count}건 형식 미확인.")
+    ssh = _safe_path(ask("SSH 인증 로그의 절대 경로: "))
+    ssh_summary, ssh_identity = _preview_source(ssh, "ssh")
+    emit(f"SSH 인증 로그 형식 검사: {ssh_summary.parsed_count}건 인식, "
+         f"{ssh_summary.rejected_count}건 형식 미확인.")
+    if app_identity[:2] == ssh_identity[:2]:
+        raise MonitorSetupError("SETUP_INVALID_INPUT")
+    destination = _safe_path(output) if output is not None else _default_output()
+    emit("두 역할을 함께 설정합니다. 기존 줄은 처리하지 않고 저장 뒤 새 줄부터 시작합니다.")
+    emit("각 역할은 별도의 제한된 복구 자료를 사용합니다. 파일 교체나 길이 축소는 자동 복구하지 않습니다.")
+    emit("검사는 기존 parser의 제한된 형식 확인만 수행합니다. 탐지·위험도·사례·AI 설명은 실행하지 않습니다.")
+    if not _approved(ask("이 두 로그 설정을 저장하시겠습니까? [y/N] ")):
+        emit("설정 생성을 취소했습니다.")
+        return SetupResult("CANCELLED")
+    create_monitor_pair_config(application, ssh, destination,
+                               _expected_identities=(app_identity, ssh_identity))
+    emit("두 로그 설정을 저장했습니다. 새 줄부터 모니터링합니다. 설정 파일을 공유하지 마십시오.")
+    emit("실행 명령: uv run python -m app.local_web --monitor")
+    return SetupResult("CREATED")
 
 
 def _approved(value: str) -> bool:
@@ -727,6 +928,10 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
         epilog="예: uv run python -m app.monitor_setup --show | --delete | --reset-checkpoint",
     )
     parser.add_argument("--output", metavar="/absolute/path/to/monitoring.json")
+    parser.add_argument("--multi-source", action="store_true",
+                        help="두 로그를 역할별로 설정하는 v3 마법사")
+    parser.add_argument("--role", choices=("application", "ssh", "all"), default=None,
+                        help="v3 복구 자료 초기화 대상 역할")
     parser.add_argument("--no-color", action="store_true", help="색상 출력 없이 실행 (기본값)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--show", action="store_true", help="기본 설정의 안전한 요약 조회")
@@ -737,8 +942,23 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
         args = parser.parse_args(argv)
         if args.output is not None and (args.show or args.delete or args.reset_checkpoint):
             raise MonitorSetupError("SETUP_INVALID_INPUT")
+        if args.role is not None and not args.reset_checkpoint:
+            raise MonitorSetupError("SETUP_INVALID_INPUT")
+        if args.multi_source and (args.show or args.delete or args.reset_checkpoint):
+            raise MonitorSetupError("SETUP_INVALID_INPUT")
         if args.show:
             summary = show_default_config()
+            if isinstance(summary, PairConfigSummary):
+                for role in summary.roles:
+                    name = "애플리케이션 로그인 로그" if role.source_role == "application" else "SSH 인증 로그"
+                    source = "사용 가능" if role.source_available else "확인 필요"
+                    recovery = {"FIRST_START": "복구 자료 없음", "RECOVERABLE": "복구 가능",
+                                "NEEDS_REVIEW": "복구 검토 필요"}[role.recovery_state]
+                    emit(f"{name}: 원본 {source}, {recovery}.")
+                emit(f"전체 실행 가능 여부: {'가능' if summary.runnable else '확인 필요'}.")
+                emit("파일 교체나 길이 축소는 자동 복구하지 않습니다.")
+                emit("다음 실행: uv run python -m app.local_web --monitor")
+                return 0
             role_name = {"application": "애플리케이션 로그인 로그",
                          "ssh": "SSH 인증 로그"}[summary.source_role]
             emit(f"기본 설정: 설정 버전: {summary.schema_version}, 로그 종류: {role_name}.")
@@ -772,9 +992,12 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             delete_default_config(ask=ask, emit=emit)
             return 0
         if args.reset_checkpoint:
-            reset_default_checkpoint(ask=ask, emit=emit)
+            reset_default_checkpoint(ask=ask, emit=emit, role=args.role)
             return 0
-        run_setup(output=args.output, ask=ask, emit=emit)
+        if args.multi_source:
+            run_pair_setup(output=args.output, ask=ask, emit=emit)
+        else:
+            run_setup(output=args.output, ask=ask, emit=emit)
         return 0
     except MonitorSetupError as error:
         print(str(error), file=sys.stderr)

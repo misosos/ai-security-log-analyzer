@@ -25,6 +25,7 @@ _MESSAGES = {
     "CONFIG_TOO_LARGE": "모니터링 설정 파일이 너무 큽니다.",
     "DUPLICATE_JSON_KEY": "모니터링 설정에 중복된 항목이 있습니다.",
     "UNSUPPORTED_SCHEMA": "지원하는 설정 버전을 사용하십시오.",
+    "PRIVATE_PAIR_SCHEMA": "두 로그 설정은 pair loader에서 확인하십시오.",
     "SOURCE_DISABLED": "비활성화된 로그 설정은 시작할 수 없습니다.",
     "DEFAULT_CONFIG_MISSING": "기본 설정이 없습니다. 설정 마법사를 실행하십시오.",
     "DEFAULT_CONFIG_UNSAFE_PARENT": "기본 설정 디렉터리 권한을 확인하십시오.",

@@ -9,8 +9,9 @@ import tempfile
 import httpx
 import uvicorn
 
-from app.live_monitoring.pair_http import create_internal_pair_app
 from app.live_monitoring import pair_service
+from app.api import create_app
+from app.local_web import _pair_runtime
 from app.monitor_setup import create_monitor_pair_config
 
 
@@ -41,7 +42,8 @@ async def smoke():
         config = root / "private" / "monitoring.json"
         create_monitor_pair_config(application, ssh, config)
         pair_service.POLL_INTERVAL_SECONDS = 0.01  # Test-only cadence, not a product latency promise.
-        app = create_internal_pair_app(config)
+        service, runner = _pair_runtime(config)
+        app = create_app(live_monitoring_service=service, live_monitoring_runner=runner)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         sock.listen(128)
@@ -62,6 +64,8 @@ async def smoke():
                 else:
                     raise AssertionError("SMOKE_START_FAILED")
                 assert health.json() == {"status": "ok"}
+                asset = await client.get("/assets/multi-source-live.js")
+                assert asset.status_code == 200 and b"MultiSourceLive" in asset.content
                 status = (await client.get("/api/v1/live/status")).json()
                 assert status["schema_version"] == "3"
                 assert [item["role"] for item in status["roles"]] == ["application", "ssh"]
@@ -119,8 +123,8 @@ async def smoke():
         finally:
             server.should_exit = True
             await asyncio.wait_for(task, timeout=10)
-            assert app.state.pair_service.active_connections == 0
-            for worker in app.state.pair_service.runtime.workers.values():
+            assert service.active_connections == 0
+            for worker in service.runtime.workers.values():
                 assert worker._session._fd == -1
                 assert worker._checkpoint._lock_fd == -1
 

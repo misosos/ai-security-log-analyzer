@@ -22,6 +22,13 @@ function requireSafe(condition, code) {
   if (!condition) throw new Error(code);
 }
 
+function summarizeMs(values) {
+  const ordered = [...values].sort((a, b) => a - b);
+  return {samples: ordered.length, median_ms: Number(ordered[Math.floor(ordered.length / 2)].toFixed(3)),
+    p95_ms: Number(ordered[Math.min(ordered.length - 1, Math.ceil(ordered.length * .95) - 1)].toFixed(3)),
+    max_ms: Number(ordered.at(-1).toFixed(3))};
+}
+
 async function unusedPort() {
   const server = createServer();
   await new Promise((ok, fail) => server.once('error', fail).listen(0, '127.0.0.1', ok));
@@ -83,6 +90,19 @@ function status(state = 'RUNNING') {
     ],
     capabilities: ['READ_ONLY_STATUS', 'BOUNDED_SSE_REPLAY', 'AUTOMATIC_POLLING', 'NO_LLM'],
   };
+}
+
+function pairStatus() {
+  const role = (name) => ({role: name, service_state: 'RUNNING', detection_revision: 0,
+    analysis_revision: 0, active_observation_count: 0, active_relation_count: 0,
+    active_risk_count: 0, active_case_count: 0, checkpoint_available: false, last_step_code: 'NO_DATA'});
+  return {schema_version: '3', service_state: 'RUNNING', session_id: SESSION,
+    roles: [role('application'), role('ssh')], available_event_count: 0, event_byte_count: 0,
+    earliest_event_id: null, latest_event_id: null, published_total: 0, evicted_total: 0,
+    replay_gap_total: 0, max_event_items: 32, max_event_bytes: 16384, max_connections: 2,
+    active_connections: 0, fixed_error_code: null,
+    interpretation_notices: ['규칙 기반 관찰이며 침해를 확정하지 않습니다.', '지연 또는 replay gap이 있을 수 있습니다.'],
+    capabilities: ['READ_ONLY_STATUS', 'BOUNDED_SSE_REPLAY', 'AUTOMATIC_POLLING', 'NO_LLM']};
 }
 
 function snapshot() {
@@ -226,9 +246,11 @@ async function main() {
         await route.abort();
       } else if (url.pathname === '/api/v1/live/status') {
         if (stateForPage === 'DISABLED') await route.continue();
-        else await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(status(stateForPage))});
+        else await route.fulfill({status: 200, contentType: 'application/json',
+          body: JSON.stringify(stateForPage === 'MULTI' ? pairStatus() : status(stateForPage))});
       } else if (['/', '/assets/style.css', '/assets/app.js',
-        '/assets/linux-audit.js', '/assets/live-monitoring.js'].includes(url.pathname)) {
+        '/assets/linux-audit.js', '/assets/live-monitoring.js',
+        '/assets/multi-source-live.js'].includes(url.pathname)) {
         await route.continue();
       } else {
         throw new Error('UNEXPECTED_LOOPBACK_REQUEST');
@@ -399,8 +421,70 @@ async function main() {
       await scan(page, stateName);
       await page.close();
     }
+    stateForPage = 'MULTI';
+    const pairPage = await context.newPage();
+    await pairPage.addInitScript(eventSourceStub);
+    await pairPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await pairPage.locator('#nav-live').waitFor({state: 'visible'});
+    await pairPage.locator('#nav-live').click();
+    requireSafe(await pairPage.locator('#live-monitoring').isVisible() &&
+      await pairPage.locator('#pair-role-heading').textContent() === '애플리케이션 로그인 로그',
+      'MULTI_SOURCE_ROLE_SCREEN_FAILED');
+    await emit(pairPage, 'snapshot', pairStatus());
+    const pairObservation = {schema_version: '3', event_id: eventId(1), session_id: SESSION,
+      revision: 1, event_type: 'observation_changes', source_role: 'application', detection_revision: 1,
+      analysis_revision: 1, created_count: 1, updated_count: 0, no_longer_matches_count: 0,
+      active_observation_count: 1, published_observation_count: 1, observations: [{
+        observation_id: 'LIVE-OBS-000001', observation_revision: 1, change_type: 'CREATED',
+        state: 'ACTIVE', detection_type: 'brute_force', accumulator_revision: 1,
+      }]};
+    const focusBefore = await pairPage.evaluate(() => ({focus: document.activeElement.id, scroll: scrollY}));
+    await emit(pairPage, 'observation_changes', pairObservation, eventId(1));
+    requireSafe(await pairPage.locator('#pair-apply').isVisible() &&
+      await pairPage.locator('#pair-observations li').count() === 0, 'MULTI_SOURCE_NOT_STAGED');
+    const focusAfter = await pairPage.evaluate(() => ({focus: document.activeElement.id, scroll: scrollY}));
+    requireSafe(focusBefore.focus === focusAfter.focus && focusBefore.scroll === focusAfter.scroll,
+      'MULTI_SOURCE_FOCUS_SCROLL_CHANGED');
+    await pairPage.locator('#pair-apply').click();
+    requireSafe(await pairPage.locator('#pair-observations li').count() === 1,
+      'MULTI_SOURCE_STAGED_APPLY_FAILED');
+    await pairPage.locator('[data-pair-role="ssh"]').click();
+    requireSafe(await pairPage.locator('#pair-role-heading').textContent() === 'SSH 인증 로그' &&
+      await pairPage.locator('#pair-observations li').count() === 0, 'MULTI_SOURCE_ROLE_ISOLATION_FAILED');
+    const roleSwitchTimes = [];
+    const domApplyTimes = [];
+    let uiPayloadBytes = 0;
+    for (let n = 2; n <= 6; n++) {
+      const targetRole = n % 2 === 0 ? 'application' : 'ssh';
+      roleSwitchTimes.push(await pairPage.locator(`[data-pair-role="${targetRole}"]`).evaluate((button) => {
+        const before = performance.now(); button.click(); return performance.now() - before;
+      }));
+      const id = eventId(n);
+      const value = {...pairObservation, event_id: id, revision: n, source_role: targetRole,
+        detection_revision: n, analysis_revision: n, observations: [{...pairObservation.observations[0],
+          observation_revision: n, accumulator_revision: n, change_type: 'UPDATED'}]};
+      uiPayloadBytes = new TextEncoder().encode(JSON.stringify(value)).length;
+      domApplyTimes.push(await pairPage.evaluate(({value, id}) => {
+        const before = performance.now();
+        window.__syntheticStreams.at(-1).emit('observation_changes', value, id);
+        document.querySelector('#pair-apply').click();
+        return performance.now() - before;
+      }, {value, id}));
+    }
+    await emit(pairPage, 'replay_gap', {schema_version: '3', code: 'EVICTED_EVENT_ID',
+      affected_roles: ['application'], stale: true, recovery_action: 'refresh'});
+    requireSafe(await pairPage.locator('#pair-recovery').isVisible(), 'MULTI_SOURCE_GAP_RECOVERY_FAILED');
+    for (const width of [320, 640, 1024, 1440]) {
+      await pairPage.setViewportSize({width, height: 900});
+      requireSafe(await pairPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        'MULTI_SOURCE_HORIZONTAL_OVERFLOW');
+    }
+    await scan(pairPage, 'multi-source-live-empty');
+    console.log(`schema3_role_switch ${JSON.stringify(summarizeMs(roleSwitchTimes))}`);
+    console.log(`schema3_dom_apply ${JSON.stringify({...summarizeMs(domApplyTimes), payload_bytes: uiPayloadBytes})}`);
+    await pairPage.close();
     requireSafe(externalRequests === 0, 'EXTERNAL_NETWORK_REQUEST');
-    console.log(`states=${STATES.length} external_requests=${externalRequests} elapsed_ms=${Math.round(performance.now() - start)}`);
+    console.log(`states=${STATES.length + 1} external_requests=${externalRequests} elapsed_ms=${Math.round(performance.now() - start)}`);
   } finally {
     let cleanupFailed = false;
     for (const cleanup of [

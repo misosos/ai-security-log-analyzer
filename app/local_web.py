@@ -53,6 +53,7 @@ def _live_runtime(config_path: Path, *, checkpoint_default: bool = False):
         if checkpoint is not None:
             checkpoint.close()
         raise
+
     worker = None
     service = None
     try:
@@ -80,6 +81,40 @@ def _live_runtime(config_path: Path, *, checkpoint_default: bool = False):
             session.close()
         if checkpoint is not None:
             checkpoint.close()
+        raise
+
+
+def _pair_runtime(config_path: Path):
+    """Build the closed v3 pair runtime before any listener is opened."""
+    from app.live_monitoring.multi_source import open_internal_pair_runtime
+    from app.live_monitoring.pair_publication import attach_pair_publication
+    from app.live_monitoring.pair_service import PairMonitoringService, PairRunner
+    runtime = open_internal_pair_runtime(config_path)
+    try:
+        service = PairMonitoringService(runtime, attach_pair_publication(runtime))
+        return service, PairRunner(service)
+    except Exception:
+        runtime.close()
+        raise
+
+
+def _configured_runtime(config_path: Path, *, checkpoint_default: bool = False):
+    from app.live_monitoring.config import _read_config_document
+    document = _read_config_document(config_path)
+    if type(document) is dict and document.get("schema_version") == "3":
+        return _pair_runtime(config_path)
+    return _live_runtime(config_path, checkpoint_default=checkpoint_default)
+
+
+def _private_schema_version(config_path: Path) -> str | None:
+    from app.live_monitoring.config import LiveMonitorError
+    from app.live_monitoring.default_config import open_default_config
+    try:
+        with open_default_config(config_path) as guard:
+            return guard.config.schema_version
+    except LiveMonitorError as error:
+        if error.code == "PRIVATE_PAIR_SCHEMA":
+            return "3"
         raise
 
 
@@ -210,12 +245,20 @@ def run_local_web(
         try:
             if monitor_default:
                 config_path = default_config_resolver()
-                with open_default_config(config_path) as guard:
-                    service, runner = (runtime_factory(config_path, checkpoint_default=True)
-                                       if runtime_factory is _live_runtime else runtime_factory(config_path))
-                    guard.check()
+                if runtime_factory is _live_runtime:
+                    if _private_schema_version(config_path) == "3":
+                        service, runner = _pair_runtime(config_path)
+                    else:
+                        with open_default_config(config_path) as guard:
+                            service, runner = _configured_runtime(config_path, checkpoint_default=True)
+                            guard.check()
+                else:
+                    with open_default_config(config_path) as guard:
+                        service, runner = runtime_factory(config_path)
+                        guard.check()
             else:
-                service, runner = runtime_factory(monitor_config)
+                service, runner = (_configured_runtime(monitor_config)
+                                   if runtime_factory is _live_runtime else runtime_factory(monitor_config))
             app = create_app(live_monitoring_service=service, live_monitoring_runner=runner)
         except LiveMonitorError as error:
             if service is not None:

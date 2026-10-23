@@ -224,6 +224,10 @@ class PairRunner:
         self._stop = asyncio.Event()
         self._task = None
 
+    @property
+    def state(self) -> str:
+        return self.service._runner_state
+
     async def _notify_safely(self) -> bool:
         try:
             await self.service.notify_change()

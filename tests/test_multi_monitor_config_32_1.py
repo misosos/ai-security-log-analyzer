@@ -117,17 +117,39 @@ def test_pair_rejects_symlinked_config_without_path_leak(tmp_path: Path) -> None
     assert str(output) not in str(caught.value) + repr(caught.value)
 
 
-def test_pair_cannot_start_either_monitor_path_or_sample_fallback(tmp_path: Path, capsys) -> None:
+def test_pair_starts_through_production_paths_without_sample_fallback(tmp_path: Path, capsys) -> None:
     application, ssh, output = _sources(tmp_path)
     create_monitor_pair_config(application, ssh, output)
 
-    def no_listener(_port: int):
-        pytest.fail("v3 must fail before binding a sample or live server")
+    class Listener:
+        closed = False
+        def close(self):
+            self.closed = True
+
+    class Server:
+        should_exit = False
+        force_exit = False
+        def run(self, sockets):
+            import time
+            while not self.should_exit:
+                time.sleep(0.005)
+
+    listeners = []
+    def listener(_port: int):
+        sock = Listener()
+        listeners.append(sock)
+        return sock
 
     for options in ({"monitor_config": output},
                     {"monitor_default": True, "default_config_resolver": lambda: output}):
-        assert local_web.run_local_web(open_browser=False, listener_factory=no_listener,
-                                       **options) == 4
-        error = capsys.readouterr().err
-        assert str(output) not in error
-        assert str(application) not in error and str(ssh) not in error
+        result = local_web.run_local_web(open_browser=False, listener_factory=listener,
+                                         server_factory=lambda _app, _port: Server(),
+                                         readiness=lambda _port: True,
+                                         sleep=lambda _duration: (_ for _ in ()).throw(KeyboardInterrupt()),
+                                         **options)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert not captured.err
+        assert str(output) not in captured.out and str(application) not in captured.out
+        assert str(ssh) not in captured.out
+    assert len(listeners) == 2
