@@ -114,7 +114,7 @@ Fail-closed는 DTO 위반, corpus/index digest 불일치, 미승인 문서, thre
 | Phase | 범위 | Gate |
 | --- | --- | --- |
 | 33.0 | 설계·위협 모델·기존 Gemini 감사 | 이 문서; 구현 승인 아님 |
-| 33.1 | 결정적 lexical retrieval baseline, citation 검증, 합성 평가; LLM 없음 | 위 synthetic gate 통과 |
+| 33.1 | 결정적 lexical retrieval baseline, citation 검증, 합성 평가; LLM 없음 | [구현·검증 기록](local_ai_lexical_retrieval_33_1.md); production API/UI 미연결 |
 | 33.2 | 로컬 embedding 모델 격리 비교 | 고정 artifact/provenance, offline·자원·privacy 비교 |
 | 33.3 | 구조화 local LLM explanation pilot | runtime/model digest, schema, egress, output gate |
 | 33.4 | injection·hallucination·privacy 독립 감사 | 독립 합성 공격 시험 통과 |

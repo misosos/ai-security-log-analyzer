@@ -1,0 +1,238 @@
+{
+  "documents": [
+    {
+      "document_id": "application-ssh-roles",
+      "title": "Application and SSH source roles",
+      "source_type": "PROJECT",
+      "source_ref": "docs/multi_source_publication_32_2.md",
+      "upstream_version": "Phase 32.2",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "source roles",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "role-scope", "text": "Application authentication records and SSH authentication records are separate source roles. Their events, analysis state, and checkpoints remain independent. A role label identifies which input produced an observation; it does not prove an attack or join activity across sources."}
+      ]
+    },
+    {
+      "document_id": "brute-force",
+      "title": "Brute Force observation meaning",
+      "source_type": "PROJECT",
+      "source_ref": "docs/detection_evaluation.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "authentication detection",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "meaning-limit", "text": "Brute Force is a rule-based observation of repeated authentication failures within the implemented rule scope. It is not proof of a person, intent, credential reuse, account compromise, or attack success. Check the relevant authentication records and surrounding operational context. Brute Force는 반복된 인증 실패에 대한 규칙 기반 관찰이며 침해나 공격 성공의 증명이 아닙니다. 관련 인증 기록과 시간 범위를 확인하세요."}
+      ]
+    },
+    {
+      "document_id": "checkpoint-reset",
+      "title": "Checkpoint reset boundary",
+      "source_type": "PROJECT",
+      "source_ref": "docs/live_checkpoint_epoch_reset_21_7.md",
+      "upstream_version": "Phase 21.7",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "recovery state",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "new-history", "text": "Checkpoint reset discards the saved analysis continuity for the selected source and begins a new history on a later start. It does not delete the source log. Earlier analysis is not reconstructed by reset, and reset is not a repair for file rotation or truncation. Checkpoint reset은 선택한 역할의 저장된 분석 연속성을 버리고 다음 시작에서 새 이력을 만듭니다. 원본 로그는 삭제하지 않으며 과거 분석을 복원하지 않습니다."}
+      ]
+    },
+    {
+      "document_id": "conflicting-evidence",
+      "title": "Conflicting evidence handling",
+      "source_type": "PROJECT",
+      "source_ref": "docs/public_analysis_privacy.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "evidence limits",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "conflict", "text": "When approved observations disagree or cover different periods, preserve the conflicting evidence and state what each source establishes. Do not choose an unsupported explanation, merge unrelated subjects, or turn a missing record into proof that an event did not happen. 충돌하는 근거는 각각의 관찰 범위를 보존합니다. 근거 없는 설명을 고르거나 기록 부재를 사건이 없었다는 증거로 바꾸지 않습니다."}
+      ]
+    },
+    {
+      "document_id": "failed-success",
+      "title": "Failed authentication followed by success",
+      "source_type": "PROJECT",
+      "source_ref": "docs/ssh_live_analysis_integration_22_3.md",
+      "upstream_version": "Phase 22.3",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "authentication relation",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "relation-not-causation", "text": "A failed login followed by a successful login is a temporal relation supported by matching rule fields and ordering. It is not causation and does not establish that the failures caused the success, that credentials were reused, or that the successful login was unauthorized. 실패 후 성공은 규칙 조건과 순서로 계산된 시간 관계입니다. 인과관계, 비밀번호 재사용 또는 무단 로그인을 입증하지 않습니다."}
+      ]
+    },
+    {
+      "document_id": "incomplete-evidence",
+      "title": "Incomplete evidence interpretation",
+      "source_type": "PROJECT",
+      "source_ref": "docs/live_log_monitoring_design.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "completeness",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "partial-input", "text": "Incomplete or stale evidence limits what the current analysis can establish. A partial observation window is not a complete account of activity. State the missing or stale boundary and avoid treating absent events as proof of safety or failure."}
+      ]
+    },
+    {
+      "document_id": "investigation-case",
+      "title": "Investigation case scope",
+      "source_type": "PROJECT",
+      "source_ref": "docs/incident_case_timeline_design.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "case semantics",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "supporting-relation", "text": "An investigation case groups only observations and supporting relations admitted by its existing deterministic rule. A case is an investigation aid, not a confirmed incident. It does not create a relation that the analysis did not produce or combine separate source roles."}
+      ]
+    },
+    {
+      "document_id": "next-checks",
+      "title": "Safe follow-up checks",
+      "source_type": "PROJECT",
+      "source_ref": "docs/final_demo_guide.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "operator follow-up",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "review-records", "text": "Next checks are manual review suggestions, not executable commands. Compare the bounded observation with approved authentication records, confirm the relevant time window and source coverage, and consult the system owner before making an operational conclusion."}
+      ]
+    },
+    {
+      "document_id": "no-finding",
+      "title": "No finding is not safe",
+      "source_type": "PROJECT",
+      "source_ref": "docs/detection_evaluation.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "analysis limitation",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "no-detection", "text": "No finding means the current rules did not produce a supported detection in the analyzed input. It does not mean the source is safe, that no attack occurred, or that all relevant events were collected."}
+      ]
+    },
+    {
+      "document_id": "password-spray",
+      "title": "Password Spraying-like observation meaning",
+      "source_type": "PROJECT",
+      "source_ref": "docs/detection_evaluation.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "authentication detection",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "spray-like-limit", "text": "Password Spraying-like is a rule-based pattern over authentication failures associated with multiple accounts within the implemented scope. The suffix like is meaningful: the observation does not prove a shared password, one actor, intent, or account compromise. Review the source records and coverage."}
+      ]
+    },
+    {
+      "document_id": "privacy-boundary",
+      "title": "Local log and privacy boundary",
+      "source_type": "PROJECT",
+      "source_ref": "docs/public_analysis_privacy.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "privacy",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "no-raw-log-search", "text": "Original logs and private identifiers are not approved knowledge and must not enter the retrieval corpus or query. Keep local analysis input separate from this static reviewed corpus. Use only allowlisted aggregate labels in the safe evidence projection."}
+      ]
+    },
+    {
+      "document_id": "relation-gone",
+      "title": "A relation disappearing is not resolution",
+      "source_type": "PROJECT",
+      "source_ref": "docs/live_analysis_correlation_case_design.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "relation lifecycle",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "not-resolved", "text": "A relation can disappear when its supporting observations leave the bounded analysis window or completeness changes. Relation gone is not resolved, safe, or evidence that an earlier observation was false. 관계 소멸은 해결이나 안전을 뜻하지 않습니다. 분석 범위에서 근거가 빠졌을 수 있습니다."}
+      ]
+    },
+    {
+      "document_id": "replay-gap",
+      "title": "Replay gap and stale state",
+      "source_type": "PROJECT",
+      "source_ref": "docs/multi_source_publication_32_2.md",
+      "upstream_version": "Phase 32.2",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "replay recovery",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "gap-stale", "text": "A replay gap means some published records could not be continued from the supplied cursor. The affected state may be stale; retrieve a current snapshot using the supported recovery flow. A gap is not zero events, and automatic replay cannot recover records already evicted. Replay gap은 일부 기록을 이어받지 못했음을 뜻합니다. 상태가 오래됐을 수 있으므로 지원되는 복구 흐름에서 최신 snapshot을 확인하세요."}
+      ]
+    },
+    {
+      "document_id": "risk-confidence",
+      "title": "Risk and confidence are different",
+      "source_type": "PROJECT",
+      "source_ref": "docs/live_analysis_correlation_case_design.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "risk semantics",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "separate-values", "text": "Risk level expresses the existing assessment of likelihood and impact under project rules. Confidence expresses support in available evidence. A high risk level is not high confidence by itself, and neither value confirms compromise. 위험도는 기존 규칙에 따른 가능성과 영향 평가이고 신뢰도는 근거의 뒷받침 정도입니다. 두 값 모두 침해 확정이 아닙니다."}
+      ]
+    },
+    {
+      "document_id": "risk-lower",
+      "title": "Risk moving lower is not safe",
+      "source_type": "PROJECT",
+      "source_ref": "docs/live_analysis_correlation_case_design.md",
+      "upstream_version": "Repository revision 33.1",
+      "license_attribution": "Project documentation; MIT",
+      "approved_topic": "risk lifecycle",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "not-safe", "text": "A risk level moving lower reflects the current rule-based assessment and available evidence. Risk lower is not safe, resolved, or proof that an event ended. Review the assessment inputs and analysis window before interpreting a change. 위험도 하향은 안전이나 해결을 뜻하지 않습니다. 현재 근거와 분석 범위에 따른 평가 변화입니다."}
+      ]
+    },
+    {
+      "document_id": "mitre-brute-force-classification",
+      "title": "MITRE ATT&CK authentication technique labels",
+      "source_type": "UPSTREAM_SUMMARY",
+      "source_ref": "https://attack.mitre.org/techniques/T1110/",
+      "upstream_version": "ATT&CK Enterprise v2.8; modified 2026-05-12",
+      "license_attribution": "MITRE ATT&CK; MITRE Terms of Use and trademark guidelines apply",
+      "approved_topic": "technique classification metadata",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "labels-not-evidence", "text": "MITRE ATT&CK classifies Brute Force as T1110 and Password Spraying as sub-technique T1110.003. These are classification labels, not evidence that a project detection occurred, that credentials were guessed, or that access succeeded. Apply a label only when the observed telemetry and project rule support it."}
+      ]
+    },
+    {
+      "document_id": "nist-incident-response",
+      "title": "NIST incident response investigation principles",
+      "source_type": "UPSTREAM_SUMMARY",
+      "source_ref": "https://csrc.nist.gov/pubs/sp/800/61/r3/final",
+      "upstream_version": "NIST SP 800-61 Rev. 3; 2025-04",
+      "license_attribution": "NIST; U.S. Government work, cite SP 800-61 Rev. 3",
+      "approved_topic": "investigation procedure",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "review-scope", "text": "NIST SP 800-61 Rev. 3 frames incident response within cybersecurity risk management. For investigation, establish scope from available records, preserve source and time boundaries, document uncertainty, and validate conclusions with the responsible organization. This general guidance does not make a log observation proof of incident success."}
+      ]
+    },
+    {
+      "document_id": "owasp-safe-logging",
+      "title": "OWASP logging and investigation context",
+      "source_type": "UPSTREAM_SUMMARY",
+      "source_ref": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+      "upstream_version": "OWASP Logging Cheat Sheet; reviewed 2026-10-23",
+      "license_attribution": "OWASP Cheat Sheet Series; CC BY-SA 4.0 attribution required",
+      "approved_topic": "safe log review",
+      "review_status": "approved",
+      "sections": [
+        {"section_id": "context-and-minimization", "text": "OWASP recommends logging enough application context to support investigation while excluding passwords, tokens, and other sensitive data. Follow the system owner’s approved access and retention process when checking related records. Do not copy private log values into this retrieval query or corpus."}
+      ]
+    }
+  ]
+}

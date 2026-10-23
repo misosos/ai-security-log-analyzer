@@ -1,0 +1,206 @@
+{
+  "corpus_digest": "fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6",
+  "documents": [
+    {
+      "approved": true,
+      "document_id": "application-ssh-roles",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "c2490d15ddf03772463ece849b04a3e8a7f4a93c60fa76f16bc2dafc403de4fd",
+          "section_id": "role-scope"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "brute-force",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "546c2d7da1f72ed5e6bb0f3b709b4fd1fe4b63fa02ea317b6afb938b8fe4078c",
+          "section_id": "meaning-limit"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "checkpoint-reset",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "7c6d8eb849ca0ba1631c35840fa79ecb0d3a53d40805e58c2336e641b1460021",
+          "section_id": "new-history"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "conflicting-evidence",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "4e7d3316b386877fc52633ef97973855673e51e5e5b501dbaecde5efa511f440",
+          "section_id": "conflict"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "failed-success",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "afacb6b9bc748531c51bad80feb701067490d1b8f77bef41ad1dbdefd3b641d0",
+          "section_id": "relation-not-causation"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "incomplete-evidence",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "2b65ec39bcf1610321db908422837cbba639ed1fbe2928efffc8a2bf550b1bf8",
+          "section_id": "partial-input"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "investigation-case",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "831575b7f483ebf753b4550db7ba123f6528b80f55c4d6805a008729b38acc98",
+          "section_id": "supporting-relation"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "next-checks",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "a6983d53263614186379ea6e1ad348bb75e3f7fd3fabc0e6372b12ec5e773294",
+          "section_id": "review-records"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "no-finding",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "158b91c8f032a38e7c5496b4e5dea4aec01b0ac2d86864152dd4d3ff0c519340",
+          "section_id": "no-detection"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "password-spray",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "7064ef9bfb92cf1a799f6718ca4348ab37a93047ea2aedabed2134f7031a49d4",
+          "section_id": "spray-like-limit"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "privacy-boundary",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "fbfed08731ccaf8dbb548d483a707cd02dc3940a5488223d3dd148507d928287",
+          "section_id": "no-raw-log-search"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "relation-gone",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "e7b7d7adb0b7dd66c8523102cab49143dd022611e8c807a63dce43f3feefde89",
+          "section_id": "not-resolved"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "replay-gap",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "b1d248c5d63179578489c9733ca7d6fe87c06f7ea5a6ffb9f4d992155f4d0097",
+          "section_id": "gap-stale"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "risk-confidence",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "892dcdc343ff31771a474411f65390d3f51bd85b05bf0e789a13a9d5b1475307",
+          "section_id": "separate-values"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "risk-lower",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "19587ca3dec75400bd8062d1804bef6a2e8102beeac85ab8559faff1e7fd2b61",
+          "section_id": "not-safe"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "mitre-brute-force-classification",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "6ac8d3bc4398312c7f376ee69822f0f27f6c49ba269d473dde1d4c8f7781e790",
+          "section_id": "labels-not-evidence"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "nist-incident-response",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "577087961f9b1de038210e74486f12954cdbf3ac7fb8f6f3c3048cd17a5515ba",
+          "section_id": "review-scope"
+        }
+      ]
+    },
+    {
+      "approved": true,
+      "document_id": "owasp-safe-logging",
+      "review_status": "approved",
+      "sections": [
+        {
+          "content_sha256": "6d5eec73de3739e8cfbb21a9c8529cbcb00024e4c2e1738309d57751fbf5236f",
+          "section_id": "context-and-minimization"
+        }
+      ]
+    }
+  ],
+  "file": "corpus.json",
+  "file_sha256": "e4f1b3be566fddf93732bf9ab4ec6295cf49a4d2bae2cf0ba4350a53bf27d054",
+  "schema_version": 1
+}

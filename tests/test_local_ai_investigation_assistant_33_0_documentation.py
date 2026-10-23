@@ -25,8 +25,8 @@ def test_phase_33_0_design_has_closed_scope_and_roadmap():
 def test_readme_and_api_design_disclose_existing_gemini_boundary():
     readme = (ROOT / "README.md").read_text()
     api_doc = (ROOT / "docs/linux_audit_api_design.md").read_text()
-    assert "별도로 호출하면 IP가 포함된 projection" in readme
-    assert "자유 문자열 응답을 검증 없이 반환" in readme
+    assert "별도 호출 시 IP가 포함된 projection" in readme
+    assert "자유 문자열을 검증 없이 반환" in readme
     assert "legacy public projection에 대상 IP가 포함" in api_doc
 
 
