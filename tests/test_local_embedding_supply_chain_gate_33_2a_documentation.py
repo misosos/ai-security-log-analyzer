@@ -34,10 +34,11 @@ def test_phase_33_2a_gate_document_pins_candidates_and_lexical_baseline():
         "pytorch_model.bin",
         "offline",
         "network deny",
-        "실제 사용자 로그",
+        "실제 로그·개인정보가 없는 eval",
         "Phase 33.2B",
         "33.2B 준비 상태는 BLOCKED/PRECONDITION_PENDING",
-        "다운로드·설치·실행하지 않았고",
+        "후속 Phase 33.2B 합성 pilot은 별도",
+        "당시에는 모델 weight·tokenizer·runtime wheel을 받거나 실행하지 않았다",
         "Embedding vector도 안전한 공개 정보가 아니다",
         "API/SSE/UI, database, checkpoint, persistent cache 또는 일반 log에 넣지 않는다",
     ):
@@ -50,7 +51,7 @@ def test_phase_33_2a_gate_document_pins_candidates_and_lexical_baseline():
     assert "Ubuntu VM" in text
 
 
-def test_phase_33_2a_docs_and_readme_link_to_gate_without_claiming_install():
+def test_phase_33_2a_docs_preserve_history_and_link_followup_pilot():
     index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     phase_33_0 = (ROOT / "docs/local_ai_investigation_assistant_33_0.md").read_text(
@@ -65,3 +66,5 @@ def test_phase_33_2a_docs_and_readme_link_to_gate_without_claiming_install():
     assert "33.2A" in phase_33_0
     assert "33.2A" in phase_33_1
     assert "33.2B" in phase_33_1
+    assert "local_embedding_retrieval_pilot_33_2b.md" in index
+    assert "local_embedding_retrieval_pilot_33_2b.md" in readme

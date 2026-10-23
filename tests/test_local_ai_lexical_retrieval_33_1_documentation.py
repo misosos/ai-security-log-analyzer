@@ -26,7 +26,7 @@ def test_phase_33_1_docs_keep_internal_only_and_ai_roadmap_boundaries():
     ):
         assert text in record
     assert "local_ai_lexical_retrieval_33_1.md" in design
-    assert "production API·UI에는 연결되지 않습니다" in readme
+    assert "Retrieval은 production API/UI에 연결되지 않고" in readme
     assert "local_ai_lexical_retrieval_33_1.md" in index
 
 

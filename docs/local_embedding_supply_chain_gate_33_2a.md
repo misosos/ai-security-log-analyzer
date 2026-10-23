@@ -1,6 +1,6 @@
 # Phase 33.2A — 로컬 embedding 공급망·평가 설계 gate
 
-**상태:** 설계 gate 완료. Phase 33.2B 실행은 아직 승인되지 않았다. 이 기록은 정적 metadata 조사만 포함한다. 모델 weight, tokenizer, runtime wheel을 다운로드·설치·실행하지 않았고 실제 사용자 로그를 쓰지 않았으며 dependency, lockfile, production 코드, API, UI, CI를 변경하지 않았다.
+**상태:** Phase 33.2A 정적 설계 gate 기록. 당시에는 모델 weight·tokenizer·runtime wheel을 받거나 실행하지 않았다. 후속 Phase 33.2B 합성 pilot은 별도 [검증 기록](local_embedding_retrieval_pilot_33_2b.md)에 있다. 이 문서의 이후 시제 표현은 Phase 33.2A 당시의 상태를 뜻한다.
 
 조사일은 2026-10-23이다. Hugging Face `main` revision은 이 날짜에 API metadata로 조회한 뒤 문서의 40자리 commit으로 고정했다. `main`은 조사 시점의 head를 찾는 용도로만 썼으며 실행 시 branch 참조로 사용하지 않는다. 저장소가 이후 바뀌면 이 기록은 새 상태를 뜻하지 않는다.
 
@@ -158,10 +158,10 @@ Phase 33.1의 동일한 17개 합성 fixture를 보존하고 세트 digest를 �
 - **33.0:** 설계·위협 모델·legacy Gemini 경로 감사.
 - **33.1:** safe evidence, static approved corpus, lexical retrieval와 citation verifier. 현행 고정 baseline.
 - **33.2A:** 모델/runtime 공급망 후보를 정적으로 조사하고 격리·평가 gate를 설계. 이 문서.
-- **33.2B:** 조건 충족 시 한 후보의 합성 전용 격리 retrieval 비교. 아직 시작되지 않음.
+- **33.2B:** 한 후보의 합성 전용 retrieval 비교는 [별도 기록](local_embedding_retrieval_pilot_33_2b.md)에 완료되었다. macOS memory hard cap 및 전용 OS isolation 증거가 부족하고 hybrid가 lexical을 개선하지 않아 production 통합은 NO_GO다.
 - **33.3:** 구조화 local LLM explanation pilot의 별도 승인.
 
-아직 LLM·embedding·Ollama·llama.cpp·vector DB를 다운로드, 설치, 실행하지 않았다. 기존 Gemini 경로는 변경하지 않았다. Production API/SSE/UI 또는 분석 pipeline과 연결하지 않았다. 33.2B 이후에도 lexical baseline을 비교 기준으로 보존한다.
+Phase 33.2A 작성 당시에는 LLM·embedding·Ollama·llama.cpp·vector DB를 다운로드, 설치, 실행하지 않았다. 후속 Phase 33.2B에서는 pinned E5-small만 별도 temp 환경에서 실행했으며 그 한계와 측정은 연결된 기록에 있다. 기존 Gemini 경로는 변경하지 않았고 retrieval은 production API/SSE/UI 또는 분석 pipeline에 연결하지 않았다. Lexical baseline은 계속 기준선이다.
 
 ## 조사 출처
 

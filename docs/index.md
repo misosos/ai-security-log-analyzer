@@ -24,7 +24,8 @@
 - [Hypothesis 설계](hypothesis_property_testing_gate_23_0.md) · [property pilot](hypothesis_property_testing_pilot_23_1.md) · [Schemathesis 설계](schemathesis_api_fuzzing_gate_23_4.md) · [API pilot](schemathesis_api_pilot_23_5.md)
 - [검증 가능한 로컬 AI 조사 도우미 설계 gate](local_ai_investigation_assistant_33_0.md) — Phase 33.0 설계 전용; Gemini 현행 경계, safe evidence, corpus, 위협 모델과 33.1 평가 기준
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — internal/test-only retrieval; LLM·embedding·API·UI 연결 없음
-- [로컬 embedding 공급망·평가 설계 gate](local_embedding_supply_chain_gate_33_2a.md) — Phase 33.2A 정적 후보 비교; E5-small 조건부 선정, 33.2B 다운로드·실행 gate 미통과
+- [로컬 embedding 공급망·평가 설계 gate](local_embedding_supply_chain_gate_33_2a.md) — Phase 33.2A 당시 정적 후보 비교; 후속 실행은 33.2B 기록 참조
+- [격리형 multilingual E5 retrieval pilot](local_embedding_retrieval_pilot_33_2b.md) — 합성 전용 native macOS 비교; production 통합 NO_GO, lexical 기준선 유지
 
 ## Linux Audit
 
