@@ -67,7 +67,7 @@ Phase 32.1B는 내부 역할별 prefix·cycle·checkpoint·close를, Phase 32.2�
 
 ## 단계와 명시적 NO-GO
 
-**단계 상태:** 32.1A private v3 설정 생성·로드, 32.1B 내부 runtime·scheduler·checkpoint, 32.2 안전한 publication/API/SSE, 32.3 setup·management·production UI 구현이 각각 별도로 기록되어 있다. 실제 Safari 사용자 수용은 NOT_TESTED다. 구현된 production 흐름도 rotation/copytruncate, second-generation replay, cross-source analysis, exactly-once 지원을 뜻하지 않는다.
+**단계 상태:** 32.1A private v3 설정 생성·로드, 32.1B 내부 runtime·scheduler·checkpoint, 32.2 안전한 publication/API/SSE, 32.3 setup·management·production UI 구현, 32.4 독립 수용·장애 검증이 각각 별도로 기록되어 있다. 합성 CLI·loopback·Chromium 자동 검증은 수행했지만 실제 Safari 사용자 수용은 NOT_TESTED다. 구현된 production 흐름도 rotation/copytruncate, second-generation replay, cross-source analysis, exactly-once 지원을 뜻하지 않는다. [Phase 32.4 수용 기록](multi_source_acceptance_32_4.md)을 참조한다.
 
 이 설계 문서는 32.0 시점의 proposal을 보존한다. 당시 v3 사용자 실행·production UI는 미구현이었으며 이후 단계 구현은 proposal의 제한을 제거하지 않았다.
 

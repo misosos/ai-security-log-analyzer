@@ -60,11 +60,16 @@
     dom("pair-overall").textContent = failed ? "전체 모니터링에 확인이 필요합니다." : "두 로그를 함께 확인하고 있습니다.";
     const item = value.roles.find((row) => row.role === selectedRole);
     dom("pair-role-heading").textContent = ROLE_NAMES[selectedRole];
-    const stateText = ({READY: "새 기록 대기 중", RUNNING: "기록 확인 중", DEGRADED: "처리 확인 필요", FAILED: "처리 중단", STOPPING: "종료 중", STOPPED: "종료됨"})[item.service_state];
+    const stateText = failed && !["DEGRADED", "FAILED", "STOPPED"].includes(item.service_state)
+      ? "전체 처리 중단으로 새 기록 확인이 멈췄습니다"
+      : ({READY: "새 기록 대기 중", RUNNING: "기록 확인 중", DEGRADED: "처리 확인 필요", FAILED: "처리 중단", STOPPING: "종료 중", STOPPED: "종료됨"})[item.service_state];
     dom("pair-role-state").textContent = `${stateText} · ${item.checkpoint_available ? "이전 상태를 이어갈 복구 자료가 있습니다" : "첫 실행 상태입니다"}`;
     dom("pair-role-counts").textContent = `관찰 ${item.active_observation_count}건 · 관계 ${item.active_relation_count}건 · 위험도 ${item.active_risk_count}건 · 조사 사례 ${item.active_case_count}건`;
     for (const button of document.querySelectorAll("[data-pair-role]")) button.setAttribute("aria-pressed", String(button.dataset.pairRole === selectedRole));
-    dom("pair-recovery").hidden = !stale;
+    dom("pair-recovery").hidden = !stale && !failed;
+    dom("pair-recovery").textContent = failed
+      ? "한 로그의 처리가 멈춰 전체 새 수집이 중단되었습니다. 두 로그의 설정과 복구 상태를 확인한 뒤 수동으로 다시 시작하십시오."
+      : "일부 기록을 이어받지 못했습니다. 최신 상태를 다시 조회해 주세요.";
     updatePending();
   }
   function updatePending() {
@@ -110,9 +115,29 @@
     if (type === "replay_gap") {
       if (!exact(value, ["schema_version", "code", "affected_roles", "stale", "recovery_action"]) || value.schema_version !== "3" ||
           value.stale !== true || !Array.isArray(value.affected_roles) || value.affected_roles.some((role) => !ROLE_NAMES[role])) { close(true); return; }
-      stale = true; dom("pair-recovery").hidden = false; close(true); return;
+      stale = true; dom("pair-recovery").textContent = "일부 기록을 이어받지 못했습니다. 최신 상태를 다시 조회해 주세요.";
+      dom("pair-recovery").hidden = false; close(true); return;
     }
-    if (type === "service_status" || type === "stream_end") { close(true); return; }
+    if (type === "service_status") {
+      if (!exact(value, ["schema_version", "state", "code"]) || value.schema_version !== "3" ||
+          !["DEGRADED", "FAILED"].includes(value.state) ||
+          !["PAIR_RUNNER_FAILED", "PAIR_RUNNER_DEGRADED", "PAIR_FAILED", "PAIR_DEGRADED"].includes(value.code)) {
+        close(true); return;
+      }
+      statusValue = {...statusValue, service_state: value.state};
+      stale = true;
+      showStatus(statusValue);
+      close(true);
+      return;
+    }
+    if (type === "stream_end") {
+      stale = true;
+      dom("pair-overall").textContent = "모니터링 연결이 종료되었습니다.";
+      dom("pair-recovery").textContent = "서버 상태를 확인한 뒤 필요하면 직접 다시 시작하십시오.";
+      dom("pair-recovery").hidden = false;
+      close(true);
+      return;
+    }
     if (type === "heartbeat") return;
     if (type !== "observation_changes" && type !== "analysis_changes") { close(true); return; }
     try {
@@ -166,7 +191,13 @@
     if (source) return true;
     source = new EventSource("/api/v1/live/events");
     ["snapshot", "observation_changes", "analysis_changes", "replay_gap", "service_status", "stream_end", "heartbeat"].forEach((type) => source.addEventListener(type, (message) => { if (source) event(type, message); }));
-    source.onerror = () => close(true);
+    source.onerror = () => {
+      stale = true;
+      dom("pair-overall").textContent = "모니터링 연결을 확인할 수 없습니다.";
+      dom("pair-recovery").textContent = "서버 상태를 확인한 뒤 필요하면 페이지를 새로 열어 다시 연결하십시오.";
+      dom("pair-recovery").hidden = false;
+      close(true);
+    };
     return true;
   }
   document.querySelectorAll("[data-pair-role]").forEach((button) => button.addEventListener("click", () => {

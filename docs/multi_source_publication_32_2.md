@@ -2,6 +2,8 @@
 
 **범위:** 당시 32.2 구현은 [32.1A private v3 설정](multi_source_private_config_32_1.md)과 [32.1B 내부 runtime](multi_source_runtime_32_1b.md)을 내부 launcher로 검증했다. **Phase 32.3 후속 구현**은 해당 schema 3 publication을 production `--monitor` 및 역할 선택 UI에 연결했다. 32.2 자체의 설계·테스트 범위는 변하지 않으며 사용자 수용은 아직 NOT_TESTED다. 단계 구분과 후속 gate는 [32.3 구현 기록](multi_source_user_monitoring_32_3.md)을 참조한다.
 
+Phase 32.4 독립 failure/acceptance evidence는 [수용 기록](multi_source_acceptance_32_4.md)에 누적한다. 실제 Safari 사용자 문구·조작·접근성 확인은 별도이며 `NOT_TESTED`다.
+
 ## 기존 단일 source 공개 계약과 확장 이유
 
 단일 source status는 닫힌 `LiveStatusResponse` schema_version `2`이며 단일 source_role, worker/publication state, detection·analysis revision, 집계, 고정 오류, 32 item·16 KiB replay 상한을 보낸다. SSE는 snapshot, observation_changes, analysis_changes, replay_gap, service_status, heartbeat, stream_end를 사용한다. Observation→analysis는 한 worker step 안에서 순서를 지킨다. event ID는 세션별 `LIVE-EVENT` 전역 cursor 형태지만 단일 source 세션에만 속한다. Buffer eviction은 gap으로 알리고 최신 snapshot 재조회가 필요하다. 단일 source 분석 projection은 131072 byte와 category별 256 item 상한이다. 기존 frontend validator는 schema `2`와 정확한 필드·enum만 수용한다. Schema `2`를 두 역할로 재해석하면 기존 클라이언트의 단일 revision·source 전제를 깨므로 내부 두 역할 transport에만 schema `3`을 사용한다. 기존 화면은 schema `3`을 안전하게 거부하고 Phase 32.3에서 별도 수용 계약을 만든다.

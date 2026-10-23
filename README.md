@@ -50,7 +50,7 @@ uv run python -m app.monitor_setup --multi-source
 
 모니터를 정상 종료하면 설정과 checkpoint가 유지됩니다. `--delete`와 `--reset-checkpoint`도 원본 로그를 삭제하지 않습니다.
 
-Multi-source wizard는 역할별 bounded 형식 확인만 수행하고 detector/risk/case/LLM은 실행하지 않습니다. 새 설정은 두 로그의 현재 끝부터 읽습니다. 역할별 checkpoint와 상태는 분리됩니다. 한 역할 실패는 전체 수집을 멈춥니다. Rotation/copytruncate, 두 번째 파일 세대 replay, cross-source 분석, exactly-once는 지원하지 않습니다. 화면의 **새 결과 보기**는 선택한 역할의 staged 결과를 적용하고, 화면 표시 일시 정지는 서버 수집을 멈추지 않습니다. 설정·관리·UI 제한은 [Phase 32.3 안내](docs/multi_source_user_monitoring_32_3.md), 실제 Safari 사용자 점검은 [수용 체크리스트](docs/safari_multi_source_acceptance_32_3.md)를 참조하십시오.
+Multi-source wizard는 역할별 bounded 형식 확인만 수행하고 detector/risk/case/LLM은 실행하지 않습니다. 새 설정은 두 로그의 현재 끝부터 읽습니다. 역할별 checkpoint와 상태는 분리됩니다. 한 역할 실패는 전체 수집을 멈춥니다. Rotation/copytruncate, 두 번째 파일 세대 replay, cross-source 분석, exactly-once는 지원하지 않습니다. 화면의 **새 결과 보기**는 선택한 역할의 staged 결과를 적용하고, 화면 표시 일시 정지는 서버 수집을 멈추지 않습니다. 설정·관리·UI 제한은 [Phase 32.3 안내](docs/multi_source_user_monitoring_32_3.md), Phase 32.4 자동·사용자 수용 상태는 [검증 기록](docs/multi_source_acceptance_32_4.md)을 참조하십시오.
 
 기존 v1/v2의 application·SSH 파일 하나 실행은 `FROM_END`부터 시작하고 bounded checkpoint로 같은 파일 복구를 유지합니다. Rotation·copytruncate의 자동 연결은 없습니다. 기존 화면에서 **새 결과 N건 보기**를 선택해야 대기 결과가 적용되며, 일시 정지는 서버 수집을 멈추지 않습니다. 단일 설정 상세는 [설정 마법사](docs/monitor_setup_20.md), [SSH 설정 구현](docs/monitor_setup_ssh_30_1.md), [checkpoint](docs/live_checkpoint_21.md), [SSH 재시작](docs/ssh_checkpoint_recovery_26_0.md)를 참조하십시오.
 

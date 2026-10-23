@@ -24,4 +24,4 @@ Phase 32.1A 자체에는 API·SSE·UI 연결이 없었다. 이후 32.2의 API·S
 
 **NO-GO 유지:** cross-source correlation, 자동 rotation/copytruncate 복구, exactly-once·무유실 보장, PentAGI 등 외부 실행 도구 연결. 이번 설정 파일의 경로는 사용자가 명시적으로 삭제할 때까지 private 영역에 남을 수 있으므로 공유·artifact 업로드 대상이 아니다.
 
-**단계 구분:** 32.1A private 설정 생성·로드, 32.1B 내부 runtime·scheduler·checkpoint, 32.2 안전한 publication/API/SSE, 32.3 사용자 설정·관리와 production UI다. Safari의 실제 사용자 검증은 32.3 범위에서 별도로 남아 있다.
+**단계 구분:** 32.1A private 설정 생성·로드, 32.1B 내부 runtime·scheduler·checkpoint, 32.2 안전한 publication/API·SSE, 32.3 사용자 설정·관리와 production UI, 32.4 독립 수용·장애·사용성 검증이다. Safari 실제 사용자 검증은 32.4 수용 기록에서 NOT_TESTED로 추적한다.

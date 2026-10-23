@@ -4,6 +4,8 @@
 
 **후속 상태:** [Phase 32.3](multi_source_user_monitoring_32_3.md)에서 v3 setup·관리 UX, 일반 `--monitor`, schema 3 production UI를 구현했다. macOS Safari와 실제 보조기술 사용자 수용은 아직 `NOT_TESTED`다. 아래 32.1B 경계와 기록은 그 단계의 역사적 구현·검증 내용을 보존한다.
 
+Phase 32.4 독립 수용·장애 검증 결과와 자동/수동 증거 구분은 [수용 기록](multi_source_acceptance_32_4.md)에 있다. Safari·VoiceOver·Web Inspector 사용자 확인은 여전히 `NOT_TESTED`다.
+
 Phase 32.1B 단독 범위에는 API·SSE·UI 연결이 없었다. 이후 32.2에서 내부 launcher의 API·SSE만 추가했다.
 
 ## 닫힌 실행 계약

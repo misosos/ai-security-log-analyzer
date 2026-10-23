@@ -6,6 +6,7 @@
 - **32.1B:** 역할별 내부 worker/runtime, bounded round-robin, checkpoint와 lock.
 - **32.2:** 역할별 공개 snapshot, global publication cursor, API/SSE 계약.
 - **32.3:** 두 로그 설정 wizard·관리, production `--monitor` 연결, 역할별 schema 3 UI.
+- **32.4 후속 검증:** [독립 수용 기록](multi_source_acceptance_32_4.md)은 합성 CLI·loopback·장애 및 자동 UI 증거를 기록한다. Safari 사용자 수용은 `NOT_TESTED`다.
 
 32.3은 역할별 분석을 기존 source 내부 detection/correlation/risk/case pipeline에 연결한다. cross-source 분석은 없다. v1/v2 설정과 schema 2 UI는 기존 경로를 유지한다. v3는 기본 `--monitor` 및 명시적 `--monitor-config PATH`에서 실행한다. 명시 경로도 닫힌 v3 loader로만 읽으며 v1/v2의 명시적 `FROM_END` 의미는 유지한다. malformed v3는 다른 설정으로 fallback하지 않는다.
 
