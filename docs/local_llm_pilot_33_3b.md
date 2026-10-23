@@ -69,7 +69,7 @@ No model, runtime, wheel, cache, prompt instance, raw output, or inference temp 
 
 ## Verdict and next gate
 
-**`ISOLATION_BLOCKED`** is the final result. This is not `GO_FOR_INDEPENDENT_AI_AUDIT`, not a structured-output or model-quality result, and not production approval. The Phase 33.2B embedding production `NO_GO` and Phase 33.1 lexical baseline remain unchanged. Before retrying 33.3B, provide or prepare a disposable Ubuntu VM with verified offline boot and OS-level network deny, then repeat preflight; do not use the Q8 official GGUF unless a separately approved quantization gate permits it. If the VM cannot be established, keep local LLM evaluation blocked. Phase 33.4 remains unstarted.
+**`ISOLATION_BLOCKED`** was the final result of this attempt. The follow-up [Phase 33.3C retry](local_llm_pilot_33_3c.md) also stopped at preflight because the existing disposable guest could not be independently reached and verified. Neither attempt is `GO_FOR_INDEPENDENT_AI_AUDIT`, a structured-output/model-quality result, nor production approval. The Phase 33.2B embedding production `NO_GO` and Phase 33.1 lexical baseline remain unchanged. Before another attempt, provide verifiable guest access and evidence for rollback, disabled host sharing, and OS-level network denial; do not use the Q8 official GGUF unless a separately approved quantization gate permits it. Phase 33.4 remains unstarted.
 
 ## Validation record
 

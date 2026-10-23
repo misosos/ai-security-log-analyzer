@@ -118,7 +118,7 @@ Fail-closed는 DTO 위반, corpus/index digest 불일치, 미승인 문서, thre
 | 33.2A | 로컬 embedding 공급망·평가 gate 설계 | [정적 조사 기록](local_embedding_supply_chain_gate_33_2a.md); E5-small만 CONDITIONAL_GO, 실행 전 조건 미충족 |
 | 33.2B | 한 후보의 합성 전용 격리 비교 | [E5-small pilot](local_embedding_retrieval_pilot_33_2b.md) 완료; production 연결은 NO_GO, memory hard cap·전용 VM isolation 근거 부족 |
 | 33.3A | 구조화 local LLM 공급망·평가 설계 | [33.3A gate](local_llm_supply_chain_gate_33_3a.md); Qwen+llama.cpp 조건부 후보, 다운로드·실행 없음 |
-| 33.3B | 격리된 합성 설명 pilot | [시도 기록](local_llm_pilot_33_3b.md); `ISOLATION_BLOCKED`, model/runtime 미다운로드·미실행 |
+| 33.3B/33.3C | 격리된 합성 설명 pilot 및 재시도 | [33.3B](local_llm_pilot_33_3b.md), [33.3C](local_llm_pilot_33_3c.md); 둘 다 `ISOLATION_BLOCKED`, model/runtime 미다운로드·미실행 |
 | 33.4 | injection·hallucination·privacy 독립 감사 | 독립 합성 공격 시험 통과 |
 | 33.5 | UI opt-in·사용자 수용 | 별도 UX/privacy/접근성 검증 |
 | 34.0 | River/PyOD anomaly detection shadow-mode 설계 | 별도 observable evidence·평가 설계 |

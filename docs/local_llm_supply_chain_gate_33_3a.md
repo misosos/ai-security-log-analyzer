@@ -157,7 +157,7 @@ Any unknown license, hash/revision drift, remote/custom code, pickle, unexpected
 | 33.2A | embedding 공급망 설계 | 기록됨 |
 | 33.2B | 합성 embedding 비교 | 완료, embedding production `NO_GO`; lexical 유지 |
 | 33.3A | 이 문서: structured local LLM 공급망·평가 설계 gate | 완료, 실행 전 |
-| 33.3B | 한 모델/runtime의 격리 합성 LLM pilot | [시도 기록](local_llm_pilot_33_3b.md); `ISOLATION_BLOCKED`, 미다운로드·미실행 |
+| 33.3B/33.3C | 한 모델/runtime의 격리 합성 LLM pilot 및 재시도 | [33.3B](local_llm_pilot_33_3b.md), [33.3C](local_llm_pilot_33_3c.md); `ISOLATION_BLOCKED`, 미다운로드·미실행 |
 | 33.4 | 독립 injection·hallucination·privacy 감사 | 미시작 |
 | 33.5 | 명시적 opt-in API/UI와 실제 사용자 수용 | 미시작 |
 | 34.0 | River/PyOD anomaly detection shadow mode | 별도 설계 |

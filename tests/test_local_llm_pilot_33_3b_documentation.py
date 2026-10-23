@@ -19,7 +19,7 @@ def test_phase_33_3b_report_records_blocked_state_and_no_runtime_claim():
         "Phase 33.2B embedding production `NO_GO`",
     ):
         assert phrase in record
-    assert "not `GO_FOR_INDEPENDENT_AI_AUDIT`" in record
+    assert "not `GO_FOR_INDEPENDENT_AI_AUDIT`" in record or "Neither attempt is `GO_FOR_INDEPENDENT_AI_AUDIT`" in record
 
 
 def test_phase_33_3b_harness_is_test_only_and_does_not_launch_a_runtime():
@@ -44,5 +44,5 @@ def test_phase_33_3b_roadmaps_link_the_blocked_attempt():
         "README.md",
     ):
         text = (ROOT / path).read_text(encoding="utf-8")
-        assert "local_llm_pilot_33_3b.md" in text or path == "README.md"
+        assert "local_llm_pilot_33_3b.md" in text or "local_llm_pilot_33_3c.md" in text or path == "README.md"
     assert "ISOLATION_BLOCKED" in (ROOT / "README.md").read_text(encoding="utf-8")

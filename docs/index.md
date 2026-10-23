@@ -26,7 +26,7 @@
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — internal/test-only retrieval; LLM·embedding·API·UI 연결 없음
 - [로컬 embedding 공급망·평가 설계 gate](local_embedding_supply_chain_gate_33_2a.md) — Phase 33.2A 당시 정적 후보 비교; 후속 실행은 33.2B 기록 참조
 - [격리형 multilingual E5 retrieval pilot](local_embedding_retrieval_pilot_33_2b.md) — 합성 전용 native macOS 비교; production 통합 NO_GO, lexical 기준선 유지
-- [구조화 local LLM 설명 pilot 공급망·평가 설계 gate](local_llm_supply_chain_gate_33_3a.md) — Phase 33.3A 정적 설계; Phase 33.3B는 [격리 불가로 차단](local_llm_pilot_33_3b.md)
+- [구조화 local LLM 설명 pilot 공급망·평가 설계 gate](local_llm_supply_chain_gate_33_3a.md) — Phase 33.3A 정적 설계; [33.3B 첫 시도](local_llm_pilot_33_3b.md)와 [33.3C 재시도](local_llm_pilot_33_3c.md)는 격리 불가로 차단
 
 ## Linux Audit
 

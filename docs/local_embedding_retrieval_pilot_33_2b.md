@@ -116,7 +116,7 @@ Cosine threshold는 평가 query와 문구가 겹치지 않도록 분리한 4개
 - **33.2A:** 정적 model/runtime 공급망 gate 설계.
 - **33.2B:** 이번 합성 전용 embedding 비교. 제품에 연결하지 않는다.
 - **33.3A:** [구조화 local LLM 설계 gate](local_llm_supply_chain_gate_33_3a.md); lexical citation만 허용하고 모델/runtime 실행은 없다.
-- **33.3B:** [시도 기록](local_llm_pilot_33_3b.md)은 `ISOLATION_BLOCKED`; Embedding, vector index, hybrid는 계속 금지다.
+- **33.3B/33.3C:** [시도 기록](local_llm_pilot_33_3b.md), [재시도 기록](local_llm_pilot_33_3c.md)은 `ISOLATION_BLOCKED`; Embedding, vector index, hybrid는 계속 금지다.
 - **33.4:** injection/hallucination/privacy 독립 감사.
 - **33.5:** UI opt-in·사용자 수용.
 - **34.0:** River/PyOD anomaly detection shadow-mode 설계.

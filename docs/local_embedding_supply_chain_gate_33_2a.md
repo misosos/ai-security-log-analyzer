@@ -160,7 +160,7 @@ Phase 33.1의 동일한 17개 합성 fixture를 보존하고 세트 digest를 �
 - **33.2A:** 모델/runtime 공급망 후보를 정적으로 조사하고 격리·평가 gate를 설계. 이 문서.
 - **33.2B:** 한 후보의 합성 전용 retrieval 비교는 [별도 기록](local_embedding_retrieval_pilot_33_2b.md)에 완료되었다. macOS memory hard cap 및 전용 OS isolation 증거가 부족하고 hybrid가 lexical을 개선하지 않아 production 통합은 NO_GO다.
 - **33.3A:** [구조화 local LLM 설계 gate](local_llm_supply_chain_gate_33_3a.md); 모델/runtime 미다운로드·미실행.
-- **33.3B:** [격리 pilot 시도](local_llm_pilot_33_3b.md)는 `ISOLATION_BLOCKED`; Qwen/runtime 미다운로드·미실행. Embedding `NO_GO`와 lexical 기준선 유지.
+- **33.3B/33.3C:** [격리 pilot 시도](local_llm_pilot_33_3b.md), [재시도](local_llm_pilot_33_3c.md)는 `ISOLATION_BLOCKED`; Qwen/runtime 미다운로드·미실행. Embedding `NO_GO`와 lexical 기준선 유지.
 
 Phase 33.2A 작성 당시에는 LLM·embedding·Ollama·llama.cpp·vector DB를 다운로드, 설치, 실행하지 않았다. 후속 Phase 33.2B에서는 pinned E5-small만 별도 temp 환경에서 실행했으며 그 한계와 측정은 연결된 기록에 있다. 기존 Gemini 경로는 변경하지 않았고 retrieval은 production API/SSE/UI 또는 분석 pipeline에 연결하지 않았다. Lexical baseline은 계속 기준선이다.
 
