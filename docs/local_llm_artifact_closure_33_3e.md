@@ -72,3 +72,7 @@ Focused tests check fixed model digests, missing/duplicate model entries, wheel 
 ## Phase boundary
 
 33.1 lexical retrieval remains the only retrieval baseline. 33.2B embedding production integration remains `NO_GO`. This phase did not acquire or execute Qwen or llama.cpp. Production API/SSE/UI, Gemini, and automatic fallback remain untouched. Any next attempt must first resolve license/install-hook/build-package closure and obtain user approval for a larger isolated VM storage plan; `READY_FOR_VM_ACQUISITION` was not reached.
+
+## Phase 33.3F follow-up
+
+The license and wheel archive gaps described above were independently addressed in [Phase 33.3F](local_llm_acquisition_environment_33_3f.md): all 28 candidate wheel archives were size/hash checked without installation, license file paths/digests and the setuptools startup hook were recorded, and the expanded payload size was incorporated into the 20 GiB storage scenario. The target VM's exact apt/build closure and physical-disk acceptance remain open. Phase 33.3F therefore ended `STORAGE_SETUP_BLOCKED`; no artifact acquisition, model conversion, build, or inference was performed.

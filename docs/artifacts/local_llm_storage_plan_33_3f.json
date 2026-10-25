@@ -1,0 +1,50 @@
+{
+  "schema": "phase33_3f_storage_plan_v1",
+  "capacity_scenario_bytes": 21474836480,
+  "minimum_free_reserve_bytes": 5368709120,
+  "root_filesystem_minimum_free_bytes": 3221225472,
+  "format_authorization": "NOT_REQUESTED",
+  "root_filesystem_mutation_allowed": false,
+  "host_shared_storage_allowed": false,
+  "storage_layout": {
+  "pilot_root": "<VM-private-mountpoint>/local-llm-pilot",
+    "subdirectories": ["cache", "apt-cache", "tmp", "source", "build", "model", "corpus", "prompt", "output"],
+    "all_paths_must_resolve_beneath_pilot_root": true,
+    "symlinks_allowed": false,
+    "mount_policy": {
+      "filesystem": "ext4",
+      "label": "LOCAL_LLM_PILOT",
+      "mountpoint_mode": "0700",
+      "owner": "non-root pilot user",
+      "options": ["nosuid", "nodev"],
+      "noexec": "evaluate separately for the runtime binary location",
+      "fstab_persistent_entry": false
+    }
+  },
+  "safe_capacity_estimate": {
+    "source": "test-only calculator plus pinned model, wheel and llama.cpp metadata",
+    "planning_peak_bytes": 9256782529,
+    "planning_peak_gib": 8.62,
+    "free_after_peak_bytes_on_20_gib_scenario": 12218053951,
+    "apt_package_archive_cache_cap_bytes": 1073741824,
+    "filesystem_safety_overhead_percent": 15,
+    "minimum_reserve_bytes": 5368709120,
+    "planning_caps_are_measured_bounds": false,
+    "root_tmp_large_files_allowed": false,
+    "disk_full_fault_plan": "Use a disposable, size-capped filesystem image under the pilot disk and fill only that image; do not fill the pilot filesystem."
+  },
+  "physical_disk_acceptance": {
+    "status": "PENDING_USER_INVENTORY",
+    "before_inventory_received": false,
+    "after_inventory_received": false,
+    "new_device_identity_saved": false,
+    "root_device_unchanged_verified": false,
+    "filesystem_uuid_saved": false,
+    "mount_verified": false,
+    "format_authorization": "NOT_REQUESTED",
+    "format_performed": false,
+    "snapshot_state_verified_after_mount": false,
+    "network_and_shared_features_rechecked": false
+  },
+  "final_storage_status": "STORAGE_SETUP_BLOCKED"
+}
