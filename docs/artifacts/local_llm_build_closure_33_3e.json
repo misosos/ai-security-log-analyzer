@@ -1,0 +1,63 @@
+{
+  "schema": "phase33_3e_build_closure_v1",
+  "status": "INCOMPLETE_NO_ACQUISITION",
+  "runtime": {
+    "repository": "ggml-org/llama.cpp",
+    "tag": "v0.7.0",
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+    "archive_url": "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/620d2225cc436ab0b001e3200e590e3b286ef9ab",
+    "archive_bytes": 38195486,
+    "archive_sha256": "1d4a987d9bd048f6e93107e838026438df70fbde237fc0c69c63d600512b4bd9",
+    "archive_hash_method": "exact commit archive streamed through SHA-256; archive not retained",
+    "tag_commit_binding": "official release/tag metadata maps v0.7.0 to the pinned commit"
+  },
+  "converter_files": [
+    {"path": "convert_hf_to_gguf.py", "bytes": 13012, "sha256": "e9a1da876330bbce9687541ab31736542a01b4ac43c6686126514a50f122fb7f"},
+    {"path": "requirements/requirements-convert_hf_to_gguf.txt", "bytes": 200, "sha256": "3c1d689a0fb8b17057f012848819e405ca3949482e0554d8ae4586391b5bbbd4"},
+    {"path": "requirements/requirements-convert_legacy_llama.txt", "bytes": 101, "sha256": "8e462f800429e87972ad4ecbf06a30c5e38bc381cda5597d0a36fb5110ca3cc8"},
+    {"path": "conversion/__init__.py", "bytes": 17073, "sha256": "1b45e39c7bb9cab7a7c8809d0f0b7e98f4dd1e8e1ba6755ab30f148efd4faf55"},
+    {"path": "conversion/base.py", "bytes": 161230, "sha256": "4fee4121afc7df99a0a3309ef1d1b6592fb9f6d1aa96a2fa1da14d18fab5b814"},
+    {"path": "conversion/qwen.py", "bytes": 49588, "sha256": "dde6d81179a077d963f54e99c713ae02bb11d3484fecce4cd5bce85727eb5f4e"},
+    {"path": "gguf-py/pyproject.toml", "bytes": 1296, "sha256": "4d4c2db08f33d8020426cf52b268e038de2be6f72d192e948c45587c921807b4"}
+  ],
+  "converter_analysis": {
+    "qwen3_support": "conversion/qwen.py maps Qwen3ForCausalLM/Qwen3Model into the QWEN3 architecture path",
+    "torch_required": true,
+    "torch_reason": "convert_hf_to_gguf.py imports torch unconditionally and wraps conversion in torch.inference_mode()",
+    "transformers_reason": "conversion code imports transformers.convert_slow_tokenizer.bytes_to_unicode",
+    "network_path": "--remote imports huggingface_hub.snapshot_download and downloads by patterns; forbidden. Use only a verified local model directory; source-build networking must be unavailable after acquisition.",
+    "dynamic_remote_code": "no trust_remote_code path required by the pinned converter; this is a static source review, not a runtime proof",
+    "output_candidate": "single non-quantized F16 GGUF; --use-temp-file behavior and exact temporary-file peak require target-runtime validation",
+    "converter_source_digest_closure": "each directly identified entry file is SHA-256 pinned above; full archive digest pins the remaining source tree"
+  },
+  "python": {
+    "target": "Ubuntu 24.04 ARM64, CPython 3.12",
+    "resolved_wheel_count": 28,
+    "wheelhouse_bytes": 197071951,
+    "only_binary_resolution": true,
+    "sdist_fallback": false,
+    "install_or_source_build_performed": false,
+    "remaining_gap": "wheel archives were not inspected for embedded installer scripts/native contents; six package license fields need authoritative resolution; resolver output is a candidate lock, not a tested install closure"
+  },
+  "os_build": {
+    "architecture": "aarch64",
+    "ubuntu_release": "24.04",
+    "required_package_candidates": ["build-essential", "cmake", "ninja-build", "python3.12", "python3.12-venv", "python3.12-dev", "git"],
+    "package_versions_and_dependency_hashes": null,
+    "compiler_cmake_ninja_versions": null,
+    "build_flags": null,
+    "linked_libraries": null,
+    "llama_cli_binary_sha256": null,
+    "llama_server_target": "must not be built or executed",
+    "network_during_build": "not verified; must be denied after all OS packages and source have been acquired",
+    "build_closure_complete": false
+  },
+  "acquisition_policy": {
+    "allowed_model_source": "pinned Qwen repository revision only; file allowlist from the model manifest",
+    "allowed_runtime_source": "pinned llama.cpp source archive only",
+    "official_gguf_substitution": false,
+    "mutable_latest": false,
+    "trust_remote_code": false,
+    "downloaded_binary_or_wheel_artifacts_in_repository": false
+  }
+}

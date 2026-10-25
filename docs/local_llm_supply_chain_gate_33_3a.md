@@ -159,6 +159,7 @@ Any unknown license, hash/revision drift, remote/custom code, pickle, unexpected
 | 33.3A | 이 문서: structured local LLM 공급망·평가 설계 gate | 완료, 실행 전 |
 | 33.3B/33.3C | 한 모델/runtime의 격리 합성 LLM pilot 및 재시도 | [33.3B](local_llm_pilot_33_3b.md), [33.3C](local_llm_pilot_33_3c.md); `ISOLATION_BLOCKED`, 미다운로드·미실행 |
 | 33.3D | 사용자 제공 Ubuntu VM에서 재개 gate | [33.3D](local_llm_pilot_33_3d.md); `SUPPLY_CHAIN_BLOCKED`, converter/runtime wheel closure 미고정으로 취득·실행 중단 |
+| 33.3E | artifact closure·disk peak gate | [33.3E](local_llm_artifact_closure_33_3e.md); `RESOURCE_NO_GO`, 5.1 GiB usable budget에 안전한 fit 입증 불가; 일부 wheel license/install-hook 및 Ubuntu build closure 미확정 |
 | 33.4 | 독립 injection·hallucination·privacy 감사 | 미시작 |
 | 33.5 | 명시적 opt-in API/UI와 실제 사용자 수용 | 미시작 |
 | 34.0 | River/PyOD anomaly detection shadow mode | 별도 설계 |
