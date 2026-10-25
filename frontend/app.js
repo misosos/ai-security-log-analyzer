@@ -650,9 +650,9 @@
     const quote = (value) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
     const canonical = `{"confidence":${quote(fields.confidence)},"observation_count":${fields.observation_count},` +
       `"review_order":${fields.review_order},"risk_level":${quote(fields.risk_level)},` +
-      `"supporting_relation_count":${fields.supporting_relation_count},"supported_detections":[` +
-      fields.supported_detections.map(quote).join(",") + `],"supported_relations":[` +
-      fields.supported_relations.map(quote).join(",") + "]}";
+      `"supported_detections":[${fields.supported_detections.map(quote).join(",")}],` +
+      `"supported_relations":[${fields.supported_relations.map(quote).join(",")}],` +
+      `"supporting_relation_count":${fields.supporting_relation_count}}`;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
     return `c_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24)}`;
   }

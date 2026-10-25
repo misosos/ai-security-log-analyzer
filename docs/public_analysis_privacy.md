@@ -18,7 +18,7 @@
 
 ## 사례 API·HTML·CLI·LLM
 
-Phase 33.4B는 `POST /api/v1/investigations[/sample]`의 `schema_version`을 `2`로 올리고 사례·타임라인·독립 관찰의 `subject`를 `subject_alias`로 교체한다. 별칭은 응답의 기존 순서에서 처음 본 정규화 IP마다 `대상 A`, `대상 B`처럼 부여하며 같은 응답의 사례와 timeline에서는 일관된다. 값·일부 문자열·hash를 별칭에 인코딩하지 않는다. 별칭은 해당 응답 밖에서 안정적인 식별자가 아니다. UI는 schema 2를 검증한다.
+Phase 33.4B는 `POST /api/v1/investigations[/sample]`의 `schema_version`을 `2`로 올리고 사례·타임라인·독립 관찰의 `subject`를 `subject_alias`로 교체한다. Deprecated `POST /api/analyze`도 `schema_version=2`를 반환하고 결과의 `ip` 대신 `subject_alias`를 제공한다. schema 1의 `subject`/`ip` 소비자는 새 version을 명시적으로 지원하도록 migration해야 한다. 별칭은 응답의 기존 순서에서 처음 본 정규화 IP마다 `대상 A`, `대상 B`처럼 부여하며 같은 응답의 사례와 timeline에서는 일관된다. 값·일부 문자열·hash를 별칭에 인코딩하지 않는다. 별칭은 원래 식별자가 아니며 응답 밖에서 안정적인 식별자가 아니다. 원래 식별자를 복구하거나 응답 간 비교, 영구 저장 또는 상관 키로 사용하면 안 된다. UI는 schema 2를 검증한다.
 
 HTML report는 기존 정렬 순서로 만든 응답 한정 별칭을 사용하고, JSON 필드 외 숨은 HTML 위치에도 원래 식별자를 출력하지 않는다. 공개용 안전 요약 안내를 표시한다. 기존 분석·case projection의 trusted 내부 원본 subject key는 계산과 안전 projection 연결에만 남는다. 운영 대응용 원래 IP 열람은 인증·권한·감사 기록을 포함한 별도 trusted detail 설계가 필요하다.
 

@@ -251,14 +251,15 @@ async function main() {
       } else if (url.pathname === '/api/v1/investigations/sample') {
         await route.continue();
       } else if (url.pathname === '/api/v1/investigations/guidance') {
-        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({
-          schema_version: 1, status: 'AVAILABLE',
-          message: '조사 도움말입니다. 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.',
-          corpus_digest: 'fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6',
-          citations: [{citation_id: 'investigation-case:supporting-relation',
-            title: '조사 사례와 지원 관계', summary: '합성 검증용 승인 문장입니다.',
-            source_ref: 'docs/live_analysis_correlation_case_design.md'}],
-        })});
+        if (stateForPage === 'GUIDANCE_REAL') await route.continue();
+        else await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({
+            schema_version: 1, status: 'AVAILABLE',
+            message: '조사 도움말입니다. 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.',
+            corpus_digest: 'fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6',
+            citations: [{citation_id: 'investigation-case:supporting-relation',
+              title: '조사 사례와 지원 관계', summary: '합성 검증용 승인 문장입니다.',
+              source_ref: 'docs/live_analysis_correlation_case_design.md'}],
+          })});
       } else if (['/', '/assets/style.css', '/assets/app.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
@@ -465,6 +466,38 @@ async function main() {
     }
     await scan(guidancePage, 'guidance');
     await guidancePage.close();
+    stateForPage = 'GUIDANCE_REAL';
+    const realGuidancePage = await context.newPage();
+    await realGuidancePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await realGuidancePage.locator('#sample-button').click();
+    const realGuidanceCard = realGuidancePage.locator('#case-list .case-card').first();
+    await realGuidanceCard.locator(':scope > summary').focus();
+    await realGuidancePage.keyboard.press('Enter');
+    const realGuidanceCalls = [];
+    realGuidancePage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/guidance')
+        realGuidanceCalls.push(request);
+    });
+    const analysisText = () => realGuidancePage.locator('#results').evaluate((node) => {
+      const clone = node.cloneNode(true);
+      clone.querySelectorAll('.investigation-guidance').forEach((item) => item.remove());
+      return clone.innerText;
+    });
+    const beforeGuidance = await analysisText();
+    requireSafe(realGuidanceCalls.length === 0, 'REAL_GUIDANCE_AUTOMATIC_REQUEST');
+    await realGuidanceCard.locator('.guidance-request').click();
+    await realGuidanceCard.locator('.guidance-status').waitFor({state: 'visible'});
+    await realGuidancePage.waitForFunction(() => {
+      const status = document.querySelector('.guidance-status')?.textContent || '';
+      return !status.includes('확인하고 있습니다');
+    });
+    const realGuidanceStatus = await realGuidanceCard.locator('.guidance-status').textContent();
+    requireSafe(realGuidanceCalls.length === 1 &&
+      realGuidanceStatus.includes('조사 도움말입니다') &&
+      await realGuidanceCard.locator('.guidance-citation').count() > 0 &&
+      await analysisText().then((text) => text === beforeGuidance),
+    'REAL_GUIDANCE_STALE_OR_MUTATED');
+    await realGuidancePage.close();
     stateForPage = 'MULTI';
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);

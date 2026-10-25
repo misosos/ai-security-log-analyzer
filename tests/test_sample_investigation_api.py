@@ -117,6 +117,21 @@ def test_identical_requests_are_deeply_equal_and_no_generated_identifier():
     assert "analysis_id" not in json.dumps(first, ensure_ascii=False)
 
 
+def test_schema_one_subject_and_schema_two_legacy_fields_are_rejected():
+    from pydantic import ValidationError
+    from app.models.investigation_sample_api import InvestigationResponse
+
+    payload = _client().post("/api/v1/investigations/sample").json()
+    old_version = dict(payload, schema_version="1")
+    with pytest.raises(ValidationError):
+        InvestigationResponse.model_validate(old_version)
+
+    old_subject = json.loads(json.dumps(payload))
+    old_subject["cases"][0]["subject"] = old_subject["cases"][0].pop("subject_alias")
+    with pytest.raises(ValidationError):
+        InvestigationResponse.model_validate(old_subject)
+
+
 @pytest.mark.parametrize("kwargs", [
     {"json": {"fixture": "anything"}},
     {"data": {"fixture": "anything"}},
