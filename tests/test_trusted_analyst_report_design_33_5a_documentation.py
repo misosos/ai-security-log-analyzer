@@ -43,6 +43,8 @@ def test_readme_and_index_distinguish_public_and_restricted_report():
     assert "trusted_analyst_report_design_33_5a.md" in readme
     assert "trusted_analyst_report_design_33_5a.md" in index
     assert "제한된 내부 조사 보고서" in readme
+    assert "trusted_analyst_report_pilot_33_5b.md" in readme
+    assert "trusted_analyst_report_pilot_33_5b.md" in index
 
 
 def test_phase_33_4c_scope_go_does_not_claim_full_accessibility_acceptance():

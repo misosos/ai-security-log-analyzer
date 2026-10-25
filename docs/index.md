@@ -27,7 +27,7 @@
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED
 - [33.4C 공개 식별자 보호 수용 검수](public_investigation_privacy_acceptance_33_4c.md) — 공개 projection·별칭·lexical guidance 범위 GO; 확대·전체 VoiceOver·Web Inspector는 NOT_TESTED
-- [33.5A 제한된 내부 조사 보고서 설계](trusted_analyst_report_design_33_5a.md) — 민감 식별자를 포함할 수 있는 CLI-only local JSON 후보; 구현 전 설계 gate, production 기능 아님
+- [33.5A 제한된 내부 조사 보고서 설계](trusted_analyst_report_design_33_5a.md) · [33.5B 합성 전용 CLI pilot](trusted_analyst_report_pilot_33_5b.md) — 닫힌 JSON·명시 승인·0700/0600·audit 경계; 실제 사용자 자료 export는 미승인
 - [로컬 embedding 공급망·평가 설계 gate](local_embedding_supply_chain_gate_33_2a.md) — Phase 33.2A 당시 정적 후보 비교; 후속 실행은 33.2B 기록 참조
 - [격리형 multilingual E5 retrieval pilot](local_embedding_retrieval_pilot_33_2b.md) — 합성 전용 native macOS 비교; production 통합 NO_GO, lexical 기준선 유지
 - [구조화 local LLM 설명 pilot 공급망·평가 설계 gate](local_llm_supply_chain_gate_33_3a.md) — Phase 33.3A 정적 설계; [33.3B](local_llm_pilot_33_3b.md)·[33.3C](local_llm_pilot_33_3c.md)는 격리 근거 부족으로 중단, [33.3D](local_llm_pilot_33_3d.md)는 acquisition 전 `SUPPLY_CHAIN_BLOCKED`, [33.3E artifact·wheel·disk gate](local_llm_artifact_closure_33_3e.md)는 `RESOURCE_NO_GO`, [33.3F 전용 저장공간·잔여 closure](local_llm_acquisition_environment_33_3f.md)는 `STORAGE_SETUP_BLOCKED`
