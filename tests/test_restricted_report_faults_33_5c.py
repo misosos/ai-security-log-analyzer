@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 import socket
 import stat
-import secrets
 import tempfile
+from contextlib import contextmanager
 
 import pytest
 
@@ -33,6 +33,63 @@ def _input(path: Path) -> Path:
 
 def _dirfd(path: Path) -> int:
     return os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+
+
+def _bind_test_socket(server: socket.socket, endpoint: Path) -> None:
+    try:
+        server.bind(str(endpoint))
+    except (OSError, ValueError):
+        pytest.fail("Could not bind the private test Unix socket.", pytrace=False)
+
+
+@contextmanager
+def _short_private_socket_dir():
+    """Create a private temp directory whose Unix socket path fits portably."""
+    # 100 bytes, including the terminating NUL, stays below the common
+    # sockaddr_un.sun_path capacities without relying on a platform-specific
+    # temporary pathname. The default temp directory is tried first; its
+    # existing parent is an explicitly checked shorter system-temp candidate.
+    max_sun_path_bytes = 100
+    default = Path(tempfile.gettempdir()).resolve(strict=True)
+    candidates = (default, default.parent)
+    seen = set()
+    for candidate in candidates:
+        temporary = None
+        try:
+            base = candidate.resolve(strict=True)
+            if base in seen:
+                continue
+            seen.add(base)
+            info = base.stat()
+            if not stat.S_ISDIR(info.st_mode):
+                continue
+            if info.st_uid != os.geteuid() and not (
+                info.st_mode & stat.S_ISVTX and info.st_mode & stat.S_IWOTH
+            ):
+                continue
+            temporary = tempfile.TemporaryDirectory(prefix="r5c-", dir=base)
+            private = Path(temporary.name)
+            private.chmod(0o700)
+            endpoint = private / "s"
+            if len(os.fsencode(endpoint)) + 1 > max_sun_path_bytes:
+                temporary.cleanup()
+                continue
+        except (OSError, ValueError):
+            if temporary is not None:
+                try:
+                    temporary.cleanup()
+                except OSError:
+                    pytest.fail("Could not clean the private test directory.", pytrace=False)
+            continue
+        try:
+            yield private, endpoint
+        finally:
+            try:
+                temporary.cleanup()
+            except OSError:
+                pytest.fail("Could not clean the private test directory.", pytrace=False)
+        return
+    pytest.fail("No verified temporary directory has a portable Unix socket path.", pytrace=False)
 
 
 def _record(status="success", role="application", report_id="a" * 32):
@@ -293,15 +350,15 @@ def test_input_fifo_socket_device_and_symlink_are_rejected(tmp_path):
     with pytest.raises(report.RestrictedReportError):
         report._read_private_input(str(alias))
 
-    sock_path = Path("/private/tmp") / f"rr-{secrets.token_hex(8)}"
-    server = socket.socket(socket.AF_UNIX)
-    try:
-        server.bind(str(sock_path))
-        with pytest.raises(report.RestrictedReportError):
-            report._read_private_input(str(sock_path))
-    finally:
-        server.close()
-        sock_path.unlink(missing_ok=True)
+    with _short_private_socket_dir() as (_socket_dir, sock_path):
+        server = socket.socket(socket.AF_UNIX)
+        try:
+            _bind_test_socket(server, sock_path)
+            with pytest.raises(report.RestrictedReportError):
+                report._read_private_input(str(sock_path))
+        finally:
+            server.close()
+            sock_path.unlink(missing_ok=True)
 
     with pytest.raises(report.RestrictedReportError):
         report._read_private_input("/dev/null")
@@ -326,20 +383,17 @@ def test_output_fifo_and_input_path_component_symlink_reject_without_audit(tmp_p
 def test_output_socket_is_rejected_without_blocking_or_creating_audit(tmp_path):
     private = _private(tmp_path / "private-socket")
     source = _input(private)
-    short_root = Path(tempfile.mkdtemp(prefix="rr5c-", dir="/private/tmp"))
-    short_root.chmod(0o700)
-    target = short_root / "target.json"
-    server = socket.socket(socket.AF_UNIX)
-    try:
-        server.bind(str(target))
-        with pytest.raises(report.RestrictedReportError):
-            report.export_report("application", str(source), str(target), approval_reader=lambda: APPROVAL)
-        assert stat.S_ISSOCK(target.lstat().st_mode)
-        assert not (short_root / report.AUDIT_NAME).exists()
-    finally:
-        server.close()
-        target.unlink(missing_ok=True)
-        short_root.rmdir()
+    with _short_private_socket_dir() as (short_root, target):
+        server = socket.socket(socket.AF_UNIX)
+        try:
+            _bind_test_socket(server, target)
+            with pytest.raises(report.RestrictedReportError):
+                report.export_report("application", str(source), str(target), approval_reader=lambda: APPROVAL)
+            assert stat.S_ISSOCK(target.lstat().st_mode)
+            assert not (short_root / report.AUDIT_NAME).exists()
+        finally:
+            server.close()
+            target.unlink(missing_ok=True)
 
 
 def test_owner_mismatch_and_invalid_identifier_projection_fail_closed(tmp_path, monkeypatch):

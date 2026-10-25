@@ -12,6 +12,16 @@
 - 이 gate run에는 Phase 33.5C 전용 Linux report smoke·benchmark step이 아직 없었다. 해당 run을 Linux report acceptance 근거로 사용하지 않는다.
 - v0.4.0 tag/Release target은 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`이었다.
 
+## Portability 결함 후속
+
+[CI run 40178663076](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40178663076)은 commit `aa3a3280808f4cf2a886181aaad06324db60625b`에서 전체 회귀 **2 failed, 2719 passed, 기존 warnings 2개**로 실패했다. 실패한 테스트는 `test_input_fifo_socket_device_and_symlink_are_rejected`와 `test_output_socket_is_rejected_without_blocking_or_creating_audit`다. run의 실패 로그에서 두 경로가 test-only `/private/tmp` 가정을 통해 Ubuntu의 `FileNotFoundError`로 끝난 것을 확인했다. 이는 테스트 이식성 결함이며 production report 기능이나 개인정보 보호 결함으로 확인된 것은 아니다. 전체 pytest가 먼저 실패했으므로 이 run에서 Linux 전용 report smoke와 benchmark 단계는 실행되지 않았다.
+
+테스트 수정은 `tempfile.gettempdir()`를 우선 사용하고, 그 경로가 보수적 Unix-domain socket pathname byte 상한에 맞지 않을 때만 존재·directory type·소유권 또는 sticky-bit 안전 조건을 검증한 더 짧은 임시 후보를 사용한다. 매번 `tempfile.TemporaryDirectory`로 별도 경로를 만들고 mode `0700`을 적용하며 socket과 directory를 teardown에서 정리한다. 후보가 안전하거나 충분히 짧지 않으면 skip하지 않고 고정 사유로 실패한다. 새 문서 계약 테스트는 해당 fault-test 파일에 `/private/tmp`가 재도입되는 것을 막는다.
+
+수정 전 portability 계약 테스트는 `/private/tmp` 고정 경로를 검출해 실패했다. 수정 후 기존 두 socket 테스트와 portability 계약 테스트는 **6 passed**로 통과했다. 수정 후 Phase 33.5B/C 및 관련 계약 focused 묶음은 **76 passed, 2 warnings**, 전체 pytest는 **2722 passed, 2 warnings**다. UTC·Asia/Seoul focused 반복은 각각 **44 passed**, 합성 평가 묶음은 **101 passed**, Chromium·axe는 **14 states** 및 `external_requests=0`으로 통과했다. `uv sync --locked --dev`, `uv lock --check`, `npm ci`, Python·Node 문법과 `git diff --check`도 통과했고 dependency manifest/lockfile은 바뀌지 않았다.
+
+수정 후 새 SHA Ubuntu CI가 실행되기 전까지 Linux acceptance, Linux smoke와 Linux benchmark는 **NOT_TESTED**다. 위 로컬 검사는 개발 host 결과로만 분류한다.
+
 ## 변경 사항과 재현 테스트
 
 수정 전 실패를 확인했다. 취소/EOF/SIGINT가 `cancelled` audit 파일을 만들었고, 기존 report 재시도는 파일은 보존해도 audit에 실패 row를 추가했다. 새 CI workflow smoke 계약도 없었다. 취소·EOF·SIGINT와 이미 존재하는 대상을 거부할 때 report와 audit를 만들거나 변경하지 않도록 고쳤다.

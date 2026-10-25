@@ -34,3 +34,14 @@ def test_linux_acceptance_record_separates_gate_ci_from_post_change_linux_eviden
     assert "NOT_TESTED" in acceptance
     assert "실제 사용자 자료" in acceptance and "NO_GO" in acceptance
     assert "자동 암호화되지 않습니다" in acceptance
+    assert "40178663076" in acceptance
+    assert "test_input_fifo_socket_device_and_symlink_are_rejected" in acceptance
+    assert "test_output_socket_is_rejected_without_blocking_or_creating_audit" in acceptance
+    assert "production report 기능이나 개인정보 보호 결함으로 확인된 것은 아니다" in acceptance
+
+
+def test_fault_tests_use_verified_temporary_paths_not_macos_private_tmp():
+    fault_tests = (ROOT / "tests/test_restricted_report_faults_33_5c.py").read_text(encoding="utf-8")
+    assert "/private/tmp" not in fault_tests
+    assert "_short_private_socket_dir" in fault_tests
+    assert "socket.AF_UNIX" in fault_tests
