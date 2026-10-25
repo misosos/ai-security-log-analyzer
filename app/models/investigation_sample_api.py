@@ -58,7 +58,7 @@ class TimelineEntry(_ClosedModel):
     end_time: Timestamp | None
     title: str
     fact: str
-    subject: str
+    subject_alias: str
     detection_display_name: str | None
     relation_display_name: str | None
     evidence: tuple[Evidence, ...]
@@ -72,7 +72,7 @@ class TextItem(_ClosedModel):
 class InvestigationCase(_ClosedModel):
     review_order: int
     case_label: str
-    subject: str
+    subject_alias: str
     included_highest_risk: Literal["HIGH", "MEDIUM", "LOW"]
     included_highest_confidence: Literal["HIGH", "MEDIUM", "LOW"]
     start_time: Timestamp | None
@@ -96,7 +96,7 @@ class IndependentObservation(_ClosedModel):
     label: Literal["독립 관찰"]
     category_label: str
     display_type: str
-    subject: str
+    subject_alias: str
     existing_risk_level: Literal["HIGH", "MEDIUM", "LOW"]
     existing_confidence: Literal["HIGH", "MEDIUM", "LOW"]
     start_time: Timestamp | None
@@ -142,7 +142,7 @@ class ReportExport(_ClosedModel):
 
 
 class InvestigationResponse(_ClosedModel):
-    schema_version: Literal["1"]
+    schema_version: Literal["2"]
     sample_context: SampleContext
     analysis_summary: AnalysisSummary
     case_summary: CaseSummary
@@ -155,7 +155,7 @@ class InvestigationResponse(_ClosedModel):
 
 
 class LocalInvestigationResponse(_ClosedModel):
-    schema_version: Literal["1"]
+    schema_version: Literal["2"]
     local_context: LocalContext
     analysis_summary: AnalysisSummary
     case_summary: CaseSummary

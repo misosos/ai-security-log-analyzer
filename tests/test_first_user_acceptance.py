@@ -180,10 +180,10 @@ def test_documented_html_report_is_private_standalone_and_no_overwrite(tmp_path)
     assert "<dt>지원 탐지 관찰 수</dt>\n<dd>5</dd>" in html
     assert "<dt>지원 상관관계 관찰 수</dt>\n<dd>3</dd>" in html
     ordered_subjects = (
-        "조사 순서 1 — 분석 대상 IP 10.0.0.5",
-        "조사 순서 2 — 분석 대상 IP 192.168.1.20",
-        "조사 순서 3 — 분석 대상 IP 192.168.1.30",
-        "조사 순서 4 — 분석 대상 IP 192.168.1.60",
+        "조사 순서 1 — 대상 A",
+        "조사 순서 2 — 대상 B",
+        "조사 순서 3 — 대상 C",
+        "조사 순서 4 — 대상 D",
     )
     positions = tuple(html.index(value) for value in ordered_subjects)
     assert positions == tuple(sorted(positions))

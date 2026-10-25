@@ -19,6 +19,7 @@ from app.models.schemas import (
     LegacyRelationProjection,
     LegacyRiskProjection,
 )
+from app.public_identifiers import subject_aliases
 from app.analyzer.web_observation_projection import (
     WEB_TYPES, WEB_PATTERN_LABELS, WebObservationEvidence,
     WebObservationProjectionError, validate_web_evidence,
@@ -186,6 +187,7 @@ def project_legacy_analysis_response(raw: object, total_sources: int) -> Analysi
     except InvestigationReportProjectionError:
         _fail()
     results = []
+    aliases = subject_aliases([row.subject_ip for row in report.subjects])
     for row in report.subjects:
         if row.subject_ip not in raw["results"]:
             _fail()
@@ -196,7 +198,7 @@ def project_legacy_analysis_response(raw: object, total_sources: int) -> Analysi
             _fail()
         risk = row.risk_assessment
         results.append(AnalysisResultResponse(
-            ip=row.subject_ip,
+            subject_alias=aliases[row.subject_ip],
             risk_level=risk.risk_level,
             detections=_detections(row),
             correlation=_relations(subject["correlation"]),
@@ -215,6 +217,7 @@ def project_legacy_analysis_response(raw: object, total_sources: int) -> Analysi
         high_risk_ips=sum(result.risk_level == "HIGH" for result in results),
     )
     return AnalysisResponse(
+        schema_version=2,
         analysis_id="not-persisted",
         status="completed",
         summary=summary,

@@ -76,6 +76,11 @@ def test_legacy_api_nested_values_are_privacy_safe():
     assert all(value not in repr(response) for value in FORBIDDEN)
     assert response.summary.total_sources == 3
     assert response.results
+    assert response.schema_version == 2
+    assert all(not hasattr(row, "ip") for row in response.results)
+    assert all(row.subject_alias.startswith("대상 ") for row in response.results)
+    assert all("subject_alias" in row.model_dump() and "ip" not in row.model_dump()
+               for row in response.results)
     assert response.global_correlation.multi_ip_authentication_count >= 0
     for row in response.results:
         assert set(row.detections) == {

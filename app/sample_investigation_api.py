@@ -35,6 +35,7 @@ from app.models.investigation_sample_api import (
     TimelineEntry,
     Timestamp,
 )
+from app.public_identifiers import subject_aliases
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -310,7 +311,7 @@ def _text_items(items) -> tuple[TextItem, ...]:
     return tuple(TextItem(label=item.label, text=item.text) for item in items)
 
 
-def _timeline(item) -> TimelineEntry:
+def _timeline(item, aliases) -> TimelineEntry:
     if item.account_alias is not None or item.account_alias_status != "ACCOUNT_REFERENCE_UNAVAILABLE":
         raise _ResponseInvalid() from None
     return TimelineEntry(
@@ -323,14 +324,14 @@ def _timeline(item) -> TimelineEntry:
         end_time=_timestamp(item.end_time),
         title=item.display_title,
         fact=item.interpretation_label,
-        subject=item.subject_ip,
+        subject_alias=aliases[item.subject_ip],
         detection_display_name=item.detection_display_name,
         relation_display_name=item.relation_display_name,
         evidence=_evidence(item.evidence),
     )
 
 
-def _case(item) -> InvestigationCase:
+def _case(item, aliases) -> InvestigationCase:
     row = item.row
     entries = item.timeline_entries + item.timeline_entries_without_time
     if row.account_alias is not None or row.account_alias_status != "ACCOUNT_REFERENCE_UNAVAILABLE":
@@ -346,7 +347,7 @@ def _case(item) -> InvestigationCase:
     return InvestigationCase(
         review_order=row.review_order,
         case_label=row.case_label,
-        subject=row.subject_ip,
+        subject_alias=aliases[row.subject_ip],
         included_highest_risk=row.included_highest_risk,
         included_highest_confidence=row.included_highest_confidence,
         start_time=_timestamp(row.start_time),
@@ -357,7 +358,7 @@ def _case(item) -> InvestigationCase:
         supported_detections=detections,
         supported_relations=relations,
         timeline_label=item.timeline_label,
-        timeline=tuple(_timeline(entry) for entry in entries),
+        timeline=tuple(_timeline(entry, aliases) for entry in entries),
         limitations=_text_items(item.limitations),
         unverified_items=_text_items(item.unverified_items),
         next_steps=_text_items(item.next_steps),
@@ -366,7 +367,7 @@ def _case(item) -> InvestigationCase:
     )
 
 
-def _independent(item) -> IndependentObservation:
+def _independent(item, aliases) -> IndependentObservation:
     if item.account_alias is not None or item.account_alias_status != "ACCOUNT_REFERENCE_UNAVAILABLE":
         raise _ResponseInvalid() from None
     return IndependentObservation(
@@ -374,7 +375,7 @@ def _independent(item) -> IndependentObservation:
         label=item.label,
         category_label=item.category_label,
         display_type=item.display_type,
-        subject=item.subject_ip,
+        subject_alias=aliases[item.subject_ip],
         existing_risk_level=item.existing_risk_level,
         existing_confidence=item.existing_confidence,
         start_time=_timestamp(item.start_time),
@@ -414,14 +415,18 @@ def build_sample_response(
         summary.independent_observation_count != len(projection.independent_observations)
     ):
         raise _ResponseInvalid() from None
-    cases = tuple(_case(item) for item in projection.cases)
-    independent = tuple(_independent(item) for item in projection.independent_observations)
+    aliases = subject_aliases(
+        [item.row.subject_ip for item in projection.cases]
+        + [item.subject_ip for item in projection.independent_observations]
+    )
+    cases = tuple(_case(item, aliases) for item in projection.cases)
+    independent = tuple(_independent(item, aliases) for item in projection.independent_observations)
     if any(case.review_order != n for n, case in enumerate(cases, 1)) or any(
         item.review_order != n for n, item in enumerate(independent, 1)
     ):
         raise _ResponseInvalid() from None
     return InvestigationResponse(
-        schema_version="1",
+        schema_version="2",
         sample_context=SampleContext(
             label="합성 샘플 결과",
             environment_notice="실제 조직 환경의 보안 상태가 아닙니다.",

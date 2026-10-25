@@ -387,13 +387,13 @@
     items(value).forEach((entry, index) => {
       closedRecord(entry, [
         "sequence", "category", "category_label", "timestamp_state", "timestamp_state_label",
-        "start_time", "end_time", "title", "fact", "subject",
+        "start_time", "end_time", "title", "fact", "subject_alias",
         "detection_display_name", "relation_display_name", "evidence"
       ]);
       if (entry.sequence !== index + 1 || !TIMELINE_CATEGORIES.has(entry.category) ||
           entry.category_label !== CATEGORY_LABELS[entry.category]) failContract();
       if (entry.timestamp_state !== "TIMESTAMPED" && entry.timestamp_state !== "NO_TIME") failContract();
-      ["title", "fact", "subject"].forEach((key) => boundedText(entry[key]));
+      ["title", "fact", "subject_alias"].forEach((key) => boundedText(entry[key]));
       if (entry.timestamp_state_label !== (entry.timestamp_state === "TIMESTAMPED" ? "시각 정보 있음" : "시간 정보 없음")) failContract();
       if (entry.detection_display_name !== null) boundedText(entry.detection_display_name);
       if (entry.relation_display_name !== null) boundedText(entry.relation_display_name);
@@ -426,14 +426,16 @@
 
   function validateCase(item, index) {
     closedRecord(item, [
-      "review_order", "case_label", "subject", "included_highest_risk",
+      "review_order", "case_label", "subject_alias", "included_highest_risk",
       "included_highest_confidence", "start_time", "end_time", "observation_count",
       "supporting_relation_count", "grouping_explanation", "supported_detections",
       "supported_relations", "timeline_label", "timeline", "limitations", "unverified_items",
       "next_steps", "account_alias_state", "account_alias_message"
     ]);
     if (item.review_order !== index + 1 || item.case_label !== `조사 사례 ${index + 1}`) failContract();
-    boundedText(item.subject);
+    boundedText(item.subject_alias);
+    if (!/^대상 (?:[A-Z]|[0-9]+)$/.test(item.subject_alias)) failContract();
+    if (item.timeline.some((entry) => entry.subject_alias !== item.subject_alias)) failContract();
     risk(item.included_highest_risk);
     risk(item.included_highest_confidence);
     const startKey = timestamp(item.start_time);
@@ -465,13 +467,14 @@
 
   function validateIndependent(item, index) {
     closedRecord(item, [
-      "review_order", "label", "category_label", "display_type", "subject",
+      "review_order", "label", "category_label", "display_type", "subject_alias",
       "existing_risk_level", "existing_confidence", "start_time", "end_time",
       "timestamp_state", "evidence", "reason", "limitation", "next_step",
       "account_alias_state", "account_alias_message"
     ]);
     if (item.review_order !== index + 1 || item.label !== "독립 관찰") failContract();
-    ["category_label", "display_type", "subject", "reason"].forEach((key) => boundedText(item[key]));
+    ["category_label", "display_type", "subject_alias", "reason"].forEach((key) => boundedText(item[key]));
+    if (!/^대상 (?:[A-Z]|[0-9]+)$/.test(item.subject_alias)) failContract();
     if (!["관찰된 사실", "탐지 관찰", "지원되는 관계"].includes(item.category_label) ||
         !INDEPENDENT_NAMES.has(item.display_type) || !INDEPENDENT_REASON_COPY.has(item.reason)) failContract();
     risk(item.existing_risk_level);
@@ -524,7 +527,7 @@
 
   function validateInvestigationResponse(value, mode = "sample") {
     closedRecord(value, mode === "sample" ? TOP_LEVEL : LOCAL_TOP_LEVEL);
-    if (value.schema_version !== "1") failContract();
+    if (value.schema_version !== "2") failContract();
     if (mode === "sample") {
       closedRecord(value.sample_context, ["label", "environment_notice", "certificate_notice"]);
       if (value.sample_context.label !== "합성 샘플 결과" ||
@@ -914,7 +917,7 @@
     const meta = document.createElement("dl");
     meta.className = "card-meta";
     detail(meta, "관찰 수", String(caseItem.observation_count));
-    detail(meta, "분석 대상", caseItem.subject);
+    detail(meta, "분석 대상", caseItem.subject_alias);
     body.append(meta);
     const range = detailSection("시간 범위");
     const time = document.createElement("div");
@@ -1015,7 +1018,7 @@
       card.append(element("h4", `별도로 확인할 활동 ${item.review_order}: ${item.display_type}`));
       const meta = document.createElement("dl");
       meta.className = "card-meta";
-      detail(meta, "분석 대상", item.subject);
+      detail(meta, "분석 대상", item.subject_alias);
       const riskPair = document.createElement("div");
       riskPair.append(element("dt", "기존 위험도"));
       const riskValue = document.createElement("dd");

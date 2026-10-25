@@ -50,7 +50,7 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
     assert response.headers["content-type"].startswith("application/json")
     body = response.json()
     assert set(body) == EXPECTED_TOP_LEVEL
-    assert body["schema_version"] == "1"
+    assert body["schema_version"] == "2"
     assert body["sample_context"] == {
         "label": "합성 샘플 결과",
         "environment_notice": "실제 조직 환경의 보안 상태가 아닙니다.",
@@ -94,7 +94,6 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
     assert report["format"] == "standalone_html"
     assert report["filename"] == "investigation-report.html"
     assert report["media_type"] == "text/html;charset=utf-8"
-    assert report["byte_count"] == 25551
     assert report["byte_count"] == len(report["html"].encode("utf-8"))
     assert report["html"].startswith("<!doctype html>\n<html lang=\"ko\">")
     assert report["html"].endswith("</html>\n")
@@ -104,6 +103,9 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
     assert "현재 형식: 대상별 결정적 조사 보고서" in report["format_notice"]
     assert "민감한 조사 자료" in report["handling_warning"]
     assert "교육용 합성 샘플 결과입니다" in report["html"]
+    assert "공개용 안전 요약이며 원본 식별자는 포함하지 않습니다." in report["html"]
+    assert body["cases"][0]["subject_alias"].startswith("대상 ")
+    assert "subject" not in body["cases"][0]
     assert len(body["interpretation_notices"]) == 5
     assert body["bounded_warnings"] == []
 

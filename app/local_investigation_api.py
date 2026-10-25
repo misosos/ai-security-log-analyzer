@@ -30,6 +30,7 @@ from app.local_request_security import classify_local_request
 from app.sample_investigation_api import (
     _EMPTY_WARNINGS, _case, _independent, _report_export,
 )
+from app.public_identifiers import subject_aliases
 
 
 _FIELDS = ("application_file", "ssh_file", "access_file")
@@ -321,14 +322,18 @@ def _local_response(
         or summary.independent_observation_count != len(projection.independent_observations)
     ):
         raise ValueError("Invalid local projection contract.")
-    cases = tuple(_case(item) for item in projection.cases)
-    independent = tuple(_independent(item) for item in projection.independent_observations)
+    aliases = subject_aliases(
+        [item.row.subject_ip for item in projection.cases]
+        + [item.subject_ip for item in projection.independent_observations]
+    )
+    cases = tuple(_case(item, aliases) for item in projection.cases)
+    independent = tuple(_independent(item, aliases) for item in projection.independent_observations)
     if any(item.review_order != index for index, item in enumerate(cases, 1)) or any(
         item.review_order != index for index, item in enumerate(independent, 1)
     ):
         raise ValueError("Invalid local projection contract.")
     return LocalInvestigationResponse(
-        schema_version="1",
+        schema_version="2",
         local_context=LocalContext(
             label="로컬 실제 로그 분석 결과",
             environment_notice="사용자가 제공한 로그를 이 로컬 서버에서 분석한 결과입니다.",

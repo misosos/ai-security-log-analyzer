@@ -397,7 +397,7 @@ def test_summary_review_table_and_projection_row_order_are_preserved():
         assert f"<dt>{label}</dt>\n<dd>{value}</dd>" in html
     headings = (
         "조사 순서",
-        "분석 대상 IP",
+        "분석 대상",
         "위험도",
         "주요 탐지",
         "주요 상관관계",
@@ -410,8 +410,9 @@ def test_summary_review_table_and_projection_row_order_are_preserved():
     assert "Review reason" not in html
     assert "review reason &amp; verification" not in html
     assert "<caption>정해진 조사 순서의 분석 대상</caption>" in html
-    assert html.index("192.0.2.30") < html.index("192.0.2.10")
-    assert html.index("192.0.2.10") < html.index("192.0.2.20")
+    assert html.index("대상 A") < html.index("대상 B")
+    assert html.index("대상 B") < html.index("대상 C")
+    assert "192.0.2." not in html
 
 
 def test_risk_has_text_indicators_and_subject_visibility_contract():
@@ -422,20 +423,20 @@ def test_risk_has_text_indicators_and_subject_visibility_contract():
         re.DOTALL,
     )
     by_subject = {
-        subject_ip: next(block for block in blocks if subject_ip in block)
-        for subject_ip in ("192.0.2.10", "192.0.2.20", "192.0.2.30")
+        alias: next(block for block in blocks if alias in block)
+        for alias in ("대상 A", "대상 B", "대상 C")
     }
 
     assert '<span class="risk risk-high">위험도: HIGH</span>' in html
     assert '<span class="risk risk-medium">위험도: MEDIUM</span>' in html
     assert '<span class="risk risk-low">위험도: LOW</span>' in html
-    assert by_subject["192.0.2.10"].startswith(
+    assert by_subject["대상 B"].startswith(
         '<details class="subject-card" open>'
     )
-    assert by_subject["192.0.2.20"].startswith(
+    assert by_subject["대상 C"].startswith(
         '<details class="subject-card" open>'
     )
-    assert by_subject["192.0.2.30"].startswith(
+    assert by_subject["대상 A"].startswith(
         '<details class="subject-card">'
     )
 
@@ -491,7 +492,7 @@ def test_assessment_limitations_and_next_steps_remain_separate():
             html,
             re.DOTALL,
         )
-        if "192.0.2.10" in block
+        if "대상 B" in block
     )
     medium_block = next(
         block
@@ -500,7 +501,7 @@ def test_assessment_limitations_and_next_steps_remain_separate():
             html,
             re.DOTALL,
         )
-        if "192.0.2.20" in block
+        if "대상 C" in block
     )
 
     assert "<h4>평가</h4>" in html
@@ -539,7 +540,7 @@ def test_next_steps_use_explicit_precedence_deduplicate_and_cap_at_three():
             html,
             re.DOTALL,
         )
-        if "192.0.2.10" in block
+        if "대상 B" in block
     )
     expected_authentication = (
         "관찰된 시간대의 인증 실패 기록을 검토하고, 해당 활동이 승인된 "
@@ -583,7 +584,7 @@ def test_next_steps_use_explicit_precedence_deduplicate_and_cap_at_three():
             html,
             re.DOTALL,
         )
-        if "192.0.2.20" in block
+        if "대상 C" in block
     )
     assert (
         "관련 계정 별칭의 IdP 인증 기록을 검토하고, 예상된 관리자 또는 "
@@ -679,7 +680,7 @@ def test_empty_states_are_bounded_and_linux_audit_absence_is_explicit():
     assert "이 보고서에는 Linux Audit 집계가 제공되지 않았습니다." in html
     assert "<h2>Linux Audit 집계</h2>" not in html
     for prohibited_claim in (
-        "안전",
+        "안전 상태",
         "정상",
         "공격 없음",
         "침해 없음",

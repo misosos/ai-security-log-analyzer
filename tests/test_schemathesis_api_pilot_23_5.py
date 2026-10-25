@@ -71,7 +71,7 @@ def test_sample_openapi_generated_no_input_contract(data):
     with _no_external_network(), ASGIClient(app, base_url="http://127.0.0.1:8000") as client:
         response = case.call_and_validate(session=client, base_url="http://127.0.0.1:8000")
     assert response.status_code == 200
-    assert response.json()["schema_version"] == "1"
+    assert response.json()["schema_version"] == "2"
     assert response.json()["sample_context"]["label"] == "합성 샘플 결과"
     _safe(response)
 

@@ -22,6 +22,7 @@ from app.analyzer.web_observation_projection import (
     WEB_TYPES, WEB_PATTERN_LABELS, WebObservationEvidence,
     WebObservationProjectionError, validate_web_evidence,
 )
+from app.public_identifiers import subject_aliases
 
 
 _RENDERER_ERROR_MESSAGE = "Investigation report rendering failed."
@@ -442,11 +443,11 @@ def _assessment_lines(assessment):
     return lines
 
 
-def _subject_lines(subject, *, local_upload=False):
+def _subject_lines(subject, alias, *, local_upload=False):
     if type(subject) is not InvestigationSubjectRow:
         _fail()
     review_order = _positive_int(subject.review_order)
-    subject_ip = _text(subject.subject_ip)
+    subject_alias = _text(alias)
     assessment = subject.risk_assessment
     if type(assessment) is not RiskAssessmentProjection:
         _fail()
@@ -456,11 +457,11 @@ def _subject_lines(subject, *, local_upload=False):
     lines = [
         f'<details class="subject-card"{open_attribute}>',
         "<summary>",
-        f"<span>조사 순서 {review_order} — 분석 대상 IP {subject_ip}</span>",
+        f"<span>조사 순서 {review_order} — {subject_alias}</span>",
         _risk_markup(assessment.risk_level),
         "</summary>",
         '<div class="subject-content">',
-        f"<h3>분석 대상 IP {subject_ip}</h3>",
+        f"<h3>분석 대상 {subject_alias}</h3>",
     ]
     lines.extend(_assessment_lines(assessment))
     lines.extend(_detection_lines(
@@ -523,7 +524,7 @@ def _summary_lines(summary):
     return lines
 
 
-def _review_table_lines(subjects):
+def _review_table_lines(subjects, aliases):
     if type(subjects) is not tuple:
         _fail()
     lines = [
@@ -535,7 +536,7 @@ def _review_table_lines(subjects):
         "<thead>",
         "<tr>",
         "<th scope=\"col\">조사 순서</th>",
-        "<th scope=\"col\">분석 대상 IP</th>",
+        "<th scope=\"col\">분석 대상</th>",
         "<th scope=\"col\">위험도</th>",
         "<th scope=\"col\">주요 탐지</th>",
         "<th scope=\"col\">주요 상관관계</th>",
@@ -558,7 +559,7 @@ def _review_table_lines(subjects):
         lines.extend([
             "<tr>",
             f"<td>{_positive_int(subject.review_order)}</td>",
-            f"<td>{_text(subject.subject_ip)}</td>",
+            f"<td>{_text(aliases[subject.subject_ip])}</td>",
             f"<td>{_risk_markup(assessment.risk_level, include_label=False)}</td>",
             (
                 "<td>"
@@ -697,6 +698,7 @@ def render_investigation_report_html(
     classification = _classification_text(projection.classification)
     summary = projection.summary
     subjects = projection.subjects
+    aliases = subject_aliases([subject.subject_ip for subject in subjects])
     linux_audit = projection.linux_audit
     if type(summary) is not ReportSummaryProjection or type(subjects) is not tuple:
         _fail()
@@ -723,6 +725,7 @@ def render_investigation_report_html(
         f'<p class="sensitivity">{classification}</p>',
         '<p class="notice">이 보고서는 분석 입력에서 지원되는 관찰만 '
         "표시합니다. 원본 로그와 관련 시스템 기록을 함께 검토하십시오.</p>",
+        '<p class="notice">공개용 안전 요약이며 원본 식별자는 포함하지 않습니다.</p>',
         "</header>",
         "<main>",
     ]
@@ -738,12 +741,14 @@ def render_investigation_report_html(
         ])
     lines.extend(_coverage_lines(summary, linux_audit))
     lines.extend(_summary_lines(summary))
-    lines.extend(_review_table_lines(subjects))
+    lines.extend(_review_table_lines(subjects, aliases))
     lines.extend(["<section>", "<h2>분석 대상별 조사 세부정보</h2>"])
     if not subjects:
         lines.append("<p>세부 검토 대상으로 투영된 분석 대상이 없습니다.</p>")
     for subject in subjects:
-        lines.extend(_subject_lines(subject, local_upload=local_upload))
+        lines.extend(_subject_lines(
+            subject, aliases[subject.subject_ip], local_upload=local_upload,
+        ))
     lines.append("</section>")
     if linux_audit is not None:
         lines.extend(_linux_audit_lines(linux_audit))

@@ -202,7 +202,7 @@ class LegacyGlobalCorrelationProjection(BaseModel):
 class AnalysisResultResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    ip: str
+    subject_alias: str
     risk_level: str
     detections: dict[str, LegacyDetectionProjection]
     correlation: tuple[LegacyRelationProjection, ...]
@@ -219,6 +219,7 @@ class AnalysisSummary(BaseModel):
 class AnalysisResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    schema_version: Literal[2]
     analysis_id: str
     status: str
     summary: AnalysisSummary

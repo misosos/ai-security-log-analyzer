@@ -299,6 +299,7 @@ def _scalar_tree(value):
 
 def test_exact_analysis_boundary_rejects_models_strings_and_iterables():
     api_model = AnalysisResponse(
+        schema_version=2,
         analysis_id="bounded",
         status="completed",
         summary=AnalysisSummary(

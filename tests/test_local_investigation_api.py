@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import asyncio
+from html.parser import HTMLParser
 from io import BytesIO
 import json
 import shutil
@@ -46,6 +47,7 @@ def test_local_sample_fixture_is_analyzed_without_sample_label():
     assert response.status_code == 200, response.json()
     body = response.json()
     assert body["local_context"]["label"] == "로컬 실제 로그 분석 결과"
+    assert body["schema_version"] == "2"
     assert body["case_summary"]["case_count"] == 2
     assert body["case_summary"]["independent_observation_count"] == 4
     assert "합성 샘플" not in response.text
@@ -87,6 +89,114 @@ def test_original_account_query_filename_and_raw_line_canaries_do_not_escape():
                    "PRIVATEFILENAMECANARY", "user=PRIVATEACCOUNTCANARY"):
         assert canary not in response.text
         assert canary not in repr(response.json())
+
+
+def test_public_projection_does_not_publish_identifiers_or_raw_canaries(caplog):
+    """Exercise the real upload, analysis, case and report production path."""
+    account = "PRIVATE_ACCOUNT_33_4B"
+    ipv4 = "198.51.100.244"
+    ipv6 = "2001:db8::cafe"
+    hostname = "PRIVATE_HOST_33_4B"
+    filename = "PRIVATE_FILE_33_4B.log"
+    absolute_path = "/private/PRIVATE_PATH_33_4B/input.log"
+    raw_line = "PRIVATE_RAW_LINE_33_4B"
+    rationale = "PRIVATE_RATIONALE_33_4B"
+    internal_error = "PRIVATE_EXCEPTION_33_4B"
+
+    app = (ROOT / "sample_logs" / FILES["application_file"]).read_bytes()
+    ssh = (ROOT / "sample_logs" / FILES["ssh_file"]).read_bytes()
+    access = (ROOT / "sample_logs" / FILES["access_file"]).read_bytes()
+    app = app.replace(b"alice", account.encode()).replace(b"admin", account.encode())
+    app = app.replace(b"192.168.1.10", ipv4.encode())
+    ssh = ssh.replace(b"admin", account.encode()).replace(b"alice", account.encode())
+    ssh = ssh.replace(b"10.0.0.5", ipv6.encode())
+    access = access.replace(b"192.168.1.60", ipv4.encode())
+    access = access.replace(b"curl/8.0", f"{hostname} {raw_line}".encode())
+    source_bytes = {
+        "application_file": app,
+        "ssh_file": ssh,
+        "access_file": access,
+    }
+    files = [
+        (field, (filename, source_bytes[field], "text/plain"))
+        for field in ("application_file", "ssh_file", "access_file")
+    ]
+    response = _client().post("/api/v1/investigations", files=files)
+    assert response.status_code == 200
+    body = response.json()
+
+    # Field-level checks catch exposure even if a canary is JSON-escaped.
+    for case in body["cases"]:
+        if case["subject_alias"] in {ipv4, ipv6}:
+            raise AssertionError("Public subject alias contract failed.") from None
+        assert case["subject_alias"].startswith("대상 ")
+        assert "subject" not in case
+        for entry in case["timeline"]:
+            if entry["subject_alias"] != case["subject_alias"]:
+                raise AssertionError("Public timeline alias consistency failed.") from None
+            assert "subject" not in entry
+
+    html = body["report_export"]["html"]
+
+    class HtmlValues(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.values = []
+
+        def handle_starttag(self, _tag, attrs):
+            self.values.extend(value or "" for _, value in attrs)
+
+        def handle_data(self, data):
+            self.values.append(data)
+
+        def handle_comment(self, data):
+            self.values.append(data)
+
+    parsed = HtmlValues()
+    parsed.feed(html)
+    public_material = json.dumps(body, ensure_ascii=False) + repr(body) + html + "\n".join(parsed.values)
+    canaries = (account, ipv4, ipv6, hostname, filename, absolute_path,
+                raw_line, rationale, internal_error)
+    if any(canary in public_material for canary in canaries):
+        raise AssertionError("Public privacy projection leaked a synthetic canary.") from None
+
+    from app.local_guidance_33_4 import TRUSTED_CORPUS_DIGEST, safe_public_case_payload
+    guidance_request = {
+        "schema_version": 1,
+        "case": safe_public_case_payload(body["cases"][0]),
+        "category": "EXPLAIN_CASE",
+        "corpus_digest": TRUSTED_CORPUS_DIGEST,
+    }
+    guidance = _client().post("/api/v1/investigations/guidance", json=guidance_request)
+    assert guidance.status_code == 200
+    guidance_material = guidance.text + repr(guidance.json()) + caplog.text
+    if any(canary in guidance_material for canary in canaries):
+        raise AssertionError("Guidance crossed the public privacy projection.") from None
+
+    assert body["case_summary"]["case_count"] == 2
+    assert body["case_summary"]["independent_observation_count"] == 4
+
+
+def test_public_subject_aliases_are_response_scoped_deterministic_and_closed():
+    from app.public_identifiers import subject_aliases
+
+    aliases = subject_aliases(["192.0.2.41", "2001:db8::1", "192.0.2.41"])
+    assert aliases == {
+        "192.0.2.41": "대상 A",
+        "2001:db8::1": "대상 B",
+    }
+    assert subject_aliases(["192.0.2.41", "2001:db8::1"]) == aliases
+    # The public labels contain no reversible fragments or stable source hash.
+    assert all(value in {"대상 A", "대상 B"} for value in aliases.values())
+    for invalid in (
+        "192.0.2.41", ["<img src=x onerror=alert(1)>"] ,
+        ["192.0.2.41" * 20], ["fe80::1%en0"], [None],
+        ["192.0.2.1"] * 257,
+    ):
+        with pytest.raises(ValueError) as caught:
+            subject_aliases(invalid)
+        if "192.0.2." in str(caught.value) or "onerror" in repr(caught.value):
+            raise AssertionError("Alias validation exposed rejected input.") from None
 
 
 def test_non_loopback_is_rejected_before_analysis():

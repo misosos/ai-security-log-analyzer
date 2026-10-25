@@ -138,6 +138,7 @@ def test_analyze_success_serialization_cleanup_and_llm_isolation(
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {
+        "schema_version",
         "analysis_id",
         "status",
         "summary",
@@ -145,6 +146,7 @@ def test_analyze_success_serialization_cleanup_and_llm_isolation(
         "global_correlation",
         "ai_summary",
     }
+    assert body["schema_version"] == 2
     assert body["status"] == "completed"
     assert body["summary"] == {
         "total_sources": 3,
