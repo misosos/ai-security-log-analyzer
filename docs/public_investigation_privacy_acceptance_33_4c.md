@@ -1,6 +1,6 @@
 # Phase 33.4C — 공개 식별자 보호 수용 검수
 
-상태: **CONDITIONAL_GO**. 시작 SHA `2fc96a896f155874cc14953a0b003303af2d2d3a`의 Ubuntu push CI가 [run 40163159684](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40163159684)에서 `completed/success`였다. 전체 pytest는 **2665 passed, 기존 warning 2개**였고 locked 설치와 Chromium·axe 단계가 성공했다. axe는 14개 상태에서 위반 0건, 외부 요청 0건을 기록했다. 저장 artifact는 0개다. CI 로그는 Phase 33.4B 전용 테스트 이름을 별도로 출력하지 않지만 전체 pytest 단계가 성공했고 해당 테스트는 전체 suite에 포함된다.
+Phase 33.4 공개 projection·별칭·lexical guidance 범위: **GO**. 최종 확인 SHA `23c3ff4e782789d5a170dc8ea7d7c3eaf5cb449a`의 Ubuntu push CI는 [run 40170482306](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40170482306)에서 `completed/success`였다. 전체 pytest는 **2667 passed, warning 2개**였고 locked 설치와 Chromium·axe 단계가 성공했다. axe는 14개 상태에서 위반 0건, 외부 요청 0건을 기록했다. 저장 artifact는 0개다. 이전 gate SHA `2fc96a896f155874cc14953a0b003303af2d2d3a`의 [run 40163159684](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40163159684)도 `completed/success`였다. Safari 실제 200% 확대, 정확한 320 CSS px 측정, 전체 페이지 VoiceOver와 Safari Web Inspector는 `NOT_TESTED`이며 WCAG 2.2 AA 준수를 의미하지 않는다.
 
 이 기록은 CI 자동 검증과 Safari 사용자 검수를 구분한다. Chromium·axe 결과는 Safari 동작, 실제 확대, VoiceOver, 사용자 이해도를 대신하지 않는다. 자동 검사는 WCAG 2.2 AA 준수 판정이 아니다.
 
@@ -43,7 +43,7 @@ Safari 18.6에서 합성 sample 화면을 준비했다. 아래 표는 사용자 
 | 3 | 원래 식별자 없이 활동 흐름과 위험 근거 이해 | PASS |
 | 4 | HTML·DOM·속성·주석에서 민감 canary 비노출 | PASS |
 
-사용자가 요청한 이번 수용 범위는 위 네 항목이다. 4번은 Safari 화면 확인과 함께 자동 HTML/DOM 구조 검사(텍스트, 속성, 주석 포함)로 검증했다. 정확한 320 CSS px 측정, 전체 페이지 VoiceOver, Safari Web Inspector는 이번 범위에서 수행하지 않는다. 시작 SHA의 원격 CI는 통과했지만 변경 SHA에는 아직 원격 CI가 없으므로 결과 판정은 `CONDITIONAL_GO`다.
+사용자가 요청한 이번 수용 범위는 위 네 항목이며 모두 PASS다. 4번은 Safari 화면 확인과 함께 자동 HTML/DOM 구조 검사(텍스트, 속성, 주석 포함)로 검증했다. 정확한 320 CSS px 측정, 전체 페이지 VoiceOver, Safari Web Inspector는 수행하지 않았다. 이 문서 갱신 시점에는 최종 SHA의 원격 CI run 40170482306이 통과했다.
 
 ## 발견한 stale 도움말 결함
 
