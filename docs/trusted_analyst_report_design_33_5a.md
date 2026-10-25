@@ -87,7 +87,7 @@ uv run python -m app.restricted_report export \
 
 > 제한된 내부 조사 보고서를 생성합니다. 이 파일에는 실제 계정·IP·호스트 이름과 기존 분석 요약이 포함될 수 있습니다. 원본 로그 전체는 포함하지 않습니다. 파일은 로컬에 암호화 없이 저장되며, 자동 외부 전송은 없습니다. 공유·백업·동기화를 주의하고 사용 후 직접 삭제해야 합니다. 위 내용을 이해하고 이 위치에 저장하려면 `민감정보 포함 보고서 생성 승인`을 정확히 입력하세요.
 
-- 비어 있는 응답, y/yes, 잘못된 문구, EOF, Ctrl+C: `생성을 취소했습니다. 파일은 만들어지지 않았습니다.` 성공/감사 성공으로 기록하지 않는다. 취소 이벤트는 감사를 활성화한 경우에만 민감정보 없이 기록한다.
+- 비어 있는 응답, y/yes, 잘못된 문구, EOF, Ctrl+C: `생성을 취소했습니다. 파일은 만들어지지 않았습니다.` 성공/감사 성공으로 기록하지 않는다. Phase 33.5C 구현 판정에서는 취소 자체가 파일을 생성·변경하지 않으며 audit 행도 남기지 않는다.
 - 성공: `제한된 보고서를 로컬에 생성했습니다. 파일에는 민감정보가 포함될 수 있습니다. 공유하지 말고 업무 종료 후 삭제하세요.` 출력은 경로 대신 case 수, field kind/count, report SHA-256, opaque report ID만 허용한다. 민감 값은 stdout/stderr에 출력하지 않는다.
 - 오류: 고정 문구 `보고서를 안전하게 완성하지 못했습니다. 지정한 위치와 권한을 확인하고, 남은 임시 파일이 없는지 직접 확인하세요.` 원문 예외, 경로, 부분 JSON을 출력하지 않는다.
 
@@ -208,6 +208,8 @@ macOS는 FileVault와 Time Machine backup encryption이 각각 별도의 control
 ## Phase 33.5B 구현 결과
 
 합성 입력만 받는 별도 명령 `python -m app.restricted_report`를 구현했다. 명시적 role/input/output, 정확한 한국어 승인 문구, closed JSON, private parent/report/audit permission과 no-clobber 저장 계약은 [33.5B pilot 기록](trusted_analyst_report_pilot_33_5b.md)에 있다. **실제 사용자 자료 export는 승인되지 않았다.** 이 구현은 실제/합성 자료를 자동 분류하지 못하며 운영 지원 선언이 아니다. Linux 별도 프로세스 CI와 조직 authorization/retention/encryption 정책 검토가 남아 있다.
+
+Phase 33.5C에서 취소와 이미 존재하는 destination의 사전 거부는 report/audit를 만들거나 바꾸지 않는 동작으로 구체화했다. 시작 gate run 40174710982는 통과했지만 그 다음에 추가한 Linux-only smoke와 benchmark step은 새 SHA CI에서 아직 실행되지 않아 Linux acceptance는 **NOT_TESTED**다. [33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 자동 증거와 남은 항목을 구분해 둔다.
 
 ## 이 설계 변경의 검증 기록
 

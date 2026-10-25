@@ -67,10 +67,7 @@ def test_restricted_export_requires_exact_interactive_approval(tmp_path):
     assert list(private.glob("*.tmp")) == []
     assert "pilot-account-7" not in result.stdout + result.stderr
     assert "192.0.2.77" not in result.stdout + result.stderr
-    audit = (private / ".restricted-report-audit.jsonl").read_text(encoding="utf-8")
-    assert json.loads(audit.splitlines()[-1])["status"] == "cancelled"
-    for canary in ("pilot-account-7", "192.0.2.77", "pilot-host-9", "/private/pilot/secret.log", "token-canary", "internal-canary", "raw-canary"):
-        assert canary not in audit
+    assert not (private / ".restricted-report-audit.jsonl").exists()
 
 
 def test_restricted_export_is_private_closed_json_and_never_overwrites(tmp_path):
@@ -100,6 +97,7 @@ def test_restricted_export_is_private_closed_json_and_never_overwrites(tmp_path)
         assert canary not in audit_text
     assert str(private) not in result.stdout + result.stderr
     before = output.read_bytes()
+    audit_before = audit.read_bytes()
     retry = subprocess.run(
         result.args,
         input=APPROVAL + "\n",
@@ -110,6 +108,7 @@ def test_restricted_export_is_private_closed_json_and_never_overwrites(tmp_path)
     )
     assert retry.returncode != 0
     assert output.read_bytes() == before
+    assert audit.read_bytes() == audit_before
 
 
 def test_restricted_export_accepts_only_explicit_synthetic_source_roles(tmp_path):
@@ -242,6 +241,7 @@ def test_eof_and_sigint_cancel_without_publishing_report(tmp_path):
     eof = subprocess.run(command, input="", text=True, capture_output=True, check=False, env=_child_env(private))
     assert eof.returncode != 0
     assert not output.exists()
+    assert not (private / ".restricted-report-audit.jsonl").exists()
     assert "cancel-user" not in eof.stdout + eof.stderr
 
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=_child_env(private))
@@ -250,6 +250,7 @@ def test_eof_and_sigint_cancel_without_publishing_report(tmp_path):
     stdout, stderr = process.communicate(timeout=5)
     assert process.returncode != 0
     assert not output.exists()
+    assert not (private / ".restricted-report-audit.jsonl").exists()
     assert "cancel-user" not in stdout + stderr
     assert not list(private.glob(".restricted-*.tmp"))
 
@@ -473,6 +474,7 @@ def test_concurrent_exports_to_same_target_publish_at_most_one_report(tmp_path):
     assert output.exists()
     assert json.loads(output.read_text(encoding="utf-8"))["source_role"] == "application"
     audit = [json.loads(line) for line in (private / ".restricted-report-audit.jsonl").read_text().splitlines()]
-    assert len(audit) == 2
-    assert {item["status"] for item in audit} == {"success", "failure"}
+    assert len(audit) in {1, 2}
+    assert sum(item["status"] == "success" for item in audit) == 1
+    assert all(item["status"] in {"success", "failure"} for item in audit)
     assert "race-user" not in "".join(first_out + second_out)

@@ -65,6 +65,14 @@ jobs:
       - name: Run complete regression
         run: uv run pytest -q
 
+      - name: Verify restricted analyst report on Linux
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run python tests/smoke_restricted_report_33_5c.py
+
+      - name: Measure bounded synthetic report export on Linux
+        run: TZ=UTC uv run python tests/benchmark_restricted_report_33_5b.py
+
       - name: Install pinned Node for development-only accessibility checks
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

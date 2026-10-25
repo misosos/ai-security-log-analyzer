@@ -53,7 +53,7 @@ uv run python -m app.restricted_report \
 
 이미 존재하는 출력 parent는 실제 directory, 현재 UID 소유, 정확히 mode `0700`, symlink 없는 path여야 한다. macOS에서는 local APFS/HFS, Linux에서는 허용된 local filesystem만 인정한다. 출력 `.json`은 같은 directory의 random `0600` temp에 serialize → write loop → file `fsync`한 뒤, POSIX atomic no-replace hard link로 publish하고 temp unlink 및 directory `fsync`를 시도한다. 기존 파일·symlink·hard-link·special target은 덮어쓰지 않는다. `link`/directory sync/cleanup에 실패하면 고정 오류로 종료하고 cleanup을 시도한다. audit 기록 실패 후에는 published output 제거를 시도한다.
 
-`<output parent>/.restricted-report-audit.jsonl`은 mode `0600`이고 parent는 `0700`이다. advisory file lock 아래 최대 128개의 closed-schema row/64 KiB를 허용한다. row는 success/failure/cancel, UTC 시각, schema, role, random report ID, 식별자 종류별 개수, case/relation/observation aggregate만 기록한다. 경로·account/IP/hostname/raw/error는 넣지 않는다. 손상·초과·permission 오류 시 fail closed하며 자동 rotation은 없다. audit는 단일 사용자 도구의 best-effort local record이지 강한 인증, RBAC, append-only 변조 방지, 두 파일 간 원자 transaction이 아니다. post-publish audit 실패에서 output 삭제는 시도하지만 crash 또는 동일 UID race 상황의 완전한 rollback을 보장하지 않는다.
+`<output parent>/.restricted-report-audit.jsonl`은 mode `0600`이고 parent는 `0700`이다. advisory file lock 아래 최대 128개의 closed-schema row/64 KiB를 허용한다. row는 success/failure, UTC 시각, schema, role, random report ID, 식별자 종류별 개수, case/relation/observation aggregate만 기록한다. 잘못된 승인·EOF·Ctrl+C와 이미 존재하는 destination의 사전 거부는 report와 audit를 만들거나 바꾸지 않는다. 경로·account/IP/hostname/raw/error는 audit에 넣지 않는다. 손상·초과·permission 오류 시 fail closed하며 자동 rotation은 없다. audit는 단일 사용자 도구의 best-effort local record이지 강한 인증, RBAC, append-only 변조 방지, 두 파일 간 원자 transaction이 아니다. post-publish audit 실패에서 output 삭제를 시도하고, 실패하면 fixed 복구 안내를 제공하지만 crash 또는 동일 UID race 상황의 완전한 rollback을 보장하지 않는다.
 
 POSIX/macOS local runner에서 hard-link no-replace, permissions, file/directory `fsync` smoke를 수행했다. 다른 filesystem/OS는 지원 근거가 없으면 거부한다. 네트워크 파일시스템, SIGKILL, power loss에서 임시 파일·보고서·audit의 정리를 보장하지 않는다.
 
@@ -70,7 +70,7 @@ POSIX/macOS local runner에서 hard-link no-replace, permissions, file/directory
 
 ## 합성 benchmark
 
-실행 명령: `PYTHONPATH=. uv run python tests/benchmark_restricted_report_33_5b.py`. 환경: macOS local workspace, Python 3.12, 1 warm-up 후 5 samples. 아래 값은 development observation이며 `operational_sla=false`다. p95는 5 samples의 nearest-rank 값이며 사실상 max다. RSS는 프로세스 high-water (`ru_maxrss`, macOS bytes)라 case별 peak가 아니다.
+실행 명령: `uv run python tests/benchmark_restricted_report_33_5b.py`. 환경: macOS local workspace, Python 3.12, 1 warm-up 후 5 samples. 아래 값은 development observation이며 `operational_sla=false`다. p95는 5 samples의 nearest-rank 값이며 사실상 max다. RSS는 프로세스 high-water (`ru_maxrss`, macOS bytes)라 case별 peak가 아니다.
 
 | events | output bytes | 분석 median/p95/max ms | JSON median/p95/max ms | file+directory fsync median/p95/max ms | audit median/p95/max ms | 전체 median/p95/max ms | peak RSS bytes |
 |---:|---:|---:|---:|---:|---:|---:|---:|
@@ -83,3 +83,7 @@ POSIX/macOS local runner에서 hard-link no-replace, permissions, file/directory
 **CONDITIONAL_GO**: 합성-only macOS CLI pilot 범위에서 진행할 수 있다. 새 SHA Ubuntu locked CI와 분리된 Linux process smoke, 실제 조직의 authorization/retention/encryption 정책은 미검증이다. 실제 사용자 자료 export와 운영 지원은 계속 **NO_GO**다. Public API/SSE/UI/HTML alias 계약은 그대로고 제한 보고서로 우회하지 않는다. embedding은 production `NO_GO`; local LLM/llama.cpp는 `STORAGE_SETUP_BLOCKED`; Gemini는 사용하지 않았다.
 
 운영용 실제 식별자 보고서는 별도 gate가 필요하다. 암호화 정책, retention, 인증/RBAC, 감사 무결성, 실제 사용자 승인과 공유/backup 취급을 검토하기 전 실제 자료를 넣지 않는다.
+
+## Phase 33.5C 상태
+
+시작 gate의 Ubuntu run 40174710982는 해당 SHA에서 성공했지만, 그 run에는 제한 보고서 전용 Linux subprocess step이 없었다. 이후 workflow에 전용 smoke와 합성 benchmark를 추가했으며 새 SHA CI 실행을 기다리고 있다. Linux 파일 permission·atomic publish·동시성 acceptance는 아직 **NOT_TESTED**다. 취소·EOF·SIGINT와 이미 존재하는 destination 거부는 report와 audit 파일 모두를 만들거나 변경하지 않도록 후속 수정했으며, audit 부분 write/fsync는 rollback을 시도한다. 최신 변경 및 증거 경계는 [Phase 33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 기록한다.

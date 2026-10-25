@@ -64,14 +64,23 @@ _RELATION_LABELS = {
     "successful_login_to_file_access": "로그인 성공 뒤 파일 접근 관찰",
     "password_spray_to_successful_login": "여러 계정 인증 실패 탐지 뒤 로그인 성공 관찰",
 }
+_OBSERVATION_LABEL_SET = {
+    "로그인 실패", "로그인 성공 관찰", "HTTP 요청 관찰",
+    *_DETECTION_LABELS.values(),
+}
+_RELATION_LABEL_SET = set(_RELATION_LABELS.values())
 
 
 class RestrictedReportError(Exception):
     """Fixed-message failure; never carries an input path or raw exception."""
 
+    def __init__(self, recovery_needed: bool = False):
+        super().__init__()
+        self.recovery_needed = recovery_needed
 
-def _fail() -> None:
-    raise RestrictedReportError() from None
+
+def _fail(recovery_needed: bool = False) -> None:
+    raise RestrictedReportError(recovery_needed=recovery_needed) from None
 
 
 def _reject_symlink_components(path: Path) -> None:
@@ -401,6 +410,7 @@ def _validate_report(report: dict) -> None:
     ):
         _fail()
     subject_ids = set()
+    identifier_total = 0
     for subject in report["subjects"]:
         if (
             type(subject) is not dict or set(subject) != {"subject_id", "identifiers"}
@@ -412,23 +422,34 @@ def _validate_report(report: dict) -> None:
         ):
             _fail()
         subject_ids.add(subject["subject_id"])
+        identifier_total += len(subject["identifiers"])
         if any(
             type(identifier) is not dict or set(identifier) != {"kind", "value"}
             or identifier["kind"] not in {"account", "ipv4", "ipv6", "hostname"}
             or type(identifier["value"]) is not str
             or len(identifier["value"].encode("utf-8")) > MAX_IDENTIFIER_BYTES
+            or _identifier(identifier["value"], identifier["kind"]) != identifier["value"]
             for identifier in subject["identifiers"]
         ):
             _fail()
+    if identifier_total > MAX_LINES * 3:
+        _fail()
     if any(len(report[key]) > MAX_LINES * 3 for key in ("subjects", "observations", "relations", "risks", "cases")):
         _fail()
     if any(type(item) is not str or len(item) > 240 for item in report["limitations"]):
         _fail()
     if any(
         type(item) is not dict or set(item) != {"type", "count"}
-        or type(item["type"]) is not str or type(item["count"]) is not int
+        or type(item["type"]) is not str or item["type"] not in _OBSERVATION_LABEL_SET
+        or type(item["count"]) is not int
         or item["count"] < 0
-        for item in report["observations"] + report["relations"]
+        for item in report["observations"]
+    ) or any(
+        type(item) is not dict or set(item) != {"type", "count"}
+        or type(item["type"]) is not str or item["type"] not in _RELATION_LABEL_SET
+        or type(item["count"]) is not int
+        or item["count"] < 0
+        for item in report["relations"]
     ):
         _fail()
     if any(
@@ -541,55 +562,100 @@ def _open_private_directory(path: Path) -> int:
 def _audit_append(dir_fd: int, record: dict) -> None:
     name = AUDIT_NAME
     base_flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = None
+    locked = False
+    created = False
+    original_size = None
     try:
         try:
             fd = os.open(name, base_flags | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=dir_fd)
             created = True
+            original_size = 0
         except FileNotFoundError:
             _fail()
         except FileExistsError:
             fd = os.open(name, base_flags, dir_fd=dir_fd)
             created = False
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            if created:
-                os.fchmod(fd, 0o600)
-            info = os.fstat(fd)
-            if (
-                not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
-                or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600
-                or info.st_size > MAX_AUDIT_BYTES
-            ):
-                _fail()
-            if info.st_size:
-                read_fd = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=dir_fd)
-                try:
-                    contents = os.read(read_fd, MAX_AUDIT_BYTES + 1)
-                finally:
-                    os.close(read_fd)
-                if contents.count(b"\n") >= MAX_AUDIT_EVENTS:
-                    _fail()
-                _validate_audit_contents(contents)
-            payload = _canonical_json(record) + b"\n"
-            if info.st_size + len(payload) > MAX_AUDIT_BYTES:
-                _fail()
-            remaining = memoryview(payload)
-            while remaining:
-                written = os.write(fd, remaining)
-                if written <= 0:
-                    _fail()
-                remaining = remaining[written:]
-            os.fsync(fd)
-            if created:
-                os.fsync(dir_fd)
-        finally:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        locked = True
+        if created:
+            os.fchmod(fd, 0o600)
+        info = os.fstat(fd)
+        if (
+            not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+            or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600
+            or info.st_size > MAX_AUDIT_BYTES
+        ):
+            _fail()
+        original_size = info.st_size
+        if info.st_size:
+            read_fd = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=dir_fd)
             try:
-                fcntl.flock(fd, fcntl.LOCK_UN)
+                read_info = os.fstat(read_fd)
+                if (read_info.st_dev, read_info.st_ino) != (info.st_dev, info.st_ino):
+                    _fail()
+                contents = os.read(read_fd, MAX_AUDIT_BYTES + 1)
+            finally:
+                os.close(read_fd)
+            if contents.count(b"\n") >= MAX_AUDIT_EVENTS:
+                _fail()
+            _validate_audit_contents(contents)
+        payload = _canonical_json(record) + b"\n"
+        if info.st_size + len(payload) > MAX_AUDIT_BYTES:
+            _fail()
+        remaining = memoryview(payload)
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                _fail()
+            remaining = remaining[written:]
+        os.fsync(fd)
+        if created:
+            os.fsync(dir_fd)
+    except KeyboardInterrupt:
+        if fd is not None and original_size is not None:
+            try:
+                os.ftruncate(fd, original_size)
+                os.fsync(fd)
             except OSError:
                 pass
-            os.close(fd)
-    except OSError:
+        raise
+    except Exception:
+        if fd is not None and original_size is not None:
+            try:
+                os.ftruncate(fd, original_size)
+                os.fsync(fd)
+                if created and original_size == 0:
+                    os.unlink(name, dir_fd=dir_fd)
+                    os.fsync(dir_fd)
+            except OSError:
+                pass
         _fail()
+    finally:
+        if fd is not None:
+            if locked:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+            try:
+                os.close(fd)
+            except OSError:
+                recovery_needed = False
+                if original_size is not None:
+                    try:
+                        os.ftruncate(fd, original_size)
+                        os.fsync(fd)
+                        if created and original_size == 0:
+                            os.unlink(name, dir_fd=dir_fd)
+                            os.fsync(dir_fd)
+                    except OSError:
+                        recovery_needed = True
+                try:
+                    os.close(fd)
+                except OSError:
+                    recovery_needed = True
+                _fail(recovery_needed=recovery_needed)
 
 
 def _validate_audit_contents(contents: bytes) -> None:
@@ -643,6 +709,7 @@ def _atomic_publish(dir_fd: int, filename: str, payload: bytes) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     fd = None
     published = False
+    rollback_failed = False
     try:
         fd = os.open(temp_name, flags, 0o600, dir_fd=dir_fd)
         view = memoryview(payload)
@@ -665,7 +732,7 @@ def _atomic_publish(dir_fd: int, filename: str, payload: bytes) -> None:
                 os.unlink(filename, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
+                rollback_failed = True
         else:
             try:
                 temp_info = os.stat(temp_name, dir_fd=dir_fd, follow_symlinks=False)
@@ -673,18 +740,26 @@ def _atomic_publish(dir_fd: int, filename: str, payload: bytes) -> None:
                 if (temp_info.st_dev, temp_info.st_ino) == (target_info.st_dev, target_info.st_ino):
                     os.unlink(filename, dir_fd=dir_fd)
                     os.fsync(dir_fd)
-            except OSError:
+            except FileNotFoundError:
                 pass
-        _fail()
+            except OSError:
+                rollback_failed = True
+        _fail(recovery_needed=rollback_failed)
     finally:
+        cleanup_failed = False
         if fd is not None:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                cleanup_failed = True
         try:
             os.unlink(temp_name, dir_fd=dir_fd)
         except FileNotFoundError:
             pass
         except OSError:
-            _fail()
+            cleanup_failed = True
+        if cleanup_failed:
+            _fail(recovery_needed=True)
 
 
 def _approval_preview(role: str, report: dict) -> str:
@@ -720,6 +795,15 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
     audit_failed = False
     published = False
     try:
+        try:
+            os.stat(output.name, dir_fd=dir_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            # A known existing destination is rejected before consent and leaves
+            # both the report and the prior audit record untouched.
+            audit_recorded = True
+            _fail()
         data, _ = _read_private_input(input_path)
         events = _parse_lines(data, role)
         report = _build_report(role, events)
@@ -728,23 +812,10 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
         try:
             answer = approval_reader()
         except (EOFError, KeyboardInterrupt):
-            _audit_append(dir_fd, {
-                "status": "cancelled", "occurred_at": datetime.now(timezone.utc).isoformat(),
-                "schema_version": SCHEMA_VERSION, "source_role": role,
-                "report_id": report_id, "identifier_counts": _identifier_counts(report),
-                "case_count": len(report["cases"]), "relation_count": sum(x["count"] for x in report["relations"]),
-                "observation_count": sum(x["count"] for x in report["observations"]),
-            })
+            # Cancellation must not create or mutate report/audit files.
             audit_recorded = True
             _fail()
         if answer != APPROVAL:
-            _audit_append(dir_fd, {
-                "status": "cancelled", "occurred_at": datetime.now(timezone.utc).isoformat(),
-                "schema_version": SCHEMA_VERSION, "source_role": role,
-                "report_id": report_id, "identifier_counts": _identifier_counts(report),
-                "case_count": len(report["cases"]), "relation_count": sum(x["count"] for x in report["relations"]),
-                "observation_count": sum(x["count"] for x in report["observations"]),
-            })
             audit_recorded = True
             _fail()
         _validate_report(report)
@@ -768,11 +839,12 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
             audit_recorded = True
         except RestrictedReportError:
             audit_failed = True
+            recovery_needed = False
             try:
                 os.unlink(output.name, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
+                recovery_needed = True
             try:
                 _audit_append(dir_fd, {
                     "status": "failure", "occurred_at": datetime.now(timezone.utc).isoformat(),
@@ -783,34 +855,25 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
                 })
             except RestrictedReportError:
                 pass
-            _fail()
+            _fail(recovery_needed=recovery_needed)
         return report, len(canonical) + 1, digest
     except KeyboardInterrupt:
+        recovery_needed = False
         if published and not audit_recorded:
             try:
                 os.unlink(output.name, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
-        if not audit_recorded and not audit_failed:
-            try:
-                _audit_append(dir_fd, {
-                    "status": "cancelled", "occurred_at": datetime.now(timezone.utc).isoformat(),
-                    "schema_version": SCHEMA_VERSION, "source_role": role,
-                    "report_id": report_id,
-                    "identifier_counts": {"account": 0, "ipv4": 0, "ipv6": 0, "hostname": 0},
-                    "case_count": 0, "relation_count": 0, "observation_count": 0,
-                })
-            except RestrictedReportError:
-                pass
-        _fail()
+                recovery_needed = True
+        _fail(recovery_needed=recovery_needed)
     except TimeoutError:
+        recovery_needed = False
         if published and not audit_recorded:
             try:
                 os.unlink(output.name, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
+                recovery_needed = True
         if not audit_recorded and not audit_failed:
             try:
                 _audit_append(dir_fd, {
@@ -822,14 +885,15 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
                 })
             except RestrictedReportError:
                 pass
-        _fail()
-    except RestrictedReportError:
+        _fail(recovery_needed=recovery_needed)
+    except RestrictedReportError as exc:
+        recovery_needed = exc.recovery_needed
         if published and not audit_recorded and not audit_failed:
             try:
                 os.unlink(output.name, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
+                recovery_needed = True
         if not audit_recorded and not audit_failed:
             try:
                 _audit_append(dir_fd, {
@@ -841,14 +905,17 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
                 })
             except RestrictedReportError:
                 pass
+        if recovery_needed and not exc.recovery_needed:
+            _fail(recovery_needed=True)
         raise
     except Exception:
+        recovery_needed = False
         if published and not audit_recorded:
             try:
                 os.unlink(output.name, dir_fd=dir_fd)
                 os.fsync(dir_fd)
             except OSError:
-                pass
+                recovery_needed = True
         if not audit_recorded and not audit_failed:
             try:
                 _audit_append(dir_fd, {
@@ -860,7 +927,7 @@ def export_report(role: str, input_path: str, output_path: str, approval_reader=
                 })
             except RestrictedReportError:
                 pass
-        _fail()
+        _fail(recovery_needed=recovery_needed)
     finally:
         os.close(dir_fd)
 
@@ -897,6 +964,11 @@ def main(argv: list[str] | None = None) -> int:
         report, byte_count, digest = export_report(
             args.source_role, args.input, args.output,
         )
+    except RestrictedReportError as exc:
+        print("제한된 보고서를 생성하지 못했습니다. 입력과 저장 위치를 확인하십시오.", file=sys.stderr)
+        if exc.recovery_needed:
+            print("보고서 파일이 남아 있을 수 있습니다. 저장 폴더의 상태를 확인하기 전까지 열거나 공유하지 마십시오.", file=sys.stderr)
+        return 1
     except Exception:
         print("제한된 보고서를 생성하지 못했습니다. 입력과 저장 위치를 확인하십시오.", file=sys.stderr)
         return 1

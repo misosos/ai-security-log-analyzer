@@ -7,8 +7,11 @@ import os
 from pathlib import Path
 import resource
 import statistics
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.restricted_report import (
     APPROVAL,
