@@ -155,6 +155,13 @@ a { color: #064f96; text-underline-offset: .2em; }
 .grouping-explanation { font-weight: 650; }
 .case-section { border-top: 1px solid #d3dce7; padding-top: .9rem; margin-top: 1.2rem; }
 .case-section h5, .independent-evidence h5 { font-size: 1rem; margin: 0 0 .55rem; }
+.investigation-guidance > label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .4rem .6rem .4rem 0; }
+.investigation-guidance select, .guidance-request { min-height: 2.5rem; }
+.guidance-citation { border-inline-start: .25rem solid #0758ab; margin-top: .7rem; padding: .2rem .8rem; overflow-wrap: anywhere; }
+.guidance-citation h6 { font-size: .95rem; margin: .35rem 0; }
+.guidance-citation p { margin: .35rem 0; }
+.guidance-source { color: #344d69; font-size: .9rem; }
+.guidance-status { min-height: 1.5rem; }
 .case-section ul, .case-section ol { padding-inline-start: 1.5rem; }
 .case-section li + li { margin-top: .65rem; }
 .timeline { list-style: decimal; display: grid; gap: .8rem; }

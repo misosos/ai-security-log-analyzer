@@ -3,6 +3,8 @@
 (() => {
   const ENDPOINT = "/api/v1/investigations/sample";
   const LOCAL_ENDPOINT = "/api/v1/investigations";
+  const GUIDANCE_ENDPOINT = "/api/v1/investigations/guidance";
+  const GUIDANCE_CORPUS_DIGEST = "fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6";
   const MAX_RESPONSE_BYTES = 128 * 1024;
   const MAX_REPORT_BYTES = 32 * 1024;
   const MAX_TEXT = 1000;
@@ -566,11 +568,11 @@
     return value;
   }
 
-  async function boundedJson(response) {
+  async function boundedJson(response, maxBytes = MAX_RESPONSE_BYTES) {
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.toLowerCase().startsWith("application/json")) failContract();
     const declared = response.headers.get("content-length");
-    if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > MAX_RESPONSE_BYTES)) failContract();
+    if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) failContract();
     if (!response.body) failContract();
     const reader = response.body.getReader();
     const chunks = [];
@@ -580,7 +582,7 @@
         const next = await reader.read();
         if (next.done) break;
         total += next.value.byteLength;
-        if (total > MAX_RESPONSE_BYTES) {
+        if (total > maxBytes) {
           await reader.cancel();
           failContract();
         }
@@ -597,6 +599,137 @@
     } catch (error) {
       failContract();
     }
+  }
+
+  function validateGuidanceResponse(value) {
+    closedRecord(value, ["schema_version", "status", "message", "citations", "corpus_digest"]);
+    if (value.schema_version !== 1 || !["AVAILABLE", "REFUSED", "STALE"].includes(value.status) ||
+        value.corpus_digest !== GUIDANCE_CORPUS_DIGEST || typeof value.message !== "string" ||
+        value.message.length > 160 || !Array.isArray(value.citations) || value.citations.length > 5) failContract();
+    const seen = new Set();
+    value.citations.forEach((citation) => {
+      closedRecord(citation, ["citation_id", "title", "summary", "source_ref"]);
+      if (typeof citation.citation_id !== "string" || !/^[a-z0-9-]{1,48}:[a-z0-9-]{1,48}$/.test(citation.citation_id) ||
+          seen.has(citation.citation_id) || typeof citation.title !== "string" || !citation.title.length ||
+          citation.title.length > 160 || typeof citation.summary !== "string" || !citation.summary.length ||
+          new TextEncoder().encode(citation.summary).length > 512 || typeof citation.source_ref !== "string" ||
+          !/^docs\/[A-Za-z0-9_./-]+\.md$/.test(citation.source_ref) || citation.source_ref.includes("..")) failContract();
+      seen.add(citation.citation_id);
+    });
+    if (value.status === "AVAILABLE" ? value.citations.length === 0 : value.citations.length !== 0) failContract();
+    return value;
+  }
+
+  function guidanceErrorMessage(code) {
+    return ({
+      INVALID_REQUEST: "지원하지 않는 도움말 요청입니다.",
+      TOO_LARGE: "도움말 요청 크기가 한도를 넘었습니다.",
+      LOCAL_ONLY: "도움말은 이 로컬 화면에서만 사용할 수 있습니다.",
+      BUSY: "다른 도움말 요청을 처리하고 있습니다.",
+      TIMEOUT: "도움말 준비 시간이 초과되었습니다.",
+      UNAVAILABLE: "승인된 도움말 자료를 확인할 수 없습니다."
+    })[code] || "도움말을 준비하지 못했습니다.";
+  }
+
+  function guidanceCaseFields(caseItem) {
+    return {
+      review_order: caseItem.review_order,
+      supported_detections: caseItem.supported_detections,
+      supported_relations: caseItem.supported_relations,
+      risk_level: caseItem.included_highest_risk,
+      confidence: caseItem.included_highest_confidence,
+      observation_count: caseItem.observation_count,
+      supporting_relation_count: caseItem.supporting_relation_count
+    };
+  }
+
+  async function guidanceCaseId(fields) {
+    const quote = (value) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+    const canonical = `{"confidence":${quote(fields.confidence)},"observation_count":${fields.observation_count},` +
+      `"review_order":${fields.review_order},"risk_level":${quote(fields.risk_level)},` +
+      `"supporting_relation_count":${fields.supporting_relation_count},"supported_detections":[` +
+      fields.supported_detections.map(quote).join(",") + `],"supported_relations":[` +
+      fields.supported_relations.map(quote).join(",") + "]}";
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    return `c_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24)}`;
+  }
+
+  function renderGuidance(caseItem) {
+    const section = detailSection("근거 도움말");
+    section.classList.add("investigation-guidance");
+    section.append(element("p", "승인된 보안 지식의 짧은 요약과 출처를 확인합니다. 이 도움말은 탐지 결과를 변경하지 않습니다."));
+    const label = document.createElement("label");
+    label.textContent = "도움말 주제 ";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "근거 도움말 주제");
+    const options = [
+      ["EXPLAIN_CASE", "조사 사례 설명"], ["EXPLAIN_DETECTION", "탐지 관찰 설명"],
+      ["EXPLAIN_RELATION", "관계 설명"], ["EXPLAIN_RISK", "위험도와 신뢰도 설명"],
+      ["NEXT_CHECKS", "다음 확인 항목"], ["EXPLAIN_LIMITATION", "해석 한계"]
+    ];
+    options.forEach(([value, title]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = title;
+      select.append(option);
+    });
+    label.append(select);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "guidance-request";
+    button.textContent = "근거 도움말 보기";
+    const status = element("p", "도움말은 요청할 때만 준비됩니다.", "guidance-status");
+    status.setAttribute("aria-live", "polite");
+    const result = document.createElement("div");
+    result.className = "guidance-result";
+    result.hidden = true;
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      result.replaceChildren();
+      result.hidden = true;
+      status.textContent = "승인된 근거를 확인하고 있습니다.";
+      try {
+        const fields = guidanceCaseFields(caseItem);
+        const caseId = await guidanceCaseId(fields);
+        const response = await fetch(GUIDANCE_ENDPOINT, {
+          method: "POST", credentials: "omit",
+          headers: {Accept: "application/json", "Content-Type": "application/json"},
+          body: JSON.stringify({schema_version: 1,
+            case: {case_id: caseId, ...fields}, category: select.value,
+            corpus_digest: GUIDANCE_CORPUS_DIGEST})
+        });
+        const payload = await boundedJson(response, 6144);
+        if (!response.ok) {
+          if (payload === null || typeof payload !== "object" || Array.isArray(payload) ||
+              Object.keys(payload).length !== 2 || !Object.hasOwn(payload, "error_code") ||
+              !Object.hasOwn(payload, "user_message") ||
+              typeof payload.error_code !== "string" || typeof payload.user_message !== "string") failContract();
+          status.textContent = guidanceErrorMessage(payload.error_code);
+        } else {
+          const guidance = validateGuidanceResponse(payload);
+          status.textContent = guidance.status === "AVAILABLE" ? guidance.message :
+            guidance.status === "STALE" ? "사례 정보가 달라졌습니다. 최신 분석 결과에서 다시 선택하십시오." :
+              "이 항목에는 승인된 근거 도움말이 없습니다.";
+          if (guidance.status === "AVAILABLE") {
+            guidance.citations.forEach((citation) => {
+              const item = document.createElement("article");
+              item.className = "guidance-citation";
+              item.append(element("h6", citation.title), element("p", citation.summary),
+                element("p", `출처: ${citation.source_ref}`, "guidance-source"));
+              result.append(item);
+            });
+            result.hidden = false;
+          }
+        }
+      } catch (_error) {
+        status.textContent = "도움말을 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+    section.append(label, button, status, result);
+    return section;
   }
 
   function validateApiError(value, mode = "sample") {
@@ -814,7 +947,7 @@
     const nextSteps = detailSection("다음 조사 단계");
     textList(nextSteps, caseItem.next_steps.map((item) => item.text), true,
       "표시할 고정 조사 단계가 없습니다.");
-    body.append(limitations, unverified, nextSteps);
+    body.append(limitations, unverified, nextSteps, renderGuidance(caseItem));
     return body;
   }
 

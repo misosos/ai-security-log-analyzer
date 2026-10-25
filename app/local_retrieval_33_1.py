@@ -139,7 +139,7 @@ class SafeEvidence:
 
     def __post_init__(self):
         try:
-            if type(self.source_role) is not SourceRole:
+            if self.source_role is not None and type(self.source_role) is not SourceRole:
                 raise ValueError
             if type(self.completeness) is not Completeness:
                 raise ValueError

@@ -149,7 +149,8 @@ def test_case_detail_source_uses_native_ordered_semantics_and_fixed_mappings():
     assert 'NEXT_STEP_SEQUENCES' in js and 'LIMITATION_TEXTS' in js
     assert 'category === "SUPPORTED_RELATION"' in js
     assert '.sort(' not in js
-    assert 'JSON.stringify(' not in js
+    assert 'JSON.stringify({schema_version: 1,' in js
+    assert 'JSON.stringify(caseItem)' not in js
     assert 'Object.entries(' not in js
     assert 'case-summary:focus-visible' in css
     assert '.timeline' in css and '.evidence-list' in css
@@ -189,7 +190,7 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
     assert client.get("/api/health").json() == {"status": "ok"}
     assert client.get("/docs").status_code == 200
     schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit"}
+    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit", "/api/v1/investigations/guidance"}
     assert client.post("/api/analyze").status_code == 422
 
 

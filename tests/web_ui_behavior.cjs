@@ -15,6 +15,7 @@ class Node {
     this.children = [];
     this.attributes = {};
     this._text = "";
+    this.classList = {add: (...names) => { this.className = [...new Set(`${this.className || ""} ${names.join(" ")}`.trim().split(/\s+/))].join(" "); }};
     this.hidden = false;
     this.open = false;
     this.disabled = false;
@@ -170,6 +171,10 @@ async function main() {
   assert.deepEqual(app.revoked, ["test-object-url"]);
   assert.equal(app.body.children.length, 0, "temporary anchor removed");
   const [high, low] = nodes["case-list"].children;
+  assert.equal(nodesOf(high, "button").filter((button) => button.textContent === "근거 도움말 보기").length, 1);
+  assert.equal(high.textContent.includes("이 도움말은 탐지 결과를 변경하지 않습니다."), true);
+  assert.equal(app.fetchCalls.filter((call) => call.url.includes("/guidance")).length, 0,
+    "guidance is never fetched before an explicit click");
   assert.equal(high.tagName, "details");
   assert.equal(high.open, false, "case detail starts collapsed");
   assert.equal(low.open, false);

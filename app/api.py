@@ -33,6 +33,10 @@ from app.models.investigation_sample_api import (
 )
 from app.sample_investigation_api import create_sample_endpoint
 from app.local_investigation_api import create_local_endpoint
+from app.local_guidance_33_4 import (
+    GuidanceErrorResponse, GuidanceResponse, GUIDANCE_OPENAPI_REQUEST,
+    create_guidance_endpoint,
+)
 from app.live_monitoring.http import (
     create_live_events_endpoint, create_live_status_endpoint, live_error_response,
 )
@@ -514,6 +518,18 @@ def create_app(
             for code in (400, 429, 500, 503)
         },
     )
+    if not enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/api/v1/investigations/guidance",
+            create_guidance_endpoint(),
+            methods=["POST"],
+            response_model=GuidanceResponse,
+            responses={code: {"model": GuidanceErrorResponse}
+                       for code in (400, 403, 413, 429, 503)},
+            openapi_extra={"requestBody": GUIDANCE_OPENAPI_REQUEST},
+            description=("Loopback-only, read-only lexical investigation guidance. "
+                          "It does not modify analysis results."),
+        )
     if not enable_linux_audit_api:
         configured_app.add_api_route(
             "/api/v1/investigations/linux-audit",

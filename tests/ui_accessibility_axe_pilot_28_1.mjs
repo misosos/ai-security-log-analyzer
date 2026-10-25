@@ -196,7 +196,7 @@ async function scan(page, state) {
       pendingLive: document.querySelector('#live-pending-status').getAttribute('aria-live') === 'polite',
     };
   });
-  const hiddenExpected = ['base', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
+  const hiddenExpected = ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
     'three-file-error', 'linux-audit-error'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
@@ -248,6 +248,17 @@ async function main() {
         if (stateForPage === 'DISABLED') await route.continue();
         else await route.fulfill({status: 200, contentType: 'application/json',
           body: JSON.stringify(stateForPage === 'MULTI' ? pairStatus() : status(stateForPage))});
+      } else if (url.pathname === '/api/v1/investigations/sample') {
+        await route.continue();
+      } else if (url.pathname === '/api/v1/investigations/guidance') {
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({
+          schema_version: 1, status: 'AVAILABLE',
+          message: '조사 도움말입니다. 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.',
+          corpus_digest: 'fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6',
+          citations: [{citation_id: 'investigation-case:supporting-relation',
+            title: '조사 사례와 지원 관계', summary: '합성 검증용 승인 문장입니다.',
+            source_ref: 'docs/live_analysis_correlation_case_design.md'}],
+        })});
       } else if (['/', '/assets/style.css', '/assets/app.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
@@ -421,6 +432,39 @@ async function main() {
       await scan(page, stateName);
       await page.close();
     }
+    stateForPage = 'DISABLED';
+    const guidancePage = await context.newPage();
+    await guidancePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await guidancePage.locator('#sample-button').click();
+    await guidancePage.locator('.guidance-request').first().waitFor({state: 'attached'});
+    requireSafe(await guidancePage.locator('.guidance-request').count() === 2,
+      'GUIDANCE_CASE_CONTROLS_MISSING');
+    const guidanceCard = guidancePage.locator('#case-list .case-card').first();
+    await guidanceCard.locator(':scope > summary').focus();
+    await guidancePage.keyboard.press('Enter');
+    const guidanceButton = guidanceCard.locator('.guidance-request');
+    const helpCalls = [];
+    guidancePage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/guidance') helpCalls.push(request);
+    });
+    requireSafe(helpCalls.length === 0, 'GUIDANCE_AUTOMATIC_REQUEST');
+    await guidanceButton.focus();
+    await guidancePage.keyboard.press('Enter');
+    await guidanceCard.locator('.guidance-citation').waitFor({state: 'visible'});
+    requireSafe(helpCalls.length === 1 &&
+      await guidanceCard.locator('.guidance-citation script').count() === 0 &&
+      await guidanceCard.locator('.guidance-citation').textContent().then((text) =>
+        text.includes('합성 검증용 승인 문장입니다.')) &&
+      await guidanceCard.locator('.guidance-status').textContent().then((text) =>
+        text.includes('결과를 변경하지 않습니다')),
+    'GUIDANCE_DOM_OR_OPT_IN_FAILED');
+    for (const width of [320, 640, 1024, 1440]) {
+      await guidancePage.setViewportSize({width, height: 900});
+      requireSafe(await guidancePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        'GUIDANCE_HORIZONTAL_OVERFLOW');
+    }
+    await scan(guidancePage, 'guidance');
+    await guidancePage.close();
     stateForPage = 'MULTI';
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);

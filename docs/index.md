@@ -23,7 +23,8 @@
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)
 - [Hypothesis 설계](hypothesis_property_testing_gate_23_0.md) · [property pilot](hypothesis_property_testing_pilot_23_1.md) · [Schemathesis 설계](schemathesis_api_fuzzing_gate_23_4.md) · [API pilot](schemathesis_api_pilot_23_5.md)
 - [검증 가능한 로컬 AI 조사 도우미 설계 gate](local_ai_investigation_assistant_33_0.md) — Phase 33.0 설계 전용; Gemini 현행 경계, safe evidence, corpus, 위협 모델과 33.1 평가 기준
-- [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — internal/test-only retrieval; LLM·embedding·API·UI 연결 없음
+- [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
+- [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) — 사례 상세에서 명시적으로 요청하는 read-only lexical citation 도움말; 새 SHA CI와 Safari 검수 전 `CONDITIONAL_GO`
 - [로컬 embedding 공급망·평가 설계 gate](local_embedding_supply_chain_gate_33_2a.md) — Phase 33.2A 당시 정적 후보 비교; 후속 실행은 33.2B 기록 참조
 - [격리형 multilingual E5 retrieval pilot](local_embedding_retrieval_pilot_33_2b.md) — 합성 전용 native macOS 비교; production 통합 NO_GO, lexical 기준선 유지
 - [구조화 local LLM 설명 pilot 공급망·평가 설계 gate](local_llm_supply_chain_gate_33_3a.md) — Phase 33.3A 정적 설계; [33.3B](local_llm_pilot_33_3b.md)·[33.3C](local_llm_pilot_33_3c.md)는 격리 근거 부족으로 중단, [33.3D](local_llm_pilot_33_3d.md)는 acquisition 전 `SUPPLY_CHAIN_BLOCKED`, [33.3E artifact·wheel·disk gate](local_llm_artifact_closure_33_3e.md)는 `RESOURCE_NO_GO`, [33.3F 전용 저장공간·잔여 closure](local_llm_acquisition_environment_33_3f.md)는 `STORAGE_SETUP_BLOCKED`

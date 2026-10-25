@@ -119,6 +119,14 @@ def test_safe_adapter_projects_synthetic_analysis_without_mutating_it():
     assert ssh_projected.source_role is SourceRole.SSH
 
 
+def test_safe_evidence_can_mark_source_role_unknown_for_combined_public_case():
+    projected = evidence(source_role=None)
+    assert projected.source_role is None
+    result = retrieve("case relation", QueryCategory.EXPLAIN_CASE,
+                      evidence(case_labels=("Failed login followed by success case",), source_role=None))
+    assert result.status is ResultStatus.OK
+
+
 def test_corpus_manifest_and_content_are_verified_and_bounded(tmp_path):
     corpus = load_corpus()
     assert len(corpus.sections) >= 12
