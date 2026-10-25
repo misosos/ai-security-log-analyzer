@@ -1,6 +1,6 @@
 # Phase 33.4 — verifiable local investigation guidance
 
-**Disposition: `CONDITIONAL_GO`.** The Phase 33.1 deterministic lexical baseline is connected to a loopback-only read-only endpoint and an explicit case-detail action. This is a cited knowledge lookup, not a generated explanation or a security decision. Final `GO` remains pending the new commit's Ubuntu CI and manual Safari review.
+**Implementation disposition: `CONDITIONAL_GO`; Phase 33.4A acceptance disposition: `NO_GO`.** The Phase 33.1 deterministic lexical baseline is connected to a loopback-only read-only endpoint and an explicit case-detail action. This is a cited knowledge lookup, not a generated explanation or a security decision. The exact-SHA Ubuntu CI passed, but 33.4A found a synthetic IP canary in the existing public case/report response and stopped before Safari manual review. See [33.4A acceptance](local_investigation_guidance_acceptance_33_4a.md).
 
 ## Gate and baseline
 
@@ -50,4 +50,4 @@ Safari, VoiceOver, real 200% zoom, and manual user acceptance were not performed
 
 ## Phase boundary
 
-Phase 33.1 lexical retrieval is the sole production search baseline. Phase 33.2 embedding remains `NO_GO`; Phase 33.3 local LLM remains `STORAGE_SETUP_BLOCKED`. No LLM, embedding, vector database, or Gemini helper is called or changed. The assistant is read-only evidence lookup; detection, correlation, risk, and cases remain authoritative and unchanged. Final approval requires the new commit's exact-SHA Ubuntu CI and manual Safari review.
+Phase 33.1 lexical retrieval is the sole production search baseline. Phase 33.2 embedding remains `NO_GO`; Phase 33.3 local LLM remains `STORAGE_SETUP_BLOCKED`. No LLM, embedding, vector database, or Gemini helper is called or changed. The assistant is read-only evidence lookup; detection, correlation, risk, and cases remain authoritative and unchanged. Final approval is blocked by the public case/report privacy exposure recorded in 33.4A, followed by exact-SHA Ubuntu CI and manual Safari review after a separately reviewed fix.
