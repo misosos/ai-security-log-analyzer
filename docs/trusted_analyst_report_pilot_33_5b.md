@@ -86,4 +86,4 @@ POSIX/macOS local runner에서 hard-link no-replace, permissions, file/directory
 
 ## Phase 33.5C 상태
 
-시작 gate의 Ubuntu run 40174710982는 해당 SHA에서 성공했지만, 그 run에는 제한 보고서 전용 Linux subprocess step이 없었다. 이후 workflow에 전용 smoke와 합성 benchmark를 추가했으며 새 SHA CI 실행을 기다리고 있다. Linux 파일 permission·atomic publish·동시성 acceptance는 아직 **NOT_TESTED**다. 취소·EOF·SIGINT와 이미 존재하는 destination 거부는 report와 audit 파일 모두를 만들거나 변경하지 않도록 후속 수정했으며, audit 부분 write/fsync는 rollback을 시도한다. 최신 변경 및 증거 경계는 [Phase 33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 기록한다.
+정확한 SHA `310922e17429f11f41d876d0ab8baec933503e80`의 [Ubuntu push CI run 40179564268](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40179564268)은 전체 회귀 **2722 passed, 2 warnings**, Linux restricted-report smoke `roles=3`, benchmark, Chromium·axe **14 states**, 외부 요청 0건 및 tracked-file 불변 검사를 통과했다. 저장 artifact는 0개다. 이 근거로 합성 입력 전용 pilot은 **CONDITIONAL_GO**다. 실제 사용자 자료 export와 조직 운영은 계속 **NO_GO**다. 실패한 실제 ENOSPC, SIGKILL, 전원 장애와 network filesystem은 **NOT_TESTED**다. [Phase 33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 자동 CI와 로컬 macOS 결과를 구분했다.

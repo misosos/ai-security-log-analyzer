@@ -70,6 +70,38 @@ def test_restricted_export_requires_exact_interactive_approval(tmp_path):
     assert not (private / ".restricted-report-audit.jsonl").exists()
 
 
+def test_approval_preview_names_excluded_sensitive_source_material():
+    from app.restricted_report import _approval_preview
+
+    preview = _approval_preview("application", {
+        "cases": [],
+        "relations": [],
+        "observations": [],
+        "audit_summary": {
+            "identifier_counts": {"account": 1, "ipv4": 1, "ipv6": 1, "hostname": 1},
+        },
+    })
+    assert "account 1개" in preview
+    assert "ipv4 1개" in preview and "ipv6 1개" in preview
+    assert "hostname 1개" in preview
+    for excluded in ("원문 로그", "파일 경로", "인증 정보", "내부 예외"):
+        assert excluded in preview
+    assert "로컬 파일" in preview
+    assert "자동 암호화되지 않습니다" in preview
+    assert "파일 권한 0600은 암호화가 아닙니다" in preview
+    assert "소유자 전용(0700) 로컬 폴더" in preview
+    assert "다른 사용자가 읽을 수 있는 폴더에는 저장하지 않습니다" in preview
+    assert "기존 파일은 덮어쓰지 않습니다" in preview
+    assert "파일이 이미 있으면 다른 새 출력 이름을 지정하십시오" in preview
+    assert "감사 기록에는 상태·시각·schema·역할·보고서 ID·식별자 종류별 개수와 사례/관계/관찰 수만 남습니다" in preview
+    assert "실제 식별자와 파일 경로는 감사 기록에 남기지 않습니다" in preview
+    assert "일반 화면과 공개용 보고서는 보호된 별칭을 계속 사용하며, 이 제한 보고서의 실제 식별자는 공개 화면이나 도움말로 전달되지 않습니다" in preview
+    assert "도구는 전달·보관 기간·삭제·백업·클라우드 동기화를 자동 관리하지 않으며, 사용자와 조직 정책에 따라 관리해야 합니다" in preview
+    assert "이 기능은 합성 자료용 pilot이며 실제 자료 export와 조직 운영은 승인되지 않았습니다" in preview
+    assert "실제 사용 전 암호화·보존 정책·인증/RBAC 검토가 필요합니다" in preview
+    assert "이 제한 보고서의 실제 식별자는 공개 화면이나 도움말로 전달되지 않습니다" in preview
+
+
 def test_restricted_export_is_private_closed_json_and_never_overwrites(tmp_path):
     result, output, private = _run(
         tmp_path, "application",

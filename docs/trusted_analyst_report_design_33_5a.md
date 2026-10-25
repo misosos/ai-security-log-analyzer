@@ -209,7 +209,7 @@ macOS는 FileVault와 Time Machine backup encryption이 각각 별도의 control
 
 합성 입력만 받는 별도 명령 `python -m app.restricted_report`를 구현했다. 명시적 role/input/output, 정확한 한국어 승인 문구, closed JSON, private parent/report/audit permission과 no-clobber 저장 계약은 [33.5B pilot 기록](trusted_analyst_report_pilot_33_5b.md)에 있다. **실제 사용자 자료 export는 승인되지 않았다.** 이 구현은 실제/합성 자료를 자동 분류하지 못하며 운영 지원 선언이 아니다. Linux 별도 프로세스 CI와 조직 authorization/retention/encryption 정책 검토가 남아 있다.
 
-Phase 33.5C에서 취소와 이미 존재하는 destination의 사전 거부는 report/audit를 만들거나 바꾸지 않는 동작으로 구체화했다. 시작 gate run 40174710982는 통과했지만 그 다음에 추가한 Linux-only smoke와 benchmark step은 새 SHA CI에서 아직 실행되지 않아 Linux acceptance는 **NOT_TESTED**다. [33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 자동 증거와 남은 항목을 구분해 둔다.
+Phase 33.5C에서 취소와 이미 존재하는 destination의 사전 거부는 report/audit를 만들거나 바꾸지 않도록 검증했다. 정확한 SHA의 Ubuntu CI run 40179564268은 전체 회귀, `roles=3` Linux subprocess smoke, 합성 benchmark, Chromium·axe와 tracked-file 불변 검사를 통과했다. 합성 pilot 범위는 **CONDITIONAL_GO**이며 실제 사용자 자료 export·조직 운영 사용은 **NO_GO**다. filesystem ENOSPC, SIGKILL, 전원 장애와 network filesystem은 여전히 **NOT_TESTED**다. [33.5C 수용 기록](trusted_analyst_report_linux_acceptance_33_5c.md)에 CI와 로컬 증거를 구분해 기록했다.
 
 ## 이 설계 변경의 검증 기록
 

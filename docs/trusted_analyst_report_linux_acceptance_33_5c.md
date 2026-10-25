@@ -2,7 +2,7 @@
 
 ## 판정
 
-**검증 대기 — Linux 전용 새 smoke와 benchmark는 새 커밋의 Ubuntu CI에서 아직 실행되지 않았다.** Linux 수용 결과를 PASS나 CONDITIONAL_GO로 기록하지 않는다. 실제 사용자 자료 export와 운영 사용은 계속 **NO_GO**다. report 파일은 자동 암호화되지 않습니다.
+**CONDITIONAL_GO — 합성 입력 범위에 한정.** Ubuntu 전용 subprocess smoke와 benchmark는 아래 정확한 CI에서 통과했다. 이는 실제 사용자 자료 export나 조직 운영 사용 승인이 아니다. 실제 사용자 자료 export와 운영 사용은 계속 **NO_GO**다. report 파일은 자동 암호화되지 않습니다.
 
 ## 시작 gate 증거
 
@@ -11,6 +11,14 @@
 - run의 Ubuntu 24.04 job은 `uv lock --check`, `uv sync --dev --locked --no-build`, 전체 pytest **2690 passed, 2 warnings**, `npm ci`, Chromium·axe **14 states**, `external_requests=0`을 통과했다. Phase 33.5B 테스트는 전체 pytest에 포함되어 성공했다. CI 저장 artifact는 0개였다.
 - 이 gate run에는 Phase 33.5C 전용 Linux report smoke·benchmark step이 아직 없었다. 해당 run을 Linux report acceptance 근거로 사용하지 않는다.
 - v0.4.0 tag/Release target은 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`이었다.
+
+## Phase 33.5C Ubuntu 수용 결과 확정
+
+- [push CI run 40179564268](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40179564268): head `310922e17429f11f41d876d0ab8baec933503e80`, `completed/success`.
+- Ubuntu 24.04 locked install 통과. 전체 pytest는 **2722 passed, 2 warnings**였다.
+- 전용 report smoke 표식: `RESTRICTED_REPORT_LINUX_SMOKE_PASS roles=3 audit_rows=6 fs=ext4`. 이는 해당 runner에서 확인한 filesystem 유형만 뜻한다.
+- 같은 run에서 Ubuntu fault tests, Chromium·axe **14 states**, `external_requests=0`, tracked-file 불변 검사가 통과했다. 저장 CI artifact는 **0개**다.
+- v0.4.0 tag와 Release target은 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`로 유지됐다.
 
 ## Portability 결함 후속
 
@@ -36,14 +44,14 @@ Audit row의 부분 write와 fsync 실패는 원래 길이로 되돌리고, 새 
 |---|---|---|
 | 시작 커밋 Ubuntu locked 설치·전체 회귀·Node/Chromium/axe | PASS | run 40174710982의 실제 job log |
 | 시작 커밋 artifact 0개·v0.4.0 불변 | PASS | Actions artifact API, tag 및 Release target |
-| 33.5C 전용 Ubuntu subprocess smoke | NOT_TESTED | 새 step은 이 로컬 변경 후 추가됐으며 새 SHA CI 미실행 |
-| Ubuntu runner 실제 filesystem 유형·mount 특성 | NOT_TESTED | 새 smoke가 유형만 출력하도록 준비됨; 실제 로그 없음 |
-| Ubuntu에서 세 role 성공·취소·EOF·SIGINT/SIGTERM·no-clobber | NOT_TESTED | Linux smoke는 아직 실행되지 않음 |
-| Linux 권한·atomic publish·동일 target 경쟁·audit fault | NOT_TESTED | 해당 OS/filesystem에서 실행된 새 SHA CI 근거 없음 |
+| 33.5C 전용 Ubuntu subprocess smoke | PASS | run 40179564268 고정 완료 표식 |
+| Ubuntu runner filesystem 유형 | PASS (범위 제한) | 해당 run에서 `ext4` 관찰; 다른 filesystem으로 일반화하지 않음 |
+| Ubuntu에서 application·SSH·access 승인·취소·EOF·SIGINT/SIGTERM·no-clobber | PASS | 전용 subprocess smoke `roles=3` |
+| Linux 권한·atomic publish·동시 target 경쟁·audit fault tests | PASS (CI test 범위) | Ubuntu 전체 pytest와 Phase 33.5C faults; 전원 장애 보장 아님 |
 | 로컬 파일-operation fault injection | PASS (macOS 개발 host) | test-only fault tests; Linux 동작 근거로 승격하지 않음 |
 | 공개 API/SSE/UI/HTML 개인정보 회귀 | PASS (macOS 개발 host) | 변경 전부터 있던 전체 회귀/Phase 33 privacy suite; 공개 producer는 수정하지 않음 |
 
-Linux smoke는 application·SSH·access 각각 승인 보고서, schema·식별자와 audit report ID 연결, `0700`/`0600`, private output, no-clobber retry 불변성 및 새 output 재실행을 확인하도록 작성했다. 거절·EOF·SIGINT는 report와 audit를 만들지 않아야 한다. 느슨한 umask 아래서도 파일 mode를 확인한다. 파일 descriptor 수를 실행 전후 비교하고 임시 directory가 제거된 뒤에만 PASS 표식을 쓴다. 현재는 이 코드를 Linux에서 실행하지 않았으므로 위 항목은 전부 NOT_TESTED다.
+Linux smoke는 application·SSH·access 각각 승인 보고서, schema·식별자와 audit report ID 연결, `0700`/`0600`, private output, no-clobber retry 불변성 및 새 output 재실행을 확인했다. 거절·EOF·SIGINT/SIGTERM은 report와 audit를 만들지 않았고, 종료 후 FD 수와 임시 directory 정리도 검사했다. run 40179564268에서 `roles=3` 완료 표식이 나왔다. 이 증거는 해당 Ubuntu 24.04 runner와 관찰된 ext4에 한정한다.
 
 ## 로컬 검증과 fault 범위
 
@@ -54,7 +62,7 @@ macOS 개발 host에서 Phase 33.5B subprocess, Linux smoke workflow/document co
 - 실제 filesystem ENOSPC: **NOT_TESTED**; runner/root filesystem을 채우지 않았다.
 - 실제 Linux `SIGKILL`, power loss, 실제 directory/file fsync 장치 오류, network filesystem, overlayfs/tmpfs의 실제 운영 동작: **NOT_TESTED**.
 - Test double ENOSPC와 실제 filesystem ENOSPC는 별도다. 어느 fault test도 전원 장애 atomicity를 입증하지 않는다.
-- NFS를 모사한 mountinfo test double은 거부된다. Linux 구현에서 ext4/xfs/btrfs/tmpfs/overlay만 허용 후보이며 network filesystem은 거부한다. 현재 Ubuntu runner 유형은 미확인이다.
+- NFS를 모사한 mountinfo test double은 거부된다. Linux 구현에서 ext4/xfs/btrfs/tmpfs/overlay만 허용 후보이며 network filesystem은 거부한다. 이 CI run의 smoke는 ext4를 관찰했다. 이는 다른 filesystem 유형의 지원 증거가 아니다.
 
 macOS 개발 host benchmark는 warm-up 1회, 표본 5회다. 전체 export median/p95/max는 1건 **7.319/9.570/9.570 ms**, 32건 **10.112/12.015/12.015 ms**, 256건 **33.246/35.060/35.060 ms**였다. 출력 크기는 각각 **1270/5083/28152 bytes**였다. 분석 준비 median은 **0.285/2.160/15.774 ms**, 직렬화 median은 **0.025/0.072/0.331 ms**, file fsync median은 **0.693/0.726/0.712 ms**, audit write median은 **0.199/0.222/0.220 ms**였다. process high-water RSS 관찰값은 OS별 단위 차이가 있어 macOS에서만 각각 **34,652,160 / 34,996,224 / 37,650,432 platform units**로 남긴다. 이 작은 개발 표본은 운영 SLA가 아니며 Linux 수치로 해석하지 않는다.
 
@@ -66,9 +74,15 @@ macOS 개발 host benchmark는 warm-up 1회, 표본 5회다. 전체 export media
 
 ## Benchmark
 
-새 Ubuntu CI benchmark는 1·32·256 합성 event에 warm-up 1회와 5표본을 사용하고 분석 준비, JSON serialization, file fsync, audit write, 전체 export, payload byte와 process high-water RSS를 기록하도록 연결했다. 이는 개발 runner의 작은 표본이며 운영 SLA가 아니다.
+Ubuntu run 40179564268 benchmark는 warm-up 1회·5표본이다. 단위는 ms이며 p95는 작은 표본에서 사실상 상단 관측치다. RSS 값은 Linux `ru_maxrss` platform units(KiB)이며 프로세스 high-water 관측이다.
 
-Phase 33.5C Ubuntu benchmark 결과: **NOT_TESTED** — 새 step은 추가됐지만 해당 변경 SHA의 CI가 아직 실행되지 않았다. 이전 Phase 33.5B macOS 숫자를 Linux 수치로 재사용하지 않는다.
+| 합성 event | output bytes | 분석 median/p95/max ms | JSON median/p95/max ms | file fsync median/p95/max ms | audit median/p95/max ms | 전체 median/p95/max ms | peak RSS units |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1270 | 0.318/0.349/0.349 | 0.030/0.037/0.037 | 0.809/1.348/1.348 | 0.414/0.558/0.558 | 1.907/3.164/3.164 | 54904 |
+| 32 | 5083 | 3.136/5.895/5.895 | 0.082/0.084/0.084 | 0.576/0.614/0.614 | 0.383/0.404/0.404 | 5.616/5.738/5.738 | 54904 |
+| 256 | 28152 | 19.894/26.168/26.168 | 0.372/0.391/0.391 | 0.785/0.853/0.853 | 0.421/0.461/0.461 | 28.468/36.507/36.507 | 54904 |
+
+이는 개발 runner의 작은 합성 표본이지 운영 SLA나 최악 지연 보장이 아니다. macOS benchmark는 위 표와 별도인 앞 절 결과다.
 
 ## 남은 경계
 
