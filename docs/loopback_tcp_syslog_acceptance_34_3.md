@@ -115,3 +115,5 @@ RSS는 Python process의 `getrusage` high-water observation이며 runtime 전용
 - embedding production 통합은 NO_GO, local LLM은 STORAGE_SETUP_BLOCKED, Gemini 연결은 없다.
 
 합성 local 반복성 범위만 **CONDITIONAL_GO**다. 기록된 두 unexplained non-reproduced 이력과 Ubuntu 확장 matrix 미실행을 한계로 유지한다. 실제 사용자 자료·원격 수집·조직 운영은 계속 **NO_GO**다.
+
+Phase 34.3A는 Ubuntu 24.04의 대표 bounded repetition을 위한 별도 CI step을 추가한다. 새 SHA의 CI 전 상태는 [Phase 34.3A 기록](loopback_tcp_syslog_linux_reliability_34_3a.md)과 같이 **PENDING_REMOTE_CI / NOT_TESTED**다. macOS의 기존 140회 matrix와 측정치는 Ubuntu 결과로 간주하지 않는다.

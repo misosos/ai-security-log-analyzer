@@ -4,6 +4,8 @@
 
 Phase 34.2는 [bounded loopback pilot](loopback_tcp_syslog_pilot_34_2.md)로 loopback-only listener를 추가하고 기존 application/SSH parser·결정적 분석 pipeline에 volatile in-process 연결을 구성했다. 합성 local pilot만 CONDITIONAL_GO이며 실제 사용자 자료·조직 운영·원격 수집은 NO_GO다. 정확한 수정 SHA의 Ubuntu CI smoke는 run `40274877704`에서 PASS했다. Phase 34.3 반복 lifecycle matrix는 로컬 macOS에서만 측정했으며 Ubuntu 확장 반복은 NOT_TESTED다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).
 
+Phase 34.3A는 별도 [Ubuntu bounded reliability step](loopback_tcp_syslog_linux_reliability_34_3a.md)을 준비했다. 새 SHA의 push CI 전까지 이 확장 검증은 `NOT_TESTED`다.
+
 ## 후속 상태 — Phase 34.1
 
 Phase 34.0의 설계 gate를 바탕으로 [Phase 34.1 순수 core 구현](bounded_tcp_syslog_core_34_1.md)을 추가했다. immutable closed config, RFC 6587 octet-counting incremental decoder, in-memory bounded queue와 safe status DTO만 존재했다. **Phase 34.1 시점에는 listener·socket·network 송수신·parser/analysis 연결이 `NOT_IMPLEMENTED`였다.** Core status state는 listener 존재를 뜻하지 않는 `READY`로 닫혔다.

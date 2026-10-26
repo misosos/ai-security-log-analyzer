@@ -70,6 +70,12 @@ jobs:
           uv run python -c "import sys; assert sys.platform == 'linux'"
           uv run python tests/smoke_tcp_syslog_34_2.py
 
+      - name: Verify bounded TCP Syslog reliability on Linux
+        timeout-minutes: 5
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run python tests/accept_loopback_tcp_syslog_34_3.py --linux-bounded
+
       - name: Verify restricted analyst report on Linux
         run: |
           uv run python -c "import sys; assert sys.platform == 'linux'"

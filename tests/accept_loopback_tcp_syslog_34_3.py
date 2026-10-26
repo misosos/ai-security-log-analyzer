@@ -19,6 +19,8 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 _TEMP_CLEANUP_FAILURES = 0
+_TEMP_CLEANUP_DETAILS: list[str] = []
+_RESOURCE_CLEANUP_DETAILS: list[str] = []
 
 
 def _line(role: str, second: int) -> bytes:
@@ -101,14 +103,14 @@ async def _child(role: str, mode: str, ready_path: Path, connected_path: Path,
                 _write_private(settled_path, "rejected")
             else:
                 _write_private(settled_path, "rejection-not-observed")
-        elif mode == "normal":
+        elif mode in {"normal", "readiness"}:
             deadline = loop.time() + 5
             while not stop_path.exists() and loop.time() < deadline:
                 await asyncio.sleep(0.002)
         elif mode != "startup":
             _write_private(settled_path, "invalid-test-mode")
 
-        if mode in {"startup", "normal"}:
+        if mode in {"startup", "readiness", "normal"}:
             stopping.set()
         else:
             await stopping.wait()
@@ -135,7 +137,7 @@ async def _child(role: str, mode: str, ready_path: Path, connected_path: Path,
                 or result["connection_tasks"] or result["closing_tasks"]
                 or not result["processor_done"] or not result["listener_released"]
                 or result["queue_events"] != 0
-                or (result["fd_delta"] is not None and result["fd_delta"] != 0)):
+                or result["fd_delta"] is None or result["fd_delta"] != 0):
             return 3
         print(f"TCP_SYSLOG_CYCLE_COMPLETE role={role} mode={mode}")
         return 0
@@ -198,7 +200,7 @@ def _cycle(role: str, mode: str, signum: int | None = None) -> tuple[str | None,
         stop_started = time.perf_counter()
         if signum is not None:
             process.send_signal(signum)
-        elif mode == "normal":
+        elif mode in {"normal", "readiness"}:
             _write_private(stop_path, "stop")
         stdout, stderr = process.communicate(timeout=5)
         elapsed = (time.perf_counter() - stop_started) * 1000
@@ -228,18 +230,35 @@ def _cycle(role: str, mode: str, signum: int | None = None) -> tuple[str | None,
         return stage, None
     finally:
         if peer is not None:
-            peer.close()
-        if process.poll() is None:
-            process.kill()
-            process.communicate()
-        temporary.cleanup()
-        if Path(temporary.name).exists():
+            try:
+                peer.close()
+            except Exception:
+                _RESOURCE_CLEANUP_DETAILS.append(f"{role}:{mode}:connection_close")
+        try:
+            if process.poll() is None:
+                process.kill()
+        except Exception:
+            _RESOURCE_CLEANUP_DETAILS.append(f"{role}:{mode}:subprocess_reap")
+        try:
+            process.communicate(timeout=2)
+        except Exception:
+            _RESOURCE_CLEANUP_DETAILS.append(f"{role}:{mode}:subprocess_reap")
+        cleanup_failed = False
+        try:
+            temporary.cleanup()
+        except Exception:
+            cleanup_failed = True
+        if cleanup_failed or Path(temporary.name).exists():
             _TEMP_CLEANUP_FAILURES += 1
+            _TEMP_CLEANUP_DETAILS.append(f"{role}:{mode}:temporary_cleanup")
 
 
-def _lifecycle_matrix() -> dict[str, object]:
-    counts = {"sigint": 10, "sigterm": 20, "normal": 10,
-              "startup": 10, "processing": 10, "malformed": 10}
+def _lifecycle_matrix(bounded: bool = False) -> dict[str, object]:
+    counts = ({"readiness": 10, "sigint": 5, "sigterm": 5, "normal": 5,
+               "startup": 5, "processing": 5, "malformed": 5}
+              if bounded else
+              {"sigint": 10, "sigterm": 20, "normal": 10,
+               "startup": 10, "processing": 10, "malformed": 10})
     totals: dict[str, object] = {"attempts": 0, "first_attempt_passes": 0,
                                  "first_attempt_failures": {}, "shutdown_ms": {}}
     for role in ("application", "ssh"):
@@ -280,7 +299,7 @@ def _wire_frame(payload: bytes) -> bytes:
     return str(len(payload)).encode("ascii") + b" " + payload
 
 
-async def _concurrency_and_soak(role: str) -> dict[str, object]:
+async def _concurrency_and_soak(role: str, bounded: bool = False) -> dict[str, object]:
     from app.log_collection.runtime import TcpRuntimeConfig, TcpSyslogRuntime
 
     runtime = TcpSyslogRuntime(TcpRuntimeConfig(
@@ -332,7 +351,7 @@ async def _concurrency_and_soak(role: str) -> dict[str, object]:
             await asyncio.sleep(0.002)
 
         rapid_completed = 0
-        for _ in range(100):
+        for _ in range(30 if bounded else 100):
             reader, writer = await asyncio.open_connection("127.0.0.1", port)
             writer.close()
             await writer.wait_closed()
@@ -345,6 +364,7 @@ async def _concurrency_and_soak(role: str) -> dict[str, object]:
 
         malformed_inputs = (
             (b"+1 invalid", "frame"),
+            (b"1234567 0", "frame"),
             (b"8193 ", "frame"),
             (b"10 short", "incomplete"),
             (_wire_frame(b"\xff"), "frame"),
@@ -503,6 +523,8 @@ async def _concurrency_and_soak(role: str) -> dict[str, object]:
                 "rejected": overload.rejected_frames,
                 "queued_events": overload.queued_events,
                 "event_limit": overload.queue_event_limit,
+                "queued_bytes": overload.queued_bytes,
+                "byte_limit": overload.queue_byte_limit,
             },
             "soak": {
                 "sent": count,
@@ -532,13 +554,45 @@ async def _concurrency_and_soak(role: str) -> dict[str, object]:
         await runtime.stop()
 
 
-async def _main() -> int:
-    lifecycle = _lifecycle_matrix()
-    print(json.dumps({"kind": "lifecycle_matrix_first_attempts", "platform": platform.platform(),
-                      "python": platform.python_version(), "temp_cleanup_failures": _TEMP_CLEANUP_FAILURES,
-                      "results": lifecycle}, sort_keys=True),
-          flush=True)
-    concurrency = [await _concurrency_and_soak(role) for role in ("application", "ssh")]
+async def _main(linux_bounded: bool = False, bounded: bool = False) -> int:
+    if linux_bounded and not sys.platform.startswith("linux"):
+        print("TCP_SYSLOG_LINUX_RELIABILITY_FAIL category=unsupported_platform", flush=True)
+        return 2
+    bounded = bounded or linux_bounded
+    lifecycle = _lifecycle_matrix(bounded=bounded)
+    failures = lifecycle["first_attempt_failures"]
+    if bounded and (lifecycle["first_attempt_passes"] != 80 or failures
+                    or _TEMP_CLEANUP_FAILURES or _RESOURCE_CLEANUP_DETAILS):
+        failure_count = lifecycle["attempts"] - lifecycle["first_attempt_passes"]
+        print(f"TCP_SYSLOG_LINUX_RELIABILITY_FAIL category=lifecycle runs={lifecycle['attempts']} failures={failure_count} "
+              f"cleanup_failures={_TEMP_CLEANUP_FAILURES}", flush=True)
+        for label, count in sorted(failures.items()):
+            role, scenario, stage = label.split(":", 2)
+            print(f"TCP_SYSLOG_LINUX_RELIABILITY_CASE role={role} scenario={scenario} "
+                  f"stage={stage} category=cycle_failure count={count}", flush=True)
+        for label in _TEMP_CLEANUP_DETAILS:
+            role, scenario, stage = label.split(":", 2)
+            print(f"TCP_SYSLOG_LINUX_RELIABILITY_CASE role={role} scenario={scenario} "
+                  f"stage={stage} category=cleanup_failure count=1", flush=True)
+        for label in _RESOURCE_CLEANUP_DETAILS:
+            role, scenario, stage = label.split(":", 2)
+            print(f"TCP_SYSLOG_LINUX_RELIABILITY_CASE role={role} scenario={scenario} "
+                  f"stage={stage} category=cleanup_failure count=1", flush=True)
+        return 1
+    if not linux_bounded:
+        print(json.dumps({"kind": "lifecycle_matrix_first_attempts", "platform": platform.platform(),
+                          "python": platform.python_version(), "temp_cleanup_failures": _TEMP_CLEANUP_FAILURES,
+                          "results": lifecycle}, sort_keys=True), flush=True)
+    concurrency = []
+    for role in ("application", "ssh"):
+        try:
+            concurrency.append(await _concurrency_and_soak(role, bounded=bounded))
+        except Exception:
+            if linux_bounded:
+                print(f"TCP_SYSLOG_LINUX_RELIABILITY_FAIL role={role} scenario=concurrency "
+                      "stage=runtime category=internal_failure count=1", flush=True)
+                return 1
+            raise
     result = {
         "kind": "synthetic_phase_34_3_acceptance_not_sla",
         "platform": platform.platform(),
@@ -547,10 +601,51 @@ async def _main() -> int:
         "lifecycle": lifecycle,
         "concurrency_and_soak": concurrency,
     }
+    if linux_bounded:
+        safe = all(
+            item["two_connection_progress"] and item["third_connection_rejected"]
+            and item["slow_partial_did_not_starve_peer"]
+            and item["rapid_connect_disconnect"] == 30
+            and item["malformed_and_parser_recovery_cases"] == 7
+            and item["active_connections_peak"] == 2
+            and item["active_connection_tasks_peak"] == 2
+            and item["main_runtime_cleanup"]["active_connections"] == 0
+            and item["main_runtime_cleanup"]["connection_tasks"] == 0
+            and item["main_runtime_cleanup"]["closing_tasks"] == 0
+            and item["main_runtime_cleanup"]["fd_before"] >= 0
+            and item["main_runtime_cleanup"]["fd_before"] == item["main_runtime_cleanup"]["fd_after"]
+            and item["main_runtime_cleanup"]["listener_released"]
+            and item["main_runtime_cleanup"]["port_reused"]
+            and item["queue_overload"]["state"] == "DEGRADED"
+            and item["queue_overload"]["accepted"] == 1
+            and item["queue_overload"]["rejected"] == 1
+            and item["queue_overload"]["queued_events"] <= item["queue_overload"]["event_limit"]
+            and item["queue_overload"]["queued_bytes"] <= item["queue_overload"]["byte_limit"]
+            and item["soak"]["sent"] == item["soak"]["accepted"] == item["soak"]["parsed"]
+                == item["soak"]["analyzed"] == 256
+            and item["soak"]["rejected"] == item["soak"]["parser_rejected"]
+                == item["soak"]["dropped"] == 0
+            and item["soak"]["queue_peak_events"] <= 256
+            and item["soak"]["queue_peak_bytes"] <= 1024 * 1024
+            and item["soak"]["active_connections_peak"] <= 2
+            and item["soak"]["active_tasks_peak"] <= 2
+            and item["soak"]["fd_before"] >= 0
+            and item["soak"]["fd_before"] == item["soak"]["fd_after"]
+            and item["soak"]["listener_released_after_stop"]
+            and item["soak"]["port_reused_after_stop"]
+            and item["soak"]["tasks_after_stop"] == 0
+            for item in concurrency
+        )
+        if not safe:
+            print("TCP_SYSLOG_LINUX_RELIABILITY_FAIL category=resource_or_concurrency", flush=True)
+            return 1
+        print("TCP_SYSLOG_LINUX_RELIABILITY_PASS roles=2 runs=80 synthetic=1 leaks=0", flush=True)
+        return 0
+
     print(json.dumps(result, sort_keys=True))
-    failures = lifecycle["first_attempt_failures"]
     return 0 if (lifecycle["first_attempt_passes"] == lifecycle["attempts"]
-                 and not failures and _TEMP_CLEANUP_FAILURES == 0) else 1
+                 and not failures and _TEMP_CLEANUP_FAILURES == 0
+                 and not _RESOURCE_CLEANUP_DETAILS) else 1
 
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--child":
@@ -558,5 +653,17 @@ if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--child":
         raise SystemExit(2)
     raise SystemExit(asyncio.run(_child(
         sys.argv[2], sys.argv[3], *(Path(value) for value in sys.argv[4:10]))))
+elif __name__ == "__main__" and len(sys.argv) == 2 and sys.argv[1] == "--linux-bounded":
+    if not sys.platform.startswith("linux"):
+        print("TCP_SYSLOG_LINUX_RELIABILITY_FAIL category=unsupported_platform", flush=True)
+        raise SystemExit(2)
+    try:
+        result = asyncio.run(_main(linux_bounded=True))
+    except Exception:
+        print("TCP_SYSLOG_LINUX_RELIABILITY_FAIL category=internal_failure", flush=True)
+        raise SystemExit(1)
+    raise SystemExit(result)
+elif __name__ == "__main__" and len(sys.argv) == 2 and sys.argv[1] == "--bounded":
+    raise SystemExit(asyncio.run(_main(bounded=True)))
 elif __name__ == "__main__":
     raise SystemExit(asyncio.run(_main()))

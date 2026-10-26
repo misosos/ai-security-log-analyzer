@@ -4,6 +4,8 @@
 
 [Phase 34.2](loopback_tcp_syslog_pilot_34_2.md)는 이 pure decoder/queue를 loopback-only application/SSH 합성 pilot에 연결했다. 별도 프로세스 smoke는 macOS와 Ubuntu CI run `40274877704`에서 확인했다. Phase 34.3의 확장 반복 matrix는 macOS local에서만 확인했으며 Ubuntu 확장 matrix는 NOT_TESTED다. 실제 사용자 자료·조직 운영과 원격 수집은 NO_GO다. 34.1의 순수 framing/queue 계약은 변경하지 않았다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).
 
+Phase 34.3A의 Ubuntu bounded matrix는 별도 CI step으로 준비 중이며 새 SHA push CI 전까지 `NOT_TESTED`다: [검증 계획·기록](loopback_tcp_syslog_linux_reliability_34_3a.md).
+
 **판정: `CONDITIONAL_GO` — 순수 framing/config/queue core만 검증했다. 자동 수집은 `NOT_IMPLEMENTED`이며 실제 socket을 열지 않았다.** 이 구현은 loopback listener, parser, 분석 pipeline, 공개 API/SSE/UI, 파일 monitor, checkpoint와 연결되지 않는다.
 
 ## 범위와 계약
