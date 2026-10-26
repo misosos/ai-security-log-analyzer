@@ -1,5 +1,13 @@
 # Phase 34.0 — 자동 보안 로그 수집 설계 gate
 
+## 후속 상태 — Phase 34.4 CLI management
+
+Phase 34.4는 기존 loopback runtime을 application/SSH 단일 역할의 합성 전용 `--setup-tcp-syslog`, `--show-tcp-syslog`, `--run-tcp-syslog`, `--delete-tcp-syslog` 흐름에 연결했다. Endpoint는 별도 정확한 사용자 승인에서만 표시한다. 공개 API/SSE/UI, 기존 file config/checkpoint, 분석 의미는 바꾸지 않았다. [구현 기록](loopback_tcp_syslog_management_34_4.md). 정확한 시작 CI run `40282366828`에서 기존 34.3A Ubuntu 반복성 step은 성공했지만 이 새 management subprocess smoke는 새 SHA CI 전까지 `NOT_TESTED`다. 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`다.
+
+## 후속 상태 — Phase 34.3A Ubuntu bounded reliability
+
+Phase 34.3A bounded Ubuntu reliability matrix는 시작 SHA `746c6d517fc27ca9a32b728b57df57c9912b2596`의 push CI run `40282366828`에서 `TCP_SYSLOG_LINUX_RELIABILITY_PASS roles=2 runs=80 synthetic=1 leaks=0`로 통과했다. 이는 기존 loopback runtime의 합성 반복성 범위만 확인하며 Phase 34.4 management 변경의 Ubuntu 결과를 대신하지 않는다.
+
 ## 후속 상태 — Phase 34.2
 
 Phase 34.2는 [bounded loopback pilot](loopback_tcp_syslog_pilot_34_2.md)로 loopback-only listener를 추가하고 기존 application/SSH parser·결정적 분석 pipeline에 volatile in-process 연결을 구성했다. 합성 local pilot만 CONDITIONAL_GO이며 실제 사용자 자료·조직 운영·원격 수집은 NO_GO다. 정확한 수정 SHA의 Ubuntu CI smoke는 run `40274877704`에서 PASS했다. Phase 34.3 반복 lifecycle matrix는 로컬 macOS에서만 측정했으며 Ubuntu 확장 반복은 NOT_TESTED다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).

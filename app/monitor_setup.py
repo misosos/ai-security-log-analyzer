@@ -925,7 +925,8 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
          emit: Callable[[str], None] = print) -> int:
     parser = _SetupParser(
         description="단일 application 또는 SSH 로그의 로컬 모니터링 설정 생성",
-        epilog="예: uv run python -m app.monitor_setup --show | --delete | --reset-checkpoint",
+        epilog=("예: uv run python -m app.monitor_setup --show | --delete | --reset-checkpoint | "
+                "--setup-tcp-syslog | --show-tcp-syslog | --run-tcp-syslog | --delete-tcp-syslog"),
     )
     parser.add_argument("--output", metavar="/absolute/path/to/monitoring.json")
     parser.add_argument("--multi-source", action="store_true",
@@ -938,6 +939,16 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
     mode.add_argument("--delete", action="store_true", help="기본 설정 하나만 승인 후 삭제")
     mode.add_argument("--reset-checkpoint", action="store_true",
                       help="명시적 승인 후 연결된 복구 자료 하나만 삭제하고 새 분석 epoch 준비")
+    mode.add_argument("--setup-tcp-syslog", dest="tcp_action", action="store_const", const="setup",
+                      help="합성 pilot용 loopback TCP Syslog 설정 생성")
+    mode.add_argument("--show-tcp-syslog", dest="tcp_action", action="store_const", const="show",
+                      help="TCP Syslog 설정의 안전한 요약 조회")
+    mode.add_argument("--run-tcp-syslog", dest="tcp_action", action="store_const", const="run",
+                      help="설정된 loopback TCP Syslog 수집 실행")
+    mode.add_argument("--delete-tcp-syslog", dest="tcp_action", action="store_const", const="delete",
+                      help="TCP Syslog 설정만 승인 후 삭제")
+    mode.add_argument("--reveal-tcp-syslog-endpoint", dest="tcp_action", action="store_const",
+                      const="reveal", help="실행 중인 TCP 수집의 연결 정보를 별도 승인 후 표시")
     try:
         args = parser.parse_args(argv)
         if args.output is not None and (args.show or args.delete or args.reset_checkpoint):
@@ -946,6 +957,11 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] = input,
             raise MonitorSetupError("SETUP_INVALID_INPUT")
         if args.multi_source and (args.show or args.delete or args.reset_checkpoint):
             raise MonitorSetupError("SETUP_INVALID_INPUT")
+        if args.tcp_action is not None:
+            if args.output is not None or args.multi_source or args.role is not None:
+                raise MonitorSetupError("SETUP_INVALID_INPUT")
+            from app.tcp_syslog_management import handle_action
+            return handle_action(args.tcp_action, ask=ask, emit=emit)
         if args.show:
             summary = show_default_config()
             if isinstance(summary, PairConfigSummary):

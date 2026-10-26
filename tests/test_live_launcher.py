@@ -17,7 +17,9 @@ from app.live_monitoring.runner import LiveMonitoringRunner
 def _config(tmp_path: Path):
     source = tmp_path / "synthetic.log"
     source.write_bytes(b"old line\n")
-    config = tmp_path / "live.json"
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    config = private / "live.json"
     config.write_text(json.dumps({
         "schema_version": "1", "start_policy": "FROM_END",
         "source": {"role": "application", "path": str(source.resolve())},
@@ -57,7 +59,8 @@ def test_valid_runtime_once_and_port_failure_closes_fd(tmp_path, capsys):
     def occupied(_port):
         raise OSError(errno.EADDRINUSE, "PRIVATE_SOCKET_EXCEPTION")
 
-    assert local_web.run_local_web(monitor_config=config, runtime_factory=runtime,
+    assert local_web.run_local_web(monitor_config=config, default_config_resolver=lambda: config,
+                                   runtime_factory=runtime,
                                    listener_factory=occupied, open_browser=False) == 3
     assert len(made) == 1
     assert made[0][0]._worker._session._fd == -1
@@ -69,12 +72,12 @@ def test_closed_config_and_source_policies_are_reused(tmp_path, capsys):
     payload = json.loads(config.read_text(encoding="utf-8"))
     payload["unknown"] = True
     config.write_text(json.dumps(payload), encoding="utf-8")
-    assert local_web.run_local_web(monitor_config=config,
+    assert local_web.run_local_web(monitor_config=config, default_config_resolver=lambda: config,
                                    listener_factory=lambda *_: pytest.fail("bound socket")) == 4
     assert "LIVE_CONFIG_INVALID" in capsys.readouterr().err
     config.unlink()
     config.symlink_to(source)
-    assert local_web.run_local_web(monitor_config=config,
+    assert local_web.run_local_web(monitor_config=config, default_config_resolver=lambda: config,
                                    listener_factory=lambda *_: pytest.fail("bound socket")) == 4
     assert str(source) not in capsys.readouterr().err
 

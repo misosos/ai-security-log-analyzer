@@ -1,5 +1,9 @@
 # Phase 34.3A — Ubuntu bounded reliability acceptance
 
+## 후속 원격 확인 — Phase 34.4 시작 SHA
+
+앞서 준비한 reliability step은 SHA `746c6d517fc27ca9a32b728b57df57c9912b2596`의 push CI run `40282366828`에서 실행되어 성공했다. 해당 run의 전체 pytest는 **2819 passed, 기존 warning 2개**였고, reliability 표식은 `TCP_SYSLOG_LINUX_RELIABILITY_PASS roles=2 runs=80 synthetic=1 leaks=0`이었다. Ubuntu basic smoke, Node·Chromium·axe, tracked-file 불변 검사도 통과하고 artifact는 0개였다. 따라서 **기존 34.3A Ubuntu synthetic bounded reliability 범위는 `CONDITIONAL_GO`**로 갱신한다. 이것은 Phase 34.4에서 추가한 CLI management smoke를 실행한 증거가 아니며, 그 smoke는 새 commit CI 전 `NOT_TESTED`다. 실제 사용자 자료·조직 운영·원격 수집은 계속 `NO_GO`다.
+
 ## Scope and gate
 
 This record covers synthetic-only Ubuntu 24.04 reliability checks for the existing loopback TCP Syslog pilot. It adds no production behavior and does not authorize actual user data, organization operation, or remote collection.

@@ -204,7 +204,7 @@ def _server(app, port: int) -> uvicorn.Server:
     return uvicorn.Server(config)
 
 
-def run_local_web(
+def _run_local_web_unlocked(
     port: int = DEFAULT_PORT,
     *,
     open_browser: bool = True,
@@ -379,6 +379,68 @@ def run_local_web(
                 asyncio.run(service.close())
             except Exception:
                 print("LIVE_SHUTDOWN_TIMEOUT: 모니터링 종료를 확인하십시오.", file=sys.stderr)
+
+
+def run_local_web(
+    port: int = DEFAULT_PORT,
+    *,
+    open_browser: bool = True,
+    monitor_config: Path | None = None,
+    monitor_default: bool = False,
+    listener_factory=_listener,
+    server_factory=_server,
+    readiness=_healthy,
+    browser_open=webbrowser.open,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+    runtime_factory=_live_runtime,
+    default_config_resolver=resolve_default_monitor_config_path,
+) -> int:
+    """Use one shared process lock when file monitoring is enabled."""
+    if (not monitor_default and monitor_config is None) or (
+        monitor_config is not None and (not isinstance(monitor_config, Path) or not monitor_config.is_absolute())
+    ):
+        return _run_local_web_unlocked(
+            port, open_browser=open_browser, monitor_config=monitor_config,
+            monitor_default=monitor_default, listener_factory=listener_factory,
+            server_factory=server_factory, readiness=readiness, browser_open=browser_open,
+            monotonic=monotonic, sleep=sleep, runtime_factory=runtime_factory,
+            default_config_resolver=default_config_resolver,
+        )
+    if monitor_default and monitor_config is not None:
+        return _run_local_web_unlocked(
+            port, open_browser=open_browser, monitor_config=monitor_config,
+            monitor_default=monitor_default, listener_factory=listener_factory,
+            server_factory=server_factory, readiness=readiness, browser_open=browser_open,
+            monotonic=monotonic, sleep=sleep, runtime_factory=runtime_factory,
+            default_config_resolver=default_config_resolver,
+        )
+    try:
+        from app.tcp_syslog_management import acquire_collector_lock
+        lock_path = default_config_resolver()
+        lock = acquire_collector_lock(lock_path)
+    except Exception:
+        print("LOCAL_COLLECTION_BUSY: 다른 로그 수집이 실행 중입니다. 먼저 정상 종료하십시오.",
+              file=sys.stderr)
+        return 4
+    result = 4
+    try:
+        result = _run_local_web_unlocked(
+            port, open_browser=open_browser, monitor_config=monitor_config,
+            monitor_default=monitor_default, listener_factory=listener_factory,
+            server_factory=server_factory, readiness=readiness, browser_open=browser_open,
+            monotonic=monotonic, sleep=sleep, runtime_factory=runtime_factory,
+            default_config_resolver=default_config_resolver,
+        )
+    finally:
+        try:
+            lock.close()
+        except Exception:
+            print("LOCAL_COLLECTION_LOCK_RELEASE_FAILED: 수집 잠금 해제를 확인하지 못했습니다.",
+                  file=sys.stderr)
+            if result == 0:
+                result = 8
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -140,12 +140,12 @@ def test_pair_starts_through_production_paths_without_sample_fallback(tmp_path: 
         listeners.append(sock)
         return sock
 
-    for options in ({"monitor_config": output},
-                    {"monitor_default": True, "default_config_resolver": lambda: output}):
+    for options in ({"monitor_config": output}, {"monitor_default": True}):
         result = local_web.run_local_web(open_browser=False, listener_factory=listener,
                                          server_factory=lambda _app, _port: Server(),
                                          readiness=lambda _port: True,
                                          sleep=lambda _duration: (_ for _ in ()).throw(KeyboardInterrupt()),
+                                         default_config_resolver=lambda: output,
                                          **options)
         assert result == 0
         captured = capsys.readouterr()

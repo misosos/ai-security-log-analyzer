@@ -1,5 +1,13 @@
 # Phase 34.1 — bounded TCP Syslog pure core
 
+## 후속 상태 — Phase 34.4
+
+Phase 34.4는 이 pure core와 기존 runtime을 로컬 합성 전용 setup/show/run/delete CLI로 연결했다. API/SSE/UI, raw persistence, file checkpoint와 분석 계약은 변경하지 않았다. Management smoke는 새 구현 CI 전까지 `NOT_TESTED`다: [Phase 34.4 management 기록](loopback_tcp_syslog_management_34_4.md).
+
+## 후속 상태 — Phase 34.3A Ubuntu bounded reliability
+
+기존 Ubuntu bounded reliability step은 SHA `746c6d517fc27ca9a32b728b57df57c9912b2596`, run `40282366828`에서 성공했다. 이 성공은 core/runtime의 기존 합성 reliability 범위에 한정되며 Phase 34.4 사용자 관리 CLI 검증을 포함하지 않는다.
+
 ## 후속 상태 — Phase 34.2
 
 [Phase 34.2](loopback_tcp_syslog_pilot_34_2.md)는 이 pure decoder/queue를 loopback-only application/SSH 합성 pilot에 연결했다. 별도 프로세스 smoke는 macOS와 Ubuntu CI run `40274877704`에서 확인했다. Phase 34.3의 확장 반복 matrix는 macOS local에서만 확인했으며 Ubuntu 확장 matrix는 NOT_TESTED다. 실제 사용자 자료·조직 운영과 원격 수집은 NO_GO다. 34.1의 순수 framing/queue 계약은 변경하지 않았다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).

@@ -1,5 +1,9 @@
 # Phase 34.2 — bounded loopback TCP Syslog pilot
 
+## 후속 상태 — Phase 34.4
+
+새 CLI 설정·상태·삭제 흐름과 runtime 상호 배제 lock은 [Phase 34.4](loopback_tcp_syslog_management_34_4.md)에 기록했다. 기존 runtime의 parser·분석 경계는 재사용하고, API/SSE/UI 연결은 없다. 34.4 관리 smoke의 Ubuntu 결과는 새 SHA CI 전까지 `NOT_TESTED`다. 기존 Ubuntu pilot smoke와 Phase 34.3A bounded reliability 성공은 34.4 관리 흐름의 CI 증거가 아니다.
+
 ## 판정과 범위
 
 Phase 34.2는 한 역할(application 또는 SSH)의 **합성 입력 loopback pilot**으로만 `CONDITIONAL_GO`다. 이 조건부 판정은 자동 원격 수집, 실제 사용자 로그, 조직 운영, 공개 API/SSE/UI 게시를 승인하지 않는다. IPv4 `127.0.0.1` 또는 IPv6 `::1` 중 하나의 고정 loopback literal에 high port로 bind하며, port 0은 test-only 구성에서만 허용한다. UDP, newline framing, TLS/mTLS, 외부 interface, access, cross-source, checkpoint, disk spool, 재연결, AI/LLM/embedding은 지원하지 않는다. Exactly-once나 무유실도 보장하지 않는다.
