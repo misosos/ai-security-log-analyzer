@@ -165,7 +165,7 @@ Phase 35.1 감사와 향후 35.2 합성 실행에서 AI/LLM을 사용하지 않�
 
 정적 문서/source/metadata는 실제 파일 rotation, sink serialization, retry/ack, resource use, egress, permission, privacy leakage를 실행 검증하지 않는다. Release checksum은 authenticity가 아니며 source commit signature는 binary signature가 아니다. API/docs와 GitHub artifact metadata가 향후 바뀔 수 있다. 공식 문서가 명시하지 않은 부분을 보장으로 채우지 않았다. MPL 적용 범위 및 재배포 의무는 법무 검토가 필요하다.
 
-Phase 35.1A에서 native socket framing이 analyzer의 ASCII decimal framing과 `INCOMPATIBLE`임을 고정 source로 확인했다. VRL transform 후보는 `CUSTOM_FRAMING_UNPROVEN`이다. 기존 RFC 6587 listener는 변경하지 않으며, 다음 순서는 JSON Lines adapter pure core다. Provenance 잔여 위험 판정과 category-only credential-shaped string 분류는 [Phase 35.1A 기록](vector_framing_preconditions_35_1a.md)에 있다.
+Phase 35.1A에서 native socket framing이 analyzer의 ASCII decimal framing과 `INCOMPATIBLE`임을 고정 source로 확인했다. VRL transform 후보는 `CUSTOM_FRAMING_UNPROVEN`이다. 기존 RFC 6587 listener는 변경하지 않으며, 후속 단계에서 별도 JSON Lines adapter pure core를 구현했다. Core는 parser pipeline이나 Vector에 연결되지 않았으며 Linux 및 실제 Vector 연동은 `NOT_TESTED`다. Provenance 잔여 위험 판정과 category-only credential-shaped string 분류는 [Phase 35.1A 기록](vector_framing_preconditions_35_1a.md)에 있다. 상세 core 계약과 macOS benchmark는 [Phase 35.2 기록](collector_jsonl_adapter_core_35_2.md)에 있다.
 
 **Vector production 통합은 `NOT_IMPLEMENTED`; 실제 사용자 자료·조직 운영은 `NO_GO`.** Phase 35.0의 후보 선택은 설계상 조건부 결정이며 Phase 35.2 Vector 실행 승인으로 승격되지 않는다.
 

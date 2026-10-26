@@ -4,9 +4,11 @@
 
 ## Decision
 
-**Vector 0.60.0은 첫 합성 연동 후보라는 설계상 `CONDITIONAL_GO`를 유지하되, native socket framing은 기존 analyzer listener와 `INCOMPATIBLE`이다. Phase 35.1A는 기존 RFC 6587 listener를 변경하지 않고, 별도 closed JSON Lines adapter의 pure core를 먼저 다루는 `PHASE_35_2_ADAPTER_CORE_REQUIRED`를 선택했다. Vector custom VRL 경로는 정적으로 구성 가능해 보이나 `CUSTOM_FRAMING_UNPROVEN`이다.**
+**Vector 0.60.0은 첫 합성 연동 후보라는 설계상 `CONDITIONAL_GO`를 유지하되, native socket framing은 기존 analyzer listener와 `INCOMPATIBLE`이다. Phase 35.2에서 별도 closed JSON Lines adapter의 pure core를 구현했다. Vector custom VRL 경로는 정적으로 구성 가능해 보이나 `CUSTOM_FRAMING_UNPROVEN`이며 실제 Vector 연동은 `NOT_TESTED`다.**
 
 이는 Vector 설치·실행 승인이나 제품 지원 판정이 아니다. Binary signature/SBOM/provenance는 미확인이다. checksum-only 잔여 위험은 disposable synthetic 격리 pilot에만 조건부 수용 가능하다고 판단했으며, 격리 통제 별도 gate 전에는 Vector를 실행하지 않는다. 정확한 wire bytes, rotation, buffer, egress 차단, 권한 및 privacy는 실행 검증 전까지 미확정이다. 외부 도구의 기능만으로 우리 환경의 안전성·무유실·exactly-once를 추론하지 않는다.
+
+Phase 35.2 core 구현은 Vector checksum-only provenance 잔여 위험을 해소하거나 Vector 실행을 승인하지 않는다. Credential-shaped scan의 `UNRESOLVED` 3건도 그대로 유지한다. Linux 및 실제 Vector 연동은 `NOT_TESTED`; 실제 사용자 자료·조직 운영은 `NO_GO`다. [Pure core 계약·검증 기록](collector_jsonl_adapter_core_35_2.md).
 
 Phase 34 종료 상태:
 

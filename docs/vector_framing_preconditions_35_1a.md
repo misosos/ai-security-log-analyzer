@@ -6,7 +6,7 @@
 
 - Vector `v0.60.0` socket sink의 native framing은 기존 analyzer가 요구하는 `ASCII decimal payload byte length + single ASCII space + payload bytes`와 **`INCOMPATIBLE`**이다.
 - 고정 VRL source와 Vector serializer를 이어 보면 custom transform은 UTF-8 byte 길이 prefix를 구성할 수 있는 것으로 **정적으로 추론**된다. 그러나 Vector 설정 전체의 검증·실행 결과나 실제 wire capture가 없으므로 그 조합의 wire compatibility는 **`CUSTOM_FRAMING_UNPROVEN`**이다.
-- 기존 RFC 6587 listener는 변경하지 않는다. Vector를 그 listener에 억지로 연결하지 않고, 다음 단계는 **`PHASE_35_2_ADAPTER_CORE_REQUIRED`**로 정한다: 별도 namespace의 닫힌 JSON Lines adapter 순수 decoder/schema/queue core를 먼저 구현·검증한다.
+- 기존 RFC 6587 listener는 변경하지 않는다. 당시 다음 단계였던 **`PHASE_35_2_ADAPTER_CORE_REQUIRED`**는 [Phase 35.2 pure core](collector_jsonl_adapter_core_35_2.md)에서 수행됐다. JSON Lines decoder/schema/queue core만 존재하며 Vector, socket, 외부 process, parser pipeline 연결은 없다.
 - Artifact의 checksum은 확인됐지만 binary signature, SBOM, attestation 및 source-to-binary provenance는 확인되지 않았다. 기술적 잔여 위험은 제한된 disposable synthetic pilot에서만 **`CHECKSUM_ONLY_ACCEPTED_FOR_ISOLATED_PILOT`**로 수용 가능하다고 판단한다. 이는 Vector 실행 승인이 아니다. Phase 35.2 core는 Vector binary 없이 진행할 수 있다. 이후 binary 실행은 격리 통제의 별도 gate를 통과해야 한다.
 - Vector production 통합은 `NOT_IMPLEMENTED`; 실제 사용자 자료·조직 운영은 `NO_GO`다.
 
@@ -110,7 +110,7 @@ Binary scan의 AWS/GitHub token/private-key/certificate 패턴 hit count는 실�
 
 ## Selected Next Step
 
-선택: **`VECTOR_JSONL_ADAPTER_DESIGN`**; 실행 단계 표기는 **`PHASE_35_2_ADAPTER_CORE_REQUIRED`**다. Phase 35.2는 Vector 없이 다음 순수 in-process core로 한정한다: closed JSON Lines decoder, strict UTF-8, exact key set, duplicate key/NaN/Infinity reject, role match, line/payload/buffer/queue byte limits, fixed error categories, canary privacy. Socket, listener, Vector binary, external process, API/SSE/UI 연결은 없다. Core가 통과한 뒤에도 Vector 격리 실행은 별도 gate가 필요하다.
+선택은 **`VECTOR_JSONL_ADAPTER_DESIGN`**이었다. 후속 Phase 35.2는 별도 namespace의 pure in-process JSON Lines core를 구현했다: closed six-key envelope, strict UTF-8, duplicate/non-finite reject, exact role match, bounded line/payload/queue, fixed errors, safe status. TDD에서 33-line batch의 기존 partial acceptance를 실패로 재현하고 atomic batch refusal로 고쳤다. 상세 검증은 [Phase 35.2 기록](collector_jsonl_adapter_core_35_2.md)에 있다. 이는 Vector 실행 승인이 아니다.
 
 ## Privacy Boundary
 
@@ -123,7 +123,7 @@ AI는 수집, framing, source role, trust, parser 선택에 관여하지 않는�
 ## Verification
 
 - Source-level fixed revision trace 및 JSONL 설계 계약: 정적 검토만 수행.
-- Phase 35.1A 문서 계약 테스트: 문서 작성 전 예상 실패 3건 확인; 문서 작성 후 focused 및 전체 결과를 커밋 전 기록한다.
+- Phase 35.1A 문서 계약 테스트: 문서 작성 전 예상 실패 3건 확인. 후속 Phase 35.2 pure-core 계약 테스트와 macOS 합성 benchmark는 별도 기록에 있다.
 - Vector archive: 공식 x86_64 GNU archive 한 개를 임시 수신해 manifest SHA-256 일치 및 member 안전성 확인; 실행/압축 해제하지 않음.
 - Vector binary process 0; container/image/volume/network 0; package install 0; listener 0.
 - manifest 변경 없음. production code, CI workflow, dependency, `uv.lock` 변경 없음.
@@ -131,4 +131,6 @@ AI는 수집, framing, source role, trust, parser 선택에 관여하지 않는�
 
 ## Limitations
 
-Vector native framing은 기존 listener와 호환되지 않는다. VRL custom path는 source-level 구성 가능성일 뿐 `CUSTOM_FRAMING_UNPROVEN`이다. Binary provenance·SBOM·attestation 없음과 세 broad-scan hit 미분류 위험이 남는다. JSONL adapter는 미구현 설계다. File rotation, source checkpoint replay, Vector buffer, sink delivery/retry, egress deny, process permissions는 이 단계에서 실행하지 않았다. 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`; Vector production integration은 `NOT_IMPLEMENTED`; exactly-once·무유실 주장은 금지한다.
+Vector native framing은 기존 listener와 호환되지 않는다. VRL custom path는 source-level 구성 가능성일 뿐 `CUSTOM_FRAMING_UNPROVEN`이다. Binary provenance·SBOM·attestation 없음과 broad-scan의 `UNRESOLVED` 3건은 유지한다. JSONL pure core는 구현됐지만 Linux와 실제 Vector 연동은 `NOT_TESTED`다. File rotation, source checkpoint replay, Vector buffer, sink delivery/retry, egress deny, process permissions는 실행하지 않았다. 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`; Vector production integration은 `NOT_IMPLEMENTED`; exactly-once·무유실 주장은 금지한다.
+
+Phase 35.2 core: [collector JSON Lines adapter](collector_jsonl_adapter_core_35_2.md).
