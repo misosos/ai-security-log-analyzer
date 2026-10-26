@@ -50,7 +50,7 @@ Across all three, transformations and redaction features do not automatically es
 
 ## Proposed Architecture
 
-**Candidate A: Vector file source → reviewed transform → loopback TCP Syslog → existing parser.** Keep Vector outside the Python process and project dependency graph. A narrowly configured instance reads only operator-selected application or SSH files. It removes source path and host metadata before the sink. A reviewed transform uses the UTF-8 payload's byte length to form decimal-byte-length + one ASCII space + payload, then sends bytes to the already bounded loopback receiver. The exact Vector 0.60.0 config, event encoding, trailing newline behavior, UTF-8 assumptions and byte count must be proven in Phase 35.1; this document does not claim it already interoperates.
+**Candidate A: Vector file source → reviewed transform → loopback TCP Syslog → existing parser.** Keep Vector outside the Python process and project dependency graph. A narrowly configured instance would read only operator-selected application or SSH files. It must remove source path and host metadata before the sink. A reviewed transform might form decimal-byte-length + one ASCII space + payload, then send bytes to the already bounded loopback receiver. Phase 35.1 found no native ASCII octet-counting encoder, and the transform/codec byte contract remains unverified; direct interoperability is not established.
 
 For the pilot, one role and one source family per isolated instance; no cross-source correlation. Restrict filesystem reads to explicit files and state directory, run as a non-root dedicated user, deny external egress, expose no public API, and keep the analyzer endpoint loopback-only. The local endpoint itself is not authenticated: another local process may inject frames. If that risk is unacceptable, do not run the pilot; a later authenticated local ingest contract must be designed.
 
@@ -168,3 +168,7 @@ Proceed only if all are documented and independently reviewable:
 5. Rotation, multiline, retry, restart, duplicate/loss, slow consumer, disk-full fault, shutdown and privacy behavior have testable closed contracts.
 6. No raw path/host/credential/message enters diagnostics or public projection; public aliases, schema 2/3, guidance, restricted report and file monitor contracts remain unchanged.
 7. No production connection or real-data use is proposed until a separate approval gate. Failure to satisfy any precondition means PRECONDITION_PENDING or NO_GO, not an alternate unreviewed integration.
+
+## Phase 35.1 공급망 감사 후 상태
+
+2026-10-26 정적 감사에서 Vector v0.60.0의 Linux GNU x86_64/aarch64 및 macOS arm64 archive 세 개는 게시 checksum과 수신 바이트 SHA-256이 일치했다. 그러나 release binary 서명·SBOM·artifact attestation/source-to-binary provenance는 확인되지 않았다. Socket sink의 native framing은 ASCII decimal RFC 6587 octet-counting과 일치하지 않으며 transform/custom framing의 정확한 byte 출력도 미검증이다. 따라서 Vector는 계속 첫 합성 후보일 뿐이며 **Phase 35.2 격리 실행은 `PRECONDITION_PENDING`**이다. 상세 evidence, manifest, stop 조건은 [Phase 35.1 공급망 감사](vector_supply_chain_audit_35_1.md)와 [artifact manifest](artifacts/vector_0_60_0_manifest.json)를 참조한다. Binary를 설치·실행하거나 container를 pull하지 않았다. 실제 사용자 로그·조직 운영은 계속 `NO_GO`; 자동 수집은 `NOT_IMPLEMENTED`다.
