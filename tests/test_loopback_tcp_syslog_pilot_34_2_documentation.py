@@ -23,6 +23,17 @@ def test_ubuntu_ci_runs_the_separate_process_smoke_without_artifact_upload():
     assert "upload-artifact" not in workflow
 
 
+def test_subprocess_smoke_failures_report_only_closed_stage_and_category():
+    smoke = (ROOT / "tests/smoke_tcp_syslog_34_2.py").read_text(encoding="utf-8")
+    for stage in (
+        "CHILD_START", "LISTENER_READY", "FRAME_SENT", "ANALYSIS_CONFIRMED",
+        "SIGNAL_SENT", "PROCESS_EXIT", "LISTENER_RELEASED", "TEMP_CLEANUP",
+    ):
+        assert stage in smoke
+    assert "TCP_SYSLOG_SMOKE_FAILURE" in smoke
+    assert "PRIVATE_BIND_CANARY" not in smoke
+
+
 def test_phase_34_design_and_readme_keep_runtime_and_remote_collection_unimplemented():
     design = (ROOT / "docs/automatic_log_collection_design_34_0.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")

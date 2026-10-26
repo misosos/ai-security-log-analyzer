@@ -28,6 +28,20 @@ def test_phase_34_2_errno_ci_history_is_correctly_attributed():
     assert "40178663076" not in text
 
 
+def test_phase_34_4b_smoke_failure_and_harness_race_are_recorded_without_overclaim():
+    pilot = (ROOT / "docs/loopback_tcp_syslog_pilot_34_2.md").read_text(encoding="utf-8")
+    acceptance = (ROOT / "docs/loopback_tcp_syslog_acceptance_34_3.md").read_text(encoding="utf-8")
+    management = (ROOT / "docs/loopback_tcp_syslog_management_34_4.md").read_text(encoding="utf-8")
+    for text in (pilot, acceptance, management):
+        assert "40299125326" in text
+        assert "70c4971cd75b48cd7b789f3d0ab10345152904d6" in text
+        assert "atomic" in text
+        assert "2855 passed" in text
+        assert "NOT_TESTED" in text
+    assert "No production runtime code changed" in pilot
+    assert "UNEXPLAINED_NON_REPRODUCED" in pilot
+
+
 def test_phase_34_3_harness_is_bounded_and_has_no_network_or_user_data_adapter():
     source = (ROOT / "tests/accept_loopback_tcp_syslog_34_3.py").read_text(encoding="utf-8")
     for phrase in (
