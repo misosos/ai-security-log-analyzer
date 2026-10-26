@@ -2,8 +2,11 @@
 
 import asyncio
 from dataclasses import FrozenInstanceError
+import errno
 import json
 import os
+from pathlib import Path
+import re
 import socket
 import time
 
@@ -280,21 +283,7 @@ def test_epoch_is_ephemeral_and_never_in_safe_snapshot():
     _run(scenario())
 
 
-def test_listener_and_pipeline_faults_are_sanitized_and_cleanup_continues(monkeypatch):
-    async def bind_failure():
-        runtime = TcpSyslogRuntime(_config())
-        async def fail_bind(_host, _port):
-            raise OSError(98, "PRIVATE_BIND_CANARY")
-        monkeypatch.setattr(runtime, "_create_server", fail_bind)
-        with pytest.raises(TcpRuntimeError) as raised:
-            await runtime.start()
-        assert raised.value.code == TcpRuntimeErrorCode.BIND_FAILED
-        assert "PRIVATE_BIND_CANARY" not in str(raised.value) + repr(raised.value)
-        assert runtime.snapshot().state == TcpRuntimeState.FAILED
-        await runtime.stop()
-        assert runtime.snapshot().state == TcpRuntimeState.STOPPED
-    _run(bind_failure())
-
+def test_pipeline_fault_is_sanitized_and_cleanup_continues(monkeypatch):
     async def parser_failure():
         runtime = TcpSyslogRuntime(_config())
         import app.log_collection.runtime as runtime_module
@@ -317,6 +306,72 @@ def test_listener_and_pipeline_faults_are_sanitized_and_cleanup_continues(monkey
             await writer.wait_closed()
             await runtime.stop()
     _run(parser_failure())
+
+
+def _assert_bind_failure_is_sanitized(failure, expected, monkeypatch, caplog, capsys):
+    async def scenario():
+        runtime = TcpSyslogRuntime(_config())
+
+        async def fail_bind(_host, _port):
+            raise failure
+
+        monkeypatch.setattr(runtime, "_create_server", fail_bind)
+        with pytest.raises(TcpRuntimeError) as raised:
+            await runtime.start()
+
+        assert raised.value.code == expected
+        assert runtime.snapshot().state == TcpRuntimeState.FAILED
+        assert runtime.snapshot().error_category == expected.value
+        exposed = str(raised.value) + repr(raised.value)
+        exposed += json.dumps(runtime.snapshot().to_dict(), sort_keys=True)
+        captured = capsys.readouterr()
+        exposed += caplog.text + captured.out + captured.err
+        assert "PRIVATE_" not in exposed
+
+        await runtime.stop()
+        assert runtime.snapshot().state == TcpRuntimeState.STOPPED
+
+    _run(scenario())
+
+
+def test_eaddrinuse_is_classified_as_port_in_use(monkeypatch, caplog, capsys):
+    _assert_bind_failure_is_sanitized(
+        OSError(errno.EADDRINUSE, "PRIVATE_PORT_CANARY"),
+        TcpRuntimeErrorCode.PORT_IN_USE,
+        monkeypatch,
+        caplog,
+        capsys,
+    )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        OSError(errno.EACCES, "PRIVATE_BIND_CANARY"),
+        OSError(max(errno.errorcode, default=0) + 1, "PRIVATE_UNKNOWN_ERRNO_CANARY"),
+        OSError("PRIVATE_MISSING_ERRNO_CANARY"),
+    ],
+    ids=["access-denied", "unknown-errno", "missing-errno"],
+)
+def test_non_eaddrinuse_bind_errors_are_fixed_bind_failed(failure, monkeypatch, caplog, capsys):
+    _assert_bind_failure_is_sanitized(
+        failure,
+        TcpRuntimeErrorCode.BIND_FAILED,
+        monkeypatch,
+        caplog,
+        capsys,
+    )
+
+
+def test_tcp_bind_fault_tests_use_platform_independent_errno_names():
+    tests_root = Path(__file__).parent
+    runtime_source = (tests_root.parent / "app/log_collection/runtime.py").read_text(encoding="utf-8")
+    assert "errno.EADDRINUSE" in runtime_source
+    numeric_errno = re.compile(r"OSError\(\s*(?:98|48)\s*,")
+    assert all(numeric_errno.search(path.read_text(encoding="utf-8")) is None
+               for path in tests_root.rglob("*.py"))
+    source = Path(__file__).read_text(encoding="utf-8")
+    assert "errno.EADDRINUSE" in source
 
 
 def test_queue_overload_is_visible_and_never_exceeds_configured_caps():
