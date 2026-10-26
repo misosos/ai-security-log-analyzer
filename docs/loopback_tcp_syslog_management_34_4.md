@@ -6,7 +6,7 @@ Phase 34.4는 application 또는 SSH 중 한 역할을 선택하는 **로컬·�
 
 이 구현은 실제 장비·사용자 로그·조직 운영에 승인되지 않았다. 원격 호스트, 외부 interface, 인증 없는 원격 수집은 `NO_GO`다. TLS/mTLS, durable spool, checkpoint, 재시작 복구, 자동 재연결, exactly-once·무유실은 지원하지 않는다. TCP 결과는 공개 API·OpenAPI·SSE·UI·HTML 보고서에 게시하지 않는다. embedding production 통합은 `NO_GO`, local LLM은 `STORAGE_SETUP_BLOCKED`로 유지한다.
 
-Phase 34.4의 로컬 구현·별도 프로세스 smoke는 검증했지만 이 변경의 새 Ubuntu CI는 아직 실행되지 않았다. **Ubuntu 관리 smoke는 `NOT_TESTED`; management pilot 판정은 `CONDITIONAL_GO`**다. 사용자가 화면 문구를 직접 이해하는지 확인하는 수용 검수도 후속 단계 전까지 `NOT_TESTED`다.
+Phase 34.4 management의 Ubuntu subprocess smoke는 정확한 SHA `961e279c19ae848d405724cc09d71bfba5cfbb38`의 push CI run `40308485200`에서 통과했다. 이후 Phase 34.5에서 합성 CLI 캡처를 사용한 10개 안내 항목의 사용자 이해도 검수를 완료했다. 사용자 응답과 범위는 [Phase 34.5 수용 기록](loopback_tcp_syslog_management_acceptance_34_5.md)에 분리해 기록했다. **합성 loopback management 안내 범위만 `CONDITIONAL_GO`**다.
 
 ## CLI 흐름
 
@@ -34,7 +34,7 @@ TCP runtime은 기존 file 설정·checkpoint와 별도다. file monitor 실행�
 
 `--show-tcp-syslog`는 설정 존재, 한국어 role 설명, loopback-only, 주소 family, 권한 적합 여부, “길이가 포함된 TCP 메시지”, 최대 연결 2개, queue bounded 여부, 재시작 때 과거 메시지를 복구하지 않는다는 점, 인증·암호화 부재와 다음 행동만 표시한다. 주소·port·설정 경로·socket·raw message·account·IP·hostname·credential·parser rationale·내부 exception/code/repr는 일반 화면에 표시하지 않는다.
 
-`--run-tcp-syslog`는 시작 상태와 5초 간격의 제한된 집계를 보여준다. 집계는 수신, 거부, 형식 미인식, 분석 완료, 처리 중 폐기, 연결 수, queue event/byte 사용량이다. 메시지별 출력이나 송신 주소 표시는 없다. `DEGRADED`·`FAILED`는 정상으로 표시하지 않고 자동 재시작하지 않는다. 종료는 listener와 runtime을 멈추고 대기 중이던 frame이 복구되지 않을 수 있음을 안내한다. 다음 시작은 새 실행이며 이전 frame이나 분석 결과를 재게시하지 않는다.
+`--run-tcp-syslog`는 시작 상태와 5초 간격의 제한된 집계를 보여준다. 집계는 수신, 거부, 내용 인식, 형식 미인식, 분석 완료, 처리 중 폐기, 연결 수, queue event/byte 사용량이다. 시작 때 각 count의 뜻과 한계를 안내한다. 이 수치는 처리 현황이며 탐지 성공, 침해 없음, 무유실을 뜻하지 않는다. 메시지별 출력이나 송신 주소 표시는 없다. `DEGRADED`·`FAILED`는 정상으로 표시하지 않고 자동 재시작하지 않는다. 종료는 listener와 runtime을 멈추고 대기 중이던 frame이 복구되지 않을 수 있음을 안내한다. 다음 시작은 새 실행이며 이전 frame이나 분석 결과를 재게시하지 않는다.
 
 연결을 실제로 구성할 때만 사용자가 endpoint를 알아야 한다. 별도 `--reveal-tcp-syslog-endpoint` 명령은 runtime lock이 활성 상태인지 확인하고, 먼저 로컬 연결 정보의 공유 주의와 loopback 다른 프로그램의 주입 가능성을 말한 뒤 `로컬 TCP 연결 정보를 표시합니다`를 정확히 입력받아 1회 출력한다. 출력에는 shell command나 history에 남길 수 있는 명령을 만들지 않는다. endpoint는 credential이 아니며 sender 인증을 제공하지 않는다. 사용자가 이를 사용 설명서·공개 이슈·로그에 복사하지 않도록 한다.
 
@@ -64,16 +64,14 @@ Phase 34.4 최초 push SHA `128ffa2a5f9a380c537414b9dd4d274e57ef8ac1`의 CI run 
 - browser UI/API/SSE/report 게시, shell command 자동 생성, 공유 workflow
 - 정확히 한 번 처리, 무유실, 조직 운영, 인증/RBAC, retention·백업 정책
 
-## 검증 결과
+## Ubuntu CI 및 사용자 수용 기록
 
-- 새 management 계약은 구현 전 모듈 부재로 수집 단계에서 실패했고, document 계약은 구현 전 문서 부재로 실패했다. 구현 뒤 focused management tests와 문서 계약을 실행했다.
-- application과 SSH를 각각 별도 OS process로 실행했다. 취소/승인, private config 권한, show 비노출, endpoint opt-in, 두 번째 실행 거부, frame 처리, SIGINT/SIGTERM, port 재사용, delete 후 file config/checkpoint 보존을 smoke로 확인했다.
-- 고정 표식: `TCP_SYSLOG_MANAGEMENT_SMOKE_PASS roles=2 synthetic=1 leaks=0`. smoke 출력은 endpoint, port, config 경로, raw frame 또는 canary를 출력하지 않는다. 확인된 운영체제는 현재 local test host이며, Ubuntu 결과는 새 push CI 전 `NOT_TESTED`다.
-- 자동 smoke는 사용자의 문구 이해를 평가하지 않는다. 사용자 이해도 항목은 모두 `NOT_TESTED`로 둔다.
-- full test, accessibility, lockfile와 회귀의 최종 결과는 이 문서 업데이트와 함께 CI job에 의해 확인될 때까지 이 구현 문서에서 임의로 PASS라고 확대하지 않는다.
+정확한 시작 SHA의 Ubuntu 증거와 사용자 화면 검수는 별도 기록에 남겼다. Phase 34.4 smoke는 Ubuntu 24.04에서 application/SSH를 각각 검사했고, completion marker는 `TCP_SYSLOG_MANAGEMENT_SMOKE_PASS roles=2 synthetic=1 leaks=0`이었다. 전체 pytest, 기존 SSH ownership·unified monitoring, basic TCP smoke, bounded reliability, restricted report, Chromium·axe 및 tracked-file 불변 단계도 같은 run에서 성공했다. 자세한 run ID·집계·사용자별 PASS/FAIL 기록은 [Phase 34.5 수용 기록](loopback_tcp_syslog_management_acceptance_34_5.md)을 참조한다.
 
-**최종 범위 판정:** local synthetic management pilot `CONDITIONAL_GO`; Ubuntu management smoke `NOT_TESTED`; 실제 사용자 자료·조직 운영·원격 수집 `NO_GO`; 사용자 이해도 `NOT_TESTED`.
+사용자 검수는 실제 명령을 직접 조작한 검사가 아니라, 임시 HOME·합성 자료로 실행한 실제 CLI 출력을 캡처해 한 항목씩 보여주고 판단을 받은 방식이다. 최초 FAIL 항목은 메시지 형식 예시·거부 안내, count의 뜻과 한계, 삭제 후 재설정 안내의 누락이었다. 각 문구에 대한 계약 테스트를 수정 전에 실패시킨 뒤 CLI 문구만 보완하고 같은 항목을 재확인해 PASS를 받았다. 분석 의미, 설정 schema, 공개 API/SSE/UI는 바꾸지 않았다.
+
+**최종 범위 판정:** Ubuntu management smoke와 10개 안내 항목은 검증되었고, 합성 loopback management 안내 범위만 `CONDITIONAL_GO`다. 실제 사용자 자료·조직 운영·원격 수집은 계속 `NO_GO`다.
 
 ### Phase 34.4B subprocess smoke follow-up
 
-Ubuntu run `40299125326` at `70c4971cd75b48cd7b789f3d0ab10345152904d6` passed SSH checkpoint ownership and the full suite (**2855 passed / 2 existing warnings**) but failed the preceding loopback pilot smoke in the application/SIGTERM combination. Management and later CI checks were skipped. The earlier wrapper hid the inner stage. Local macOS reproduction found a harness-only readiness marker race: parent could observe the marker file before its port text was fully written. The test harness now atomically publishes complete 0600 markers, validates them separately, and limits failure output to fixed stage/category fields. Post-fix macOS first-attempt checks passed application SIGTERM 50/50, application SIGINT 20/20, SSH SIGTERM 20/20, 20 normal stops and 8 lifecycle-boundary cases. This is not Ubuntu evidence; the exact inner cause of the historical Ubuntu failure and management smoke on a changed SHA remain `NOT_TESTED`. Production listener/runtime, management contracts and checkpoint ownership code were not changed. The historical macOS SSH/SIGTERM event remains `UNEXPLAINED_NON_REPRODUCED`; actual user data, organization operation and unauthenticated remote collection remain `NO_GO`.
+Ubuntu run `40299125326` at `70c4971cd75b48cd7b789f3d0ab10345152904d6` passed SSH checkpoint ownership and the full suite (**2855 passed / 2 existing warnings**) but failed the preceding loopback pilot smoke in the application/SIGTERM combination. Management and later CI checks were skipped. The earlier wrapper hid the inner stage. Local macOS reproduction found a harness-only readiness marker race: parent could observe the marker file before its port text was fully written. The test harness now atomically publishes complete 0600 markers, validates them separately, and limits failure output to fixed stage/category fields. Post-fix macOS first-attempt checks passed application SIGTERM 50/50, application SIGINT 20/20, SSH SIGTERM 20/20, 20 normal stops and 8 lifecycle-boundary cases. The exact inner cause of the historical Ubuntu failure remains unconfirmed; do not claim it was the same marker race. The later run `40308485200` passed the updated basic, reliability and management steps, which validates that SHA but does not retroactively identify the old failure. Production listener/runtime, management contracts and checkpoint ownership code were not changed by the marker harness repair. The historical macOS SSH/SIGTERM event remains `UNEXPLAINED_NON_REPRODUCED`; actual user data, organization operation and unauthenticated remote collection remain `NO_GO`.

@@ -8,6 +8,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -88,6 +89,17 @@ def test_setup_explains_full_safety_boundary_before_first_choice(monkeypatch, tm
     assert management.setup_tcp_syslog(ask=ask, emit=output.append) == "CANCELLED"
 
 
+def test_setup_explains_length_prefix_with_example_and_rejection(monkeypatch, tmp_path):
+    _sandbox(monkeypatch, tmp_path)
+    output = []
+    answers = iter(("1", "1", str(_free_high_port()), "취소"))
+    assert management.setup_tcp_syslog(ask=lambda _prompt: next(answers), emit=output.append) == "CANCELLED"
+    rendered = "\n".join(output)
+    assert "메시지 형식: 메시지 내용 앞에 길이를 붙인 TCP 메시지입니다." in rendered
+    assert "예: 5 hello (5는 뒤 메시지의 byte 수)" in rendered
+    assert "형식이 맞지 않으면 해당 연결이 거부될 수 있습니다." in rendered
+
+
 @pytest.mark.parametrize("approval", ["", "y", "아니오"])
 def test_setup_cancel_or_wrong_approval_creates_no_config(monkeypatch, tmp_path, approval):
     _sandbox(monkeypatch, tmp_path)
@@ -132,6 +144,29 @@ def test_show_hides_address_port_path_and_internal_values(monkeypatch, tmp_path)
     assert "검토 필요" not in rendered
 
 
+def test_counter_guidance_explains_processing_counts_without_claiming_detection():
+    rendered = management._counter_guidance()
+    for phrase in (
+        "수신은 형식 확인 후 대기열에 들어간 수",
+        "거부는 형식·연결 문제로 거절된 수",
+        "내용 인식과 형식 미인식은 선택한 로그 종류의 내용을 읽었는지",
+        "분석 완료는 기존 분석 처리가 끝난 수이며 탐지 성공을 뜻하지 않습니다",
+        "처리 중 폐기는 받은 뒤 분석을 마치지 못한 수",
+        "침해가 없거나 누락 없는 수집을 보장하지 않습니다",
+    ):
+        assert phrase in rendered
+
+
+def test_runtime_summary_includes_count_for_recognized_log_content():
+    snapshot = SimpleNamespace(
+        last_success_at="unavailable", accepted_frames=3, rejected_frames=1,
+        parsed_events=2, parser_rejected_events=1, analyzed_events=3,
+        dropped_frames=0, active_connections=0, connection_limit=2,
+        queued_events=0, queue_event_limit=256, queued_bytes=0, queue_byte_limit=1024,
+    )
+    assert "내용 인식 2" in management._summary(snapshot)
+
+
 def test_duplicate_key_unknown_field_and_corrupt_config_show_review_not_absence(monkeypatch, tmp_path):
     path = _setup(monkeypatch, tmp_path)
     raw = path.read_text()
@@ -163,6 +198,15 @@ def test_delete_exact_approval_only_removes_tcp_config(monkeypatch, tmp_path):
                                         emit=lambda _line: None) == "DELETED"
     assert not path.exists()
     assert file_config.read_text() == "file-config" and checkpoint.read_text() == "checkpoint"
+
+
+def test_delete_prompt_explains_setup_is_required_to_use_tcp_again(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path)
+    output = []
+    assert management.delete_tcp_syslog(ask=lambda _prompt: "취소", emit=output.append) == "CANCELLED"
+    rendered = "\n".join(output)
+    assert "다시 사용하려면 --setup-tcp-syslog로 설정을 새로 만들어야 합니다." in rendered
+    assert management.tcp_config_path().exists()
 
 
 def test_management_and_file_monitor_share_mutual_exclusion_lock(monkeypatch, tmp_path, capsys):

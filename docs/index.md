@@ -16,8 +16,8 @@
 - [checkpoint 잠금·장애 경계](live_checkpoint_21_2.md) · [별도 프로세스 재시작](live_checkpoint_21_3.md) · [명시적 epoch reset](live_checkpoint_epoch_reset_21_7.md) · [Linux reset 검증](live_checkpoint_epoch_reset_21_8_linux_audit.md)
 - [축소 감지](live_rotation_21_1.md) · [poll/ack 경계](live_rotation_21_4.md) · [rotation handoff 검토](live_rotation_21_5.md) · [두 파일 세대 검토](live_rotation_21_6.md)
 - [local collector 설계](local_collector_v030_design.md) · [상호운용 gate](local_collector_interop_gate_25_0.md) · [Vector 합성 pilot](vector_collector_pilot_25_1.md)
-- [자동 보안 로그 수집 설계 gate](automatic_log_collection_design_34_0.md) — loopback TCP Syslog 후보와 framing·backpressure·trust/privacy 계약; 자동 수집은 아직 미구현
-- [Phase 34.1 bounded TCP Syslog pure core](bounded_tcp_syslog_core_34_1.md) — in-process framing·buffer·queue 계약 · [Phase 34.2 loopback pilot](loopback_tcp_syslog_pilot_34_2.md) — Ubuntu CI subprocess smoke 통과 · [Phase 34.3 수용 검증](loopback_tcp_syslog_acceptance_34_3.md) — macOS 반복 lifecycle·자원 정리 · [Phase 34.3A Ubuntu bounded reliability](loopback_tcp_syslog_linux_reliability_34_3a.md) — Ubuntu bounded 반복 smoke는 기존 CI에서 통과, management 변경의 Ubuntu 검증은 `NOT_TESTED` · [Phase 34.4 CLI 설정·실행·삭제](loopback_tcp_syslog_management_34_4.md) — 합성 local pilot만 `CONDITIONAL_GO`; 실제 자료·운영 `NO_GO`
+- [자동 보안 로그 수집 설계 gate](automatic_log_collection_design_34_0.md) — loopback TCP Syslog 후보와 framing·backpressure·trust/privacy 계약
+- [Phase 34.1 bounded TCP Syslog pure core](bounded_tcp_syslog_core_34_1.md) — in-process framing·buffer·queue 계약 · [Phase 34.2 loopback pilot](loopback_tcp_syslog_pilot_34_2.md) — Ubuntu CI subprocess smoke 통과 · [Phase 34.3 수용 검증](loopback_tcp_syslog_acceptance_34_3.md) — macOS 반복 lifecycle·자원 정리 · [Phase 34.3A Ubuntu bounded reliability](loopback_tcp_syslog_linux_reliability_34_3a.md) — Ubuntu bounded 반복 smoke 통과 · [Phase 34.4 CLI 설정·실행·삭제](loopback_tcp_syslog_management_34_4.md) 및 [Phase 34.5 사용자 수용](loopback_tcp_syslog_management_acceptance_34_5.md) — Ubuntu management CI와 10개 합성 안내 항목 사용자 PASS; pilot 범위만 `CONDITIONAL_GO`, 실제 자료·조직 운영·원격 수집 `NO_GO`
 
 ## 탐지·평가·개인정보
 

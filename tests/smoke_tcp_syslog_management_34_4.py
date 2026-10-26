@@ -89,6 +89,17 @@ def _run(role: str, signum: int) -> None:
                         break
             if not ready:
                 raise RuntimeError("readiness")
+            startup_text = "".join(lines)
+            for required in (
+                "수신은 형식 확인 후 대기열에 들어간 수",
+                "거부는 형식·연결 문제로 거절된 수",
+                "내용 인식과 형식 미인식은 선택한 로그 종류의 내용을 읽었는지",
+                "분석 완료는 기존 분석 처리가 끝난 수이며 탐지 성공을 뜻하지 않습니다",
+                "처리 중 폐기는 받은 뒤 분석을 마치지 못한 수",
+                "침해가 없거나 누락 없는 수집을 보장하지 않습니다",
+            ):
+                if required not in startup_text:
+                    raise RuntimeError("counter-guidance")
             stage = "second-run"
             second = subprocess.run(_command("--run-tcp-syslog"), text=True, capture_output=True,
                                     env=env, timeout=5)

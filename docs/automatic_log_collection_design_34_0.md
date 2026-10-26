@@ -2,7 +2,7 @@
 
 ## 후속 상태 — Phase 34.4 CLI management
 
-Phase 34.4는 기존 loopback runtime을 application/SSH 단일 역할의 합성 전용 `--setup-tcp-syslog`, `--show-tcp-syslog`, `--run-tcp-syslog`, `--delete-tcp-syslog` 흐름에 연결했다. Endpoint는 별도 정확한 사용자 승인에서만 표시한다. 공개 API/SSE/UI, 기존 file config/checkpoint, 분석 의미는 바꾸지 않았다. [구현 기록](loopback_tcp_syslog_management_34_4.md). 정확한 시작 CI run `40282366828`에서 기존 34.3A Ubuntu 반복성 step은 성공했지만 이 새 management subprocess smoke는 새 SHA CI 전까지 `NOT_TESTED`다. 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`다.
+Phase 34.4는 기존 loopback runtime을 application/SSH 단일 역할의 합성 전용 CLI 흐름에 연결했다. Phase 34.5의 정확한 SHA CI run `40308485200`에서 Ubuntu management subprocess smoke를 확인했고, 10개 사용자 안내 항목은 최종 PASS를 받았다. [구현 기록](loopback_tcp_syslog_management_34_4.md) · [수용 기록](loopback_tcp_syslog_management_acceptance_34_5.md). 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`다.
 
 ## 후속 상태 — Phase 34.3A Ubuntu bounded reliability
 

@@ -411,7 +411,8 @@ def setup_tcp_syslog(*, ask: Callable[[str], str] = input,
             config = TcpUserConfig(SCHEMA_VERSION, role, family, port, RUNTIME_PROFILE)
             if not _port_is_available(config):
                 raise TcpManagementError("PORT_UNAVAILABLE")
-            emit("메시지 형식: 길이가 포함된 TCP 메시지만 받습니다.")
+            emit("메시지 형식: 메시지 내용 앞에 길이를 붙인 TCP 메시지입니다.")
+            emit("예: 5 hello (5는 뒤 메시지의 byte 수). 형식이 맞지 않으면 해당 연결이 거부될 수 있습니다.")
             emit("연결 수, 메시지 크기와 대기열에는 고정 상한이 있습니다.")
             emit("중단 중 메시지는 복구하지 않습니다. sender 재전송은 중복될 수 있습니다.")
             emit("정확히 한 번 처리하거나 무유실을 보장하지 않습니다.")
@@ -469,6 +470,7 @@ def delete_tcp_syslog(*, ask: Callable[[str], str] = input,
             config = load_tcp_config(target)
             emit("TCP 수집 설정만 삭제합니다. file 설정·checkpoint·원본 sender 자료와 이미 생성된 분석 결과는 보존합니다.")
             emit("실행 중에는 삭제할 수 없습니다. 정확한 승인 문구가 필요합니다.")
+            emit("삭제 후 다시 사용하려면 --setup-tcp-syslog로 설정을 새로 만들어야 합니다.")
             try:
                 answer = ask("승인 문구: ")
             except (EOFError, KeyboardInterrupt):
@@ -561,6 +563,7 @@ async def _run_async(*, path: Path | None, reveal_endpoint: bool,
         role_name = "애플리케이션 로그" if config.source_role == "application" else "SSH 인증 로그"
         emit(f"{role_name} 수집이 시작되었습니다. loopback 전용입니다.")
         emit("수신 원문은 화면에 표시하지 않습니다. 정상 종료: Ctrl+C.")
+        emit(_counter_guidance())
         if reveal_endpoint:
             emit("이 값은 로컬 연결 정보이며 공개 공유하지 마십시오.")
             if _approval(ask("한 번 표시하려면 승인 문구를 입력하십시오: "), REVEAL_APPROVAL):
@@ -632,11 +635,22 @@ def _summary(snapshot) -> str:
     else:
         last_success = f"{last_success} (UTC)"
     return (f"수신 {snapshot.accepted_frames}, 거부 {snapshot.rejected_frames}, "
-            f"형식 미인식 {snapshot.parser_rejected_events}, 분석 완료 {snapshot.analyzed_events}, "
+            f"내용 인식 {snapshot.parsed_events}, 형식 미인식 {snapshot.parser_rejected_events}, "
+            f"분석 완료 {snapshot.analyzed_events}, "
             f"처리 중 폐기 {snapshot.dropped_frames}; 연결 {snapshot.active_connections}/"
             f"{snapshot.connection_limit}, 대기열 {snapshot.queued_events}/{snapshot.queue_event_limit}건 "
             f"({snapshot.queued_bytes}/{snapshot.queue_byte_limit}바이트), "
             f"최근 처리 시각 {last_success}.")
+
+
+def _counter_guidance() -> str:
+    return (
+        "수치 안내: 수신은 형식 확인 후 대기열에 들어간 수, 거부는 형식·연결 문제로 거절된 수입니다. "
+        "내용 인식과 형식 미인식은 선택한 로그 종류의 내용을 읽었는지 나타냅니다. "
+        "분석 완료는 기존 분석 처리가 끝난 수이며 탐지 성공을 뜻하지 않습니다. "
+        "처리 중 폐기는 받은 뒤 분석을 마치지 못한 수입니다. "
+        "이 수치는 처리 현황이며 침해가 없거나 누락 없는 수집을 보장하지 않습니다."
+    )
 
 
 def run_tcp_syslog(*, path: Path | None = None, reveal_endpoint: bool = False,

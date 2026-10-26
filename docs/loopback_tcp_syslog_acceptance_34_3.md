@@ -2,7 +2,7 @@
 
 ## 후속 상태 — Phase 34.3A 및 34.4
 
-Phase 34.3A의 bounded Ubuntu reliability는 시작 SHA `746c6d517fc27ca9a32b728b57df57c9912b2596`의 push CI run `40282366828`에서 80회 역할별 matrix가 성공했다. 이 근거는 [34.3A 기록](loopback_tcp_syslog_linux_reliability_34_3a.md)에 추가했다. Phase 34.4는 그 runtime 위에 CLI management를 구현했으며 새 management subprocess CI는 아직 실행 전이므로 `NOT_TESTED`다. [Phase 34.4 기록](loopback_tcp_syslog_management_34_4.md). 실제 자료·조직 운영·원격 수집은 계속 `NO_GO`다.
+Phase 34.3A의 bounded Ubuntu reliability는 시작 SHA `746c6d517fc27ca9a32b728b57df57c9912b2596`의 push CI run `40282366828`에서 80회 역할별 matrix가 성공했다. 이후 Phase 34.4 CLI management도 SHA `961e279c19ae848d405724cc09d71bfba5cfbb38`의 push CI run `40308485200`에서 Ubuntu subprocess smoke로 통과했고, Phase 34.5에서 합성 CLI 안내 10개 항목의 사용자 이해도를 수용 검수했다. [Phase 34.4 기록](loopback_tcp_syslog_management_34_4.md) 및 [34.5 수용 기록](loopback_tcp_syslog_management_acceptance_34_5.md). 실제 자료·조직 운영·원격 수집은 계속 `NO_GO`다.
 
 ## 판정 범위
 
