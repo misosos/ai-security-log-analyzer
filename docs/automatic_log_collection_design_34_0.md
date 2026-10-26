@@ -2,7 +2,7 @@
 
 ## 후속 상태 — Phase 34.2
 
-Phase 34.2는 [bounded loopback pilot](loopback_tcp_syslog_pilot_34_2.md)로 loopback-only listener를 추가하고 기존 application/SSH parser·결정적 분석 pipeline에 volatile in-process 연결을 구성했다. 합성 local pilot만 CONDITIONAL_GO이며 실제 사용자 자료·조직 운영·원격 수집은 NO_GO다. 새 SHA의 Ubuntu CI smoke는 NOT_TESTED다.
+Phase 34.2는 [bounded loopback pilot](loopback_tcp_syslog_pilot_34_2.md)로 loopback-only listener를 추가하고 기존 application/SSH parser·결정적 분석 pipeline에 volatile in-process 연결을 구성했다. 합성 local pilot만 CONDITIONAL_GO이며 실제 사용자 자료·조직 운영·원격 수집은 NO_GO다. 정확한 수정 SHA의 Ubuntu CI smoke는 run `40274877704`에서 PASS했다. Phase 34.3 반복 lifecycle matrix는 로컬 macOS에서만 측정했으며 Ubuntu 확장 반복은 NOT_TESTED다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).
 
 ## 후속 상태 — Phase 34.1
 
@@ -149,7 +149,7 @@ Phase 34 수집은 결정적 framing·validation·기존 parser adapter부터 �
 ## Validation roadmap
 
 1. **Phase 34.1 — pure framing/config contract:** implemented in [`bounded_tcp_syslog_core_34_1.md`](bounded_tcp_syslog_core_34_1.md); incremental octet-count parser, digit/length/control/UTF-8/EOF/multi-frame properties, closed config/status DTO, fixed buffer/queue model, fuzz/property tests. No listener, public UI or production integration.
-2. **Phase 34.2 — loopback isolated synthetic smoke:** implemented in [the pilot record](loopback_tcp_syslog_pilot_34_2.md). macOS local subprocess evidence is distinct from new-SHA Ubuntu CI, which remains NOT_TESTED until run. No real user log.
+2. **Phase 34.2 — loopback isolated synthetic smoke:** implemented in [the pilot record](loopback_tcp_syslog_pilot_34_2.md); Ubuntu CI run `40274877704` passed at its exact SHA. Phase 34.3 extended repetition is separately recorded as macOS-local evidence; its Ubuntu matrix remains NOT_TESTED. No real user log.
 3. **Phase 34.3 — independent Ubuntu validation:** locked environment, subprocess smoke, overload/longer soak, listener/FD/memory lifecycle, SIGINT/SIGTERM and actual status review. User acceptance is synthetic and separate.
 4. **Phase 34.4+ — separate gates:** authenticated remote collector and TLS/mTLS, additional source adapters, deployment/retention policy, AI parser suggestion isolated supply-chain and evaluation pilot. No phase is implied approved by this design.
 

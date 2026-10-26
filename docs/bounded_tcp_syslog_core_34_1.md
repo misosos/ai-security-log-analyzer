@@ -2,7 +2,7 @@
 
 ## 후속 상태 — Phase 34.2
 
-[Phase 34.2](loopback_tcp_syslog_pilot_34_2.md)는 이 pure decoder/queue를 loopback-only application/SSH 합성 pilot에 연결했다. 별도 프로세스 smoke는 macOS local에서 확인했고, 이번 구현 SHA의 Ubuntu CI 실행은 아직 없어 Linux listener acceptance는 NOT_TESTED다. 실제 사용자 자료·조직 운영과 원격 수집은 NO_GO다. 34.1의 순수 framing/queue 계약은 변경하지 않았다.
+[Phase 34.2](loopback_tcp_syslog_pilot_34_2.md)는 이 pure decoder/queue를 loopback-only application/SSH 합성 pilot에 연결했다. 별도 프로세스 smoke는 macOS와 Ubuntu CI run `40274877704`에서 확인했다. Phase 34.3의 확장 반복 matrix는 macOS local에서만 확인했으며 Ubuntu 확장 matrix는 NOT_TESTED다. 실제 사용자 자료·조직 운영과 원격 수집은 NO_GO다. 34.1의 순수 framing/queue 계약은 변경하지 않았다. [Phase 34.3 수용 기록](loopback_tcp_syslog_acceptance_34_3.md).
 
 **판정: `CONDITIONAL_GO` — 순수 framing/config/queue core만 검증했다. 자동 수집은 `NOT_IMPLEMENTED`이며 실제 socket을 열지 않았다.** 이 구현은 loopback listener, parser, 분석 pipeline, 공개 API/SSE/UI, 파일 monitor, checkpoint와 연결되지 않는다.
 
@@ -43,7 +43,7 @@ Closed result/status 표현에는 frame 수, buffer/queue byte/count, state, 고
 
 이 작은 표본은 한 macOS 개발 환경의 관측값이며 Linux/Ubuntu 성능, 운영 처리량, 최악 지연 또는 SLA를 대표하지 않는다. RSS는 측정하지 않았다.
 
-이번 macOS 작업에서 실제 socket, TCP 송수신, Ubuntu network, slowloris timing, connection flood, 장시간 soak, parser/analysis integration은 수행하지 않았다 (`NOT_TESTED`). 공개 API·SSE·UI, v1/v2/v3 file runtime, checkpoint, schema 2/3, detection/relation/risk/case, lexical guidance, restricted-report 계약, Gemini/embedding/LLM은 변경하지 않았다. CI의 실제 network listener 검증은 아직 없다. 원격 수집은 인증·암호화 전까지 `NO_GO`; AI parser 제안은 별도 gate 전까지 `NO_GO`다.
+Phase 34.1 당시에는 실제 socket, TCP 송수신, Ubuntu network, slowloris timing, connection flood, soak, parser/analysis integration을 수행하지 않았다 (`NOT_TESTED`). Phase 34.2는 별도 [Ubuntu CI run `40274877704`](loopback_tcp_syslog_pilot_34_2.md)에서 합성 loopback smoke를 통과했다. Phase 34.3 확장 반복/soak는 macOS local only이며 Ubuntu 확장 matrix는 NOT_TESTED다. 공개 API·SSE·UI, v1/v2/v3 file runtime, checkpoint, schema 2/3, detection/relation/risk/case, lexical guidance, restricted-report 계약, Gemini/embedding/LLM은 변경하지 않았다. 원격 수집은 인증·암호화 전까지 `NO_GO`; AI parser 제안은 별도 gate 전까지 `NO_GO`다.
 
 ## Research Basis, Observable Evidence Mapping, Limitations
 

@@ -11,7 +11,7 @@ AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 
 - Linux Audit 프로세스 실행 기록에서 조사 후보를 별도로 요약합니다.
 - API·SSE·HTML 보고서에는 개인정보를 제한한 projection을 사용합니다. CLI 출력과 다운로드 파일도 민감한 조사 자료로 취급하십시오.
 - 합성 평가, property·API 계약 검사, 개발용 접근성 자동 검사를 제공합니다.
-- 자동 수집은 합성 입력의 loopback TCP Syslog pilot 범위만 있으며 원격·실제 사용자 로그 수집은 지원하지 않습니다. [Phase 34.0 설계](docs/automatic_log_collection_design_34_0.md) · [Phase 34.1 core](docs/bounded_tcp_syslog_core_34_1.md) · [Phase 34.2 pilot](docs/loopback_tcp_syslog_pilot_34_2.md)
+- 자동 수집은 합성 입력의 loopback TCP Syslog pilot 범위만 검증했습니다. 원격·실제 사용자 로그 수집은 지원하지 않습니다. 조직 운영도 지원하지 않습니다. [Phase 34.0 설계](docs/automatic_log_collection_design_34_0.md) · [Phase 34.1 core](docs/bounded_tcp_syslog_core_34_1.md) · [Phase 34.2/34.3 검증](docs/loopback_tcp_syslog_acceptance_34_3.md)
 
 ## 빠른 시작
 
