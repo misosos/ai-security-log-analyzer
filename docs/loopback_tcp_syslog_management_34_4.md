@@ -46,6 +46,16 @@ raw frame은 기존 bounded decoder/queue/parser/runtime 경로에서 일시적�
 
 일반 오류는 고정 한국어 안내만 사용한다. 상세 내부 예외·path·port·payload는 출력하지 않는다. setup은 no-clobber, exclusive temp, fsync/publish, private permissions와 post-write parse를 확인한다. delete는 현재 config identity/permission을 재확인한다. cleanup 오류는 성공으로 표시하지 않는다. 프로세스 강제 종료나 전원 장애 후 temp 파일 정리는 보장하지 않는다.
 
+## Ownership 오류 회귀 후속 수정
+
+Phase 34.4 최초 push SHA `128ffa2a5f9a380c537414b9dd4d274e57ef8ac1`의 CI run `40292029527`은 `Verify Linux SSH checkpoint recovery and process ownership` 단계에서 실패했다. 기존 SSH smoke의 두 번째 v2 file monitor는 nonzero 종료했지만 stderr에 기존 `CHECKPOINT_ALREADY_OWNED`가 없었다. 그 run에서는 전체 회귀와 이후 TCP smoke·management·axe 단계가 실행되지 않았다. 실패 CI의 전체 출력이나 합성 경로·식별자는 이 문서에 복사하지 않는다.
+
+합성 lock-precedence 재현에서 collector lock을 사용할 수 없고 기존 runtime이 `CHECKPOINT_ALREADY_OWNED`를 반환하면, 이전 구현은 runtime/checkpoint 검사 전에 공용 collector lock을 시도해 exit code 4와 `LOCAL_COLLECTION_BUSY`로 먼저 거부했다. 이는 실제 v2 checkpoint ownership 검사를 가린 Phase 34.4 production lock-order 회귀다. v3 pair runtime도 기존 초기화/ownership 오류가 공용 lock에 가려질 수 있었다.
+
+수정 후 file monitor는 기존 v1/v2 checkpoint manager 또는 v3 pair runtime을 먼저 준비한다. 기존 ownership 오류가 있으면 해당 기존 fixed code를 유지하고 listener와 공용 lock을 열지 않는다. 준비가 성공한 경우에만 listener 직전에 공용 collector lock을 nonblocking으로 얻는다. 이 lock 충돌이면 준비한 service를 닫아 source FD·worker·checkpoint manager를 정리하고 고정 `LOCAL_COLLECTION_BUSY`로 종료한다. TCP는 file checkpoint를 얻지 않으며 기존 순서대로 공용 collector lock 다음 TCP 전용 lock을 얻는다. 따라서 양쪽 lock 획득은 모두 nonblocking이고 TCP 경로는 file checkpoint를 기다리지 않아 교착 순환이 없다. 부분 lock 획득 실패는 이미 얻은 descriptor를 모두 해제한다.
+
+수정 뒤 로컬 synthetic SSH checkpoint smoke는 기존 `CHECKPOINT_ALREADY_OWNED` assertion을 유지한 채 통과했다. v2 checkpoint·v3 pair error 우선순위 계약, file/TCP 양방향 상호 배제, TCP/TCP 충돌 및 두 번째 lock 실패 후 첫 lock 해제를 focused 테스트로 확인했다. 수정 SHA의 Ubuntu CI 전까지 Phase 34.4 Linux management는 `NOT_TESTED`다.
+
 다음은 지원하지 않는다.
 
 - 실제 장비/실제 사용자 로그, 원격 호스트, 외부 interface, TLS/mTLS

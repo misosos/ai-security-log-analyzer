@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from threading import Thread
 import time
+from typing import Callable
 import webbrowser
 
 import uvicorn
@@ -218,6 +219,7 @@ def _run_local_web_unlocked(
     sleep=time.sleep,
     runtime_factory=_live_runtime,
     default_config_resolver=resolve_default_monitor_config_path,
+    before_listener: Callable[[], None] | None = None,
 ) -> int:
     """Run until interrupted; injectable boundaries keep lifecycle tests bounded."""
     if type(port) is not int or not MIN_PORT <= port <= MAX_PORT:
@@ -274,15 +276,34 @@ def _run_local_web_unlocked(
             return 4
         except Exception as error:
             from app.live_monitoring.checkpoint import LiveCheckpointError
+            from app.live_monitoring.multi_source import MultiSourceRuntimeError
             if isinstance(error, LiveCheckpointError):
                 if service is not None:
                     asyncio.run(service.close())
                 print(f"{error.code}: 자동 복구를 중단했습니다. 기본 설정과 같은 파일의 상태를 수동으로 확인하십시오.",
                       file=sys.stderr)
                 return 4
+            if isinstance(error, MultiSourceRuntimeError):
+                if service is not None:
+                    asyncio.run(service.close())
+                print(f"{error.code}: 두 로그의 내부 실행을 시작하지 못했습니다.", file=sys.stderr)
+                return 4
             if service is not None:
                 asyncio.run(service.close())
             print("LIVE_RUNTIME_START_FAILED: 로컬 모니터링을 시작하지 못했습니다. 설정을 확인한 뒤 다시 시도하십시오.", file=sys.stderr)
+            return 4
+    if before_listener is not None:
+        try:
+            before_listener()
+        except Exception:
+            if service is not None:
+                try:
+                    asyncio.run(service.close())
+                except Exception:
+                    print("LIVE_SHUTDOWN_TIMEOUT: 모니터링 종료를 확인하십시오.", file=sys.stderr)
+                    return 8
+            print("LOCAL_COLLECTION_BUSY: 다른 로그 수집이 실행 중입니다. 먼저 정상 종료하십시오.",
+                  file=sys.stderr)
             return 4
     try:
         listener = listener_factory(port)
@@ -415,14 +436,12 @@ def run_local_web(
             monotonic=monotonic, sleep=sleep, runtime_factory=runtime_factory,
             default_config_resolver=default_config_resolver,
         )
-    try:
+    lock_holder = []
+
+    def acquire_shared_collector_lock() -> None:
         from app.tcp_syslog_management import acquire_collector_lock
-        lock_path = default_config_resolver()
-        lock = acquire_collector_lock(lock_path)
-    except Exception:
-        print("LOCAL_COLLECTION_BUSY: 다른 로그 수집이 실행 중입니다. 먼저 정상 종료하십시오.",
-              file=sys.stderr)
-        return 4
+        lock_holder.append(acquire_collector_lock(default_config_resolver()))
+
     result = 4
     try:
         result = _run_local_web_unlocked(
@@ -431,15 +450,17 @@ def run_local_web(
             server_factory=server_factory, readiness=readiness, browser_open=browser_open,
             monotonic=monotonic, sleep=sleep, runtime_factory=runtime_factory,
             default_config_resolver=default_config_resolver,
+            before_listener=acquire_shared_collector_lock,
         )
     finally:
-        try:
-            lock.close()
-        except Exception:
-            print("LOCAL_COLLECTION_LOCK_RELEASE_FAILED: 수집 잠금 해제를 확인하지 못했습니다.",
-                  file=sys.stderr)
-            if result == 0:
-                result = 8
+        if lock_holder:
+            try:
+                lock_holder[0].close()
+            except Exception:
+                print("LOCAL_COLLECTION_LOCK_RELEASE_FAILED: 수집 잠금 해제를 확인하지 못했습니다.",
+                      file=sys.stderr)
+                if result == 0:
+                    result = 8
     return result
 
 

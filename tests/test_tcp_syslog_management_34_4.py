@@ -167,6 +167,12 @@ def test_delete_exact_approval_only_removes_tcp_config(monkeypatch, tmp_path):
 
 def test_management_and_file_monitor_share_mutual_exclusion_lock(monkeypatch, tmp_path, capsys):
     path = _setup(monkeypatch, tmp_path)
+    from app.monitor_setup import create_monitor_config
+    source = tmp_path / "synthetic-file.log"
+    source.write_text("2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n",
+                      encoding="utf-8")
+    file_config = path.parent / "monitoring.json"
+    create_monitor_config(source, file_config)
     lock = management.acquire_collector_lock(path)
     try:
         with pytest.raises(management.TcpManagementError) as raised:
@@ -178,15 +184,164 @@ def test_management_and_file_monitor_share_mutual_exclusion_lock(monkeypatch, tm
         assert blocked_delete.value.code == "COLLECTOR_BUSY"
         assert path.exists()
         from app import local_web
+        runtimes = []
+
+        def make_runtime(file_path):
+            service, runner = local_web._live_runtime(file_path)
+            runtimes.append(service)
+            return service, runner
+
         result = local_web.run_local_web(
-            monitor_config=path.parent / "file-config.json",
+            monitor_config=file_config,
             default_config_resolver=lambda: path,
+            runtime_factory=make_runtime,
             listener_factory=lambda *_args: pytest.fail("file and TCP collectors must not run together"),
         )
         assert result == 4
         assert "다른 로그 수집이 실행 중입니다" in capsys.readouterr().err
+        assert len(runtimes) == 1
+        assert runtimes[0]._worker._session._fd == -1
     finally:
         lock.close()
+
+
+def test_second_runtime_lock_failure_releases_first_lock(monkeypatch, tmp_path):
+    path = _setup(monkeypatch, tmp_path)
+    tcp_lock = management._acquire_names(management.TCP_LOCK_NAME, path=path)
+    try:
+        with pytest.raises(management.TcpManagementError) as raised:
+            management._management_locks(path)
+        assert raised.value.code == "TCP_BUSY"
+        # _management_locks acquired the shared lock before failing on the TCP lock.
+        collector = management.acquire_collector_lock(path)
+        collector.close()
+    finally:
+        tcp_lock.close()
+
+
+def test_file_checkpoint_ownership_error_precedes_collector_lock_conflict(monkeypatch, tmp_path, capsys):
+    from app import local_web
+    from app.live_monitoring.checkpoint import LiveCheckpointError
+
+    _sandbox(monkeypatch, tmp_path)
+    config = tmp_path / "synthetic-monitor.json"
+    collector_lock_attempts = []
+
+    def collector_busy(_path=None):
+        collector_lock_attempts.append(True)
+        raise management.TcpManagementError("COLLECTOR_BUSY")
+
+    def checkpoint_owned(_path):
+        raise LiveCheckpointError("CHECKPOINT_ALREADY_OWNED")
+
+    monkeypatch.setattr(management, "acquire_collector_lock", collector_busy)
+    result = local_web.run_local_web(
+        monitor_config=config,
+        default_config_resolver=lambda: config,
+        runtime_factory=checkpoint_owned,
+        listener_factory=lambda *_args: pytest.fail("listener must not open"),
+    )
+    assert result == 4
+    assert "CHECKPOINT_ALREADY_OWNED" in capsys.readouterr().err
+    assert not collector_lock_attempts
+
+
+def test_pair_ownership_error_precedes_collector_lock_conflict(monkeypatch, tmp_path, capsys):
+    from app import local_web
+    from app.live_monitoring.multi_source import MultiSourceRuntimeError
+
+    _sandbox(monkeypatch, tmp_path)
+    config = tmp_path / "synthetic-pair.json"
+    lock_attempts = []
+
+    def collector_busy(_path=None):
+        lock_attempts.append(True)
+        raise management.TcpManagementError("COLLECTOR_BUSY")
+
+    def pair_owned(_path):
+        raise MultiSourceRuntimeError("PAIR_START_FAILED")
+
+    monkeypatch.setattr(management, "acquire_collector_lock", collector_busy)
+    result = local_web.run_local_web(
+        monitor_config=config,
+        default_config_resolver=lambda: config,
+        runtime_factory=pair_owned,
+        listener_factory=lambda *_args: pytest.fail("listener must not open"),
+    )
+    assert result == 4
+    assert "PAIR_START_FAILED" in capsys.readouterr().err
+    assert not lock_attempts
+
+
+def test_v3_pair_runtime_ownership_error_is_not_masked_by_collector_lock(
+    monkeypatch, tmp_path, capsys
+):
+    from app import local_web
+    from app.live_monitoring.multi_source import MultiSourceRuntimeError
+    from app.monitor_setup import create_monitor_pair_config
+
+    _sandbox(monkeypatch, tmp_path)
+    application = tmp_path / "synthetic-application.log"
+    ssh = tmp_path / "synthetic-ssh.log"
+    application.write_text("2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n")
+    ssh.write_text("2026-01-02 03:04:05 sshd: Failed password for synthetic from 198.51.100.2 port 5001 ssh2\n")
+    config = tmp_path / "private" / "monitoring.json"
+    create_monitor_pair_config(application, ssh, config)
+    lock_attempts = []
+
+    def pair_busy(_path):
+        raise MultiSourceRuntimeError("PAIR_START_FAILED")
+
+    def collector_busy(_path=None):
+        lock_attempts.append(True)
+        raise management.TcpManagementError("COLLECTOR_BUSY")
+
+    monkeypatch.setattr(local_web, "_pair_runtime", pair_busy)
+    monkeypatch.setattr(management, "acquire_collector_lock", collector_busy)
+    result = local_web.run_local_web(
+        monitor_default=True,
+        default_config_resolver=lambda: config,
+        listener_factory=lambda *_args: pytest.fail("listener must not open"),
+    )
+    assert result == 4
+    assert "PAIR_START_FAILED" in capsys.readouterr().err
+    assert not lock_attempts
+
+
+def test_collector_conflict_closes_prepared_v3_pair_runtime(monkeypatch, tmp_path, capsys):
+    from app import local_web
+    from app.monitor_setup import create_monitor_pair_config
+
+    _sandbox(monkeypatch, tmp_path)
+    application = tmp_path / "synthetic-application.log"
+    ssh = tmp_path / "synthetic-ssh.log"
+    application.write_text("2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.1\n")
+    ssh.write_text("2026-01-02 03:04:05 sshd: Failed password for synthetic from 198.51.100.2 port 5001 ssh2\n")
+    config = tmp_path / "private" / "monitoring.json"
+    create_monitor_pair_config(application, ssh, config)
+    collector = management.acquire_collector_lock(config)
+    runtimes = []
+    original = local_web._pair_runtime
+
+    def capture(path):
+        service, runner = original(path)
+        runtimes.append(service)
+        return service, runner
+
+    monkeypatch.setattr(local_web, "_pair_runtime", capture)
+    try:
+        result = local_web.run_local_web(
+            monitor_default=True,
+            default_config_resolver=lambda: config,
+            listener_factory=lambda *_args: pytest.fail("listener must not open"),
+        )
+        assert result == 4
+        assert "다른 로그 수집이 실행 중입니다" in capsys.readouterr().err
+        assert len(runtimes) == 1
+        assert all(worker._session._fd == -1 and worker._checkpoint._lock_fd == -1
+                   for worker in runtimes[0].runtime.workers.values())
+    finally:
+        collector.close()
 
 
 def test_setup_never_overwrites_existing_config_and_busy_port_is_sanitized(monkeypatch, tmp_path):
