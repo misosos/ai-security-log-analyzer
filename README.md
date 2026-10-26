@@ -11,6 +11,7 @@ AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 
 - Linux Audit 프로세스 실행 기록에서 조사 후보를 별도로 요약합니다.
 - API·SSE·HTML 보고서에는 개인정보를 제한한 projection을 사용합니다. CLI 출력과 다운로드 파일도 민감한 조사 자료로 취급하십시오.
 - 합성 평가, property·API 계약 검사, 개발용 접근성 자동 검사를 제공합니다.
+- 자동 네트워크 수집은 설계 단계이며 아직 지원하지 않습니다. [Phase 34.0 설계](docs/automatic_log_collection_design_34_0.md)
 
 ## 빠른 시작
 

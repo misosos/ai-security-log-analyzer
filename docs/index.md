@@ -16,6 +16,7 @@
 - [checkpoint 잠금·장애 경계](live_checkpoint_21_2.md) · [별도 프로세스 재시작](live_checkpoint_21_3.md) · [명시적 epoch reset](live_checkpoint_epoch_reset_21_7.md) · [Linux reset 검증](live_checkpoint_epoch_reset_21_8_linux_audit.md)
 - [축소 감지](live_rotation_21_1.md) · [poll/ack 경계](live_rotation_21_4.md) · [rotation handoff 검토](live_rotation_21_5.md) · [두 파일 세대 검토](live_rotation_21_6.md)
 - [local collector 설계](local_collector_v030_design.md) · [상호운용 gate](local_collector_interop_gate_25_0.md) · [Vector 합성 pilot](vector_collector_pilot_25_1.md)
+- [자동 보안 로그 수집 설계 gate](automatic_log_collection_design_34_0.md) — loopback TCP Syslog 후보와 framing·backpressure·trust/privacy 계약; 자동 수집은 아직 미구현
 
 ## 탐지·평가·개인정보
 
