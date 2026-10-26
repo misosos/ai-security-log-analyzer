@@ -1,5 +1,9 @@
 # Phase 34.0 — 자동 보안 로그 수집 설계 gate
 
+## 후속 상태 — Phase 35.0 기업형 수집 연동
+
+Phase 34 종료 판정은 합성 loopback 관리 pilot `GO`, 안내 이해도 최종 10/10 사용자 `PASS`, 실제 사용자 자료·조직 운영·인증 없는 원격 수집 `NO_GO`다. 과거 macOS SSH/SIGTERM 실패는 `UNEXPLAINED_NON_REPRODUCED`; 과거 Ubuntu smoke 실패의 내부 stage는 기록되지 않아 후속 local marker race와 같은 원인으로 단정하지 않는다. Phase 35.0은 공식 자료 정적 비교만 수행했으며, Vector 0.60.0 별도 프로세스 후보를 합성 연동 설계에 한해 `CONDITIONAL_GO`로 선정했다. collector는 설치·실행되지 않았고 자동 수집은 여전히 `NOT_IMPLEMENTED`다. [Phase 35.0 설계 기록](enterprise_log_collection_architecture_35_0.md).
+
 ## 후속 상태 — Phase 34.4 CLI management
 
 Phase 34.4는 기존 loopback runtime을 application/SSH 단일 역할의 합성 전용 CLI 흐름에 연결했다. Phase 34.5의 정확한 SHA CI run `40308485200`에서 Ubuntu management subprocess smoke를 확인했고, 10개 사용자 안내 항목은 최종 PASS를 받았다. [구현 기록](loopback_tcp_syslog_management_34_4.md) · [수용 기록](loopback_tcp_syslog_management_acceptance_34_5.md). 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`다.
