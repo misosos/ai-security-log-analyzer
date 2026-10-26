@@ -110,7 +110,7 @@ Analyzer checkpoint/report, 사용자 HOME, repository, Docker socket, host shar
 
 현재 analyzer pilot은 다음 exact wire bytes를 요구한다: `<ASCII decimal UTF-8 payload byte length><one SP><payload bytes>`. 고정 Vector socket sink 문서는 TCP address, encoding codec, framing을 제공한다. `bytes` framing은 delimiter를 추가하지 않는 방식이고, `length_delimited`는 기본 little-endian 32-bit 길이 framing이다. 문서화된 native encoder 중 RFC 6587의 ASCII decimal octet-counting encoder를 찾지 못했다. 고정 source tree에는 octet-counting decoder가 있으나 대응 encoding module은 확인되지 않았다.
 
-**판정: `TRANSFORM_REQUIRED` / `CUSTOM_FRAMING_REQUIRED`; 직접 호환 `DIRECT_SUPPORTED`가 아니다.** VRL transform으로 UTF-8 payload의 byte length prefix를 구성할 수 있는 가능성은 있으나, exact serialized byte stream, payload escaping, newline 추가 여부, UTF-8 byte count 대 character count, 여러 event/batch behavior를 공식 config 문서만으로 증명하지 못한다. `bytes` encoder와 transform의 결합도 실행 fixture 없이 계약을 닫지 않는다. Phase 35.2 첫 목표는 synthetic framing fixture를 통해 발신 실제 byte stream과 analyzer decoder acceptance를 입증하는 것이며, 통과 전에는 분석기 연결을 금지한다. 사용자 정의 code/transform의 검증 및 maintenance surface도 별도 검토한다.
+**Phase 35.1 시점의 잠정 판정은 `TRANSFORM_REQUIRED` / `CUSTOM_FRAMING_REQUIRED`였다. Phase 35.1A fixed-source 후속 추적으로 native framing은 `INCOMPATIBLE`, VRL source-level 경로는 가능성이 있으나 `CUSTOM_FRAMING_UNPROVEN`으로 확정했다.** VRL byte length·text serializer·bytes framer를 소스상 연결했지만 실제 Vector config validation과 wire capture는 하지 않았다. 그러므로 기존 RFC 6587 listener를 변경하지 않고, Phase 35.2는 Vector synthetic fixture보다 앞서 별도 closed JSON Lines adapter pure core를 요구한다. 구체 근거는 [35.1A framing 기록](vector_framing_preconditions_35_1a.md) 참조.
 
 Socket sink는 reconnect/retry/buffer, timeout/batch/connection 옵션 및 acknowledgements를 제공하지만 socket write/connection acknowledgement는 analyzer가 parse·분석을 완료했다는 ack가 아니다. Source time/metadata 자동 삽입 여부와 serialization 변형은 최종 config로 별도 확인한다. Source docs: [Socket sink](https://vector.dev/docs/reference/configuration/sinks/socket/), fixed [`src/sinks/socket.rs`](https://github.com/vectordotdev/vector/blob/v0.60.0/src/sinks/socket.rs), [`bytes` framing implementation](https://github.com/vectordotdev/vector/blob/v0.60.0/lib/codecs/src/encoding/framing/bytes.rs).
 
@@ -163,9 +163,11 @@ Phase 35.1 감사와 향후 35.2 합성 실행에서 AI/LLM을 사용하지 않�
 
 ## Limitations
 
-정적 문서/source/metadata는 실제 파일 rotation, sink serialization, retry/ack, resource use, egress, permission, privacy leakage를 실행 검증하지 않는다. release checksum은 authenticity가 아니며 source commit signature는 binary signature가 아니다. API/docs와 GitHub artifact metadata가 향후 바뀔 수 있다. 공식 문서가 명시하지 않은 부분을 보장으로 채우지 않았다. MPL 적용 범위 및 재배포 의무는 법무 검토가 필요하다.
+정적 문서/source/metadata는 실제 파일 rotation, sink serialization, retry/ack, resource use, egress, permission, privacy leakage를 실행 검증하지 않는다. Release checksum은 authenticity가 아니며 source commit signature는 binary signature가 아니다. API/docs와 GitHub artifact metadata가 향후 바뀔 수 있다. 공식 문서가 명시하지 않은 부분을 보장으로 채우지 않았다. MPL 적용 범위 및 재배포 의무는 법무 검토가 필요하다.
 
-**Vector production 통합은 `NOT_IMPLEMENTED`; 실제 사용자 자료·조직 운영은 `NO_GO`.** Phase 35.0의 후보 선택은 설계 조건부 결정일 뿐 Phase 35.2 실행 승인으로 승격되지 않는다.
+Phase 35.1A에서 native socket framing이 analyzer의 ASCII decimal framing과 `INCOMPATIBLE`임을 고정 source로 확인했다. VRL transform 후보는 `CUSTOM_FRAMING_UNPROVEN`이다. 기존 RFC 6587 listener는 변경하지 않으며, 다음 순서는 JSON Lines adapter pure core다. Provenance 잔여 위험 판정과 category-only credential-shaped string 분류는 [Phase 35.1A 기록](vector_framing_preconditions_35_1a.md)에 있다.
+
+**Vector production 통합은 `NOT_IMPLEMENTED`; 실제 사용자 자료·조직 운영은 `NO_GO`.** Phase 35.0의 후보 선택은 설계상 조건부 결정이며 Phase 35.2 Vector 실행 승인으로 승격되지 않는다.
 
 ## 조사 근거
 

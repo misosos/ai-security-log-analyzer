@@ -4,9 +4,9 @@
 
 ## Decision
 
-**Vector 0.60.0을 별도 프로세스형 첫 합성 연동 pilot 후보로 CONDITIONAL_GO 선정한다.** 제안 경로는 기존 analyzer의 loopback RFC 6587 수신기(A)다. Vector의 file source가 선택된 파일을 tail하고, 검토된 변환이 analyzer의 octet-counting framing을 만든 뒤 loopback socket sink로 전달한다. Python dependency에 넣거나 기존 분석기 안에 plugin을 로드하지 않는다.
+**Vector 0.60.0은 첫 합성 연동 후보라는 설계상 `CONDITIONAL_GO`를 유지하되, native socket framing은 기존 analyzer listener와 `INCOMPATIBLE`이다. Phase 35.1A는 기존 RFC 6587 listener를 변경하지 않고, 별도 closed JSON Lines adapter의 pure core를 먼저 다루는 `PHASE_35_2_ADAPTER_CORE_REQUIRED`를 선택했다. Vector custom VRL 경로는 정적으로 구성 가능해 보이나 `CUSTOM_FRAMING_UNPROVEN`이다.**
 
-이는 제품 지원 또는 배포 승인 판정이 아니다. 0.60.0의 해당 설정으로 정확한 byte framing, 파일 rotation, bounded queue/disk buffer, egress 차단, 권한 및 개인정보 삭제 동작이 합성 검증되기 전까지 구현 진입은 보류한다. 이 조건을 Phase 35.1 정적 공급망 gate와 후속 합성 검증에서 닫는다. 외부 도구의 기능 설명만으로 우리 환경의 안전성·무유실·exactly-once를 추론하지 않는다.
+이는 Vector 설치·실행 승인이나 제품 지원 판정이 아니다. Binary signature/SBOM/provenance는 미확인이다. checksum-only 잔여 위험은 disposable synthetic 격리 pilot에만 조건부 수용 가능하다고 판단했으며, 격리 통제 별도 gate 전에는 Vector를 실행하지 않는다. 정확한 wire bytes, rotation, buffer, egress 차단, 권한 및 privacy는 실행 검증 전까지 미확정이다. 외부 도구의 기능만으로 우리 환경의 안전성·무유실·exactly-once를 추론하지 않는다.
 
 Phase 34 종료 상태:
 
@@ -63,7 +63,7 @@ The collector's own file checkpoints/state directory are distinct from analyzer 
 | C. Collector → private spool directory → existing file monitor | source and durable spool files, backups/sync may copy them | file owner/mode and directory handoff define trust; existing parser can read only if a new role/config adapter is added | rename/atomic handoff can reduce partial reads but crash windows and replay/duplicate semantics need explicit manifest/ack | rotation and spool quotas, cleanup, disk full, no-clobber/atomic publish all become project contracts | raw logs persist on disk; existing checkpoint must not be silently reused. Medium/high complexity; adds sensitive durable copy |
 | D. Collector → OTLP Logs → dedicated adapter → pipeline | source, collector buffers, OTLP exporter queues, adapter memory and possibly disk | OTLP receiver identity/TLS plus strict closed attribute/resource mapping required; arbitrary attributes must be rejected | protocol acknowledgements have layer-specific meaning; they do not imply analyzer case/risk completion. Retries can duplicate | collector buffering is available; adapter queue and per-event limits still needed | schema and adapter conversion are new; no current OTLP analyzer input. Highest migration surface, while preserving analysis only if mapping is exact |
 
-Candidate A has the smallest analyzer change while delegating file mechanics to an isolated collector. Its main unresolved issue is whether the selected stable Vector sink can emit exactly the framing and payload bytes accepted by Phase 34.2 runtime under bounded settings. If Phase 35.1 cannot prove that, A fails its precondition; do not silently fall back to C or D.
+Candidate A was the Phase 35.0 initial hypothesis. Phase 35.1A supersedes its framing assumption: native Vector framing is incompatible, and the VRL path remains unproven. Do not modify the existing RFC 6587 listener to accommodate it. The selected next step is the independent JSON Lines adapter pure core; the previous Candidate A is not implementation approval.
 
 ## Data Contract
 
