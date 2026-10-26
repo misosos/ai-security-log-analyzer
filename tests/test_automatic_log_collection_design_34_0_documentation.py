@@ -68,14 +68,15 @@ def test_design_records_primary_research_and_mapping_limits():
         assert phrase in text
 
 
-def test_repository_navigation_and_readme_keep_collection_unimplemented():
+def test_repository_navigation_and_readme_limit_collection_to_synthetic_loopback_pilot():
     index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     phase_33d = (ROOT / "docs/trusted_analyst_report_user_acceptance_33_5d.md").read_text(
         encoding="utf-8"
     )
     assert "automatic_log_collection_design_34_0.md" in index
-    assert "자동 네트워크 수집은 설계 단계이며 아직 지원하지 않습니다" in readme
+    assert "합성 입력의 loopback TCP Syslog pilot 범위만" in readme
+    assert "원격·실제 사용자 로그 수집은 지원하지 않습니다" in readme
     assert "최종 사용자 응답은 10개 모두 `PASS`" in phase_33d
     assert "조직 사용은 **NO_GO**" in phase_33d
 

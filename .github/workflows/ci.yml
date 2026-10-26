@@ -65,6 +65,11 @@ jobs:
       - name: Run complete regression
         run: uv run pytest -q
 
+      - name: Verify bounded loopback TCP Syslog pilot on Linux
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run python tests/smoke_tcp_syslog_34_2.py
+
       - name: Verify restricted analyst report on Linux
         run: |
           uv run python -c "import sys; assert sys.platform == 'linux'"

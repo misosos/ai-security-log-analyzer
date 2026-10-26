@@ -1,5 +1,9 @@
 # Phase 34.1 — bounded TCP Syslog pure core
 
+## 후속 상태 — Phase 34.2
+
+[Phase 34.2](loopback_tcp_syslog_pilot_34_2.md)는 이 pure decoder/queue를 loopback-only application/SSH 합성 pilot에 연결했다. 별도 프로세스 smoke는 macOS local에서 확인했고, 이번 구현 SHA의 Ubuntu CI 실행은 아직 없어 Linux listener acceptance는 NOT_TESTED다. 실제 사용자 자료·조직 운영과 원격 수집은 NO_GO다. 34.1의 순수 framing/queue 계약은 변경하지 않았다.
+
 **판정: `CONDITIONAL_GO` — 순수 framing/config/queue core만 검증했다. 자동 수집은 `NOT_IMPLEMENTED`이며 실제 socket을 열지 않았다.** 이 구현은 loopback listener, parser, 분석 pipeline, 공개 API/SSE/UI, 파일 monitor, checkpoint와 연결되지 않는다.
 
 ## 범위와 계약

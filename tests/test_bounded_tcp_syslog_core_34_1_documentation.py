@@ -19,10 +19,12 @@ def test_phase_34_1_record_closes_core_contract_and_scope():
     assert "socket을 열지 않았다" in text
 
 
-def test_phase_34_design_and_readme_keep_listener_unimplemented():
+def test_phase_34_readme_links_pilot_and_keeps_remote_collection_unsupported():
     design = (ROOT / "docs/automatic_log_collection_design_34_0.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     index = (ROOT / "docs/index.md").read_text(encoding="utf-8")
     assert "Phase 34.1 순수 core 구현" in design
-    assert "아직 지원하지 않습니다" in readme
+    assert "loopback TCP Syslog pilot 범위만" in readme
+    assert "원격·실제 사용자 로그 수집은 지원하지 않습니다" in readme
     assert "bounded_tcp_syslog_core_34_1.md" in index
+    assert "loopback_tcp_syslog_pilot_34_2.md" in index

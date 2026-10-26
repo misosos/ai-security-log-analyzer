@@ -1,8 +1,12 @@
 # Phase 34.0 — 자동 보안 로그 수집 설계 gate
 
+## 후속 상태 — Phase 34.2
+
+Phase 34.2는 [bounded loopback pilot](loopback_tcp_syslog_pilot_34_2.md)로 loopback-only listener를 추가하고 기존 application/SSH parser·결정적 분석 pipeline에 volatile in-process 연결을 구성했다. 합성 local pilot만 CONDITIONAL_GO이며 실제 사용자 자료·조직 운영·원격 수집은 NO_GO다. 새 SHA의 Ubuntu CI smoke는 NOT_TESTED다.
+
 ## 후속 상태 — Phase 34.1
 
-Phase 34.0의 설계 gate를 바탕으로 [Phase 34.1 순수 core 구현](bounded_tcp_syslog_core_34_1.md)을 추가했다. immutable closed config, RFC 6587 octet-counting incremental decoder, in-memory bounded queue와 safe status DTO만 존재한다. **실제 listener·socket·네트워크 송수신·기존 parser/analysis pipeline 연결은 여전히 `NOT_IMPLEMENTED`**다. 34.1 core만 synthetic/unit contract 범위에서 `CONDITIONAL_GO`이며 이 결과는 34.2 진입이나 실제 로그 사용 승인이 아니다. Core status state는 listener 존재를 뜻하지 않는 `READY`로 닫혔다.
+Phase 34.0의 설계 gate를 바탕으로 [Phase 34.1 순수 core 구현](bounded_tcp_syslog_core_34_1.md)을 추가했다. immutable closed config, RFC 6587 octet-counting incremental decoder, in-memory bounded queue와 safe status DTO만 존재했다. **Phase 34.1 시점에는 listener·socket·network 송수신·parser/analysis 연결이 `NOT_IMPLEMENTED`였다.** Core status state는 listener 존재를 뜻하지 않는 `READY`로 닫혔다.
 
 **판정: `CONDITIONAL_GO` — 설계와 계약만 진행 가능. 자동 로그 수집은 `NOT_IMPLEMENTED`.** 이 단계에서는 네트워크 listener, 외부 collector, AI 모델, dependency를 설치·실행·구현하지 않았다. 문서와 문서 계약 테스트만 추가한다. 아래 수치는 구현 전 합성 평가를 위한 설계 상한 후보이며, RFC나 외부 프로젝트가 보장한 값 또는 운영 SLA가 아니다.
 
@@ -145,7 +149,7 @@ Phase 34 수집은 결정적 framing·validation·기존 parser adapter부터 �
 ## Validation roadmap
 
 1. **Phase 34.1 — pure framing/config contract:** implemented in [`bounded_tcp_syslog_core_34_1.md`](bounded_tcp_syslog_core_34_1.md); incremental octet-count parser, digit/length/control/UTF-8/EOF/multi-frame properties, closed config/status DTO, fixed buffer/queue model, fuzz/property tests. No listener, public UI or production integration.
-2. **Phase 34.2 — loopback isolated synthetic smoke:** separate process, one selected role, existing parser/analysis pipeline, backpressure/privacy/fault tests, listener/process/FD cleanup. No real user log.
+2. **Phase 34.2 — loopback isolated synthetic smoke:** implemented in [the pilot record](loopback_tcp_syslog_pilot_34_2.md). macOS local subprocess evidence is distinct from new-SHA Ubuntu CI, which remains NOT_TESTED until run. No real user log.
 3. **Phase 34.3 — independent Ubuntu validation:** locked environment, subprocess smoke, overload/longer soak, listener/FD/memory lifecycle, SIGINT/SIGTERM and actual status review. User acceptance is synthetic and separate.
 4. **Phase 34.4+ — separate gates:** authenticated remote collector and TLS/mTLS, additional source adapters, deployment/retention policy, AI parser suggestion isolated supply-chain and evaluation pilot. No phase is implied approved by this design.
 
