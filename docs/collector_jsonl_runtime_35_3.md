@@ -6,7 +6,7 @@
 
 `app/log_collection/jsonl_runtime.py` adds a separate IPv4/IPv6 loopback listener that reuses the Phase 35.2 incremental JSON Lines decoder and bounded queue. Each runtime is fixed to one `application` or `ssh` role and routes each validated payload through that role's existing `parse_live_records` adapter and the existing deterministic detection and analysis accumulators. There is no role fallback. User account metadata is not loaded; analysis uses an empty metadata tuple.
 
-No Vector binary, socket outside loopback, public API/SSE/UI/HTML, parser rule, checkpoint, publication, durable replay, management CLI, shared collection lock, or external process is used. Runtime results remain in bounded in-memory accumulators and the status contains counts only. This synthetic runtime is `CONDITIONAL_GO` only after its local regression and smoke checks; Linux and actual Vector integration remain `NOT_TESTED` until a future remote CI run. Actual user data and organizational operation remain `NO_GO`.
+No Vector binary, socket outside loopback, public API/SSE/UI/HTML, parser rule, checkpoint, publication, durable replay, management CLI, shared collection lock, or external process is used. Runtime results remain in bounded in-memory accumulators and the status contains counts only. This synthetic runtime is `GO` only for the bounded Ubuntu acceptance scope recorded in [Phase 35.3A](collector_jsonl_runtime_linux_acceptance_35_3a.md). Actual Vector integration remains `NOT_TESTED`; actual user data and organizational operation remain `NO_GO`.
 
 실제 사용자 자료와 조직 운영은 계속 `NO_GO`이며, 이 단계에서 **Vector 실행**, 설치, 외부 process, public API 연결은 하지 않았다.
 공개 API, SSE, UI에는 연결하지 않았다.
@@ -69,7 +69,7 @@ Local benchmark environment: Python 3.12.7, macOS Darwin arm64. Representative a
 
 Synthetic payload size was 81 bytes for application and 94 bytes for SSH. RSS was not measured by this benchmark. These numbers are local observations only; Linux and Vector measurements remain `NOT_TESTED`.
 
-The official Python docs and current-source API behavior do not verify the actual Vector process, Linux socket behavior, egress, or cross-process delivery. Phase 35.3A adds a bounded Ubuntu subprocess acceptance harness; its exact scope and the current `PENDING_REMOTE_CI` state are recorded in [the Linux reliability acceptance record](collector_jsonl_runtime_linux_acceptance_35_3a.md). Until a new SHA passes that step, Ubuntu JSONL runtime behavior remains `NOT_TESTED`.
+The bounded Ubuntu subprocess acceptance for this JSONL runtime passed in exact push run `40452774780`; see [the Linux reliability acceptance record](collector_jsonl_runtime_linux_acceptance_35_3a.md). It does not verify Vector, egress isolation, long-duration operation, filesystem durability, Linux IPv6, or operational delivery guarantees.
 
 ## Limitations
 
@@ -77,4 +77,4 @@ The official Python docs and current-source API behavior do not verify the actua
 - TLS/mTLS, authentication, remote collection, disk buffer, durable replay, exactly-once and lossless delivery are unsupported.
 - Public API/SSE/UI, management CLI, shared collection lock, and file-monitor coordination are not implemented.
 - Actual logs, organizational operation, and production use remain `NO_GO`.
-- Linux runtime and actual Vector integration are `NOT_TESTED` until separately executed on the corresponding environment.
+- Actual Vector integration remains `NOT_TESTED`; actual user data and organizational operation remain `NO_GO`.

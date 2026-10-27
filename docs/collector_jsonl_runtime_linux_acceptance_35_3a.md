@@ -1,6 +1,7 @@
 # Phase 35.3A — JSON Lines runtime Linux reliability acceptance
 
-**Status before push:** `PENDING_REMOTE_CI`; Ubuntu 24.04 runtime result is `NOT_TESTED`.
+**Status before push:** `PENDING_REMOTE_CI`; Ubuntu 24.04 result was then `NOT_TESTED`.
+**Final status:** `GO` for the bounded synthetic Ubuntu 24.04 JSONL runtime acceptance scope only. Vector integration, user data, organizational operation, and remote collection remain `NOT_TESTED` or `NO_GO` as specified below.
 **Evidence date:** 2026-10-27. This record describes synthetic-only tests and
 does not approve actual user data or organizational operation (`NO_GO`).
 
@@ -119,9 +120,48 @@ progress record is published before stop. These were corrected in test-only
 code; no production defect was found or changed. No failed case was retried
 within a matrix run.
 
-Ubuntu CI pass/fail, per-role matrix time, FD counts, and Linux soak
-observations will be appended only from the exact new-SHA run. Until then,
-Linux runtime reliability remains `NOT_TESTED`.
+## Exact Ubuntu acceptance result
+
+The Phase 35.3A commit `5cdf941291204a48edace62a25c1e1fbe3350a75` was pushed
+to `main`. Exact push run
+[40452774780](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40452774780)
+completed successfully on 2026-10-27. It ran the full regression (**2,934
+passed, 2 existing warnings**), SSH checkpoint ownership and unified
+monitoring, existing TCP Syslog smoke/reliability/management, restricted
+report and benchmark, Node/Chromium/axe, and tracked-file immutability. The
+dedicated **`Verify collector JSONL runtime on Linux`** step ran after full
+pytest and TCP steps and before Node. Its exact completion marker appeared
+once:
+
+```text
+COLLECTOR_JSONL_LINUX_ACCEPTANCE_PASS roles=2 runs=80 synthetic=1 leaks=0
+```
+
+Artifact count was **0**. The `v0.4.0` tag and Release still target
+`eecd6ee1cda0545e34b01c42e1a2163a899bcc27`.
+
+The passing harness definition fixes eight first-attempt scenarios × five
+repetitions for each of application and SSH: readiness, SIGINT, SIGTERM,
+normal stop, immediate stop, pending accepted record, malformed recovery, and
+queue-full shutdown. Thus the marker represents 40 subprocess runs per role,
+80 total, without retries. The same invocation also passed two-connection
+progress/third-connection refusal, partial-record fairness, 30 reconnects per
+role, split UTF-8, exact 32/33 decoder boundaries, and an isolated 256-record
+soak per role. Queue-full assertions covered 256 accepted, overflow rejected,
+`DEGRADED`, fixed `JSONL_RUNTIME_QUEUE_FULL`, and all 256 queued records
+accounted as dropped on shutdown. The soak assertions required 256 received,
+validated, queued, parser-recognized, and analyzed; rejected, malformed, and
+dropped were zero.
+
+The harness verified child reap, closed listener/worker/connection tasks,
+empty queue, same-port rebind, and no positive `/proc/self/fd` delta when
+available (the file descriptor check is an aggregate, not a published count).
+It sampled peak RSS privately, but the CI output did not retain
+numeric RSS or FD baselines; the marker's `leaks=0` is the checked aggregate,
+not a general resource cap. The runner filesystem/mount type was not recorded.
+The harness uses IPv4 loopback; Linux IPv6 remains `NOT_TESTED`. These checks
+are short synthetic CI observations, not a long soak, operational SLA, or
+delivery guarantee.
 
 This phase does not add production features. Account privilege metadata remains
 unavailable to the JSONL runtime; arbitrary account metadata is not accepted.
@@ -132,6 +172,8 @@ A process crash, SIGKILL,
 power loss, long-duration operational load, and IPv6 Linux listener behavior
 are not established here.
 
-Local validation is not an Ubuntu result. Until the new push CI completes, the
-Phase 35.3A Linux acceptance decision is **`PENDING_REMOTE_CI`** and Linux
-runtime reliability is **`NOT_TESTED`**.
+Local macOS validation remains separately identified above and is not used as
+the Ubuntu result. JSONL runtime의 합성 Ubuntu 수용 범위만 `GO`입니다.
+Phase 35.3A is **`GO` only for the tested bounded synthetic Ubuntu acceptance
+scope**. Actual Vector integration remains `NOT_TESTED`; actual user data,
+organizational operation, and remote collection remain `NO_GO`.

@@ -16,6 +16,8 @@ def test_linux_acceptance_record_separates_remote_evidence_and_limits():
     ):
         assert phrase in text
     assert "COLLECTOR_JSONL_LINUX_ACCEPTANCE_PASS roles=2 runs=80 synthetic=1 leaks=0" in text
+    assert "40452774780" in text and "2,934" in text
+    assert "JSONL runtime의 합성 Ubuntu 수용 범위만 `GO`" in text
     assert "tests/accept_collector_jsonl_runtime_35_3a.py" in text
     assert "tests/test_collector_jsonl_runtime_linux_ci_35_3a.py" in text
 
