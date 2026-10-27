@@ -1,6 +1,6 @@
 # Phase 36.3 — read-only investigation checklist API and explicit UI
 
-**Current result:** `CONDITIONAL_GO` for the local synthetic/read-only API and explicit case-detail interaction. A fresh Ubuntu CI run and manual Safari/VoiceOver review have not run. This is not approval for real organizational logs or operations.
+**Current result:** `CONDITIONAL_GO` for the synthetic/read-only API and explicit case-detail interaction. Phase 36.3A user comprehension is **10/10 final PASS** for the actual captured Safari UI, including the added explanation for unknown source role and `undetermined` priority. The acceptance is recorded in [Phase 36.3A](investigation_checklist_acceptance_36_3a.md). A new Ubuntu CI run for this acceptance change and a full Safari accessibility/VoiceOver review have not run. This is not approval for real organizational logs or operations.
 
 ## Scope and gate
 
@@ -40,9 +40,9 @@ The endpoint only reads the already registered safe DTO projection and approved 
 
 Each eligible case detail has an explicit **조사 점검표 보기** button. The API request occurs only after that explicit click. Rendering a case, selecting it, hovering, navigating, or loading the page does not call the endpoint. A click sends exactly the schema version and opaque checklist reference with `POST`; cookies are omitted. The UI has keyboard-focusable control, `aria-live` progress/result messaging, disabled loading state, retry through the same button, and fixed stale, refusal, timeout, rate-limit, and unavailable wording.
 
-The detail separates existing risk from the review priority, and shows category, checklist steps, explanation, uncertainty/limitations, and citation summaries. It says citations are general reference material rather than case evidence. Refusal is explicitly not a safety finding. Dynamic content is inserted with DOM nodes and `textContent`; no `innerHTML`, external link, external request, or automatic download was added. The existing schema 2/3 live UI and `subject_alias` presentation remain unchanged. Cases beyond the bounded current registry show no checklist button.
+The detail separates existing risk from the review priority, and shows category, checklist steps, explanation, uncertainty/limitations, and citation summaries. When priority is `undetermined`, the UI now explicitly says the public case projection has no log role, no role was guessed, this does not mean low risk or no review is needed, and existing analysis should be checked. It says citations are general reference material rather than case evidence. Refusal is explicitly not a safety finding. Dynamic content is inserted with DOM nodes and `textContent`; no `innerHTML`, external link, external request, or automatic download was added. The existing schema 2/3 live UI and `subject_alias` presentation remain unchanged. Cases beyond the bounded current registry show no checklist button.
 
-Chromium/axe covered 23 states, including initial/no-call, loading, available, refused, stale, timeout, rate-limited, unavailable, retry success, and a live local API request. Axe reported zero violations and `external_requests=0` (external requests: zero). Narrow viewport and 200% text scaling checks passed. This is an automated accessibility check, not a WCAG 2.2 AA certification. Safari and VoiceOver are `NOT_TESTED`.
+Chromium/axe covered 23 states, including initial/no-call, loading, available, refused, stale, timeout, rate-limited, unavailable, retry success, and a live local API request. Axe reported zero violations and `external_requests=0` (external requests: zero). Narrow viewport and 200% text scaling checks passed. This is an automated accessibility check, not a WCAG 2.2 AA certification. Safari 18.6 was used for actual synthetic available/refused UI captures and 10-item comprehension review. Safari keyboard-only completion, native 200% zoom, stale/timeout/rate-limit recovery, Web Inspector review, and VoiceOver remain `NOT_TESTED`.
 
 ## Determinism and development measurement
 
@@ -60,11 +60,12 @@ Regression history: the first full-suite run after adding the route exposed stal
 
 Current limits:
 
-- Phase 36.3 API/UI is `CONDITIONAL_GO` pending a fresh SHA's Ubuntu/Linux CI and manual Safari/VoiceOver verification.
-- Local full regression: **3,059 passed**, existing warning count **2**. The preceding transient Hypothesis deadline event and the route-contract migrations are recorded above.
+- Phase 36.3 API/UI is `CONDITIONAL_GO` pending a fresh SHA's Ubuntu/Linux CI and the remaining Safari accessibility checks, including VoiceOver.
+- Phase 36.3A captured UI comprehension: **10/10 final PASS**; item 7's initial FAIL is retained and the fixed UI explanation was rechecked. See the acceptance record for the intermediate responses and the isolated `HOME` recapture.
+- Original Phase 36.3 implementation full regression: **3,059 passed**, existing warning count **2**. The Phase 36.3A acceptance revision full regression: **3,061 passed**, the same two existing warnings. The preceding transient Hypothesis deadline event and route-contract migrations are recorded above.
 - Phase 36.1 evaluation: **44 fixtures**, schema/refusal/citation 100%, privacy leaks 0, analysis mutation 0. Phase 36.2 evaluation: **24/24**, required citation completeness and semantic-support precision/completeness 100%, invalid/forbidden citations 0, unsupported claim 0, benign false refusal 0.
 - Existing evaluations: synthetic **79/79**, Linux **21/21**, risk/case **70/70**; UTC and Asia/Seoul evaluation JSON was byte-identical.
-- Chromium/axe: **23 states**, zero axe violations and `external_requests=0`. This does not establish WCAG 2.2 AA conformance; Safari/VoiceOver remain `NOT_TESTED`.
+- Chromium/axe: **23 states**, zero axe violations and `external_requests=0`. Safari 18.6 captured actual synthetic available/refused screens and user comprehension reached 10/10; keyboard-only completion, native zoom, several Safari error states, Web Inspector, and VoiceOver remain `NOT_TESTED`. Neither automated axe nor this limited Safari review establishes WCAG 2.2 AA conformance.
 - `npm ci --ignore-scripts`, `uv sync --locked --dev`, `uv lock --check`, Python/Node syntax, `git diff --check`, and changed-file privacy/dependency scans passed. Dependency and lockfiles are unchanged.
 - Real user logs, actual organization logs, and organizational operation remain `NO_GO`.
 - Automatic account/IP/file/process response remains `NO_GO`.

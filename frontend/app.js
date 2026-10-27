@@ -1054,6 +1054,9 @@
           checklist.status === "unavailable" ? "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다." :
             "검토 우선순위는 기존 위험도와 별개인 참고 제안입니다.";
         result.append(element("h6", `검토 우선순위: ${checklist.review_priority}`));
+        if (checklist.review_priority === "undetermined") {
+          result.append(element("p", "현재 공개된 사례 정보에는 로그 역할이 없어 역할을 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
+        }
         result.append(element("p", `사례 범주: ${checklist.category}`));
         result.append(element("p", checklist.explanation.text));
         checklist.steps.forEach((step) => result.append(element("p", step.text)));

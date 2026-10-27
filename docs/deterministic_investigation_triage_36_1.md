@@ -102,3 +102,5 @@ Analysis summaries, publication, checkpoint, SSE cursor and corpus digest must r
 - **36.4:** explicit user action and plain-text UI/API acceptance are separate future decisions; automatic requests remain prohibited.
 
 Current limitations: no model quality assessment, no human comprehension review, no incident urgency/organization context, no production surface, no actual user data, no organization operation, no automated response. Actual user material and organizational operation remain `NO_GO`.
+
+Phase 36.3 later connected this internal deterministic reference to an explicit, read-only checklist API and case-detail button. Phase 36.3A separately captured the real synthetic UI in Safari 18.6 and received 10/10 final user comprehension PASS; item 7's initial FAIL and fixed UI explanation are retained in [the Phase 36.3A acceptance record](investigation_checklist_acceptance_36_3a.md). This does not change the reference's no-model status or approve real data, organization operation, or automatic response.

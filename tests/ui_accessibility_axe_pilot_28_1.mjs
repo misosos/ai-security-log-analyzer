@@ -591,6 +591,11 @@ async function main() {
         requireSafe((checklistState === 'CHECKLIST_REAL' ? rendered.includes('undetermined') : rendered.includes('review_soon')) &&
           rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),
           'CHECKLIST_AVAILABLE_RENDER_FAILED');
+        if (checklistState === 'CHECKLIST_REAL') {
+          requireSafe(rendered.includes('현재 공개된 사례 정보에는 로그 역할이 없어 역할을 추측하지 않았습니다') &&
+            rendered.includes('이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다') &&
+            rendered.includes('기존 분석 결과를 확인하세요'), 'CHECKLIST_UNDETERMINED_EXPLANATION_MISSING');
+        }
       } else if (checklistState === 'CHECKLIST_STALE' || checklistState === 'CHECKLIST_TIMEOUT' ||
                  checklistState === 'CHECKLIST_RATE' || checklistState === 'CHECKLIST_UNAVAILABLE') {
         requireSafe(rendered.length > 0, 'CHECKLIST_FIXED_ERROR_NOT_RENDERED');

@@ -35,11 +35,12 @@
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)
 - [Hypothesis 설계](hypothesis_property_testing_gate_23_0.md) · [property pilot](hypothesis_property_testing_pilot_23_1.md) · [Schemathesis 설계](schemathesis_api_fuzzing_gate_23_4.md) · [API pilot](schemathesis_api_pilot_23_5.md)
 - [검증 가능한 로컬 AI 조사 도우미 설계 gate](local_ai_investigation_assistant_33_0.md) — Phase 33.0 설계 전용; Gemini 현행 경계, safe evidence, corpus, 위협 모델과 33.1 평가 기준
-- [Phase 36.0 AI investigation triage 설계](ai_investigation_triage_design_36_0.md) — deterministic 분석 권위 유지; 36.3 명시적 read-only API/UI 후속 상태 포함
+- [Phase 36.0 AI investigation triage 설계](ai_investigation_triage_design_36_0.md) — deterministic 분석 권위 유지; 36.3A 합성 UI 이해도 10/10 최종 PASS를 별도 기록
 - [Phase 36.1 결정적 investigation triage 기준선](deterministic_investigation_triage_36_1.md) — closed DTO와 별도 검토 우선순위; source role 미상 시 priority `undetermined`
-- [Phase 36.2 lexical investigation checklist](lexical_investigation_checklist_36_2.md) — Phase 33.1 citation 기반 고정 checklist, 24개 합성 fixture; 36.3 API 연결은 별도 기록
+- [Phase 36.2 lexical investigation checklist](lexical_investigation_checklist_36_2.md) — Phase 33.1 citation 기반 고정 checklist, 24개 합성 fixture; 36.3A 사용자 수용은 별도 기록
 - [Phase 36.2A 한국어 checklist 수용 검수](investigation_checklist_acceptance_36_2a.md) — 합성 내부 안내 8/8 PASS; 최초 refusal 안내 FAIL과 재검수 기록, Phase 36.3 UI는 별도 미검수
-- [Phase 36.3 조사 checklist read-only API·명시적 UI](investigation_checklist_api_ui_36_3.md) — POST 1개와 버튼 클릭만으로 요청; 로컬 검증 `CONDITIONAL_GO`, 새 Ubuntu CI·Safari/VoiceOver 수동 검수 대기
+- [Phase 36.3 조사 checklist read-only API·명시적 UI](investigation_checklist_api_ui_36_3.md) — POST 1개와 버튼 클릭만으로 요청; `CONDITIONAL_GO`, 36.3A 사용자 이해도 10/10 PASS, 새 Ubuntu CI 및 전체 Safari 접근성은 남음
+- [Phase 36.3A 조사 checklist API/UI 수용 검수](investigation_checklist_acceptance_36_3a.md) — 실제 합성 Safari UI 사용자 이해도 10/10 최종 PASS, item 7 최초 FAIL 유지; VoiceOver 등 NOT_TESTED, 운영 NO_GO
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED
