@@ -22,6 +22,12 @@ MAX_OUTPUT_BYTES = 8_192
 MAX_STEPS = 5
 MAX_TEXT_BYTES = 512
 MAX_CONCURRENT_REQUESTS = 1
+_REFUSAL_EXPLANATION = (
+    "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
+    "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+    "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
+    "승인 근거가 검토되기 전에는 추측하지 않습니다."
+)
 CHECKLIST_FIELDS = (
     "schema_version", "request_id", "case_ref", "review_priority", "steps",
     "explanation", "uncertainty", "limitation_codes", "generated_by", "status",
@@ -196,7 +202,7 @@ def _fixed_result(item: SafeInvestigationDTO, status: str) -> InvestigationCheck
         case_ref=item.case_ref,
         review_priority=ReviewPriority.UNDETERMINED,
         steps=(),
-        explanation="",
+        explanation=_REFUSAL_EXPLANATION if status == "refused" else "",
         explanation_citation_ids=(),
         uncertainty=("insufficient_context",),
         limitation_codes=tuple(item.limitation_codes),
@@ -477,7 +483,9 @@ def validate_checklist_json(raw: str | bytes, item: SafeInvestigationDTO) -> Inv
             if seen_templates != expected_templates:
                 raise ChecklistError("OUTPUT_INVALID")
         else:
-            if steps or explain_text != "" or explain_ids != [] or priority is not ReviewPriority.UNDETERMINED:
+            expected_explanation = _REFUSAL_EXPLANATION if status == "refused" else ""
+            if (steps or explain_text != expected_explanation or explain_ids != []
+                    or priority is not ReviewPriority.UNDETERMINED):
                 raise ChecklistError("OUTPUT_INVALID")
         uncertainty = parsed["uncertainty"]
         limitations = parsed["limitation_codes"]

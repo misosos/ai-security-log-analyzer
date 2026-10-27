@@ -79,7 +79,29 @@ def test_supported_and_refused_categories_are_citation_scoped(kind, overrides, s
         assert "relation-gone:not-resolved" not in citations
     else:
         assert result.steps == ()
-        assert result.explanation == ""
+        if status == "refused":
+            assert result.explanation == (
+                "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
+                "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+                "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
+                "승인 근거가 검토되기 전에는 추측하지 않습니다."
+            )
+        else:
+            assert result.explanation == ""
+
+
+def test_refusal_output_explains_scope_boundary_and_safe_next_steps():
+    result = build_investigation_checklist(dto(detection_codes=("path_traversal",)))
+    assert result.status == "refused"
+    assert result.steps == ()
+    assert result.explanation == (
+        "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
+        "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+        "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
+        "승인 근거가 검토되기 전에는 추측하지 않습니다."
+    )
+    validated = validate_checklist_json(result.to_json(), dto(detection_codes=("path_traversal",)))
+    assert validated.to_json() == result.to_json()
 
 
 def test_conflict_priority_remains_undetermined_while_checklist_is_useful():
@@ -278,7 +300,10 @@ def test_faults_return_fixed_non_partial_results(monkeypatch, fault, expected):
     result = build_investigation_checklist(item)
     assert result.status == expected
     assert result.steps == ()
-    assert result.explanation == ""
+    if expected == "refused":
+        assert "안전 또는 위험하지 않다는 판정이 아닙니다." in result.explanation
+    else:
+        assert result.explanation == ""
 
 
 def test_output_cap_failure_is_unavailable_not_truncated(monkeypatch):

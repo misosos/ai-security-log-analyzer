@@ -65,6 +65,8 @@ The DTO accepts only already-normalized role/category/code/completeness buckets.
 
 Evaluation on this finite fixture set: schema 100%, deterministic refusal 100%, fixed unavailable outcomes 2, citation precision/completeness 100%, privacy leaks 0, tool/action execution 0, injection execution 0, analysis mutation 0, benign-control false refusal 0%, and priority agreement with the fixture reference 100%. These are contract counts on synthetic fixtures, not effectiveness or security detection accuracy.
 
+Phase 36.2A human comprehension acceptance reviewed eight synthetic checklist outputs: final 8/8 PASS. Item 6 first failed because the actual refusal DTO omitted its reason, non-safety boundary, and next steps; after fixed refusal guidance was added to the DTO, the same fixture passed. See [acceptance record](investigation_checklist_acceptance_36_2a.md). This is not a production UI test or real-user-log acceptance.
+
 ### Development benchmark
 
 `uv run python -m tests.benchmark_investigation_triage_36_1` used 10 warm-ups and 100 samples per operation on Darwin 24.6.0 arm64, Python 3.12.7. Input was 492 bytes, output 885 bytes, and the in-memory lexical index reported 25,279 estimated resident bytes.

@@ -1,6 +1,6 @@
 # Phase 36.2 — citation-verified lexical investigation checklist
 
-**상태:** 내부 deterministic adapter의 합성 평가 PHASE_36_2_AUTOMATED_GO. no model, no network, no provider call. 한국어 사용자 이해도는 직접 검수 전까지 NOT_TESTED. 실제 로그·조직 운영은 NO_GO.
+**상태:** 내부 deterministic adapter의 합성 평가 PHASE_36_2_AUTOMATED_GO. 한국어 안내 수용 검수 8/8 최종 PASS (`USER_COMPREHENSION_CONDITIONAL_GO`); 6/8 최초 FAIL과 수정 후 재검수 PASS를 함께 기록합니다. no model, no network, no provider call. 실제 로그·조직 운영은 NO_GO.
 
 ## 범위와 구조
 
@@ -30,7 +30,7 @@ InvestigationChecklist는 immutable 결과입니다. JSON key 순서는 schema_v
 
 모든 step과 제한 설명은 인용한 승인 section의 일반 지식에 한정합니다. 자동 대응 지시, 명령, URL, 환경별 적용 가능성, 계정·IP·hostname·경로·원문, 새 공격 사실은 출력하지 않습니다. review_priority는 Phase 36.1 reference의 보조 값이며 기존 risk와 다릅니다. conflicting/unknown evidence의 priority가 undetermined여도 직접 근거가 있는 수동 checklist는 제공할 수 있습니다. 이는 priority를 확정했다는 뜻이 아닙니다.
 
-출력 상한은 UTF-8 JSON 8 KiB, 최대 5 step, text당 512 bytes입니다. duplicate JSON key, non-finite number, 잘못된 enum, 추가·누락 key, citation 불일치, 허용되지 않은 텍스트, 상한 초과는 전체 거부됩니다. 부분 수락이나 자동 수정은 없습니다. 실패는 안전한 고정 refused/unavailable 결과 또는 fixed error category로 끝납니다. 제한된 동시 요청 수는 1입니다.
+출력 상한은 UTF-8 JSON 8 KiB, 최대 5 step, text당 512 bytes입니다. duplicate JSON key, non-finite number, 잘못된 enum, 추가·누락 key, citation 불일치, 허용되지 않은 텍스트, 상한 초과는 전체 거부됩니다. 부분 수락이나 자동 수정은 없습니다. unsupported category의 `refused` 결과에는 고정 설명을 포함합니다: 현재 승인 근거로는 해당 checklist를 만들 수 없고, 이는 안전/위험 판정이 아니며, 기존 결정적 분석과 승인된 내부 경로의 원본 증거를 확인하고 근거 검토 전 추측하지 말라는 내용입니다. 이 안내는 사례별 보안 주장이 아니므로 citation을 붙이지 않으며, validator는 정확한 고정 문구만 허용합니다. 기술적 오류의 `unavailable` 결과에는 이 refusal 문구를 넣지 않습니다. 제한된 동시 요청 수는 1입니다.
 
 ## Citation 검증과 의미 평가
 
@@ -46,9 +46,9 @@ InvestigationChecklist는 immutable 결과입니다. JSON key 순서는 schema_v
 
 합성 canary와 invalid output을 DTO·예외·repr·logger 경계에서 검사합니다. 모델·Gemini·HTTP·socket/network·embedding·Ollama/llama.cpp process 경로는 호출하지 않습니다. AI fallback도 없습니다. Phase 33.1 corpus에는 로그·사례를 추가하지 않습니다.
 
-## 사용자 이해도 검수 준비
+## 사용자 이해도 검수
 
-tests/fixtures/investigation_checklist_user_review_36_2.json에는 8개 고정 한국어 화면 문구를 검수 후보로 준비했습니다. 목적, risk와 priority 차이, 수동 checklist, citation과 사건 근거 구분, 불확실성, refusal 다음 행동, 식별자 비포함, 분석 불변을 다룹니다. 이는 캡처된 제품 화면이나 사용자의 응답이 아니며 사용자 이해도는 NOT_TESTED입니다.
+Phase 36.2A에서는 실제 `build_investigation_checklist` 합성 반환값을 한 항목씩 보여주고 8개 항목 모두 최종 PASS를 받았습니다. 6/8 refusal 출력은 최초 FAIL이었고, 실제 DTO에 고정 사유·비판정 경계·안전한 다음 행동을 추가한 뒤 동일 fixture 재검수에서 PASS를 받았습니다. 다른 7개 항목은 최초 PASS입니다. 이 검수는 실제 화면 조작이 아닌 캡처 결과 검토이며, 평가 자동화는 사용자 응답으로 계산하지 않았습니다. 자세한 fixture와 응답은 [Phase 36.2A 수용 기록](investigation_checklist_acceptance_36_2a.md)에 있습니다.
 
 ## 실행·재현 측정
 
@@ -71,7 +71,7 @@ Input 621 bytes, output 960 bytes, corpus 18 sections, lexical index resident es
 
 tests/test_investigation_checklist_36_2.py, tests/evaluate_investigation_checklist_36_2.py, tests/benchmark_investigation_checklist_36_2.py를 사용합니다. 구조 유효성과 직접 의미 지지는 분리해 검사합니다.
 
-TDD 첫 단계에서는 모듈 import 테스트가 새 모듈 부재로 실패했고, 문서 계약 테스트도 새 기록/link 부재로 실패했습니다. 구현 뒤 focused adapter·Phase 36.1·Phase 33.1 retrieval/guidance 테스트는 **131 passed**였습니다. adapter/documentation focused tests는 **34 passed**였고 UTC와 Asia/Seoul에서 adapter tests가 각각 **31 passed**였습니다. 전체 local suite는 **3038 passed, 기존 warning 2개**였습니다.
+TDD 첫 단계에서는 모듈 import 테스트가 새 모듈 부재로 실패했고, 문서 계약 테스트도 새 기록/link 부재로 실패했습니다. Phase 36.2A refusal-copy test는 기존 DTO explanation이 비어 있어 수정 전 실패했고, fixed refusal 설명 적용 후 통과했습니다. acceptance 수정 뒤 Phase 36.2 adapter/evaluator, Phase 36.1, Phase 33.1 retrieval focus는 **110 passed**였습니다. 전체 suite는 **3040 passed, 기존 warning 2개**였습니다. `uv sync --locked --dev`, `uv lock --check`, `npm ci --ignore-scripts`, Python/Node syntax, `git diff --check` 및 secret/personal-path 검사도 통과했습니다. Chromium/axe는 14 states, `external_requests=0`을 보고했습니다. 원격 시작 run은 **3038 passed, 기존 warning 2개**였습니다.
 
 평가 요약:
 
