@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "synthetic_only": true,
+  "user_acceptance_status": "NOT_TESTED",
+  "captured_cli_or_ui": false,
+  "items": [
+    {"id":"review-01","topic":"purpose","display":"합성 사례를 바탕으로 승인 문서의 근거가 있는 수동 확인 항목을 제안합니다. 실제 탐지나 운영 적합성을 보장하지 않습니다."},
+    {"id":"review-02","topic":"priority_vs_risk","display":"검토 우선순위는 분석가가 먼저 살펴볼 순서에 대한 참고이며 기존 보안 위험도와 다릅니다."},
+    {"id":"review-03","topic":"not_automatic_response","display":"확인 항목은 수동 검토 제안입니다. 계정·주소 차단이나 파일·프로세스 변경을 실행하지 않습니다."},
+    {"id":"review-04","topic":"citation_vs_case_evidence","display":"문서 인용은 일반적인 검토 근거입니다. 현재 사례에서 해당 행위가 발생했다는 증거가 아닙니다."},
+    {"id":"review-05","topic":"uncertainty","display":"자료 범위가 부족하거나 근거가 충돌하면 결과를 확정하지 않고 제한점을 표시합니다."},
+    {"id":"review-06","topic":"unsupported_refusal","display":"직접 관련된 승인 문서 근거가 없으면 체크리스트를 만들지 않습니다. 기존 분석 결과를 확인하세요."},
+    {"id":"review-07","topic":"privacy","display":"출력에는 원문 로그, 계정, 주소, 호스트 이름 또는 파일 위치를 포함하지 않습니다."},
+    {"id":"review-08","topic":"analysis_immutability","display":"이 보조 결과는 탐지, 관계, 위험도 또는 사례 상태를 변경하지 않습니다."}
+  ]
+}

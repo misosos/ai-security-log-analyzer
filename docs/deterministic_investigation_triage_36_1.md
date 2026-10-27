@@ -1,5 +1,7 @@
 # Phase 36.1 — deterministic investigation triage reference
 
+Phase 36.2는 이 DTO와 priority 기준선을 변경하지 않고, category별 직접 citation이 확인된 내부 checklist를 추가했습니다. 구체적인 지원 category, fixed refusal, 구조/의미 평가 및 사용자 검수 상태는 [Phase 36.2 기록](lexical_investigation_checklist_36_2.md)을 참조하십시오.
+
 ## Decision
 
 **Status: `PHASE_36_2_READY` for the deterministic internal reference contract only.** 시작 SHA `ee2d595d18119f3c217a8d39e5a16d348750c2a0`의 push run `40473731051`은 정확한 SHA에서 `completed/success`였고 artifact 0개였다. 기존 `v0.4.0` tag/release target은 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`을 유지했다. 구현 TDD는 새 module import 부재로 인한 초기 collection 실패에서 시작했다. 이번 단계는 기존 deterministic 분석 결과를 그대로 두고 내부 호출용 review assistance 기준선을 추가한다. 이 기능은 보안 사실 판정, 탐지, 위험도 계산 또는 대응 권한이 아닙니다. 우선순위는 **검토 순서를 정하기 위한 프로젝트 휴리스틱**입니다.

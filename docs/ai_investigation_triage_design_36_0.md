@@ -8,7 +8,7 @@ No automatic action is permitted: there is no tool, command, or system-side acti
 
 Phase 36.1 implemented an **LLM-free deterministic case review-priority reference**, its closed DTO/output validator, and fixed citation-verified checklist text. This is internal/test-only with no user-facing integration. Any later suggestion must remain separate from the existing risk band/score, detection, relation, case state, publication, SSE revision, or checkpoint.
 
-Phase 36.1 adds only fixed, citation-checked checklist text and a fixed explanation alongside the review-priority reference. These are internal synthetic-tested outputs, not a user-facing integration. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, production data, or organizational use.
+Phase 36.1 adds a fixed review-priority reference. Phase 36.2 adds category-scoped fixed checklist and explanation templates only when a directly relevant Phase 33.1 citation is verified. Unsupported categories return a fixed refusal. Both are internal synthetic-tested outputs, not user-facing integrations. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, production data, or organizational use. See the [Phase 36.2 semantic checklist record](lexical_investigation_checklist_36_2.md).
 
 The deterministic pipeline remains authoritative. AI assistance, if a later gate approves it, can only be a labeled analyst aid. A missing, refused, invalid, timed-out, or failed assistance result leaves existing analysis unchanged and usable.
 

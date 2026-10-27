@@ -1,5 +1,7 @@
 # Phase 33.1 — 결정적 로컬 지식 검색·citation baseline
 
+Phase 36.2 consumes this frozen corpus/retriever/verifier through a separate internal checklist adapter. It does not change the 33.1 ranking or its 17-citation evaluation, including the existing single over-citation case. See [Phase 36.2 semantic checklist](lexical_investigation_checklist_36_2.md).
+
 **상태: internal/test-only baseline 구현·검증 완료.** 검색 결과는 승인 문서의 근거 후보이며 AI 답변이나 권위 있는 분석 결과가 아니다. LLM, embedding, Ollama, llama.cpp, vector DB, 외부 요청은 사용하지 않았다. Gemini helper는 별도 경로로 남아 있으며 변경하지 않았다. 이 모듈은 production API·SSE·UI와 연결되지 않았고 자연어 답변·자동 보고서를 생성하지 않는다.
 
 ## 범위와 데이터 흐름
