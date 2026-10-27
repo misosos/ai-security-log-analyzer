@@ -1,14 +1,14 @@
 # Phase 36.0 — AI-assisted security investigation triage design
 
-**Status: design gate; no production implementation or model call.** Checked 2026-10-27. This phase used repository evidence and official documentation only. No LLM, Gemini, embedding, Ollama, external API, model/runtime download, or installation was used.
+**Status: design plus Phase 36.1 internal deterministic reference; no model call or public integration.** The Phase 36.1 module is synthetic/test-only and does not alter authoritative results. No LLM, Gemini, embedding, Ollama, external API, model/runtime download, or installation was used. See [Phase 36.1 implementation record](deterministic_investigation_triage_36_1.md).
 
 No automatic action is permitted: there is no tool, command, or system-side action path in this design.
 
 ## Decision
 
-Phase 36.1 may implement an **LLM-free deterministic case review-priority reference** and its closed DTO/output validator. The first user-facing assistance capability is limited to a separate review-priority suggestion. It must not modify the existing risk band/score or detection, relation, case state, publication, SSE revision, or checkpoint. The suggestion is optional and analyst-controlled.
+Phase 36.1 implemented an **LLM-free deterministic case review-priority reference**, its closed DTO/output validator, and fixed citation-verified checklist text. This is internal/test-only with no user-facing integration. Any later suggestion must remain separate from the existing risk band/score, detection, relation, case state, publication, SSE revision, or checkpoint.
 
-Investigation checklist and evidence explanation remain later candidates; neither is part of the first implementation. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, production data, or organizational use.
+Phase 36.1 adds only fixed, citation-checked checklist text and a fixed explanation alongside the review-priority reference. These are internal synthetic-tested outputs, not a user-facing integration. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, production data, or organizational use.
 
 The deterministic pipeline remains authoritative. AI assistance, if a later gate approves it, can only be a labeled analyst aid. A missing, refused, invalid, timed-out, or failed assistance result leaves existing analysis unchanged and usable.
 
@@ -42,7 +42,7 @@ deterministic case result (unchanged)
 
 The Phase 36.1 reference uses deterministic rules, not a model. Before any later model call, the exact system policy text and input/output schema version must be pinned by a content digest and reviewed; policy/schema changes require a new digest and evaluation. A later model must be an isolated optional producer behind the same input/output contracts. It has no filesystem, network, shell, or tool capability. Failure is confined to the assistance branch. No automatic request is made on case creation, page load, API/SSE update, or background schedule.
 
-The initial product scope is one capability: **case review priority**. The priority is not severity or risk. Phase 36.1 establishes a deterministic reference policy and tests its separation from analysis. Checklist templates can be considered in 36.2; model-generated explanation is not required to ship either stage.
+The Phase 36.1 internal scope is a review-priority reference plus bounded fixed checklist/explanation templates. The priority is not severity or risk. The module is not connected to a product surface. Phase 36.2 requires semantic citation review and synthetic contract evaluation before any retrieval-backed expansion; model-generated explanation is not required.
 
 ## Safe Investigation DTO
 
@@ -64,9 +64,9 @@ Build a dedicated allowlist DTO; do not pass a public projection, model, `asdict
 | `limitation_codes` | bounded unique reviewed enum list |
 | `verified_citation_ids` | bounded IDs returned by the Phase 33.1 verifier for this request and matching the current corpus digest/category |
 
-Unknown fields, missing required fields, duplicate keys, invalid enums, non-finite numbers, free strings outside bounded opaque IDs, and values outside explicit byte/item limits are rejected. Phase 36.1 must freeze the exact detector/relation/case code inventories and their digest in its reviewed contract; if the inventory changes, the DTO schema/policy digest changes and unknown values fail closed. No account, IP, hostname, file path, checkpoint, source identity, exact timestamp, raw log, user free-text question, credential, exception, internal rationale, HTML, URL search result, or unrestricted metadata is included. Values are omitted when not required; they are not inferred. Request IDs are short-lived correlation handles, not global case IDs.
+Unknown fields, missing required fields, duplicate keys, invalid enums, non-finite numbers, free strings outside bounded opaque IDs, and values outside explicit byte/item limits are rejected. Phase 36.1 freezes supported role/category/detection/relation/limitation enums in code; unknown values fail closed. No account, IP, hostname, file path, checkpoint, source identity, exact timestamp, raw log, user free-text question, credential, exception, internal rationale, HTML, URL search result, or unrestricted metadata is included. Values are omitted when not required; they are not inferred. Request IDs are short-lived correlation handles, not global case IDs.
 
-Suggested initial engineering caps for Phase 36.1 implementation review: serialized input at most 4 KiB, 16 detection codes, 16 relation codes, 16 limitation codes, and 8 citation IDs. These are project limits, not standards or performance claims; fixture evidence may justify a lower cap before implementation. There is no model token budget in Phase 36.1 because it has no model.
+Phase 36.1 fixes serialized input at 4 KiB, bounded category lists and 8 citation IDs. These are project limits, not standards or performance claims. There is no model token budget because this reference has no model.
 
 ## Output Schema
 
@@ -94,7 +94,7 @@ Validation is all-or-nothing. Reject duplicate JSON keys, `NaN`/`Infinity`, unkn
 
 All text is bounded plain text. Reject HTML, Markdown links, script-like markup, URLs, command/tool syntax, and account/IP/hostname-like identifiers. Do not truncate or repair invalid output; discard the entire response and return a fixed unavailable/refused category. Render as escaped plain text only. A schema validator cannot prove a claim true or prove prompt-injection resistance.
 
-Candidate response caps for a later implementation: 8 KiB total UTF-8 JSON, at most 4 priority reasons, 5 investigation steps, 4 uncertainty codes, and 8 total distinct citation IDs; each text field at most 512 UTF-8 bytes. Phase 36.1 tests should freeze the chosen limits before coding.
+Phase 36.1 fixes response caps at 8 KiB total UTF-8 JSON, 4 priority reasons, 5 investigation steps, 4 uncertainty codes, 8 distinct citation IDs, and 512 UTF-8 bytes per text. These are synthetic contract limits, not service capacity claims.
 
 ## Retrieval and Citation Boundary
 
@@ -134,7 +134,7 @@ Required acceptance targets for a future model gate: schema validation 100%; inv
 
 | Candidate | Privacy / egress | Supply chain / resources | Structure, citation, failure | Decision |
 | --- | --- | --- | --- | --- |
-| Deterministic template/reference | No model egress; bounded categories only | Repository code; low additional runtime cost | Fully testable and deterministic; citation rules can be fixed | **Select for Phase 36.1** |
+| Deterministic template/reference | No model egress; bounded categories only | Repository code; low additional runtime cost | Fully testable and deterministic; fixed citation rules | **Implemented for Phase 36.1; internal only** |
 | Local LLM | Can be local after setup, but input still crosses a model boundary | Model and native runtime supply chain, RAM/CPU, isolation not closed; prior local execution gates remain blocked | Structured output still needs validation; timeout/crash isolation required | NOT_TESTED; later gate only |
 | Existing Gemini helper | Provider egress; historical input projection may include IP | Pinned SDK does not close provider/model handling or data retention | Free-text output; no closed citation validation; not default path | Not selected; no call |
 | Hosted external LLM | Direct third-party data transfer | Provider, model revision, retention, region, outage, and contract need separate review | Structured response does not establish factual support; network failure | NO_GO for this design |
@@ -162,7 +162,7 @@ These sources inform design controls; they do not establish that a future model 
 | Phase | Scope | Gate |
 | --- | --- | --- |
 | 36.0 | This design, closed DTO/output and threats/evaluation contract | `PHASE_36_1_READY` only for LLM-free reference work |
-| 36.1 | SafeInvestigationDTO, deterministic review-priority reference, strict output validator, synthetic evaluation fixtures | No model; mutation/privacy/citation/schema targets pass |
+| 36.1 | SafeInvestigationDTO, deterministic review-priority reference, citation-verified fixed checklist, strict output validator, 44 synthetic evaluation cases | No model; internal/test-only; see implementation record |
 | 36.2 | Lexical-retrieval checklist templates and citation semantic review | No model; existing corpus digest/verifier; human semantic review |
 | 36.3 | Compare isolated local model/provider only after separate supply-chain, privacy, resource, and egress gate | No automatic Gemini fallback; synthetic input only |
 | 36.4 | Explicit analyst action, bounded API/concurrency/size and plain-text UI | Separate privacy/security and direct user acceptance; no automatic request |
@@ -171,4 +171,4 @@ Similar-case grouping and response recommendations require later independent gat
 
 ## Limitations
 
-This is a static design, not implementation evidence or a model evaluation. No model or runtime was called, installed, or downloaded. The finite synthetic plan cannot prove prompt-injection resistance, semantic correctness, analyst performance, or operational suitability. The Phase 33.1 over-citation remains. Real user data, organizational operation, automatic response, external hosted processing, production embedding, and remote collection remain `NO_GO`. Phase 35.4B remains paused pending user VM action; Vector was not run, and this phase does not validate Vector or replace its isolation gate. Crash/SIGKILL/power-loss recovery, provider retention, long-duration load, and model resource behavior remain `NOT_TESTED`.
+Phase 36.1 is a deterministic internal reference, not a model evaluation or user study. No model or runtime was called, installed, or downloaded. The finite synthetic suite cannot prove semantic correctness, analyst performance, or operational suitability. Korean semantic quality remains `NOT_TESTED`; Phase 33.1 over-citation remains a regression. Real user data, organizational operation, automatic response, external hosted processing, production embedding, and remote collection remain `NO_GO`. Phase 35.4B remains paused pending user VM action; Vector was not run, and this phase does not validate Vector or replace its isolation gate. Crash/SIGKILL/power-loss recovery, provider retention, long-duration load, and model resource behavior remain `NOT_TESTED`.
