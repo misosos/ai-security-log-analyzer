@@ -1,5 +1,7 @@
 # Phase 33.0 — 검증 가능한 로컬 AI 조사 도우미 설계 gate
 
+후속 설계: [Phase 36.0 AI investigation triage](ai_investigation_triage_design_36_0.md)는 기존 33.x의 경계를 확장하지 않고 사례 검토 우선순위를 별도 설계했다. deterministic analysis는 계속 권위가 있고, 36.1은 LLM 없는 기준선부터 시작한다. Phase 35.4B Vector/VM 보류 상태와 독립이다.
+
 **상태: 설계 gate 통과, 구현은 미시작.** 이 단계에서는 저장소·공식 문서 정적 조사와 설계만 했다. 모델, embedding, Ollama, llama.cpp, vector DB를 설치·다운로드·실행하지 않았고 dependency, lockfile, production 코드, API, UI, CI를 변경하지 않았다. 이 문서는 기능 활성화나 provider 호출 승인이 아니다.
 
 ## 제품 경계

@@ -35,6 +35,7 @@
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)
 - [Hypothesis 설계](hypothesis_property_testing_gate_23_0.md) · [property pilot](hypothesis_property_testing_pilot_23_1.md) · [Schemathesis 설계](schemathesis_api_fuzzing_gate_23_4.md) · [API pilot](schemathesis_api_pilot_23_5.md)
 - [검증 가능한 로컬 AI 조사 도우미 설계 gate](local_ai_investigation_assistant_33_0.md) — Phase 33.0 설계 전용; Gemini 현행 경계, safe evidence, corpus, 위협 모델과 33.1 평가 기준
+- [Phase 36.0 AI investigation triage 설계](ai_investigation_triage_design_36_0.md) — deterministic 분석 권위 유지, LLM 없는 사례 검토 우선순위 기준선부터; 사용자 자료·조직 운영 NO_GO
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED

@@ -1,5 +1,7 @@
 # Phase 35.4A2 — Vector ARM64 isolation preflight
 
+후속 상태 (2026-10-27): Phase 35.4B는 취소되지 않았으며 Ubuntu VM malfunction으로 `USER_ACTION_REQUIRED` 상태에서 일시 보류 중이다. Vector를 실행하지 않았다. VM·snapshot·artifact 상태는 변경하지 않았다. Phase 36.0 triage 설계는 이 blocker와 독립이며 이를 해소하거나 Vector 안전성을 검증하지 않는다.
+
 검토일: 2026-10-27. 이 문서는 읽기 전용 VMware host 확인과 합성·정적 artifact preflight 기록이다. Vector 실행을 승인하지 않는다.
 
 ## Start Gate
