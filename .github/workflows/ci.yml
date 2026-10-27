@@ -82,6 +82,12 @@ jobs:
           uv run python -c "import sys; assert sys.platform == 'linux'"
           uv run python tests/smoke_tcp_syslog_management_34_4.py
 
+      - name: Verify collector JSONL runtime on Linux
+        timeout-minutes: 5
+        run: |
+          uv run python -c "import sys; assert sys.platform == 'linux'"
+          uv run python tests/accept_collector_jsonl_runtime_35_3a.py
+
       - name: Verify restricted analyst report on Linux
         run: |
           uv run python -c "import sys; assert sys.platform == 'linux'"

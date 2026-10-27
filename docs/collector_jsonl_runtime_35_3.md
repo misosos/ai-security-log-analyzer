@@ -69,7 +69,7 @@ Local benchmark environment: Python 3.12.7, macOS Darwin arm64. Representative a
 
 Synthetic payload size was 81 bytes for application and 94 bytes for SSH. RSS was not measured by this benchmark. These numbers are local observations only; Linux and Vector measurements remain `NOT_TESTED`.
 
-The official Python docs and current-source API behavior do not verify the actual Vector process, Linux socket behavior, egress, or cross-process delivery. Local macOS test results are recorded after execution; Ubuntu runtime, Vector integration, long soak under production-like load, and external collector behavior remain `NOT_TESTED` until a new SHA is verified on CI.
+The official Python docs and current-source API behavior do not verify the actual Vector process, Linux socket behavior, egress, or cross-process delivery. Phase 35.3A adds a bounded Ubuntu subprocess acceptance harness; its exact scope and the current `PENDING_REMOTE_CI` state are recorded in [the Linux reliability acceptance record](collector_jsonl_runtime_linux_acceptance_35_3a.md). Until a new SHA passes that step, Ubuntu JSONL runtime behavior remains `NOT_TESTED`.
 
 ## Limitations
 

@@ -1,6 +1,6 @@
 # Phase 35.2 — Collector JSON Lines Adapter Pure Core
 
-Phase 35.3 후속: 이 core는 별도 synthetic loopback runtime에서 재사용되어 기존 role-specific parser와 결정적 in-memory analysis에 연결되었다. 상세 범위와 로컬 검증 결과는 [Phase 35.3 runtime 기록](collector_jsonl_runtime_35_3.md)을 참조한다. Vector·실제 자료·조직 운영은 계속 미지원/`NO_GO`다.
+Phase 35.3 후속: 이 core는 별도 synthetic loopback runtime에서 재사용되어 기존 role-specific parser와 결정적 in-memory analysis에 연결되었다. Ubuntu 별도 프로세스 신뢰성 검증은 [Phase 35.3A Linux acceptance 기록](collector_jsonl_runtime_linux_acceptance_35_3a.md)에 있으며 새 SHA push 전까지 `PENDING_REMOTE_CI` / `NOT_TESTED`다. Vector·실제 자료·조직 운영은 계속 미지원/`NO_GO`다.
 
 검증 기준일: **2026-10-26**. 이 변경은 external collector 전용 JSON Lines envelope의 순수 decoder·검증·bounded queue·safe status DTO만 제공한다.
 
