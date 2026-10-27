@@ -1,5 +1,7 @@
 # Phase 35.0 — 기업형 로그 수집 연동 아키텍처 설계
 
+후속 상태: Phase 35.3은 Vector가 아닌 별도 JSON Lines loopback runtime을 synthetic application/SSH payload로 기존 in-memory deterministic pipeline에 연결했다. 이는 외부 collector 또는 Vector 실행을 뜻하지 않는다. Linux/Vector 통합 `NOT_TESTED`, 실제 자료·조직 운영 `NO_GO`. [검증 기록](collector_jsonl_runtime_35_3.md).
+
 조사 기준일: **2026-10-26**. 공식 문서와 고정 릴리스 메타데이터의 정적 비교다. collector binary/container/plugin을 **설치·다운로드·실행하지 않았다**. 실제 사용자 자료나 실제 로그를 읽지 않았다. 프로젝트 코드와 dependency도 변경하지 않았다.
 
 ## Decision

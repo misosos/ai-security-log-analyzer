@@ -134,3 +134,5 @@ AI는 수집, framing, source role, trust, parser 선택에 관여하지 않는�
 Vector native framing은 기존 listener와 호환되지 않는다. VRL custom path는 source-level 구성 가능성일 뿐 `CUSTOM_FRAMING_UNPROVEN`이다. Binary provenance·SBOM·attestation 없음과 broad-scan의 `UNRESOLVED` 3건은 유지한다. JSONL pure core는 구현됐지만 Linux와 실제 Vector 연동은 `NOT_TESTED`다. File rotation, source checkpoint replay, Vector buffer, sink delivery/retry, egress deny, process permissions는 실행하지 않았다. 실제 사용자 자료·조직 운영·원격 수집은 `NO_GO`; Vector production integration은 `NOT_IMPLEMENTED`; exactly-once·무유실 주장은 금지한다.
 
 Phase 35.2 core: [collector JSON Lines adapter](collector_jsonl_adapter_core_35_2.md).
+
+Phase 35.3에서는 pure JSON Lines core를 별도 synthetic loopback runtime과 기존 in-memory parser/analysis에 연결했다. Vector는 실행하지 않았으며 checksum-only provenance 판정과 `UNRESOLVED` 3건은 유지한다. Linux 및 actual Vector integration은 `NOT_TESTED`; 실제 자료·조직 운영은 `NO_GO`다. 상세: [Phase 35.3 runtime](collector_jsonl_runtime_35_3.md).

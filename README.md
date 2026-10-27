@@ -11,7 +11,7 @@ AI Security Log Analyzer는 인증·웹 접근 로그에서 조사할 관찰과 
 - Linux Audit 프로세스 실행 기록에서 조사 후보를 별도로 요약합니다.
 - API·SSE·HTML 보고서에는 개인정보를 제한한 projection을 사용합니다. CLI 출력과 다운로드 파일도 민감한 조사 자료로 취급하십시오.
 - 합성 평가, property·API 계약 검사, 개발용 접근성 자동 검사를 제공합니다.
-- 자동 수집은 합성 입력의 loopback TCP Syslog pilot 범위만 검증했습니다. 별도 external collector용 JSON Lines pure core는 구현했지만 Vector·socket listener·외부 process 실행과 분석 pipeline 연결은 **NOT_TESTED**이며 기업형 collector 연동은 미지원입니다. Vector 0.60.0 native framing은 기존 listener와 호환되지 않습니다. 원격·실제 사용자 로그 수집은 지원하지 않습니다. 실제 사용자 로그 수집과 조직 운영은 계속 지원하지 않습니다. [JSON Lines adapter core 기록](docs/collector_jsonl_adapter_core_35_2.md) · [Phase 34.5 수용 기록](docs/loopback_tcp_syslog_management_acceptance_34_5.md) · [Phase 35.1A framing 판정](docs/vector_framing_preconditions_35_1a.md)
+- 자동 수집은 합성 입력의 loopback TCP Syslog pilot 범위만 검증했습니다. 별도 external collector adapter core와 JSON Lines runtime은 합성 application·SSH 입력을 기존 결정적 pipeline에 내부 연결하지만, Vector 실행·실제 collector 연동과 Linux 검증은 **NOT_TESTED**입니다. Vector 0.60.0 native framing은 기존 listener와 호환되지 않습니다. 원격·실제 사용자 로그 수집은 지원하지 않습니다. 실제 사용자 로그 수집과 조직 운영은 계속 지원하지 않습니다(**NO_GO**). [JSON Lines runtime 기록](docs/collector_jsonl_runtime_35_3.md) · [JSON Lines pure core 기록](docs/collector_jsonl_adapter_core_35_2.md) · [Phase 34.5 수용 기록](docs/loopback_tcp_syslog_management_acceptance_34_5.md) · [Phase 35.1A framing 판정](docs/vector_framing_preconditions_35_1a.md)
 
 ## 빠른 시작
 
