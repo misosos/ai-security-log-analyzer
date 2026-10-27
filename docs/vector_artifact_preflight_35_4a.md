@@ -82,13 +82,19 @@ Phase 35.4B는 disposable Ubuntu 24.04 x86_64 VM/snapshot에서만 검토한다:
 
 ## Local Verification
 
-Phase 35.4A focused preflight/config/wire/documentation tests passed (15 tests); fixture tests passed under both `TZ=UTC` and `TZ=Asia/Seoul` (8 each). Synthetic evaluations were 79/79, Linux 21/21, risk 70/70, case 70/70. `npm ci --ignore-scripts` and Chromium/axe passed 14 states with 0 external requests; `uv sync --locked --dev`, `uv lock --check`, Python/Node syntax and `git diff --check` passed. The final full suite reported 2,948 passed, 1 failed, 2 existing warnings. The sole failure was the existing Phase 32 test `test_each_role_file_identity_fault_stops_pair_without_quiet_success[truncate-application]`; an isolated diagnostic run of that test passed. An earlier full suite run passed all 2,949 tests before the final manifest metadata edit. The full-suite failure is preserved as unresolved and is not erased by the isolated pass. No production or monitoring code changed.
+Artifact preflight 자체는 checksum 및 archive 정적 검사 범위에서 통과했다. 저장소 회귀 gate는 Phase 35.4A1에서 결정적 scheduler-clock test reproduction과 bounded-cycle test 보정 후 전체 pytest 3회 연속 성공(`2,953 passed, 2 warnings` each)으로 복구됐다. repository 회귀 판정은 `READY_TO_PUSH`다. 과거 전체 suite 실패의 상세 traceback은 보존되지 않아 정확한 최초 assertion line은 미확인이다. 상세 근거는 [Phase 35.4A1 기록](pair_truncation_stability_35_4a1.md)에 남긴다. 이 저장소 회귀 결과는 Vector 격리 조건을 바꾸지 않으며 Vector 실행은 계속 `ISOLATION_BLOCKED`다.
+
+35.4A 당시 저장된 전체 pytest 결과는 `2,948 passed, 1 failed, 2 existing warnings`였으며 실패 node는 `test_each_role_file_identity_fault_stops_pair_without_quiet_success[truncate-application]`였다.
+당시 별도 단독 실행에서는 `isolated diagnostic run of that test passed`였으나, 이후 전체 suite와의 차이는 재현·분류가 필요해 35.4A1에서 조사했다.
+
+35.4A1의 test-only bounded-cycle 보정 후 pair regression은 100회 단독, 테스트 파일 30회, 인접 cases 30회, Phase 32 runtime/checkpoint/cleanup 조합 20회 동안 모두 통과했다. UTC와 Asia/Seoul focused run도 각 9개 통과했다. 전체 pytest는 연속 3회 모두 2,953 passed 및 기존 warning 2개로 성공했다. 기존 Phase 35.4A evaluation/accessibility/locked dependency 결과는 그 원 기록의 증거이며 이번 안정화 작업에서 재실행한 결과와 구분한다.
 
 ## Limitations
 
 - Ubuntu에서의 archive extraction/runtime library availability, cgroup/resource limit, egress deny와 wire bytes는 NOT_TESTED.
 - config candidate는 Vector `validate`로 검증되지 않았다. unknown component/field와 YAML parser duplicate behavior도 실행 시 확인해야 한다.
 - checksum만 확인됐고 detached signature, SBOM, attestation, reproducible build, binary provenance는 없다. credential 형태 문자열 UNRESOLVED 3건 유지.
+- 저장소 전체 회귀 baseline은 Phase 35.4A1에서 3회 연속 전체 suite 성공으로 복구됐다. 이는 Vector 실행 승인이 아니다.
 - actual user logs, organization operation, remote collection, Vector production integration, TLS/mTLS, disk buffer, durable replay, exactly-once/lossless delivery remain NO_GO/unsupported.
 - 실제 사용자 로그와 실제 사용자 자료 사용, 조직 운영은 계속 `NO_GO`다.
 - synthesis and static metadata are not an operational safety, privacy compliance, or availability guarantee.

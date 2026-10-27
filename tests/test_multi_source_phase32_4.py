@@ -9,6 +9,7 @@ from app.live_monitoring.config import load_live_monitor_pair_config
 from app.live_monitoring.multi_source import MultiSourceRuntimeError, open_internal_pair_runtime
 from app.live_monitoring.worker import LiveProcessingWorker
 from app.monitor_setup import create_monitor_pair_config
+from app.live_monitoring import multi_source as multi_source_module
 
 
 APP = "2026-01-02 03:04:05 INFO login_failed user=synthetic ip=192.0.2.9\n"
@@ -23,6 +24,40 @@ def pair_files(root: Path):
     config = root / "private" / "monitoring.json"
     create_monitor_pair_config(app, ssh, config)
     return app, ssh, config
+
+
+def _cycle_until_pair_fault(runtime) -> MultiSourceRuntimeError:
+    """Observe a pair-wide failure without assuming one fair cycle checks both roles."""
+    for _ in range(3):
+        try:
+            runtime.cycle()
+        except MultiSourceRuntimeError as error:
+            return error
+    raise AssertionError("PAIR_FAULT_NOT_OBSERVED")
+
+
+def test_pair_truncate_is_detected_after_budgeted_partial_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    """A fair cycle may yield after SSH; the next bounded cycle checks application."""
+    app, ssh, config = pair_files(tmp_path)
+    runtime = open_internal_pair_runtime(config)
+    try:
+        runtime.cycle()
+        app.write_text("", encoding="utf-8")
+        with ssh.open("a", encoding="utf-8") as stream:
+            stream.write(SSH)
+
+        clock_values = iter((0.0, multi_source_module.SOFT_CYCLE_BUDGET_SECONDS + 1,
+                             1.0))
+        monkeypatch.setattr(multi_source_module, "monotonic", lambda: next(clock_values))
+
+        # A fair cycle may finish SSH and yield; a bounded subsequent cycle
+        # must observe the application truncation as a pair-wide failure.
+        failed = _cycle_until_pair_fault(runtime)
+        assert failed.code in {"PAIR_DEGRADED", "PAIR_FAILED"}
+    finally:
+        runtime.close()
 
 
 @pytest.mark.parametrize("role", ["application", "ssh"])
@@ -45,10 +80,9 @@ def test_each_role_file_identity_fault_stops_pair_without_quiet_success(
             replacement.replace(source)
         with sources[other].open("a", encoding="utf-8") as stream:
             stream.write(APP if other == "application" else SSH)
-        with pytest.raises(MultiSourceRuntimeError) as failed:
-            runtime.cycle()
-        assert "PAIR_" in str(failed.value)
-        assert str(tmp_path) not in str(failed.value) + repr(failed.value)
+        failed = _cycle_until_pair_fault(runtime)
+        assert "PAIR_" in str(failed)
+        assert str(tmp_path) not in str(failed) + repr(failed)
         before = runtime.workers[other]._session.snapshot()
         with sources[other].open("a", encoding="utf-8") as stream:
             stream.write(APP if other == "application" else SSH)
