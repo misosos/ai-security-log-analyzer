@@ -1,5 +1,7 @@
 # Phase 35.4 — Vector isolated JSON Lines integration plan
 
+Status after Phase 35.4A: official x86_64 GNU archive checksum and member inspection passed, and the planned disk budget is numerically closed. No Vector executable or config validation was run. The environment is macOS arm64, without a disposable Ubuntu VM or independently verified OS-level egress deny, so execution remains `ISOLATION_BLOCKED`.
+
 Evidence checked 2026-10-27. This is a design and entry gate only. **Vector was not downloaded, installed, unpacked, or executed.** No user logs, Vector configuration, external process, or production connection was used. Vector execution is `NOT_TESTED`.
 
 ## Decision
@@ -78,13 +80,13 @@ No execution occurs unless all are independently checked in a disposable Ubuntu 
 5. Keep the memory buffer bounded and disk buffer disabled. Any need for disk buffering, privileged/root execution, remote endpoint, or external service is `NO_GO` for this pilot.
 6. Scan safe projections and captured outputs for canaries. Never print raw Vector or analyzer output; report only fixed stage/category and safe counts.
 
-The archive itself has a compressed size of 58,655,370 bytes. The uncompressed member size and extracted binary/runtime footprint are not asserted from this manifest. Before any pilot, derive the expanded size from safely inspected archive metadata and reserve temporary disk for the archive plus expanded members, isolated writable state, bounded tmp, and cleanup margin. If that bounded disk budget cannot be met, do not download or run it.
+Phase 35.4A measured the compressed archive at 58,655,370 bytes, regular-member expanded size at 160,893,403 bytes, and extracted `bin/vector` at 160,680,968 bytes. Including a second read-only binary/license staging copy, bounded state, buffers, synthetic input, capture and test output, the planned peak is 482,025,136 bytes including 15% margin. Require at least 1.25 GiB free at start and retain at least 512 MiB. These are preflight calculations, not Ubuntu runtime measurements; recheck quotas and free space in the disposable environment.
 
 ## Resource Budget
 
-Proposed limits for the later disposable run are one source file, one role, one Vector process, one analyzer runtime, at most two loopback connections, 16 MiB Vector memory-buffer design cap (subject to config validation), analyzer queue 256 events/1 MiB, payload 8,192 bytes, JSONL line 65,536 bytes, and bounded runtime/history limits already enforced by Phase 35.2/35.3. These are test limits, not capacity or SLA claims.
+Proposed limits for the later disposable run are one source file, one role, one Vector process, one analyzer runtime, at most two loopback connections, 128 Vector memory-buffer events with an 8 MiB conservative serialized-line allowance (candidate only; subject to config validation), analyzer queue 256 events/1 MiB, payload 8,192 bytes, JSONL line 65,536 bytes, and bounded runtime/history limits already enforced by Phase 35.2/35.3. These are test limits, not capacity or SLA claims.
 
-Disk reserve is **not yet numerically closed** because safe archive member inventory and extracted size have not been repeated for the execution environment. The 58,655,370-byte compressed archive is a known floor, not a complete peak-disk estimate. This keeps execution blocked.
+Disk reserve is numerically planned by Phase 35.4A but must be checked against the disposable Ubuntu volume. Execution remains blocked by missing OS isolation and independently verified egress deny.
 
 ## Failure Semantics
 
@@ -102,12 +104,12 @@ Actual user data, organization operation, remote collection, TLS/mTLS, durable s
 
 ## Phase 35.4 Entry Criteria
 
-The current phase is a design result only. A later execution request must first close all of these:
+Phase 35.4A closed the pinned archive byte/checksum and metadata inventory and added synthetic expected-wire decoder fixtures. A later execution request must still close all of these:
 
 - disposable Ubuntu 24.04 x86_64 isolation and independently verified egress deny;
-- exact artifact bytes, checksum revalidation, archive-member audit, and expanded disk reserve;
-- fixed v0.60.0 offline config validation command and accepted 16 MiB memory-buffer configuration;
-- source path/host metadata allowlist and six-key JSONL byte fixtures;
+- repeat artifact byte/checksum verification in the disposable Ubuntu environment and confirm expanded disk quota;
+- execute fixed v0.60.0 config validation under egress deny; confirm config fields and the 8 MiB memory-buffer bound;
+- capture actual source path/host metadata stripping and compare exact six-key JSONL bytes with fixtures;
 - analyzer test runtime bound to the fixed loopback endpoint, one selected role;
 - capture-based expected-wire comparison and 8,192/65,536/32-record boundaries;
 - rotation, copytruncate, retry/duplicate, restart, full-buffer, unavailable-listener, corrupt-state, and cleanup results;
