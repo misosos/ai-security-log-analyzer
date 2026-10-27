@@ -2,6 +2,10 @@
 
 검토일: 2026-10-27. 이 기록은 정적·합성 preflight이며 Vector 실행 승인이나 production 통합 승인이 아니다.
 
+## Phase 35.4A2 ARM64 Update
+
+The x86_64 archive result below is retained as static evidence only. Phase 35.4A2 independently checked the official v0.60.0 Linux GNU aarch64 archive against the existing manifest and official checksum, inspected all 53 archive members, and statically classified the extracted AArch64 ELF. See [ARM64 isolation preflight](vector_arm64_isolation_preflight_35_4a2.md) and [ARM64 manifest](artifacts/vector_0_60_0_aarch64_preflight.json). The first execution candidate is now Ubuntu 24.04.5 LTS aarch64. The existing VM is running with NAT and USB enabled; shared-folder, clipboard, drag-and-drop, current guest free space, and cgroup limits are unverified. Current gate: `USER_ACTION_REQUIRED`, `ISOLATION_BLOCKED`, `RESOURCE_BLOCKED`. Vector was not executed. Checksum-only provenance and 3 `UNRESOLVED` credential-shaped findings remain.
+
 ## Start Gate
 
 - 시작 SHA `c71be0e54107db8bfd37a464f9c97250bb329db2`, branch `main`, clean tree, local `main` = `origin/main`; `origin/main...HEAD`는 `0 0`이었다.

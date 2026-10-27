@@ -63,6 +63,7 @@ def test_manifest_is_closed_and_has_no_unresolved_placeholders():
         assert isinstance(item["architecture"], str) and item["architecture"]
         assert item["validation_status"] in {
             "BYTE_HASH_MATCHED_OFFICIAL_CHECKSUM",
+            "BYTE_HASH_AND_ARCHIVE_MATCHED_OFFICIAL_CHECKSUM",
             "BYTE_HASH_MATCHED_RELEASE_API_DIGEST",
             "SOURCE_ARCHIVE_OBSERVED_UNAUTHENTICATED",
             "REGISTRY_METADATA_ONLY",

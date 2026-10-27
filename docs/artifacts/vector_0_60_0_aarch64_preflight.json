@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "product": "Vector",
+  "version": "0.60.0",
+  "tag": "v0.60.0",
+  "source_commit": "0d0b35865036f8b5c2f0104d9744fa84985ffff1",
+  "platform": "ubuntu-24.04-aarch64-gnu",
+  "artifact": {
+    "url": "https://github.com/vectordotdev/vector/releases/download/v0.60.0/vector-0.60.0-aarch64-unknown-linux-gnu.tar.gz",
+    "filename": "vector-0.60.0-aarch64-unknown-linux-gnu.tar.gz",
+    "bytes": 56805541,
+    "sha256": "1540662d8bc33af5afd287f821ba930417e0f3124073bc9db6a29c59dda88dbb",
+    "final_download_host": "release-assets.githubusercontent.com",
+    "official_checksum_asset_sha256": "c9107d804285c4980b251639afd48de14ac9ff14734371a69aca6097a2341413",
+    "official_checksum_match": true,
+    "signature": "NOT_PUBLISHED",
+    "sbom": "NOT_PUBLISHED",
+    "attestation": "NOT_PUBLISHED",
+    "provenance": "CHECKSUM_ONLY"
+  },
+  "archive": {
+    "member_count": 53,
+    "regular_member_count": 42,
+    "expanded_regular_bytes": 151119387,
+    "max_member_path_bytes": 92,
+    "unsafe_members": 0,
+    "checks": [
+      "ABSOLUTE_PATH",
+      "TRAVERSAL",
+      "ESCAPING_SYMLINK",
+      "HARDLINK",
+      "DEVICE_FIFO_SOCKET",
+      "SETUID_SETGID",
+      "WORLD_WRITABLE_EXECUTABLE",
+      "DUPLICATE_PATH",
+      "CASE_COLLISION",
+      "LONG_PATH",
+      "NESTED_ARCHIVE"
+    ],
+    "result": "STATIC_MEMBER_CHECKS_PASSED"
+  },
+  "binary": {
+    "relative_path": "vector-0.60.0-aarch64-unknown-linux-gnu/bin/vector",
+    "bytes": 150906952,
+    "sha256": "c0231b1714541a10cfb03a9e965a81a98d6e97401f4c738dc7f741d60cefab7a",
+    "format": "ELF64_LSB_PIE",
+    "architecture": "AArch64",
+    "interpreter": "/lib/ld-linux-aarch64.so.1",
+    "needed_libraries": [
+      "libz.so.1",
+      "libgcc_s.so.1",
+      "libpthread.so.0",
+      "libm.so.6",
+      "libdl.so.2",
+      "libc.so.6"
+    ],
+    "stripped": false,
+    "build_id_sha1": "c61411f0eb71ec46d019a2208fc2707b501ba94e",
+    "static_tools": [
+      "file 5.41",
+      "Apple LLVM objdump 17.0.0"
+    ],
+    "executed": false
+  },
+  "disk_budget": {
+    "units": "bytes",
+    "items": {
+      "archive": 56805541,
+      "extracted_distribution": 151119387,
+      "readonly_staging_copy": 151119387,
+      "config_state_temp_cap": 4194304,
+      "synthetic_input_cap": 1048576,
+      "wire_capture_cap": 16777216,
+      "inventory_validation_cap": 4194304,
+      "test_results_cap": 4194304,
+      "bounded_failure_allowance": 67108864,
+      "memory_buffer_disk_allowance": 0
+    },
+    "subtotal": 456561883,
+    "safety_margin_percent": 15,
+    "safety_margin_bytes": 68484283,
+    "planned_peak_bytes": 525046166,
+    "root_reserve_bytes": 3221225472,
+    "start_free_bytes_required": 3746271638,
+    "minimum_free_condition_bytes": 1342177280,
+    "guest_free_bytes_observed": null,
+    "guest_free_bytes_status": "NOT_VERIFIED"
+  },
+  "cleanup": {
+    "archive_removed": true,
+    "staging_removed": true,
+    "package_installed": false,
+    "container_created": false,
+    "vector_process_created": false,
+    "listener_created": false,
+    "secure_erase_claimed": false
+  },
+  "credential_findings": {
+    "unresolved": 3,
+    "cleared": 0
+  },
+  "vmware_host": {
+    "vmrun_present": true,
+    "vmx_present": true,
+    "target_vm_running": true,
+    "configured_vcpus": 2,
+    "configured_memory_mib": 6144,
+    "snapshot_names_present": [
+      "clean-before-phase-31-2a",
+      "pre-phase-33-3d"
+    ],
+    "network_adapter": "PRESENT_NAT",
+    "shared_folders_disabled": "NOT_CONFIRMED",
+    "clipboard_disabled": "NOT_CONFIRMED",
+    "drag_and_drop_disabled": "NOT_CONFIRMED",
+    "guest_isolation_disabled": "NOT_CONFIRMED",
+    "usb_autoconnect_disabled": "NOT_CONFIRMED",
+    "guest_inventory": "NOT_RUN",
+    "vm_or_snapshot_modified": false
+  },
+  "decision": "USER_ACTION_REQUIRED",
+  "blockers": [
+    "ISOLATION_BLOCKED",
+    "RESOURCE_BLOCKED"
+  ]
+}

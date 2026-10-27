@@ -22,7 +22,7 @@
       "signature": "NOT_PUBLISHED",
       "sbom": "NOT_PUBLISHED",
       "provenance": "SOURCE_COMMIT_ONLY",
-      "validation_status": "BYTE_HASH_MATCHED_OFFICIAL_CHECKSUM"
+      "validation_status": "BYTE_HASH_AND_ARCHIVE_MATCHED_OFFICIAL_CHECKSUM"
     },
     {
       "url": "https://github.com/vectordotdev/vector/releases/download/v0.60.0/vector-0.60.0-arm64-apple-darwin.tar.gz",

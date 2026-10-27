@@ -1,20 +1,20 @@
 # Phase 35.4 — Vector isolated JSON Lines integration plan
 
-Status after Phase 35.4A: official x86_64 GNU archive checksum and member inspection passed, and the planned disk budget is numerically closed. No Vector executable or config validation was run. The environment is macOS arm64, without a disposable Ubuntu VM or independently verified OS-level egress deny, so execution remains `ISOLATION_BLOCKED`.
+Status after Phase 35.4A2: x86_64 static preflight remains recorded, and the first execution target is Ubuntu 24.04 ARM64 because that is the architecture of the existing user-provided VM. The ARM64 official archive checksum and static archive/ELF inspection passed. The VM is currently running with NAT and USB enabled; shared-folder, clipboard, drag-and-drop, and guest isolation are not confirmed. Guest free space and cgroup limits are unverified. Execution remains `USER_ACTION_REQUIRED` with `ISOLATION_BLOCKED` and `RESOURCE_BLOCKED`.
 
-Evidence checked 2026-10-27. This is a design and entry gate only. **Vector was not downloaded, installed, unpacked, or executed.** No user logs, Vector configuration, external process, or production connection was used. Vector execution is `NOT_TESTED`.
+Evidence checked 2026-10-27. This is a design and entry gate only. In Phase 35.4A2 the fixed ARM64 archive was downloaded to a temporary directory, statically inspected, and removed; its binary was never executed. No user logs, Vector configuration validation, external process, or production connection was used. Vector execution is `NOT_TESTED`.
 
 ## Decision
 
 **Phase 35.3 synthetic Ubuntu acceptance: `GO` for the bounded JSONL runtime acceptance scope only.** The exact push run passed its full regression and the dedicated Linux step. This does not approve Vector execution, real data, organization operation, or remote collection.
 
-**Next step: `PHASE_35_4_ISOLATED_SYNTHETIC_PILOT_DESIGN_READY`; execution remains `ISOLATION_BLOCKED` until every entry criterion below is independently evidenced.** The only candidate is Vector v0.60.0, in a disposable Ubuntu 24.04 x86_64 environment. This platform is selected because the matching official GNU x86_64 artifact is recorded in the existing manifest and the acceptance CI ran on Ubuntu; the CI does not prove the Vector binary or its filesystem behavior.
+**Next step: ARM64 isolated synthetic pilot remains blocked pending user action and current guest inventory.** The candidate is Vector v0.60.0 in the existing Ubuntu ARM64 VM, not the earlier x86_64 target. The Ubuntu CI validates the analyzer runtime, not Vector's ARM64 binary or filesystem behavior.
 
-The fixed Vector source commit is `0d0b35865036f8b5c2f0104d9744fa84985ffff1`. The existing [artifact manifest](artifacts/vector_0_60_0_manifest.json) is the source of the platform artifact's filename, compressed size, and SHA-256; this plan does not override those values. The selected Linux GNU x86_64 archive entry records 58,655,370 bytes and SHA-256 `89a9f134dcc35a6fbba9cb8ad0fec2d4802657bba6cb1c374a30660ef9456bdc`.
+The fixed Vector source commit is `0d0b35865036f8b5c2f0104d9744fa84985ffff1`. The existing [artifact manifest](artifacts/vector_0_60_0_manifest.json) records both platform artifacts. The retained x86_64 GNU static preflight is 58,655,370 bytes with SHA-256 `89a9f134dcc35a6fbba9cb8ad0fec2d4802657bba6cb1c374a30660ef9456bdc`; the ARM64 GNU candidate is 56,805,541 bytes with SHA-256 `1540662d8bc33af5afd287f821ba930417e0f3124073bc9db6a29c59dda88dbb`. See the [ARM64 preflight](vector_arm64_isolation_preflight_35_4a2.md) for current host and resource blockers.
 
 ## Candidate Platform
 
-The single candidate is **Ubuntu 24.04 x86_64** using the manifest's Linux GNU x86_64 archive. No ARM64 run is planned in this phase. The current Ubuntu CI provides Linux runtime acceptance evidence only; it does not establish the host architecture, artifact execution compatibility, or filesystem type for Vector. The isolated environment must verify `x86_64` and Ubuntu release before any acquisition. A mismatch stops the run.
+The first execution target is Ubuntu 24.04 ARM64 using the manifest's Linux GNU aarch64 archive. The earlier x86_64 static preflight remains recorded as static evidence only and is not replaced or treated as ARM64 proof. The CI provides Linux runtime acceptance only. The guest must verify Ubuntu release, `aarch64`, filesystem, free space, and resource controls before any execution.
 
 Checksum agreement is not a detached signature, SBOM, attestation, reproducible-build proof, or source-to-binary provenance. The current disposition `CHECKSUM_ONLY_ACCEPTED_FOR_ISOLATED_PILOT` is limited to one disposable, synthetic, isolated experiment; it is not a general supply-chain approval. Three credential-shaped binary string findings remain `UNRESOLVED`; they are neither declared secrets nor cleared findings.
 
@@ -31,6 +31,12 @@ Checksum agreement is not a detached signature, SBOM, attestation, reproducible-
 - CI output contained only the fixed JSONL completion marker for this harness. It did not upload artifacts. Synthetic child outputs and temporary state remained outside artifacts.
 
 Evidence is bounded to that harness and runner. It is not a long-duration soak, an RSS limit, a filesystem durability result, or a Vector integration test. The exact workflow did not execute Vector.
+
+### Phase 35.4A2 Platform and Host Update
+
+The exact push run for `572a9e38e9fe4a22f17f4e645f3db214b12d9028` was [40462392016](https://github.com/misosos/ai-security-log-analyzer/actions/runs/40462392016), `completed/success`, with 2,953 tests, the required Linux smokes, axe 14 states/external requests 0, tracked-file integrity, and zero artifacts. Its JSONL acceptance marker occurred once. The ARM64 archive and extracted AArch64 ELF were statically checked; no Vector command ran. The older x86_64 preflight is retained but no longer selects the first execution platform.
+
+Read-only VMware host inspection found the selected VM already running. VMX reports 2 vCPUs and 6,144 MiB configured memory; these are VM configuration values, not live guest free memory. NAT and USB are enabled. Shared-folder count and clipboard/drag-and-drop/HGFS/USB autoconnect isolation are unset or unconfirmed. Named snapshots exist, but names do not establish clean state. Guest root free space and cgroup limits were not read. The ARM64 gate is therefore `USER_ACTION_REQUIRED` with `ISOLATION_BLOCKED` and `RESOURCE_BLOCKED`.
 
 ## Topology
 
@@ -71,7 +77,7 @@ Rotation and restart cases must record replay/duplicate/loss counts. The file so
 
 ## Isolation Gate
 
-No execution occurs unless all are independently checked in a disposable Ubuntu 24.04 x86_64 VM or equivalently isolated environment:
+No execution occurs unless all are independently checked in the existing Ubuntu 24.04 ARM64 VM after an explicitly approved clean-state/isolation procedure, or an equivalently isolated ARM64 environment:
 
 1. Re-fetch only the fixed official artifact in a task-owned temporary area; compare its byte count and SHA-256 to the existing manifest and official checksum. Do not execute before checking archive members for traversal, symlink/hard-link, set-id, unexpected payload, and permission hazards.
 2. Run as non-root with an immutable artifact, read-only config/input, private state/temp, no repository or real HOME access, and no host-shared folder or container socket.
@@ -106,7 +112,7 @@ Actual user data, organization operation, remote collection, TLS/mTLS, durable s
 
 Phase 35.4A closed the pinned archive byte/checksum and metadata inventory and added synthetic expected-wire decoder fixtures. A later execution request must still close all of these:
 
-- disposable Ubuntu 24.04 x86_64 isolation and independently verified egress deny;
+- Ubuntu 24.04 `aarch64` identity, disposable clean state, and independently verified egress deny;
 - repeat artifact byte/checksum verification in the disposable Ubuntu environment and confirm expanded disk quota;
 - execute fixed v0.60.0 config validation under egress deny; confirm config fields and the 8 MiB memory-buffer bound;
 - capture actual source path/host metadata stripping and compare exact six-key JSONL bytes with fixtures;

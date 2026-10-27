@@ -28,7 +28,7 @@ def test_vector_isolated_plan_records_exact_linux_acceptance_and_scope() -> None
         "UNRESOLVED",
         "NO_GO",
         "NOT_TESTED",
-        "Vector was not downloaded, installed, unpacked, or executed",
+        "binary was never executed",
     ):
         assert required in text
 
