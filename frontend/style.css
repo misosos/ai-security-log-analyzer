@@ -162,6 +162,15 @@ a { color: #064f96; text-underline-offset: .2em; }
 .guidance-citation p { margin: .35rem 0; }
 .guidance-source { color: #344d69; font-size: .9rem; }
 .guidance-status { min-height: 1.5rem; }
+.investigation-checklist > button { min-height: 2.75rem; max-width: 100%; white-space: normal; }
+.checklist-result, .checklist-result article { min-width: 0; overflow-wrap: anywhere; }
+.checklist-result article { border-inline-start: .25rem solid #0758ab; margin-top: .7rem; padding: .2rem .8rem; }
+.checklist-result h6 { font-size: .95rem; margin: .35rem 0; }
+.checklist-status { min-height: 2.5rem; overflow-wrap: anywhere; }
+@media (max-width: 40rem) {
+  .investigation-checklist > button { width: 100%; }
+  .checklist-result { max-width: 100%; }
+}
 .case-section ul, .case-section ol { padding-inline-start: 1.5rem; }
 .case-section li + li { margin-top: .65rem; }
 .timeline { list-style: decimal; display: grid; gap: .8rem; }

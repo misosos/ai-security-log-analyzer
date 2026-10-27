@@ -326,7 +326,8 @@ def _local_response(
         [item.row.subject_ip for item in projection.cases]
         + [item.subject_ip for item in projection.independent_observations]
     )
-    cases = tuple(_case(item, aliases) for item in projection.cases)
+    import secrets
+    cases = tuple(_case(item, aliases, "c_" + secrets.token_hex(12)) for item in projection.cases)
     independent = tuple(_independent(item, aliases) for item in projection.independent_observations)
     if any(item.review_order != index for index, item in enumerate(cases, 1)) or any(
         item.review_order != index for index, item in enumerate(independent, 1)
@@ -401,7 +402,12 @@ def _worker(connection, sources, analyze: Callable, project: Callable,
             if len(serialized) > _MAX_RESPONSE_BYTES:
                 connection.send(("error", "RESPONSE_INVALID"))
                 return
-            connection.send(("ok", serialized))
+            from app.investigation_checklist_api_36_3 import trusted_case_fields_from_projection
+            safe_case_inputs = tuple(
+                trusted_case_fields_from_projection(case)
+                for case in projection.cases[:128]
+            ) + (None,) * max(0, len(projection.cases) - 128)
+            connection.send(("ok", serialized, safe_case_inputs))
         except (ValueError, ValidationError, TypeError):
             connection.send(("error", "RESPONSE_INVALID"))
     except Exception:
@@ -439,7 +445,8 @@ async def _run_worker(sources, analyze, project, build_report_projection, render
         if not ready:
             return _error("ANALYSIS_TIMEOUT")
         try:
-            kind, value = receiving.recv()
+            message = receiving.recv()
+            kind, value = message[:2]
         except (EOFError, OSError):
             return _error("ANALYSIS_FAILED")
         if kind == "error" and value in _ERRORS:
@@ -450,7 +457,8 @@ async def _run_worker(sources, analyze, project, build_report_projection, render
             response = LocalInvestigationResponse.model_validate_json(value)
         except ValidationError:
             return _error("RESPONSE_INVALID")
-        return response
+        safe_case_inputs = message[2] if len(message) == 3 else None
+        return response, safe_case_inputs
     except TimeoutError:
         return _error("ANALYSIS_TIMEOUT")
     except (OSError, RuntimeError, TypeError):
@@ -464,6 +472,7 @@ async def _run_worker(sources, analyze, project, build_report_projection, render
 def create_local_endpoint(
     analyze: Callable, project: Callable,
     build_report_projection: Callable, render_report: Callable = _render_local_report,
+    checklist_registry=None,
 ):
     limiter = _LocalLimit()
 
@@ -488,10 +497,21 @@ def create_local_endpoint(
                     async with asyncio.timeout(_UPLOAD_TIMEOUT_SECONDS):
                         form = await _form(request)
                         sources = await _stage(form, directory)
-                    return await _run_worker(
+                    worker_result = await _run_worker(
                         sources, analyze, project,
                         build_report_projection, render_report,
                     )
+                    if (checklist_registry is not None and type(worker_result) is tuple
+                            and len(worker_result) == 2
+                            and isinstance(worker_result[0], LocalInvestigationResponse)
+                            and type(worker_result[1]) is tuple):
+                        response, safe_case_inputs = worker_result
+                        if any(item is None for item in safe_case_inputs):
+                            return _error("RESPONSE_INVALID")
+                        return checklist_registry.attach(response, safe_case_inputs)
+                    if type(worker_result) is tuple:
+                        return worker_result[0]
+                    return worker_result
             except _UploadError as error:
                 return _error(error.code, error.field)
             except TimeoutError:

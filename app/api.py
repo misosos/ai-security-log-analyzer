@@ -37,6 +37,10 @@ from app.local_guidance_33_4 import (
     GuidanceErrorResponse, GuidanceResponse, GUIDANCE_OPENAPI_REQUEST,
     create_guidance_endpoint,
 )
+from app.investigation_checklist_api_36_3 import (
+    CHECKLIST_OPENAPI_REQUEST, ChecklistErrorResponse, ChecklistRegistry, ChecklistResponse,
+    create_checklist_endpoint,
+)
 from app.live_monitoring.http import (
     create_live_events_endpoint, create_live_status_endpoint, live_error_response,
 )
@@ -368,6 +372,7 @@ def create_app(
     live_monitoring_service: LiveMonitoringService | None = None,
     live_monitoring_runner: LiveMonitoringRunner | None = None,
 ) -> FastAPI:
+    checklist_registry = ChecklistRegistry()
     from app.live_monitoring.pair_service import PairMonitoringService, PairRunner
     from app.models.multi_source_live import PairStatusResponse
     pair_service = type(live_monitoring_service) is PairMonitoringService
@@ -510,6 +515,7 @@ def create_app(
             lambda projection: render_investigation_report_html(
                 projection, synthetic_sample=True,
             ),
+            checklist_registry,
         ),
         methods=["POST"],
         response_model=InvestigationResponse,
@@ -519,6 +525,17 @@ def create_app(
         },
     )
     if not enable_linux_audit_api:
+        configured_app.add_api_route(
+            "/api/v1/investigations/checklist",
+            create_checklist_endpoint(checklist_registry),
+            methods=["POST"],
+            response_model=ChecklistResponse,
+            responses={code: {"model": ChecklistErrorResponse}
+                       for code in (400, 404, 429, 503)},
+            openapi_extra={"requestBody": CHECKLIST_OPENAPI_REQUEST},
+            description=("Explicit loopback-only request for a bounded checklist attached "
+                         "to the current analysis result. It never reruns or changes analysis."),
+        )
         configured_app.add_api_route(
             "/api/v1/investigations/guidance",
             create_guidance_endpoint(),
@@ -547,6 +564,7 @@ def create_app(
                 analyze,
                 project_investigation_cases_from_analysis,
                 build_investigation_report_projection,
+                checklist_registry=checklist_registry,
             ),
             methods=["POST"],
             response_model=LocalInvestigationResponse,

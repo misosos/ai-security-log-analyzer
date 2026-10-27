@@ -149,7 +149,17 @@ def test_guidance_does_not_run_analysis_or_mutate_public_analysis_response(monke
     assert response.status_code == 200
     monkeypatch.undo()
     after = client.post("/api/v1/investigations/sample").json()
-    assert before == after
+    def without_request_scoped_refs(value):
+        result = dict(value)
+        result["cases"] = [
+            {key: field for key, field in case.items() if key != "checklist_ref"}
+            for case in value["cases"]
+        ]
+        return result
+    assert without_request_scoped_refs(before) == without_request_scoped_refs(after)
+    before_refs = {case["checklist_ref"] for case in before["cases"]}
+    after_refs = {case["checklist_ref"] for case in after["cases"]}
+    assert before_refs.isdisjoint(after_refs)
 
 
 def test_guidance_response_is_deterministic_across_timezone_settings(monkeypatch):

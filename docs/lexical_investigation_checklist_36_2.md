@@ -2,6 +2,8 @@
 
 **상태:** 내부 deterministic adapter의 합성 평가 PHASE_36_2_AUTOMATED_GO. 한국어 안내 수용 검수 8/8 최종 PASS (`USER_COMPREHENSION_CONDITIONAL_GO`); 6/8 최초 FAIL과 수정 후 재검수 PASS를 함께 기록합니다. no model, no network, no provider call. 실제 로그·조직 운영은 NO_GO.
 
+후속 Phase 36.3에서 이 adapter를 명시적 요청 전용 read-only POST API와 사례 상세 UI 동작에 연결했습니다. 아래의 “연결하지 않음”은 Phase 36.2 완료 시점의 범위를 기록하며, 현재 API/UI 계약은 [Phase 36.3 기록](investigation_checklist_api_ui_36_3.md)을 따릅니다. 36.2A의 8/8은 합성 내부 문구 검수이며 Phase 36.3 UI의 사용자 수용 결과가 아닙니다.
+
 ## 범위와 구조
 
 app/investigation_checklist_36_2.py는 Phase 36.1의 frozen SafeInvestigationDTO, review-priority reference와 출력 기준을 재사용하고 Phase 33.1의 digest-pinned corpus, lexical search 및 citation verifier를 호출합니다. 고정 한국어 문구로 checklist를 구성합니다. 모델, Gemini, embedding, vector DB, HTTP, socket/network, process, 사용자 corpus는 사용하지 않습니다. CLI·API·SSE·UI·HTML·guidance·restricted report와 연결하지 않은 internal/test-only 코드입니다.

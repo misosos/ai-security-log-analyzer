@@ -1,14 +1,14 @@
 # Phase 36.0 — AI-assisted security investigation triage design
 
-**Status: design plus Phase 36.1 internal deterministic reference; no model call or public integration.** The Phase 36.1 module is synthetic/test-only and does not alter authoritative results. No LLM, Gemini, embedding, Ollama, external API, model/runtime download, or installation was used. See [Phase 36.1 implementation record](deterministic_investigation_triage_36_1.md).
+**Status: design plus deterministic internal reference and Phase 36.3 explicit read-only API/UI integration.** Phase 36.3 adds one bounded POST endpoint and an explicit case-detail action; it does not add a model call or alter authoritative results. No LLM, Gemini, embedding, Ollama, external API, model/runtime download, or installation was used. See the [Phase 36.1 implementation record](deterministic_investigation_triage_36_1.md) and [Phase 36.3 implementation record](investigation_checklist_api_ui_36_3.md).
 
 No automatic action is permitted: there is no tool, command, or system-side action path in this design.
 
 ## Decision
 
-Phase 36.1 implemented an **LLM-free deterministic case review-priority reference**, its closed DTO/output validator, and fixed citation-verified checklist text. This is internal/test-only with no user-facing integration. Any later suggestion must remain separate from the existing risk band/score, detection, relation, case state, publication, SSE revision, or checkpoint.
+Phase 36.1 implemented an **LLM-free deterministic case review-priority reference**, its closed DTO/output validator, and Phase 36.2 added fixed citation-verified checklist text. Phase 36.3 exposes that bounded result only through an explicit, read-only request tied to a current opaque case reference. Any suggestion remains separate from the existing risk band/score, detection, relation, case state, publication, SSE revision, or checkpoint.
 
-Phase 36.1 adds a fixed review-priority reference. Phase 36.2 adds category-scoped fixed checklist and explanation templates only when a directly relevant Phase 33.1 citation is verified. Unsupported categories return a fixed refusal. Both are internal synthetic-tested outputs, not user-facing integrations. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, production data, or organizational use. See the [Phase 36.2 semantic checklist record](lexical_investigation_checklist_36_2.md).
+Phase 36.1 adds a fixed review-priority reference. Phase 36.2 adds category-scoped fixed checklist and explanation templates only when a directly relevant Phase 33.1 citation is verified. Phase 36.3 adds a read-only API and explicit UI request, without GET/background retrieval. Unsupported categories return a fixed refusal. Similar-case grouping and response recommendations are deferred. Automated response is prohibited. This decision does not approve an LLM, model provider, real user data, or organizational operation. See the [Phase 36.2 semantic checklist record](lexical_investigation_checklist_36_2.md) and [Phase 36.3 API/UI record](investigation_checklist_api_ui_36_3.md).
 
 The deterministic pipeline remains authoritative. AI assistance, if a later gate approves it, can only be a labeled analyst aid. A missing, refused, invalid, timed-out, or failed assistance result leaves existing analysis unchanged and usable.
 
@@ -42,7 +42,7 @@ deterministic case result (unchanged)
 
 The Phase 36.1 reference uses deterministic rules, not a model. Before any later model call, the exact system policy text and input/output schema version must be pinned by a content digest and reviewed; policy/schema changes require a new digest and evaluation. A later model must be an isolated optional producer behind the same input/output contracts. It has no filesystem, network, shell, or tool capability. Failure is confined to the assistance branch. No automatic request is made on case creation, page load, API/SSE update, or background schedule.
 
-The Phase 36.1 internal scope is a review-priority reference plus bounded fixed checklist/explanation templates. The priority is not severity or risk. The module is not connected to a product surface. Phase 36.2 requires semantic citation review and synthetic contract evaluation before any retrieval-backed expansion; model-generated explanation is not required.
+At Phase 36.1, the reference was internal-only; Phase 36.3 now exposes a bounded, explicit read-only request as described above. The priority remains separate from severity or risk. Phase 36.2 requires semantic citation review and synthetic contract evaluation before retrieval-backed expansion; model-generated explanation is not required.
 
 ## Safe Investigation DTO
 

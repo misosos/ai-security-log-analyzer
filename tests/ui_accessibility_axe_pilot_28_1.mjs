@@ -17,6 +17,31 @@ const STATES = [
   'private-event-rejected', 'degraded', 'failed', 'replay-gap', 'checkpoint-reset-explanation',
   'three-file-error', 'linux-audit-error',
 ];
+const CHECKLIST_STATES = [
+  'CHECKLIST_LOADING', 'CHECKLIST_AVAILABLE', 'CHECKLIST_REFUSED', 'CHECKLIST_STALE',
+  'CHECKLIST_TIMEOUT', 'CHECKLIST_RATE', 'CHECKLIST_UNAVAILABLE', 'CHECKLIST_RETRY',
+  'CHECKLIST_REAL',
+];
+
+function checklistPayload(state) {
+  if (state === 'CHECKLIST_AVAILABLE') return {
+    schema: 'investigation-checklist/v1', status: 'available', review_priority: 'review_soon',
+    priority_meaning: 'analyst_review_order_only_not_security_risk', category: 'authentication',
+    steps: [{text: '합성 자료의 coverage를 확인하세요.', purpose_code: 'manual_coverage',
+      citation_ids: ['next-checks:review-records'], limitation_codes: ['INCOMPLETE_EVIDENCE']}],
+    explanation: {text: '검토 순서에 관한 참고 제안입니다.', citation_ids: ['next-checks:review-records']}, uncertainty_codes: [], limitation_codes: [],
+    citations: [{citation_id: 'next-checks:review-records', title: '조사 범위 확인',
+      summary: '승인된 일반 조사 참고 자료입니다. 사례 발생의 증거가 아닙니다.'}],
+    citation_meaning: 'general_reference_not_case_evidence', generated_by: 'deterministic_lexical_template'
+  };
+  return {
+    schema: 'investigation-checklist/v1', status: 'refused', review_priority: 'undetermined',
+    priority_meaning: 'analyst_review_order_only_not_security_risk', category: 'unknown', steps: [],
+    explanation: {text: '현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. 이는 안전 또는 비위험 판정이 아닙니다. 기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. 승인 근거가 검토되기 전에는 추측하지 않습니다.', citation_ids: []},
+    uncertainty_codes: ['insufficient_context'], limitation_codes: ['INCOMPLETE_EVIDENCE'], citations: [],
+    citation_meaning: 'general_reference_not_case_evidence', generated_by: 'deterministic_lexical_template'
+  };
+}
 
 function requireSafe(condition, code) {
   if (!condition) throw new Error(code);
@@ -196,8 +221,9 @@ async function scan(page, state) {
       pendingLive: document.querySelector('#live-pending-status').getAttribute('aria-live') === 'polite',
     };
   });
-  const hiddenExpected = ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
-    'three-file-error', 'linux-audit-error'].includes(state);
+  const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
+    ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
+      'three-file-error', 'linux-audit-error'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
     if (key === 'hiddenLive') continue;
@@ -224,6 +250,7 @@ async function main() {
   let context;
   let externalRequests = 0;
   let stateForPage = 'DISABLED';
+  let checklistRouteCalls = 0;
   try {
     server = await startServer(home);
     const response = await fetch(`${server.origin}/`);
@@ -260,6 +287,30 @@ async function main() {
               title: '조사 사례와 지원 관계', summary: '합성 검증용 승인 문장입니다.',
               source_ref: 'docs/live_analysis_correlation_case_design.md'}],
           })});
+      } else if (url.pathname === '/api/v1/investigations/checklist') {
+        if (stateForPage === 'CHECKLIST_REAL') await route.continue();
+        else if (stateForPage === 'CHECKLIST_LOADING') {
+          await new Promise((resolveRequest) => setTimeout(resolveRequest, 150));
+          await route.fulfill({status: 200, contentType: 'application/json',
+            body: JSON.stringify(checklistPayload('CHECKLIST_REFUSED'))});
+        } else if (stateForPage === 'CHECKLIST_STALE') {
+          await route.fulfill({status: 404, contentType: 'application/json',
+            body: JSON.stringify({error_code: 'NOT_FOUND', user_message: '현재 분석 결과에서 사례를 찾을 수 없습니다.'})});
+        } else if (stateForPage === 'CHECKLIST_TIMEOUT') {
+          await route.fulfill({status: 503, contentType: 'application/json',
+            body: JSON.stringify({error_code: 'TIMEOUT', user_message: '조사 점검표 준비 시간이 초과되었습니다.'})});
+        } else if (stateForPage === 'CHECKLIST_RATE') {
+          await route.fulfill({status: 429, contentType: 'application/json',
+            body: JSON.stringify({error_code: 'RATE_LIMITED', user_message: '조사 점검표 요청 한도에 도달했습니다.'})});
+        } else if (stateForPage === 'CHECKLIST_UNAVAILABLE' ||
+                   (stateForPage === 'CHECKLIST_RETRY' && checklistRouteCalls++ === 0)) {
+          await route.fulfill({status: 503, contentType: 'application/json',
+            body: JSON.stringify({error_code: 'UNAVAILABLE', user_message: '승인 근거를 확인할 수 없어 점검표를 준비하지 못했습니다.'})});
+        } else {
+          await route.fulfill({status: 200, contentType: 'application/json',
+            body: JSON.stringify(checklistPayload(stateForPage === 'CHECKLIST_AVAILABLE' ||
+              stateForPage === 'CHECKLIST_RETRY' ? 'CHECKLIST_AVAILABLE' : 'CHECKLIST_REFUSED'))});
+        }
       } else if (['/', '/assets/style.css', '/assets/app.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
@@ -498,6 +549,72 @@ async function main() {
       await analysisText().then((text) => text === beforeGuidance),
     'REAL_GUIDANCE_STALE_OR_MUTATED');
     await realGuidancePage.close();
+    for (const checklistState of CHECKLIST_STATES) {
+      stateForPage = checklistState;
+      checklistRouteCalls = 0;
+      const checklistPage = await context.newPage();
+      await checklistPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+      await checklistPage.locator('#sample-button').click();
+      const card = checklistPage.locator('#case-list .case-card').first();
+      await card.locator(':scope > summary').focus();
+      await checklistPage.keyboard.press('Enter');
+      const control = card.locator('.checklist-request');
+      const calls = [];
+      checklistPage.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/api/v1/investigations/checklist') calls.push(request);
+      });
+      const before = await checklistPage.locator('#results').evaluate((node) => {
+        const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
+        return copy.innerText;
+      });
+      requireSafe(calls.length === 0, 'CHECKLIST_AUTOMATIC_REQUEST');
+      requireSafe(await control.getAttribute('type') === 'button' && await control.evaluate((node) => node.tabIndex >= 0),
+        'CHECKLIST_KEYBOARD_CONTROL_MISSING');
+      await control.focus();
+      await checklistPage.keyboard.press('Enter');
+      if (checklistState === 'CHECKLIST_LOADING') {
+        requireSafe(await card.locator('.checklist-status').textContent().then((text) => text.includes('확인하고 있습니다')) &&
+          await control.isDisabled(), 'CHECKLIST_LOADING_STATE_MISSING');
+      }
+      await checklistPage.waitForFunction(() => !document.querySelector('.checklist-status')?.textContent.includes('확인하고 있습니다'));
+      if (checklistState === 'CHECKLIST_RETRY') {
+        await control.click();
+        await checklistPage.waitForSelector('.checklist-result article');
+      }
+      requireSafe(calls.length === (checklistState === 'CHECKLIST_RETRY' ? 2 : 1), 'CHECKLIST_OPT_IN_COUNT_FAILED');
+      const requestBody = JSON.parse(calls[0].postData() || '{}');
+      requireSafe(Object.keys(requestBody).sort().join(',') === 'case_ref,schema_version' &&
+        /^c_[0-9a-f]{24}$/.test(requestBody.case_ref), 'CHECKLIST_REQUEST_PRIVACY_FAILED');
+      const rendered = await card.locator('.investigation-checklist').innerText();
+      if (checklistState === 'CHECKLIST_AVAILABLE' || checklistState === 'CHECKLIST_RETRY' ||
+          checklistState === 'CHECKLIST_REAL') {
+        requireSafe((checklistState === 'CHECKLIST_REAL' ? rendered.includes('undetermined') : rendered.includes('review_soon')) &&
+          rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),
+          'CHECKLIST_AVAILABLE_RENDER_FAILED');
+      } else if (checklistState === 'CHECKLIST_STALE' || checklistState === 'CHECKLIST_TIMEOUT' ||
+                 checklistState === 'CHECKLIST_RATE' || checklistState === 'CHECKLIST_UNAVAILABLE') {
+        requireSafe(rendered.length > 0, 'CHECKLIST_FIXED_ERROR_NOT_RENDERED');
+      } else {
+        requireSafe(rendered.includes('안전 또는 비위험 판정이 아닙니다'), 'CHECKLIST_REFUSAL_SEMANTICS_FAILED');
+      }
+      requireSafe(await checklistPage.locator('#results').evaluate((node) => {
+        const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
+        return copy.innerText;
+      }) === before, 'CHECKLIST_ANALYSIS_MUTATION');
+      for (const width of [320, 640, 1024, 1440]) {
+        await checklistPage.setViewportSize({width, height: 900});
+        requireSafe(await checklistPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          'CHECKLIST_HORIZONTAL_OVERFLOW');
+      }
+      await checklistPage.setViewportSize({width: 640, height: 900});
+      await checklistPage.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      requireSafe(await checklistPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        'CHECKLIST_200_PERCENT_TEXT_OVERFLOW');
+      await checklistPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await scan(checklistPage, checklistState.toLowerCase());
+      await checklistPage.close();
+    }
+    stateForPage = 'DISABLED';
     stateForPage = 'MULTI';
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);
@@ -561,7 +678,7 @@ async function main() {
     console.log(`schema3_dom_apply ${JSON.stringify({...summarizeMs(domApplyTimes), payload_bytes: uiPayloadBytes})}`);
     await pairPage.close();
     requireSafe(externalRequests === 0, 'EXTERNAL_NETWORK_REQUEST');
-    console.log(`states=${STATES.length + 1} external_requests=${externalRequests} elapsed_ms=${Math.round(performance.now() - start)}`);
+    console.log(`states=${STATES.length + CHECKLIST_STATES.length + 1} external_requests=${externalRequests} elapsed_ms=${Math.round(performance.now() - start)}`);
   } finally {
     let cleanupFailed = false;
     for (const cleanup of [

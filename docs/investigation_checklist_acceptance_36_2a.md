@@ -46,6 +46,7 @@ Final result: **8/8 PASS**, with the item 6 initial FAIL retained. `USER_COMPREH
 - Deterministic analysis and corpus digest: unchanged in review captures.
 - Citation verification and output validation: passed for displayed results.
 - Production API/SSE/UI integration: `NOT_IMPLEMENTED`.
+- Subsequent state: Phase 36.3 added one explicit read-only checklist POST endpoint and case-detail button. This does not retroactively extend the 8/8 comprehension result to the production API/UI; that integration still requires its own human acceptance.
 - Actual user logs and organization operations: `NO_GO`.
 - 실제 조직 로그 사용은 승인되지 않았습니다. Automated evaluation results do not replace user answers.
 - Automated response: `NO_GO`.

@@ -113,7 +113,10 @@ def test_sample_success_has_fixed_counts_order_labels_and_capabilities():
 def test_identical_requests_are_deeply_equal_and_no_generated_identifier():
     first = _client().post("/api/v1/investigations/sample").json()
     second = _client().post("/api/v1/investigations/sample").json()
+    first_refs = [case.pop("checklist_ref") for case in first["cases"]]
+    second_refs = [case.pop("checklist_ref") for case in second["cases"]]
     assert first == second
+    assert first_refs and second_refs and set(first_refs).isdisjoint(second_refs)
     assert "analysis_id" not in json.dumps(first, ensure_ascii=False)
 
 

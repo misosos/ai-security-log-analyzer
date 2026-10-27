@@ -36,6 +36,7 @@ from app.models.investigation_sample_api import (
     Timestamp,
 )
 from app.public_identifiers import subject_aliases
+from app.investigation_checklist_api_36_3 import trusted_case_fields_from_projection
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -331,7 +332,7 @@ def _timeline(item, aliases) -> TimelineEntry:
     )
 
 
-def _case(item, aliases) -> InvestigationCase:
+def _case(item, aliases, checklist_ref: str) -> InvestigationCase:
     row = item.row
     entries = item.timeline_entries + item.timeline_entries_without_time
     if row.account_alias is not None or row.account_alias_status != "ACCOUNT_REFERENCE_UNAVAILABLE":
@@ -345,6 +346,7 @@ def _case(item, aliases) -> InvestigationCase:
         if entry.relation_display_name is not None
     ))
     return InvestigationCase(
+        checklist_ref=checklist_ref,
         review_order=row.review_order,
         case_label=row.case_label,
         subject_alias=aliases[row.subject_ip],
@@ -394,6 +396,7 @@ def build_sample_response(
     analysis: dict,
     projection: InvestigationCaseProjection,
     report_export: ReportExport,
+    checklist_refs: tuple[str, ...] | None = None,
 ) -> InvestigationResponse:
     if (
         type(analysis) is not dict
@@ -419,7 +422,12 @@ def build_sample_response(
         [item.row.subject_ip for item in projection.cases]
         + [item.subject_ip for item in projection.independent_observations]
     )
-    cases = tuple(_case(item, aliases) for item in projection.cases)
+    if checklist_refs is None:
+        import secrets
+        checklist_refs = tuple("c_" + secrets.token_hex(12) for _ in projection.cases)
+    if len(checklist_refs) != len(projection.cases):
+        raise _ResponseInvalid() from None
+    cases = tuple(_case(item, aliases, checklist_ref) for item, checklist_ref in zip(projection.cases, checklist_refs))
     independent = tuple(_independent(item, aliases) for item in projection.independent_observations)
     if any(case.review_order != n for n, case in enumerate(cases, 1)) or any(
         item.review_order != n for n, item in enumerate(independent, 1)
@@ -465,6 +473,7 @@ def _execute(
     project: Callable,
     build_report_projection: Callable,
     render_report: Callable,
+    checklist_registry=None,
 ) -> InvestigationResponse:
     verified = tuple(_fixture_bytes(spec) for spec in _FIXTURES)
     with tempfile.TemporaryDirectory(prefix="investigation-sample-") as directory:
@@ -482,7 +491,13 @@ def _execute(
         except Exception:
             raise _ReportGenerationFailed() from None
         try:
-            return build_sample_response(analysis, projection, report_export)
+            response = build_sample_response(analysis, projection, report_export)
+            if checklist_registry is not None:
+                return checklist_registry.attach(
+                    response,
+                    tuple(trusted_case_fields_from_projection(case) for case in projection.cases),
+                )
+            return response
         except ValidationError:
             raise _ResponseInvalid() from None
 
@@ -501,6 +516,7 @@ def create_sample_endpoint(
     project: Callable,
     build_report_projection: Callable,
     render_report: Callable,
+    checklist_registry=None,
 ):
     limiter = _SampleLimit()
 
@@ -519,10 +535,12 @@ def create_sample_endpoint(
             return _error(rejection)
         task = asyncio.create_task(asyncio.to_thread(
             _execute, analyze, project, build_report_projection, render_report,
+            checklist_registry,
         ))
         task.add_done_callback(lambda completed: _complete(completed, limiter))
         try:
-            return await asyncio.wait_for(asyncio.shield(task), _TIMEOUT_SECONDS)
+            response = await asyncio.wait_for(asyncio.shield(task), _TIMEOUT_SECONDS)
+            return response
         except TimeoutError:
             return _error("ANALYSIS_TIMEOUT")
         except _FixtureUnavailable:

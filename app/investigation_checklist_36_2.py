@@ -24,7 +24,7 @@ MAX_TEXT_BYTES = 512
 MAX_CONCURRENT_REQUESTS = 1
 _REFUSAL_EXPLANATION = (
     "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
-    "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+    "이는 안전 또는 비위험 판정이 아닙니다. "
     "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
     "승인 근거가 검토되기 전에는 추측하지 않습니다."
 )
@@ -289,7 +289,7 @@ def build_investigation_checklist(item: SafeInvestigationDTO) -> InvestigationCh
             if assistance.status != "available":
                 return _fixed_result(item, assistance.status)
             categories = _categories(item)
-            if (item.source_role == "unknown" or not categories
+            if (not categories
                     or any(category not in _CATEGORY_TEMPLATE for category in categories)):
                 return _fixed_result(item, "refused")
             verified_now = _verified_ids(item, categories, corpus)
@@ -406,7 +406,7 @@ def validate_checklist_json(raw: str | bytes, item: SafeInvestigationDTO) -> Inv
         if active_corpus.digest != item.corpus_digest:
             raise ChecklistError("OUTPUT_INVALID")
         categories = _categories(item)
-        if (item.source_role == "unknown" or not categories
+        if (not categories
                 or any(category not in _CATEGORY_TEMPLATE for category in categories)):
             verified = set()
         else:
@@ -465,7 +465,7 @@ def validate_checklist_json(raw: str | bytes, item: SafeInvestigationDTO) -> Inv
         if status == "available":
             if not steps or type(explain_text) is not str or not explain_text:
                 raise ChecklistError("OUTPUT_INVALID")
-            if (item.source_role == "unknown" or not categories
+            if (not categories
                     or any(category not in _CATEGORY_TEMPLATE for category in categories)):
                 raise ChecklistError("OUTPUT_INVALID")
             if len(explain_text.encode("utf-8")) > MAX_TEXT_BYTES:

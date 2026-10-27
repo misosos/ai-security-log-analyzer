@@ -67,12 +67,14 @@ def test_category_checklist_is_closed_cited_and_deterministic():
     ("benign_control", {"detection_codes": (), "observation_categories": ("authentication",), "limitation_codes": ("NO_FINDING_IS_NOT_SAFE",)}, "available", "review_no_finding_scope", "no-finding:no-detection"),
     ("path_traversal_no_corpus_support", {"detection_codes": ("path_traversal",)}, "refused", None, None),
     ("process_no_corpus_support", {"detection_codes": (), "relation_codes": (), "observation_categories": ("process_execution",)}, "refused", None, None),
-    ("unknown_role", {"source_role": "unknown", "detection_codes": (), "relation_codes": ()}, "refused", None, None),
+    ("unknown_role_supported_category", {"source_role": "unknown"}, "available", "review_authentication_scope", "brute-force:meaning-limit"),
 ])
 def test_supported_and_refused_categories_are_citation_scoped(kind, overrides, status, template, required):
     result = build_investigation_checklist(dto(**overrides))
     assert result.status == status
     if status == "available":
+        if kind == "unknown_role_supported_category":
+            assert result.review_priority.value == "undetermined"
         assert template in {step.template_code for step in result.steps}
         citations = {citation for step in result.steps for citation in step.citation_ids}
         assert required in citations
@@ -82,7 +84,7 @@ def test_supported_and_refused_categories_are_citation_scoped(kind, overrides, s
         if status == "refused":
             assert result.explanation == (
                 "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
-                "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+                "이는 안전 또는 비위험 판정이 아닙니다. "
                 "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
                 "승인 근거가 검토되기 전에는 추측하지 않습니다."
             )
@@ -96,7 +98,7 @@ def test_refusal_output_explains_scope_boundary_and_safe_next_steps():
     assert result.steps == ()
     assert result.explanation == (
         "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. "
-        "이는 안전 또는 위험하지 않다는 판정이 아닙니다. "
+        "이는 안전 또는 비위험 판정이 아닙니다. "
         "기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. "
         "승인 근거가 검토되기 전에는 추측하지 않습니다."
     )
@@ -301,7 +303,7 @@ def test_faults_return_fixed_non_partial_results(monkeypatch, fault, expected):
     assert result.status == expected
     assert result.steps == ()
     if expected == "refused":
-        assert "안전 또는 위험하지 않다는 판정이 아닙니다." in result.explanation
+        assert "안전 또는 비위험 판정이 아닙니다." in result.explanation
     else:
         assert result.explanation == ""
 

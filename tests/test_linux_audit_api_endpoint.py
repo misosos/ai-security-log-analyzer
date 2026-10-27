@@ -162,7 +162,8 @@ def test_default_app_is_disabled_and_does_not_invoke_linux_audit_helpers(
 
     schema = api_module.app.openapi()
     assert set(schema["paths"]) == {
-        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit", "/api/v1/investigations/guidance"
+        "/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit", "/api/v1/investigations/guidance",
+        "/api/v1/investigations/checklist",
     }
     assert ENDPOINT not in schema["paths"]
     assert "LinuxAuditInvestigationResponse" in schema.get("components", {}).get("schemas", {})

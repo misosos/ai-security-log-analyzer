@@ -4,6 +4,7 @@
   const ENDPOINT = "/api/v1/investigations/sample";
   const LOCAL_ENDPOINT = "/api/v1/investigations";
   const GUIDANCE_ENDPOINT = "/api/v1/investigations/guidance";
+  const CHECKLIST_ENDPOINT = "/api/v1/investigations/checklist";
   const GUIDANCE_CORPUS_DIGEST = "fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6";
   const MAX_RESPONSE_BYTES = 128 * 1024;
   const MAX_REPORT_BYTES = 32 * 1024;
@@ -430,9 +431,11 @@
       "included_highest_confidence", "start_time", "end_time", "observation_count",
       "supporting_relation_count", "grouping_explanation", "supported_detections",
       "supported_relations", "timeline_label", "timeline", "limitations", "unverified_items",
-      "next_steps", "account_alias_state", "account_alias_message"
+      "next_steps", "account_alias_state", "account_alias_message", "checklist_ref"
     ]);
     if (item.review_order !== index + 1 || item.case_label !== `조사 사례 ${index + 1}`) failContract();
+    if (item.checklist_ref !== null &&
+        (typeof item.checklist_ref !== "string" || !/^c_[0-9a-f]{24}$/.test(item.checklist_ref))) failContract();
     boundedText(item.subject_alias);
     if (!/^대상 (?:[A-Z]|[0-9]+)$/.test(item.subject_alias)) failContract();
     if (item.timeline.some((entry) => entry.subject_alias !== item.subject_alias)) failContract();
@@ -950,8 +953,130 @@
     const nextSteps = detailSection("다음 조사 단계");
     textList(nextSteps, caseItem.next_steps.map((item) => item.text), true,
       "표시할 고정 조사 단계가 없습니다.");
-    body.append(limitations, unverified, nextSteps, renderGuidance(caseItem));
+    body.append(limitations, unverified, nextSteps, renderGuidance(caseItem), renderChecklist(caseItem));
     return body;
+  }
+
+  function validateChecklistResponse(value) {
+    closedRecord(value, ["schema", "status", "review_priority", "priority_meaning", "category",
+      "steps", "explanation", "uncertainty_codes", "limitation_codes", "citations",
+      "citation_meaning", "generated_by"]);
+    if (value.schema !== "investigation-checklist/v1" ||
+        !["available", "refused", "unavailable"].includes(value.status) ||
+        !["review_now", "review_soon", "review_later", "undetermined"].includes(value.review_priority) ||
+        value.priority_meaning !== "analyst_review_order_only_not_security_risk" ||
+        !["authentication", "web_request", "relation", "unknown"].includes(value.category) ||
+        value.citation_meaning !== "general_reference_not_case_evidence" ||
+        value.generated_by !== "deterministic_lexical_template") failContract();
+    items(value.steps, 5).forEach((step) => {
+      closedRecord(step, ["text", "purpose_code", "citation_ids", "limitation_codes"]);
+      boundedText(step.text); boundedText(step.purpose_code);
+      if (new TextEncoder().encode(step.text).length > 512) failContract();
+      texts(step.citation_ids, 2); texts(step.limitation_codes, 4);
+    });
+    closedRecord(value.explanation, ["text", "citation_ids"]);
+    boundedText(value.explanation.text);
+    if (new TextEncoder().encode(value.explanation.text).length > 1024) failContract();
+    texts(value.uncertainty_codes, 4); texts(value.limitation_codes, 16);
+    items(value.citations, 8).forEach((citation) => {
+      closedRecord(citation, ["citation_id", "title", "summary"]);
+      if (typeof citation.citation_id !== "string" ||
+          !/^[a-z0-9-]{1,48}:[a-z0-9-]{1,48}$/.test(citation.citation_id)) failContract();
+      boundedText(citation.title); boundedText(citation.summary);
+    });
+    const citationIds = value.citations.map((citation) => citation.citation_id);
+    if (new Set(citationIds).size !== citationIds.length) failContract();
+    const used = [...value.explanation.citation_ids];
+    if (value.status === "available") {
+      if (value.steps.length === 0 || used.length === 0) failContract();
+      value.steps.forEach((step) => {
+        if (step.citation_ids.length === 0) failContract();
+        used.push(...step.citation_ids);
+      });
+      if (used.some((id) => !citationIds.includes(id)) || citationIds.some((id) => !used.includes(id))) failContract();
+    } else {
+      if (value.steps.length !== 0 || citationIds.length !== 0 || used.length !== 0) failContract();
+      const expected = value.status === "refused" ?
+        "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. 이는 안전 또는 비위험 판정이 아닙니다. 기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. 승인 근거가 검토되기 전에는 추측하지 않습니다." :
+        "승인 근거를 검증할 수 없어 점검표를 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
+      if (value.explanation.text !== expected) failContract();
+    }
+    return value;
+  }
+
+  function renderChecklist(caseItem) {
+    const section = detailSection("조사 점검표");
+    section.classList.add("investigation-checklist");
+    section.append(element("p", "검토 우선순위는 기존 위험도가 아니라 분석가의 검토 순서에 관한 별도 제안입니다."));
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "checklist-request";
+    button.textContent = "조사 점검표 보기";
+    const status = element("p", "점검표는 요청할 때만 준비됩니다.", "checklist-status");
+    status.setAttribute("aria-live", "polite");
+    const result = document.createElement("div");
+    result.className = "checklist-result";
+    result.hidden = true;
+    if (caseItem.checklist_ref === null) {
+      status.textContent = "현재 결과에서 점검표를 요청할 수 없습니다. 최신 분석을 다시 실행하세요.";
+      section.append(status);
+      return section;
+    }
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      result.replaceChildren(); result.hidden = true;
+      status.textContent = "승인된 참고 근거를 확인하고 있습니다.";
+      try {
+        const response = await fetch(CHECKLIST_ENDPOINT, {
+          method: "POST", credentials: "omit",
+          headers: {Accept: "application/json", "Content-Type": "application/json"},
+          body: JSON.stringify({schema_version: 1, case_ref: caseItem.checklist_ref})
+        });
+        const payload = await boundedJson(response, 8192);
+        if (!response.ok) {
+          closedRecord(payload, ["error_code", "user_message"]);
+          const messages = {
+            INVALID_REQUEST: "요청 형식을 확인할 수 없습니다.",
+            NOT_FOUND: "현재 분석 결과에서 사례를 찾을 수 없습니다. 최신 결과에서 다시 선택하세요.",
+            RATE_LIMITED: "요청 한도에 도달했습니다. 잠시 뒤 다시 시도하세요.",
+            BUSY: "다른 점검표 요청이 진행 중입니다. 완료 후 다시 시도하세요.",
+            TIMEOUT: "점검표 준비 시간이 초과되었습니다. 기존 분석 결과는 그대로 유지됩니다.",
+            UNAVAILABLE: "승인 근거를 확인할 수 없습니다. 기존 분석 결과를 확인하세요."
+          };
+          if (!Object.hasOwn(messages, payload.error_code) || payload.user_message !== messages[payload.error_code]) failContract();
+          status.textContent = messages[payload.error_code];
+          return;
+        }
+        const checklist = validateChecklistResponse(payload);
+        status.textContent = checklist.status === "refused" ?
+          `${checklist.explanation.text} 참고 근거는 일반적인 조사 방법과 한계이며 사례 증거가 아닙니다.` :
+          checklist.status === "unavailable" ? "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다." :
+            "검토 우선순위는 기존 위험도와 별개인 참고 제안입니다.";
+        result.append(element("h6", `검토 우선순위: ${checklist.review_priority}`));
+        result.append(element("p", `사례 범주: ${checklist.category}`));
+        result.append(element("p", checklist.explanation.text));
+        checklist.steps.forEach((step) => result.append(element("p", step.text)));
+        checklist.uncertainty_codes.forEach((code) => result.append(element("p", `불확실성: ${code}`)));
+        checklist.limitation_codes.forEach((code) => result.append(element("p", `한계: ${code}`)));
+        if (checklist.citations.length) {
+          result.append(element("p", "아래 참고 근거는 일반 조사 지식이며 이 사례의 직접 증거가 아닙니다."));
+          checklist.citations.forEach((citation) => {
+            const item = document.createElement("article");
+            item.append(element("h6", citation.title), element("p", citation.summary),
+              element("p", `참고 ID: ${citation.citation_id}`));
+            result.append(item);
+          });
+        }
+        result.hidden = false;
+      } catch (_error) {
+        status.textContent = "점검표를 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+    section.append(button, status, result);
+    return section;
   }
 
   function renderSummary(data) {

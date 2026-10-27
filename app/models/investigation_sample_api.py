@@ -70,6 +70,7 @@ class TextItem(_ClosedModel):
 
 
 class InvestigationCase(_ClosedModel):
+    checklist_ref: str | None = Field(pattern=r"^c_[0-9a-f]{24}$", max_length=26)
     review_order: int
     case_label: str
     subject_alias: str

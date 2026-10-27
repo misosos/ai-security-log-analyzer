@@ -19,17 +19,20 @@ def test_phase_36_1_documentation_states_closed_scope_and_entry_gate():
     assert "tests/benchmark_investigation_triage_36_1.py" in text
 
 
-def test_phase_36_0_and_33_0_status_link_to_36_1_without_claiming_model_use():
+def test_phase_36_0_and_33_0_status_link_to_triage_without_claiming_model_use():
     design = (ROOT / "docs/ai_investigation_triage_design_36_0.md").read_text()
     phase33 = (ROOT / "docs/local_ai_investigation_assistant_33_0.md").read_text()
     assert "deterministic_investigation_triage_36_1.md" in design
+    assert "investigation_checklist_api_ui_36_3.md" in design
     assert "Phase 36.1" in design
     assert "deterministic_investigation_triage_36_1.md" in phase33
 
 
-def test_readme_and_index_link_to_internal_reference_only():
+def test_readme_and_index_link_to_deterministic_reference_and_phase_36_3():
     readme = (ROOT / "README.md").read_text()
     index = (ROOT / "docs/index.md").read_text()
     assert "결정적 조사 우선순위 기준선" in readme
+    assert "investigation_checklist_api_ui_36_3.md" in readme
     assert "deterministic_investigation_triage_36_1.md" in readme
     assert "deterministic_investigation_triage_36_1.md" in index
+    assert "investigation_checklist_api_ui_36_3.md" in index
