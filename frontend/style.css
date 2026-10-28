@@ -150,6 +150,17 @@ a { color: #064f96; text-underline-offset: .2em; }
 .independent-card { padding: .85rem; }
 .independent-card .independent-evidence { margin-top: .5rem; }
 .review-detail-view[hidden], .review-route-expired[hidden] { display: none; }
+.workspace-detail-shell-36-6b { display: grid; gap: 1rem; padding: 1rem; }
+.workspace-detail-shell-36-6b h2, .workspace-detail-shell-36-6b h3,
+.workspace-detail-shell-36-6b p { margin: 0; }
+.workspace-detail-shell-36-6b h3 { font-size: 1.25rem; line-height: 1.4; }
+.workspace-shell-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin: 0; }
+.workspace-shell-summary > div { min-width: 0; }
+.workspace-shell-summary dt { color: #344d69; font-weight: 650; }
+.workspace-shell-summary dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.workspace-shell-facts { color: #344d69; }
+.workspace-shell-status { font-weight: 700; }
+.workspace-shell-note { max-width: 70ch; line-height: 1.55; }
 .results > details { border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; }
 #results .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

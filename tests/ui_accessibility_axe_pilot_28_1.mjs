@@ -49,6 +49,7 @@ function requireSafe(condition, code) {
 }
 
 async function openReviewCase(page, index = 0) {
+  await page.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
   await page.locator(`#review-case-link-${index}`).click();
   await page.locator('#case-detail-view').waitFor({state: 'visible'});
   return page.locator('#case-detail-view .case-card');
@@ -230,7 +231,8 @@ async function scan(page, state) {
   });
   const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
-      'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired'].includes(state);
+      'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired',
+      'workspace-projection-shell', 'workspace-direct-entry-expired'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
     if (key === 'hiddenLive') continue;
@@ -244,8 +246,7 @@ async function scan(page, state) {
     .map((item) => ({impact: item.impact, id: item.id, nodes: item.nodes.length}))
     .sort((a, b) => a.id.localeCompare(b.id));
   console.log(`${state} ${JSON.stringify(summary)}`);
-  requireSafe(!summary.some((item) => item.impact === 'serious' || item.impact === 'critical'),
-    'AXE_SERIOUS_OR_CRITICAL');
+  requireSafe(summary.length === 0, 'AXE_VIOLATIONS_PRESENT');
 }
 
 async function main() {
@@ -641,6 +642,7 @@ async function main() {
     stateForPage = 'DISABLED';
     const reviewWorkspacePage = await context.newPage();
     await reviewWorkspacePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await reviewWorkspacePage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
     await reviewWorkspacePage.locator('#sample-button').click();
     await reviewWorkspacePage.locator('#case-list .case-card').nth(1).waitFor({state: 'attached'});
     requireSafe(await reviewWorkspacePage.locator('#case-list .case-detail').count() === 0 &&
@@ -715,6 +717,12 @@ async function main() {
     requireSafe(zoomOverflow && zoomCardSafe, 'REVIEW_CARD_SMALL_ZOOM_REFLOW_FAILED');
     await reviewWorkspacePage.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await reviewWorkspacePage.setViewportSize({width: 1280, height: 900});
+    await reviewWorkspacePage.evaluate(() => {
+      const firstLink = document.querySelector('#case-list a[data-review-case-ref]');
+      const projection = window.workspaceNavigation.projectionForRef(firstLink?.dataset.reviewCaseRef);
+      const firstSummary = document.querySelector('#case-list .review-card-summary');
+      if (projection && firstSummary) firstSummary.textContent = projection.summary;
+    });
     await scan(reviewWorkspacePage, 'review-list');
     for (const width of [320, 640, 1024, 1440]) {
       await reviewWorkspacePage.setViewportSize({width, height: 900});
@@ -782,7 +790,6 @@ async function main() {
       reviewHtmlBytes = detailStats.bytes;
     }
     console.log(`REVIEW_WORKSPACE_BENCHMARK warmup=10 samples=30 transition_ms=${JSON.stringify(summarizeMs(reviewTransitionTimes))} detail_dom_nodes=${reviewDomNodes} detail_html_bytes=${reviewHtmlBytes}`);
-    await reviewWorkspacePage.close();
     const expiredRoutePage = await context.newPage();
     const expiredChecklistCalls = [];
     expiredRoutePage.on('request', (request) => {
@@ -796,6 +803,136 @@ async function main() {
     await expiredRoutePage.getByRole('button', {name: '분석 결과로 돌아가기'}).click();
     requireSafe(new URL(expiredRoutePage.url()).hash === '', 'REVIEW_EXPIRED_RETURN_FAILED');
     await expiredRoutePage.close();
+
+    stateForPage = 'DISABLED';
+    const projectionShellPage = reviewWorkspacePage;
+    let shellChecklistCalls = 0;
+    let shellAnalysisCalls = 0;
+    projectionShellPage.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path === '/api/v1/investigations/checklist') shellChecklistCalls += 1;
+      if (path === '/api/v1/investigations/sample') shellAnalysisCalls += 1;
+    });
+    await projectionShellPage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(false));
+    await projectionShellPage.locator('#case-list .review-case-card').nth(1).waitFor({state: 'attached'});
+    requireSafe(await projectionShellPage.evaluate(async () => {
+      const source = await fetch('/assets/app.js', {cache: 'no-store'}).then((response) => response.text());
+      return source.includes('element("p", projection?.summary ?? caseItemShortSummary(item), "review-card-summary")') &&
+        source.includes('caseByRef.set(item.checklist_ref, {item, index, projection})');
+    }), 'WORKSPACE_PROJECTION_SOURCE_NOT_SERVED');
+    const firstProjection = await projectionShellPage.evaluate(() => {
+      const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
+      return window.workspaceNavigation.projectionForRef(ref);
+    });
+    requireSafe(await projectionShellPage.locator('#case-list a[data-review-case-ref]').evaluateAll((nodes) =>
+      new Set(nodes.map((node) => node.dataset.reviewCaseRef)).size === nodes.length),
+    'WORKSPACE_DUPLICATE_CASE_REF');
+    requireSafe(firstProjection && firstProjection.schema_version === 'investigation-workspace-ui/v1' &&
+      Object.keys(firstProjection).sort().join(',') === [
+        'case_ref', 'category', 'checklist_status', 'display_order', 'display_title', 'limitation_count',
+        'observation_count', 'relation_count', 'review_priority', 'risk_band', 'schema_version',
+        'source_role', 'start_time_kst', 'start_time_utc', 'subject_alias', 'summary', 'task_count',
+        'end_time_kst', 'end_time_utc'
+      ].sort().join(',') && firstProjection.source_role === 'unknown' &&
+      firstProjection.review_priority === 'undetermined' && firstProjection.checklist_status === 'not_requested',
+    'WORKSPACE_CLOSED_PROJECTION_MISSING');
+    const projectionSnapshotContract = await projectionShellPage.evaluate(() => {
+      const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
+      const projection = window.workspaceNavigation.projectionForRef(ref);
+      const card = document.querySelector('#case-list a[data-review-case-ref]')?.closest('.review-case-card');
+      return {
+        frozen: Object.isFrozen(projection), key_count: Object.keys(projection).length,
+        stable_reference: projection === window.workspaceNavigation.projectionForRef(ref),
+        card_reference_matches: card.querySelector('a[data-review-case-ref]')?.dataset.reviewCaseRef === ref,
+        title_matches: card.querySelector('.review-card-title')?.textContent === projection.display_title,
+        summary_matches: card.querySelector('.review-card-summary')?.textContent === projection.summary,
+      };
+    });
+    console.log(`WORKSPACE_PROJECTION_CONTRACT ${JSON.stringify(projectionSnapshotContract)}`);
+    requireSafe(projectionSnapshotContract.frozen && projectionSnapshotContract.key_count === 19 &&
+      projectionSnapshotContract.stable_reference && projectionSnapshotContract.card_reference_matches &&
+      projectionSnapshotContract.title_matches && projectionSnapshotContract.summary_matches,
+    'WORKSPACE_PROJECTION_NOT_IMMUTABLE');
+    requireSafe(await projectionShellPage.evaluate(() => {
+      const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
+      return window.workspaceNavigation.rejectProjectionMutationForTest(ref, {additions: {
+        account: 'account-canary', ip: '192.0.2.44', hostname: 'host-canary',
+        raw_log: 'raw-line-canary', input_path: '/private/input.log', output_path: '/private/output.html',
+        credential: 'token-canary', internal_exception: 'exception-canary', other_case: 'other-case-canary'
+      }});
+    }), 'WORKSPACE_PROJECTION_CANARY_ACCEPTED');
+    requireSafe(await projectionShellPage.evaluate(() => {
+      const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
+      return window.workspaceNavigation.rejectProjectionMutationForTest(ref, {remove_key: 'timeline'}) &&
+        window.workspaceNavigation.rejectProjectionMutationForTest(ref, {overrides: {observation_count: true}});
+    }), 'WORKSPACE_PROJECTION_MISSING_OR_TYPE_ACCEPTED');
+    const firstRef = await projectionShellPage.locator('#case-list a[data-review-case-ref]').nth(0).getAttribute('data-review-case-ref');
+    const secondRef = await projectionShellPage.locator('#case-list a[data-review-case-ref]').nth(1).getAttribute('data-review-case-ref');
+    requireSafe(firstRef !== secondRef, 'WORKSPACE_CASE_REFS_NOT_DISTINCT');
+    const analysisBeforeShellRoute = await projectionShellPage.evaluate(() => document.querySelector('#results-dashboard').textContent);
+    await projectionShellPage.locator(`#review-case-link-0`).click();
+    await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+    requireSafe(new URL(projectionShellPage.url()).hash === `#/investigations/${firstRef}` &&
+      await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === firstRef &&
+      await projectionShellPage.locator('#case-detail-view .case-detail').count() === 0 &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0 &&
+      await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute,
+    'WORKSPACE_SHELL_ROUTE_OR_INVARIANCE_FAILED');
+    await projectionShellPage.goBack();
+    await projectionShellPage.waitForFunction(() => location.hash === '');
+    await projectionShellPage.goForward();
+    await projectionShellPage.waitForFunction((expected) => location.hash === `#/investigations/${expected}`, firstRef);
+    requireSafe(await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === firstRef &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_HISTORY_OR_AUTOMATIC_POST_FAILED');
+    await projectionShellPage.locator('#review-back-link').click();
+    await projectionShellPage.waitForFunction(() => location.hash === '');
+    await projectionShellPage.locator('#review-case-link-1').click();
+    await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+    requireSafe(await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === secondRef &&
+      !(await projectionShellPage.locator('.workspace-detail-shell-36-6b').textContent()).includes(firstRef) &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
+    const projectionBenchmarks = [];
+    for (const count of [1, 32, 256]) {
+      for (let warmup = 0; warmup < 10; warmup += 1) {
+        await projectionShellPage.evaluate((size) => window.workspaceNavigation.projectionBatchForTest(size), count);
+      }
+      const samples = [];
+      let outputBytes = 0;
+      let inputBytes = 0;
+      for (let sample = 0; sample < 100; sample += 1) {
+        const measured = await projectionShellPage.evaluate((size) => {
+          const start = performance.now();
+          const result = window.workspaceNavigation.projectionBatchForTest(size);
+          return {elapsed: performance.now() - start, result};
+        }, count);
+        samples.push(measured.elapsed);
+        outputBytes = new TextEncoder().encode(JSON.stringify(measured.result.projections)).byteLength;
+        inputBytes = measured.result.input_bytes * count;
+      }
+      projectionBenchmarks.push({count, ...summarizeMs(samples), input_bytes: inputBytes, output_bytes: outputBytes});
+    }
+    const shellRouteTimes = [];
+    for (let iteration = 0; iteration < 10; iteration += 1) {
+      const started = performance.now();
+      await projectionShellPage.locator('#review-back-link').click();
+      await projectionShellPage.waitForFunction(() => location.hash === '');
+      await projectionShellPage.locator('#review-case-link-0').click();
+      await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+      if (iteration >= 2) shellRouteTimes.push(performance.now() - started);
+    }
+    const shellDomNodes = await projectionShellPage.locator('#case-detail-view').evaluate((node) => node.querySelectorAll('*').length);
+    const shellHtmlBytes = await projectionShellPage.locator('#case-detail-view').evaluate((node) =>
+      new TextEncoder().encode(new XMLSerializer().serializeToString(node)).byteLength);
+    console.log(`WORKSPACE_36_6B_PROJECTION_BENCHMARK warmup=10 samples=100 batches=${JSON.stringify(projectionBenchmarks)}`);
+    console.log(`WORKSPACE_36_6B_ROUTE_BENCHMARK warmup=2 samples=8 transition_ms=${JSON.stringify(summarizeMs(shellRouteTimes))} dom_nodes=${shellDomNodes} html_bytes=${shellHtmlBytes}`);
+    await scan(projectionShellPage, 'workspace-projection-shell');
+    await projectionShellPage.reload({waitUntil: 'networkidle'});
+    requireSafe(await projectionShellPage.locator('#review-route-expired').isVisible() &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+    'WORKSPACE_DIRECT_ENTRY_DID_NOT_EXPIRE');
+    await scan(projectionShellPage, 'workspace-direct-entry-expired');
+    await projectionShellPage.close();
+
     stateForPage = 'MULTI';
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);

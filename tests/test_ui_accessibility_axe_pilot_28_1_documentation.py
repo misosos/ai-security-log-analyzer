@@ -54,7 +54,7 @@ def test_ci_and_frontend_preserve_boundaries():
         assert term in ci
     for term in (
         "mkdtemp", "XDG_CONFIG_HOME", "127.0.0.1", "AxeBuilder",
-        "externalRequests", "CANARY", "AXE_SERIOUS_OR_CRITICAL",
+        "externalRequests", "CANARY", "AXE_VIOLATIONS_PRESENT",
         "CSP_CONTRACT_FAILED", "LOOPBACK_LISTENER_REMAINED",
     ):
         assert term in script

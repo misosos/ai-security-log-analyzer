@@ -192,6 +192,8 @@
   let caseByRef = new Map();
   let reviewReturnFocusId = null;
   let reviewReturnScrollY = 0;
+  const USE_WORKSPACE_DETAIL_SHELL_36_6B = true;
+  let legacyWorkspaceDetailForTests = false;
   const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
   const workspaceNav = document.getElementById("workspace-nav");
   const workspaceNavigation = (() => {
@@ -288,7 +290,43 @@
     setAvailable("local", loopbackPage);
     setAvailable("audit", loopbackPage);
     showView("start");
-    return {show: showView, showResult, setAvailable, setPending};
+    const navigationApi = {show: showView, showResult, setAvailable, setPending};
+    if (loopbackPage) Object.assign(navigationApi, {
+      projectionForRef: (caseRef) => caseByRef.get(caseRef)?.projection ?? null,
+      projectionBatchForTest: (count) => {
+        if (!loopbackPage || !Number.isSafeInteger(count) || count < 1 || count > 256) return null;
+        const seed = caseByRef.values().next().value;
+        if (!seed) return null;
+        const projections = Array.from({length: count}, (_, index) => {
+          const caseRef = `c_${index.toString(16).padStart(24, "0")}`;
+          return createWorkspaceProjection({...seed.item, checklist_ref: caseRef}, seed.index, caseRef);
+        });
+        return {projections, input_bytes: new TextEncoder().encode(JSON.stringify(seed.item)).byteLength};
+      },
+      setLegacyDetailForTests: (enabled) => {
+        if (loopbackPage) legacyWorkspaceDetailForTests = enabled === true;
+      },
+      rejectProjectionMutationForTest: (caseRef, mutation) => {
+        if (!loopbackPage || mutation === null || typeof mutation !== "object" || Array.isArray(mutation)) return false;
+        const entry = caseByRef.get(caseRef);
+        if (!entry) return false;
+        const candidate = {...entry.item};
+        if (typeof mutation.remove_key === "string") delete candidate[mutation.remove_key];
+        if (mutation.additions && typeof mutation.additions === "object" && !Array.isArray(mutation.additions)) {
+          Object.assign(candidate, mutation.additions);
+        }
+        if (mutation.overrides && typeof mutation.overrides === "object" && !Array.isArray(mutation.overrides)) {
+          Object.assign(candidate, mutation.overrides);
+        }
+        try {
+          createWorkspaceProjection(candidate, entry.index, caseRef);
+          return false;
+        } catch (error) {
+          return error instanceof Error && error.message === "WORKSPACE_PROJECTION_INVALID";
+        }
+      }
+    });
+    return navigationApi;
   })();
   window.workspaceNavigation = workspaceNavigation;
 
@@ -324,7 +362,10 @@
       showExpiredReviewRoute();
       return;
     }
-    caseDetailContent.replaceChildren(renderCaseDetail(entry.item, entry.index));
+    const useWorkspaceShell = USE_WORKSPACE_DETAIL_SHELL_36_6B && !legacyWorkspaceDetailForTests;
+    caseDetailContent.replaceChildren(useWorkspaceShell ?
+      renderWorkspaceDetailShell(entry.projection) : renderCaseDetail(entry.item, entry.index));
+    caseDetailView.setAttribute("aria-labelledby", useWorkspaceShell ? "workspace-shell-heading" : "case-detail-heading");
     reviewDetailContext.textContent = currentInvestigationMode === "sample" ?
       "합성 예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
       "현재 탭 메모리에 있는 분석 결과입니다.";
@@ -1357,31 +1398,50 @@
   function renderCaseOverview(cases) {
     caseSection.hidden = cases.length === 0;
     caseByRef = new Map();
+    const caseRefs = cases.map((item) => item.checklist_ref).filter((caseRef) => caseRef !== null);
+    if (new Set(caseRefs).size !== caseRefs.length) failContract();
     cases.forEach((item, index) => {
+      const projection = item.checklist_ref === null ? null :
+        createWorkspaceProjection(item, index, item.checklist_ref);
       const card = document.createElement("article");
       card.className = "case-card";
       card.classList.add("review-case-card");
-      card.append(element("h4", `검토 건 #${index + 1}`, "review-card-number"));
-      card.append(element("h5", humanActivity(item.supported_detections[0] ||
-        item.supported_relations[0] || "연결된 활동"), "review-card-title"));
+      card.append(element("h4", `검토 건 #${projection?.display_order ?? index + 1}`, "review-card-number"));
+      card.append(element("h5", projection?.display_title ?? "연결된 활동", "review-card-title"));
       const badges = document.createElement("div");
       badges.className = "review-status-badges";
-      const risk = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[item.included_highest_risk];
-      badges.append(element("span", `위험도 ${risk}`, `review-status-badge ${RISK_CLASSES[item.included_highest_risk]}`));
+      const riskBand = projection?.risk_band ?? item.included_highest_risk;
+      const risk = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[riskBand];
+      badges.append(element("span", `위험도 ${risk}`, `review-status-badge ${RISK_CLASSES[riskBand]}`));
       badges.append(element("span", item.checklist_ref === null ? "확인 순서 확인 불가" : "확인 순서 요청 전",
         "review-status-badge review-priority-pending"));
       badges.append(element("span", "역할 미확인", "review-status-badge review-role-pending"));
       const facts = element("p", "", "review-card-facts");
-      facts.append(compactKstRange(item.start_time, item.end_time), document.createTextNode(
-        ` · 활동 ${item.observation_count}개 · 연결 ${item.supporting_relation_count}개`));
-      card.append(badges, facts, element("p", caseItemShortSummary(item), "review-card-summary"));
+      if (projection) {
+        const startTime = document.createElement("time");
+        startTime.textContent = projection.start_time_kst ?? "시간 정보 없음";
+        if (projection.start_time_utc) startTime.setAttribute("datetime", projection.start_time_utc);
+        facts.append(startTime);
+        if (projection.end_time_kst && projection.end_time_kst !== projection.start_time_kst) {
+          const endTime = document.createElement("time");
+          endTime.textContent = ` – ${projection.end_time_kst}`;
+          if (projection.end_time_utc) endTime.setAttribute("datetime", projection.end_time_utc);
+          facts.append(endTime);
+        }
+        facts.append(document.createTextNode(
+          ` · 활동 ${projection.observation_count}개 · 연결 ${projection.relation_count}개`));
+      } else {
+        facts.append(compactKstRange(item.start_time, item.end_time), document.createTextNode(
+          ` · 활동 ${item.observation_count}개 · 연결 ${item.supporting_relation_count}개`));
+      }
+      card.append(badges, facts, element("p", projection?.summary ?? caseItemShortSummary(item), "review-card-summary"));
       if (item.checklist_ref !== null) {
         const link = element("a", "상세 분석 보기", "review-detail-link");
         link.href = `#/investigations/${item.checklist_ref}`;
         link.id = `review-case-link-${index}`;
         link.dataset.reviewCaseRef = item.checklist_ref;
         card.append(link);
-        caseByRef.set(item.checklist_ref, {item, index});
+        caseByRef.set(item.checklist_ref, {item, index, projection});
       } else {
         const unavailable = document.createElement("button");
         unavailable.type = "button";
@@ -1391,6 +1451,106 @@
       }
       caseList.append(card);
     });
+  }
+
+  const WORKSPACE_CASE_INPUT_FIELDS_36_6B = Object.freeze([
+    "review_order", "case_label", "subject_alias", "included_highest_risk",
+    "included_highest_confidence", "start_time", "end_time", "observation_count",
+    "supporting_relation_count", "grouping_explanation", "supported_detections",
+    "supported_relations", "timeline_label", "timeline", "limitations", "unverified_items",
+    "next_steps", "account_alias_state", "account_alias_message", "checklist_ref"
+  ]);
+  const WORKSPACE_SUMMARY_COPY_36_6B = "기존 분석에서 묶인 활동입니다. 침해나 인과관계를 확정하지 않습니다.";
+
+  function createWorkspaceProjection(item, index, caseRef) {
+    try {
+      if (item === null || typeof item !== "object" || Array.isArray(item)) throw new Error();
+      const keys = Object.keys(item);
+      if (keys.length !== WORKSPACE_CASE_INPUT_FIELDS_36_6B.length ||
+          !WORKSPACE_CASE_INPUT_FIELDS_36_6B.every((key) => Object.hasOwn(item, key))) throw new Error();
+      if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_CASES ||
+          typeof caseRef !== "string" || !/^c_[0-9a-f]{24}$/.test(caseRef) || item.checklist_ref !== caseRef ||
+          item.review_order !== index + 1 || item.case_label !== `조사 사례 ${index + 1}` ||
+          !/^대상 (?:[A-Z]|[0-9]+)$/.test(item.subject_alias) ||
+          !Object.hasOwn(RISK_CLASSES, item.included_highest_risk) ||
+          !Number.isSafeInteger(item.observation_count) || item.observation_count < 0 || item.observation_count > MAX_ITEMS ||
+          !Number.isSafeInteger(item.supporting_relation_count) || item.supporting_relation_count < 0 ||
+          item.supporting_relation_count > MAX_ITEMS || !Array.isArray(item.supported_detections) ||
+          !Array.isArray(item.supported_relations) || !Array.isArray(item.limitations) ||
+          !Array.isArray(item.unverified_items) || item.supported_detections.length > MAX_ITEMS ||
+          item.supported_relations.length > MAX_ITEMS || item.limitations.length > MAX_ITEMS ||
+          item.unverified_items.length > MAX_ITEMS) throw new Error();
+      const names = [...item.supported_detections, ...item.supported_relations];
+      if (names.length === 0 || names.some((name) =>
+        typeof name !== "string" || (!DETECTION_NAMES.has(name) && !RELATION_NAMES.has(name)))) throw new Error();
+      const category = names.every((name) => DETECTION_NAMES.has(name) || RELATION_NAMES.has(name)) ?
+        "authentication" : "unknown";
+      if (category !== "authentication") throw new Error();
+      const startTime = item.start_time === null ? null : timestamp(item.start_time);
+      const endTime = item.end_time === null ? null : timestamp(item.end_time);
+      if (startTime === null && endTime !== null) throw new Error();
+      if (item.limitations.length > MAX_ITEMS || item.unverified_items.length > MAX_ITEMS) throw new Error();
+      const displayName = item.supported_detections[0] || item.supported_relations[0];
+      const displayTitle = humanActivity(displayName);
+      if (displayTitle === "연결된 활동") throw new Error();
+      const projection = {
+        schema_version: "investigation-workspace-ui/v1",
+        case_ref: caseRef,
+        display_order: index + 1,
+        display_title: displayTitle,
+        risk_band: item.included_highest_risk,
+        subject_alias: item.subject_alias,
+        source_role: "unknown",
+        review_priority: "undetermined",
+        start_time_kst: workspaceKstText(item.start_time?.display_kst),
+        start_time_utc: item.start_time?.display_utc ?? null,
+        end_time_kst: workspaceKstText(item.end_time?.display_kst),
+        end_time_utc: item.end_time?.display_utc ?? null,
+        observation_count: item.observation_count,
+        relation_count: item.supporting_relation_count,
+        task_count: 0,
+        limitation_count: item.limitations.length,
+        category,
+        summary: WORKSPACE_SUMMARY_COPY_36_6B,
+        checklist_status: "not_requested"
+      };
+      return Object.freeze(projection);
+    } catch {
+      throw new Error("WORKSPACE_PROJECTION_INVALID");
+    }
+  }
+
+  function workspaceKstText(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "string") throw new Error("WORKSPACE_PROJECTION_INVALID");
+    return value.replace(/ \(UTC\+09:00\)$/, "");
+  }
+
+  function renderWorkspaceDetailShell(projection) {
+    const shell = document.createElement("div");
+    shell.className = "workspace-detail-shell-36-6b";
+    shell.dataset.caseRef = projection.case_ref;
+    const heading = element("h2", "검토 건 상세");
+    heading.id = "workspace-shell-heading";
+    const title = element("h3", projection.display_title);
+    const status = document.createElement("p");
+    status.className = "workspace-shell-status";
+    status.setAttribute("role", "status");
+    status.textContent = "확인할 작업은 아직 요청되지 않았습니다.";
+    const badges = document.createElement("dl");
+    badges.className = "workspace-shell-summary";
+    detail(badges, "기존 위험도", ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[projection.risk_band]);
+    detail(badges, "확인 순서", "확인 순서 미정");
+    detail(badges, "로그 역할", "역할 미확인");
+    detail(badges, "보호된 대상 별칭", projection.subject_alias);
+    const facts = document.createElement("p");
+    facts.className = "workspace-shell-facts";
+    facts.textContent = `활동 ${projection.observation_count}개 · 연결 ${projection.relation_count}개 · 분석 한계 ${projection.limitation_count}개`;
+    const note = document.createElement("p");
+    note.className = "workspace-shell-note";
+    note.textContent = `${projection.summary} 이 화면은 단계별 이식용 기본 shell이며, 확인 작업·타임라인·근거 화면은 아직 연결되지 않았습니다.`;
+    shell.append(heading, title, badges, facts, status, note);
+    return shell;
   }
 
   function caseItemShortSummary(item) {

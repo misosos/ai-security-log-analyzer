@@ -45,7 +45,8 @@
 - [Phase 36.4 검증된 source role checklist 전달](investigation_checklist_verified_role_36_4.md) — same-analysis normalized source metadata만 사용, 혼합·누락·stale 시 `unknown`; API schema v2, 로컬 conditional 범위만
 - [Phase 36.5A 검토 작업공간 재설계](investigation_review_workspace_redesign_36_5a.md) — 결과 목록과 독립 상세 화면, 접근 가능한 활동 흐름, 작업 카드와 접힌 근거; 새 Ubuntu CI와 36.5B 사용자 검수 전 `CONDITIONAL_GO`
 - [Phase 36.5B/C/D PatternFly 참고 정적 prototype](investigation_workspace_patternfly_prototype_36_5b.md) · [desktop 사용자 검수](investigation_workspace_patternfly_acceptance_36_5c.md) · [모바일 검수](investigation_workspace_mobile_acceptance_36_5d.md) — desktop 및 모바일 사용자 수용 완료; production 미이식, 200% equivalent overflow 미해결, 실제 기기·Safari `NOT_TESTED`
-- [Phase 36.6A production 이식 설계](investigation_workspace_production_migration_design_36_6a.md) — 기존 API/projection을 유지하는 단계별 이식과 rollback 계약; production 구현은 `NOT_IMPLEMENTED`, 실제 자료·조직 운영 `NO_GO`
+- [Phase 36.6A production 이식 설계](investigation_workspace_production_migration_design_36_6a.md) — 기존 API/projection을 유지하는 단계별 이식과 rollback 계약; 36.6B projection·navigation shell 구현 진행, 기존 UI 유지, 실제 자료·조직 운영 `NO_GO`
+- [Phase 36.6B closed UI projection·navigation shell](investigation_workspace_projection_navigation_36_6b.md) — existing hash route와 minimal shell을 병행 도입; production 이식 진행 중이며 기존 UI를 대체하지 않음, 200%·실기기·Safari 미검증
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED
