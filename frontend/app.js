@@ -1056,6 +1056,7 @@
           `${checklist.explanation.text} 참고 근거는 일반적인 조사 방법과 한계이며 사례 증거가 아닙니다.` :
           checklist.status === "unavailable" ? "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다." :
             "검토 우선순위는 기존 위험도와 별개인 참고 제안입니다.";
+        result.append(element("p", "이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다."));
         result.append(element("h6", `검토 우선순위: ${checklist.review_priority}`));
         if (checklist.source_role === "unknown") {
           result.append(element("p", "신뢰된 내부 관찰에서 단일 역할을 확인할 수 없어 역할을 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));

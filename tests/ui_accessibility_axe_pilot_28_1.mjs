@@ -588,6 +588,8 @@ async function main() {
       const rendered = await card.locator('.investigation-checklist').innerText();
       if (checklistState === 'CHECKLIST_AVAILABLE' || checklistState === 'CHECKLIST_RETRY' ||
           checklistState === 'CHECKLIST_REAL') {
+        requireSafe(rendered.includes('이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.'),
+          'CHECKLIST_ANALYSIS_INVARIANCE_EXPLANATION_MISSING');
         requireSafe(rendered.includes('review_soon'),
           'CHECKLIST_PRIORITY_RENDER_FAILED');
         requireSafe(rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),

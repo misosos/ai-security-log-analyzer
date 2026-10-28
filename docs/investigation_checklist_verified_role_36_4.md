@@ -71,3 +71,9 @@ Chromium/axe passed 23 states with zero axe violations and `external_requests=0`
 - Phase 36.3A's 10/10 comprehension result covered the earlier UI, not these new role labels. No new human role-label comprehension review was performed.
 - New SHA Ubuntu CI is pending. Safari remains `NOT_TESTED / USER_HOME_ISOLATION_BLOCKED`; model/provider use remains `NOT_TESTED`; Vector/VM remains `USER_ACTION_REQUIRED / ISOLATION_BLOCKED`.
 - Actual user data, organizational operation, remote collection, and automatic response remain `NO_GO`.
+
+## Phase 36.4A Follow-up — Analysis Invariance Wording
+
+During the 36.4A user review, item 7 initially received `FAIL` because the available checklist screen did not explicitly say that the checklist leaves detection, relation, risk, and case results unchanged. The UI now includes that fixed explanation, and the browser contract fails with `CHECKLIST_ANALYSIS_INVARIANCE_EXPLANATION_MISSING` if it is absent. The contract failed before the UI wording was added and passed afterward.
+
+The updated screen was not shown to the user again: user retest is `NOT_TESTED`. The old UI's full comprehension review is not complete; it will be repeated against the redesigned screen in Phase 36.5B after Phase 36.5A. This follow-up does not establish Phase 36.4A acceptance or production GO. Safari remains `NOT_TESTED / USER_HOME_ISOLATION_BLOCKED`; actual user data, organizational operation, and automatic response remain `NO_GO`; model-based AI remains `NOT_TESTED`.
