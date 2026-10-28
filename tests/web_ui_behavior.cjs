@@ -180,7 +180,11 @@ async function main() {
   assert.equal(nodesOf(high, "a").some((link) => link.textContent === "상세 분석 보기"), true);
   assert.equal(high.textContent.includes("검토 건 #1"), true);
   assert.equal(high.textContent.includes("위험도 높음"), true);
-  assert.equal(high.textContent.includes("목록 위치 #1"), true);
+  assert.equal(high.textContent.includes("확인 순서 요청 전"), true);
+  assert.equal(high.textContent.includes("역할 미확인"), true);
+  assert.equal(high.textContent.includes("목록 위치"), false);
+  assert.equal(nodesOf(high, "p").some((item) => item.className === "review-card-facts" &&
+    item.textContent.includes("활동 3개") && item.textContent.includes("연결 2개")), true);
   assert.equal(nodesOf(nodes["case-list"], "details").length, 0, "dashboard omits detail disclosures");
   assert.equal(nodesOf(nodes["case-list"], "ol").length, 0, "dashboard omits timeline and checklist");
   assert.equal(nodes["case-list"].textContent.includes("CORRELATION_IS_NOT_CAUSATION"), false);

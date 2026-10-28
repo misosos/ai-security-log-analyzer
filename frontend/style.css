@@ -156,9 +156,22 @@ a { color: #064f96; text-underline-offset: .2em; }
 .result-body #case-list { grid-template-columns: minmax(0, 1fr); }
 .result-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 1.5rem; align-items: start; margin-top: 1rem; }
 .result-body > * { min-width: 0; }
-.result-rail { display: grid; gap: 1.25rem; min-width: 0; }
+.result-body #case-section { grid-column: 1 / -1; }
+.result-rail { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; min-width: 0; align-items: start; }
 .result-body #case-section, .result-rail > * { border-top: 1px solid #d3dce7; padding-top: 1rem; margin: 0; }
-.result-body #case-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.result-body #case-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 20px; }
+.case-card.review-case-card { display: grid; align-content: start; gap: 12px; padding: 20px 22px; }
+.review-card-number { margin: 0; color: #344d69; font-size: .95rem; line-height: 1.45; }
+.review-card-title { margin: 0; font-size: 1.3rem; line-height: 1.4; overflow-wrap: anywhere; }
+.review-status-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-status-badge { display: inline-flex; align-items: center; min-height: 2rem; padding: .3rem .7rem; border: 1px solid #8da2ba; border-radius: 999px; background: #f1f5fa; color: #173550; font-weight: 750; line-height: 1.3; }
+.review-status-badge.risk-high { border-color: #a74747; background: #fff1f0; color: #752020; }
+.review-status-badge.risk-medium { border-color: #8b6b24; background: #fff8e6; color: #5f4810; }
+.review-status-badge.risk-low { border-color: #52775d; background: #eef7ef; color: #244c30; }
+.review-status-badge.review-priority-pending, .review-status-badge.review-role-pending { border-style: dashed; }
+.review-card-facts { margin: 0; color: #344d69; font-size: 1rem; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.review-card-summary { margin: 0; max-width: 60ch; font-size: 1rem; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.review-case-card .review-detail-link { justify-self: start; margin-top: 4px; min-height: 2.75rem; display: inline-flex; align-items: center; }
 .case-summary-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .75rem; margin: .4rem 0; }
 .case-summary-meta div:last-child { grid-column: 1 / -1; }
 .case-summary-meta div { min-width: 0; }
@@ -256,6 +269,8 @@ a { color: #064f96; text-underline-offset: .2em; }
 #report-download button { margin-block-start: .4rem; max-width: 100%; white-space: normal; }
 @media (max-width: 74.9375rem) {
   .result-body { grid-template-columns: minmax(0, 1fr); }
+  .result-body #case-section, .result-rail { grid-column: 1; }
+  .result-rail { grid-template-columns: minmax(0, 1fr); }
   .result-body #case-list { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 74.9375rem) {

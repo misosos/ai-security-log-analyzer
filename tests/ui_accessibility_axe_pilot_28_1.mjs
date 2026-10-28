@@ -653,6 +653,68 @@ async function main() {
       'REVIEW_LIST_HEADING_FAILED');
     requireSafe(await reviewWorkspacePage.locator('#case-list').getByRole('link', {name: '상세 분석 보기'}).count() === 2,
       'REVIEW_LIST_LINKS_FAILED');
+    const caseCards = reviewWorkspacePage.locator('#case-list .review-case-card');
+    for (let index = 0; index < await caseCards.count(); index += 1) {
+      const card = caseCards.nth(index);
+      const badges = card.locator('.review-status-badges .review-status-badge');
+      requireSafe(await badges.count() === 3 &&
+        (await badges.nth(0).textContent()).includes('위험도') &&
+        (await badges.nth(1).textContent()).includes('확인 순서 요청 전') &&
+        (await badges.nth(2).textContent()).includes('역할 미확인') &&
+        !(await card.textContent()).includes('목록 위치'),
+      'REVIEW_LIST_STATUS_HIERARCHY_FAILED');
+      requireSafe(await card.locator('.review-card-facts').count() === 1 &&
+        await card.locator('.review-card-facts').getByRole('time').count() >= 1,
+      'REVIEW_LIST_FACTS_NOT_COMPACT_FAILED');
+      requireSafe(await card.evaluate((node) => node.getBoundingClientRect().width >= 400),
+        'REVIEW_LIST_CARD_WIDTH_FAILED');
+      const spacing = await card.evaluate((node) => {
+        const px = (value) => Number.parseFloat(value) || 0;
+        const style = getComputedStyle(node);
+        const badgesStyle = getComputedStyle(node.querySelector('.review-status-badges'));
+        const factsStyle = getComputedStyle(node.querySelector('.review-card-facts'));
+        const summary = node.querySelector('.review-card-summary');
+        const summaryStyle = getComputedStyle(summary);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = summaryStyle.font;
+        const chWidth = context.measureText('0').width;
+        const linkStyle = getComputedStyle(node.querySelector('.review-detail-link'));
+        return {
+          paddingInline: px(style.paddingLeft) + px(style.paddingRight),
+          paddingBlock: px(style.paddingTop) + px(style.paddingBottom),
+          rowGap: px(style.rowGap),
+          badgeGap: px(badgesStyle.columnGap),
+          lineHeightRatio: px(summaryStyle.lineHeight) / px(summaryStyle.fontSize),
+          summaryMaxWidthCh: px(summaryStyle.maxWidth) / chWidth,
+          lineClamp: summaryStyle.webkitLineClamp,
+          summaryButtonGap: px(style.rowGap) + px(linkStyle.marginTop),
+          cardGap: px(getComputedStyle(node.parentElement).columnGap),
+        };
+      });
+      requireSafe(spacing.paddingInline >= 40 && spacing.paddingBlock >= 36 &&
+        spacing.rowGap >= 12 && spacing.badgeGap >= 8 && spacing.lineHeightRatio >= 1.55 &&
+        spacing.summaryMaxWidthCh >= 55 && spacing.summaryMaxWidthCh <= 65 && spacing.lineClamp === '2' &&
+        spacing.summaryButtonGap >= 16 && spacing.cardGap >= 16,
+      'REVIEW_CARD_SPACING_FAILED');
+    }
+    await reviewWorkspacePage.setViewportSize({width: 320, height: 900});
+    await reviewWorkspacePage.locator('.review-card-summary').first().evaluate((node) => {
+      node.textContent = '합성 검수용 긴 한국어 문장입니다. 레이아웃이 줄바꿈과 두 줄 제한을 유지해야 합니다. '.repeat(8) +
+        'Synthetic long English summary checks wrapping, clipping, and card boundaries. '.repeat(8);
+    });
+    await reviewWorkspacePage.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const zoomOverflow = await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    const zoomCardSafe = await reviewWorkspacePage.locator('.review-case-card').first().evaluate((node) => {
+        const card = getComputedStyle(node);
+        const summary = node.querySelector('.review-card-summary');
+        const summaryStyle = getComputedStyle(summary);
+        return Number.parseFloat(card.paddingLeft) >= 20 && Number.parseFloat(card.paddingRight) >= 20 &&
+          summaryStyle.webkitLineClamp === '2' && summary.scrollWidth <= summary.clientWidth;
+      });
+    requireSafe(zoomOverflow && zoomCardSafe, 'REVIEW_CARD_SMALL_ZOOM_REFLOW_FAILED');
+    await reviewWorkspacePage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await reviewWorkspacePage.setViewportSize({width: 1280, height: 900});
     await scan(reviewWorkspacePage, 'review-list');
     for (const width of [320, 640, 1024, 1440]) {
       await reviewWorkspacePage.setViewportSize({width, height: 900});

@@ -1361,31 +1361,20 @@
       const card = document.createElement("article");
       card.className = "case-card";
       card.classList.add("review-case-card");
-      const headingRow = document.createElement("div");
-      headingRow.className = "case-heading-row";
-      const lead = document.createElement("div");
-      lead.className = "case-lead";
-      lead.append(element("h4", `검토 건 #${index + 1}`),
-        element("p", humanActivity(item.supported_detections[0] || item.supported_relations[0] || "연결된 활동")));
-      const state = document.createElement("div");
-      state.className = "case-state";
-      const riskMarker = document.createElement("span");
-      riskMarker.className = "risk-marker";
-      riskMarker.append(icon("shield-alert"), riskBadge(item.included_highest_risk));
-      state.append(element("span", `위험도 ${({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[item.included_highest_risk]}`),
-        element("span", `목록 위치 #${item.review_order}`));
-      headingRow.append(lead, state);
-      const meta = document.createElement("dl");
-      meta.className = "case-summary-meta";
-      detail(meta, "로그 역할", "점검표 요청 후 확인");
-      detail(meta, "확인된 활동", `${item.observation_count}건`);
-      detail(meta, "연결된 활동", `${item.supporting_relation_count}건`);
-      const timePair = document.createElement("div");
-      const timeValue = document.createElement("dd");
-      timeValue.append(compactKstRange(item.start_time, item.end_time));
-      timePair.append(element("dt", "시간 범위"), timeValue);
-      meta.append(timePair);
-      card.append(headingRow, meta, element("p", caseItemShortSummary(item), "review-card-summary"));
+      card.append(element("h4", `검토 건 #${index + 1}`, "review-card-number"));
+      card.append(element("h5", humanActivity(item.supported_detections[0] ||
+        item.supported_relations[0] || "연결된 활동"), "review-card-title"));
+      const badges = document.createElement("div");
+      badges.className = "review-status-badges";
+      const risk = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[item.included_highest_risk];
+      badges.append(element("span", `위험도 ${risk}`, `review-status-badge ${RISK_CLASSES[item.included_highest_risk]}`));
+      badges.append(element("span", item.checklist_ref === null ? "확인 순서 확인 불가" : "확인 순서 요청 전",
+        "review-status-badge review-priority-pending"));
+      badges.append(element("span", "역할 미확인", "review-status-badge review-role-pending"));
+      const facts = element("p", "", "review-card-facts");
+      facts.append(compactKstRange(item.start_time, item.end_time), document.createTextNode(
+        ` · 활동 ${item.observation_count}개 · 연결 ${item.supporting_relation_count}개`));
+      card.append(badges, facts, element("p", caseItemShortSummary(item), "review-card-summary"));
       if (item.checklist_ref !== null) {
         const link = element("a", "상세 분석 보기", "review-detail-link");
         link.href = `#/investigations/${item.checklist_ref}`;
