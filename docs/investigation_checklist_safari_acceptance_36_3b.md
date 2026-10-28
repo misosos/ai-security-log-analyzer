@@ -2,6 +2,8 @@
 
 **Result:** Safari-specific accessibility acceptance is `NOT_TESTED / USER_HOME_ISOLATION_BLOCKED`. The exact CI gate passed, but the installed Safari browser profile could not be isolated from the macOS user profile under the required temporary-HOME boundary. Chromium evidence does not replace Safari checks. The existing checklist UI remains `CONDITIONAL_GO`; this phase found no basis for a Safari-specific GO. Actual user logs, organization operation, and automatic response remain `NO_GO`.
 
+Phase 36.4 does not retry this check. The verified-role response/UI contract changed after this Safari gate; it also remains untested by Safari and does not alter the recorded `NOT_TESTED / USER_HOME_ISOLATION_BLOCKED` status.
+
 ## Start gate
 
 - Branch: `main`; start SHA, local `main`, and `origin/main`: `ec41d708db67c5de50b9dba4a092fcbfdc964ffc`; working tree clean; ahead/behind `0/0`.

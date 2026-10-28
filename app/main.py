@@ -20,6 +20,9 @@ from app.analyzer.process_execution_classification import (
     classify_process_execution_observations,
 )
 from app.models.schemas import NormalizedEvent
+from app.investigation_role_snapshot_36_4 import (
+    AnalysisSourceRoleSnapshot, AnalysisWithSourceRoleSnapshot,
+)
 from app.analyzer.html_report import (
     InvestigationReportRendererError,
     render_investigation_report_html,
@@ -212,6 +215,16 @@ def analyze(log_sources=None):
     logs = load_normalized_logs(log_sources)
 
     return _analyze_normalized_logs(logs)
+
+
+def analyze_with_source_role_snapshot(log_sources=None):
+    """Analyze one parsed input snapshot and retain only its closed source-role metadata."""
+    if log_sources is None:
+        log_sources = LOG_SOURCES
+    logs = load_normalized_logs(log_sources)
+    result = _analyze_normalized_logs(logs)
+    roles = AnalysisSourceRoleSnapshot.from_events(result, tuple(logs))
+    return AnalysisWithSourceRoleSnapshot(result, roles)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

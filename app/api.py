@@ -16,7 +16,7 @@ from app.api_uploads import (
     LinuxAuditUploadValidationError,
     stage_linux_audit_uploads,
 )
-from app.main import analyze
+from app.main import analyze, analyze_with_source_role_snapshot
 from app.analyzer.incident_case_adapter import (
     project_investigation_cases_from_analysis,
 )
@@ -67,6 +67,16 @@ from app.models.linux_audit_api import (
 from app.models.schemas import (
     AnalysisResponse,
 )
+
+
+_DEFAULT_ANALYZE = analyze
+
+
+def _analyze_checklist_input(sources):
+    """Keep injected analyzers compatible; production captures roles in the same parse pass."""
+    if analyze is not _DEFAULT_ANALYZE:
+        return analyze(sources)
+    return analyze_with_source_role_snapshot(sources)
 from app.security.linux_audit_api import (
     LINUX_AUDIT_AUTHENTICATION_ERROR_CODE,
     LinuxAuditAnalysisBusyError,
@@ -509,7 +519,7 @@ def create_app(
     configured_app.add_api_route(
         "/api/v1/investigations/sample",
         create_sample_endpoint(
-            lambda sources: analyze(sources),
+            _analyze_checklist_input,
             lambda result: project_investigation_cases_from_analysis(result),
             lambda result: build_investigation_report_projection(result),
             lambda projection: render_investigation_report_html(
@@ -561,7 +571,7 @@ def create_app(
         configured_app.add_api_route(
             "/api/v1/investigations",
             create_local_endpoint(
-                analyze,
+                _analyze_checklist_input,
                 project_investigation_cases_from_analysis,
                 build_investigation_report_projection,
                 checklist_registry=checklist_registry,

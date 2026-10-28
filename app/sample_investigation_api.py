@@ -37,6 +37,7 @@ from app.models.investigation_sample_api import (
 )
 from app.public_identifiers import subject_aliases
 from app.investigation_checklist_api_36_3 import trusted_case_fields_from_projection
+from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -483,7 +484,13 @@ def _execute(
             with staged.open("xb") as stream:
                 stream.write(content)
             sources.append({"source": spec.source, "path": str(staged)})
-        analysis = analyze(sources)
+        analysis_run = analyze(sources)
+        role_snapshot = None
+        if type(analysis_run) is AnalysisWithSourceRoleSnapshot:
+            analysis = analysis_run.analysis
+            role_snapshot = analysis_run.source_roles
+        else:
+            analysis = analysis_run
         projection = project(analysis)
         try:
             report_projection = build_report_projection(analysis)
@@ -493,9 +500,19 @@ def _execute(
         try:
             response = build_sample_response(analysis, projection, report_export)
             if checklist_registry is not None:
+                bound_roles = (role_snapshot.bind_projection(projection, analysis)
+                               if role_snapshot is not None else ())
                 return checklist_registry.attach(
                     response,
-                    tuple(trusted_case_fields_from_projection(case) for case in projection.cases),
+                    tuple(
+                        trusted_case_fields_from_projection(
+                            case,
+                            bound_roles[index] if index < len(bound_roles) else None,
+                            analysis,
+                            projection,
+                        )
+                        for index, case in enumerate(projection.cases)
+                    ),
                 )
             return response
         except ValidationError:

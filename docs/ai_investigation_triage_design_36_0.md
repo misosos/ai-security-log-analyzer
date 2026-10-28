@@ -2,6 +2,8 @@
 
 **Status: design, deterministic reference, lexical checklist, and explicit read-only API/UI integration.** Phase 36.3 adds one bounded POST endpoint and an explicit case-detail action; Phase 36.3A records 10/10 final user comprehension PASS for captured synthetic UI, with item 7's initial FAIL retained and corrected. The API/UI remains conditional pending a new Ubuntu CI run and outstanding Safari accessibility checks. It does not add a model call or alter authoritative results. No LLM, Gemini, embedding, Ollama, external API, model/runtime download, or installation was used. See the [Phase 36.1 implementation record](deterministic_investigation_triage_36_1.md), [Phase 36.3 implementation record](investigation_checklist_api_ui_36_3.md), and [Phase 36.3A acceptance record](investigation_checklist_acceptance_36_3a.md).
 
+**Phase 36.4 update:** role comes only from the `source` field on normalized observations captured during that same analysis pass. A unanimous role for all events associated with the case's internal subject membership may be retained; missing, unsupported, mixed, stale, or mismatched metadata becomes `unknown`. The checklist response is explicitly versioned `investigation-checklist/v2` to expose only a closed role enum and fixed Korean label. See [verified-role record](investigation_checklist_verified_role_36_4.md). It does not infer role from detection/category, risk, aliases, identifiers, log text, citations, UI, or `case_ref`.
+
 No automatic action is permitted: there is no tool, command, or system-side action path in this design.
 
 ## Decision
@@ -52,7 +54,7 @@ Build a dedicated allowlist DTO; do not pass a public projection, model, `asdict
 | --- | --- |
 | `schema_version` | integer `1`; booleans rejected |
 | `request_id` | request-scoped opaque random identifier; not a case identity |
-| `source_role` | `application`, `ssh`, `web`, `unknown` |
+| `source_role` | `application`, `ssh`, `access`, `unknown` |
 | `observation_categories` | `authentication`, `web_request`, `process_execution`, `relation`, `risk`, `case_lifecycle`, `unknown` |
 | `detection_codes` | exact stable code strings copied from the reviewed current detector enum inventory; no arbitrary string and no code inference; unsupported codes refuse |
 | `relation_codes` | exact stable code strings copied from the reviewed current relation enum inventory; no arbitrary string and no code inference; unsupported codes refuse |

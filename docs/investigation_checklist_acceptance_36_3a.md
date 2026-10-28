@@ -2,6 +2,8 @@
 
 **Result:** User comprehension is **10/10 final PASS** for the synthetic checklist UI shown in Safari 18.6. The API/UI remains **CONDITIONAL_GO**: this is local synthetic evidence, and no new Ubuntu CI run was performed for this acceptance commit. Real user logs, organization operation, automatic response, and model-based explanation remain **NO_GO / NOT_TESTED** as applicable.
 
+Later Phase 36.4 adds verified source-role labels through response schema v2. This 36.3A user review did not test that addition and is not being counted as role-label acceptance; see [Phase 36.4 record](investigation_checklist_verified_role_36_4.md).
+
 ## Start gate and remote evidence
 
 - Start SHA and local/origin `main`: `44cdfb439513c412a3c9a30dc11657a463451978`; branch `main`, clean tree, ahead/behind `0/0` before this acceptance work.

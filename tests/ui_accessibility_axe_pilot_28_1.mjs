@@ -25,7 +25,7 @@ const CHECKLIST_STATES = [
 
 function checklistPayload(state) {
   if (state === 'CHECKLIST_AVAILABLE') return {
-    schema: 'investigation-checklist/v1', status: 'available', review_priority: 'review_soon',
+    schema: 'investigation-checklist/v2', status: 'available', source_role: 'application', source_role_label: '애플리케이션 로그', review_priority: 'review_soon',
     priority_meaning: 'analyst_review_order_only_not_security_risk', category: 'authentication',
     steps: [{text: '합성 자료의 coverage를 확인하세요.', purpose_code: 'manual_coverage',
       citation_ids: ['next-checks:review-records'], limitation_codes: ['INCOMPLETE_EVIDENCE']}],
@@ -35,7 +35,7 @@ function checklistPayload(state) {
     citation_meaning: 'general_reference_not_case_evidence', generated_by: 'deterministic_lexical_template'
   };
   return {
-    schema: 'investigation-checklist/v1', status: 'refused', review_priority: 'undetermined',
+    schema: 'investigation-checklist/v2', status: 'refused', source_role: 'unknown', source_role_label: '역할 정보 미확인', review_priority: 'undetermined',
     priority_meaning: 'analyst_review_order_only_not_security_risk', category: 'unknown', steps: [],
     explanation: {text: '현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. 이는 안전 또는 비위험 판정이 아닙니다. 기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. 승인 근거가 검토되기 전에는 추측하지 않습니다.', citation_ids: []},
     uncertainty_codes: ['insufficient_context'], limitation_codes: ['INCOMPLETE_EVIDENCE'], citations: [],
@@ -588,19 +588,24 @@ async function main() {
       const rendered = await card.locator('.investigation-checklist').innerText();
       if (checklistState === 'CHECKLIST_AVAILABLE' || checklistState === 'CHECKLIST_RETRY' ||
           checklistState === 'CHECKLIST_REAL') {
-        requireSafe((checklistState === 'CHECKLIST_REAL' ? rendered.includes('undetermined') : rendered.includes('review_soon')) &&
-          rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),
-          'CHECKLIST_AVAILABLE_RENDER_FAILED');
+        requireSafe(rendered.includes('review_soon'),
+          'CHECKLIST_PRIORITY_RENDER_FAILED');
+        requireSafe(rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),
+          'CHECKLIST_CITATION_BOUNDARY_RENDER_FAILED');
         if (checklistState === 'CHECKLIST_REAL') {
-          requireSafe(rendered.includes('현재 공개된 사례 정보에는 로그 역할이 없어 역할을 추측하지 않았습니다') &&
-            rendered.includes('이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다') &&
-            rendered.includes('기존 분석 결과를 확인하세요'), 'CHECKLIST_UNDETERMINED_EXPLANATION_MISSING');
+          requireSafe(rendered.includes('검증된 관찰 역할: SSH 인증 로그') &&
+            !rendered.includes('역할 정보 미확인'), 'CHECKLIST_VERIFIED_ROLE_LABEL_MISSING');
         }
       } else if (checklistState === 'CHECKLIST_STALE' || checklistState === 'CHECKLIST_TIMEOUT' ||
                  checklistState === 'CHECKLIST_RATE' || checklistState === 'CHECKLIST_UNAVAILABLE') {
         requireSafe(rendered.length > 0, 'CHECKLIST_FIXED_ERROR_NOT_RENDERED');
       } else {
         requireSafe(rendered.includes('안전 또는 비위험 판정이 아닙니다'), 'CHECKLIST_REFUSAL_SEMANTICS_FAILED');
+        if (checklistState === 'CHECKLIST_REFUSED') {
+          requireSafe(rendered.includes('신뢰된 내부 관찰에서 단일 역할을 확인할 수 없어 역할을 추측하지 않았습니다') &&
+            rendered.includes('이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다') &&
+            rendered.includes('기존 분석 결과를 확인하세요'), 'CHECKLIST_UNKNOWN_ROLE_EXPLANATION_MISSING');
+        }
       }
       requireSafe(await checklistPage.locator('#results').evaluate((node) => {
         const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());

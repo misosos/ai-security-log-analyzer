@@ -183,7 +183,7 @@ async function main() {
   const checklistButton = nodesOf(high, "button").find((button) => button.textContent === "조사 점검표 보기");
   assert.ok(checklistButton, "case detail exposes an explicit checklist button");
   app.setResponse({
-    schema: "investigation-checklist/v1", status: "refused", review_priority: "undetermined",
+    schema: "investigation-checklist/v2", status: "refused", source_role: "unknown", source_role_label: "역할 정보 미확인", review_priority: "undetermined",
     priority_meaning: "analyst_review_order_only_not_security_risk", category: "relation", steps: [],
     explanation: {text: "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. 이는 안전 또는 비위험 판정이 아닙니다. 기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. 승인 근거가 검토되기 전에는 추측하지 않습니다.", citation_ids: []},
     uncertainty_codes: ["insufficient_context"], limitation_codes: ["INCOMPLETE_EVIDENCE"], citations: [],

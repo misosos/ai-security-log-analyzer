@@ -73,7 +73,7 @@ def test_safe_dto_is_closed_frozen_bounded_and_opaque():
 @pytest.mark.parametrize("field,value", [
     ("schema_version", True),
     ("schema_version", 1.0),
-    ("source_role", "access"),
+    ("source_role", "web"),
     ("observation_categories", ("authentication", "authentication")),
     ("detection_codes", ("brute_force", "unknown_detector")),
     ("relation_codes", ("failed_to_successful_login", "failed_to_successful_login")),

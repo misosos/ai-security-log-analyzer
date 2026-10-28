@@ -42,6 +42,7 @@
 - [Phase 36.3 조사 checklist read-only API·명시적 UI](investigation_checklist_api_ui_36_3.md) — POST 1개와 버튼 클릭만으로 요청; `CONDITIONAL_GO`, 36.3A 사용자 이해도 10/10 PASS, 새 Ubuntu CI 및 전체 Safari 접근성은 남음
 - [Phase 36.3A 조사 checklist API/UI 수용 검수](investigation_checklist_acceptance_36_3a.md) — 실제 합성 Safari UI 사용자 이해도 10/10 최종 PASS, item 7 최초 FAIL 유지; 접근성 검수는 별도
 - [Phase 36.3B Safari 접근성 수용 검수](investigation_checklist_safari_acceptance_36_3b.md) — CI gate 통과; task-private Safari 프로필 격리를 확보하지 못해 keyboard, VoiceOver, 확대, 320 CSS px, Web Inspector는 NOT_TESTED
+- [Phase 36.4 검증된 source role checklist 전달](investigation_checklist_verified_role_36_4.md) — same-analysis normalized source metadata만 사용, 혼합·누락·stale 시 `unknown`; API schema v2, 로컬 conditional 범위만
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED

@@ -25,6 +25,7 @@ from app.models.investigation_sample_api import (
     AnalysisSummary, CaseSummary, LocalCapabilities, LocalContext,
     LocalInvestigationErrorResponse, LocalInvestigationResponse, ReportExport,
 )
+from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
 from app.parser.ssh_auth import AUTHENTICATION_MESSAGE
 from app.local_request_security import classify_local_request
 from app.sample_investigation_api import (
@@ -376,7 +377,13 @@ def _worker(connection, sources, analyze: Callable, project: Callable,
             build_report_projection: Callable, render_report: Callable) -> None:
     try:
         try:
-            analysis = analyze(sources)
+            analysis_run = analyze(sources)
+            role_snapshot = None
+            if type(analysis_run) is AnalysisWithSourceRoleSnapshot:
+                analysis = analysis_run.analysis
+                role_snapshot = analysis_run.source_roles
+            else:
+                analysis = analysis_run
         except (ValueError, IndexError, UnicodeError):
             connection.send(("error", "PARSER_INCOMPATIBLE"))
             return
@@ -403,9 +410,16 @@ def _worker(connection, sources, analyze: Callable, project: Callable,
                 connection.send(("error", "RESPONSE_INVALID"))
                 return
             from app.investigation_checklist_api_36_3 import trusted_case_fields_from_projection
+            bound_roles = (role_snapshot.bind_projection(projection, analysis)
+                           if role_snapshot is not None else ())
             safe_case_inputs = tuple(
-                trusted_case_fields_from_projection(case)
-                for case in projection.cases[:128]
+                trusted_case_fields_from_projection(
+                    case,
+                    bound_roles[index] if index < len(bound_roles) else None,
+                    analysis,
+                    projection,
+                )
+                for index, case in enumerate(projection.cases[:128])
             ) + (None,) * max(0, len(projection.cases) - 128)
             connection.send(("ok", serialized, safe_case_inputs))
         except (ValueError, ValidationError, TypeError):

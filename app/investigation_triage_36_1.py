@@ -82,7 +82,7 @@ class TriageError(Exception):
         super().__init__(self._MESSAGES[self.code])
 
 
-_ROLES = frozenset({"application", "ssh", "web", "unknown"})
+_ROLES = frozenset({"application", "ssh", "access", "unknown"})
 _OBSERVATION_CATEGORIES = frozenset({
     "authentication", "web_request", "process_execution", "relation", "risk",
     "case_lifecycle", "unknown",

@@ -45,14 +45,14 @@ def test_explicit_post_returns_fixed_refusal_without_rerunning_analysis(monkeypa
     import app.api as api
 
     calls = 0
-    real_analyze = api.analyze
+    real_analyze = api.analyze_with_source_role_snapshot
 
     def counted(sources):
         nonlocal calls
         calls += 1
         return real_analyze(sources)
 
-    monkeypatch.setattr(api, "analyze", counted)
+    monkeypatch.setattr(api, "analyze_with_source_role_snapshot", counted)
     client = TestClient(api.create_app(), base_url="http://127.0.0.1",
                         client=("127.0.0.1", 12345))
     current = client.post("/api/v1/investigations/sample").json()
@@ -62,11 +62,12 @@ def test_explicit_post_returns_fixed_refusal_without_rerunning_analysis(monkeypa
                            json={"schema_version": 1, "case_ref": case_ref})
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"schema", "status", "review_priority", "priority_meaning", "category",
+    assert set(body) == {"schema", "status", "source_role", "source_role_label", "review_priority", "priority_meaning", "category",
                          "steps", "explanation", "uncertainty_codes", "limitation_codes",
                          "citations", "citation_meaning", "generated_by"}
     assert body["status"] == "available"
-    assert body["review_priority"] == "undetermined"
+    assert body["source_role"] == "ssh"
+    assert body["source_role_label"] == "SSH 인증 로그"
     assert body["steps"]
     assert body["citations"]
     assert body["explanation"]["citation_ids"]
@@ -158,6 +159,14 @@ def test_checklist_openapi_declares_only_post_and_closed_body():
     assert body["type"] == "object" and body["additionalProperties"] is False
     assert body["required"] == ["schema_version", "case_ref"]
     assert set(body["properties"]) == {"schema_version", "case_ref"}
+    response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert response_schema["$ref"].endswith("/ChecklistResponse")
+    fields = schema["components"]["schemas"]["ChecklistResponse"]["properties"]
+    assert fields["schema"]["const"] == "investigation-checklist/v2"
+    assert fields["source_role"]["enum"] == ["application", "ssh", "access", "unknown"]
+    assert fields["source_role_label"]["enum"] == [
+        "애플리케이션 로그", "SSH 인증 로그", "접근 로그", "역할 정보 미확인",
+    ]
 
 
 def test_checklist_api_rejects_invalid_body_and_fixed_not_found(monkeypatch):

@@ -4,6 +4,8 @@ Phase 36.2는 이 DTO와 priority 기준선을 변경하지 않고, category별 
 
 후속 상태: Phase 36.3은 이 기준선을 변경하지 않고, 명시적인 사례 상세 POST 요청에만 내부 검토 priority를 별도 응답 필드로 제공합니다. source role 정보가 없는 사례의 priority는 계속 `undetermined`이며 기존 risk는 그대로 둡니다. API/UI 경계와 제한은 [Phase 36.3 기록](investigation_checklist_api_ui_36_3.md)에 있습니다.
 
+Phase 36.4는 source-role allowlist를 `application`, `ssh`, `access`, `unknown`으로 정정하고, 같은 분석에서 수집한 normalized observation의 source metadata를 사례 snapshot에 결합합니다. 역할 없음·혼합·충돌·stale/mismatched snapshot은 `unknown`이며 priority 계산 규칙은 그대로입니다. 공개 checklist 응답은 닫힌 역할 값과 안전한 label을 더해 `investigation-checklist/v2`로 명시적으로 올라갔습니다. [Phase 36.4 기록](investigation_checklist_verified_role_36_4.md).
+
 ## Decision
 
 **Status: `PHASE_36_2_READY` for the deterministic internal reference contract only.** 시작 SHA `ee2d595d18119f3c217a8d39e5a16d348750c2a0`의 push run `40473731051`은 정확한 SHA에서 `completed/success`였고 artifact 0개였다. 기존 `v0.4.0` tag/release target은 `eecd6ee1cda0545e34b01c42e1a2163a899bcc27`을 유지했다. 구현 TDD는 새 module import 부재로 인한 초기 collection 실패에서 시작했다. 이번 단계는 기존 deterministic 분석 결과를 그대로 두고 내부 호출용 review assistance 기준선을 추가한다. 이 기능은 보안 사실 판정, 탐지, 위험도 계산 또는 대응 권한이 아닙니다. 우선순위는 **검토 순서를 정하기 위한 프로젝트 휴리스틱**입니다.

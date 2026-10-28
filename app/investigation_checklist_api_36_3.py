@@ -25,6 +25,7 @@ from app.investigation_triage_36_1 import (
 from app.local_request_security import classify_local_request
 from app.local_retrieval_33_1 import load_corpus
 from app.analyzer.incident_case_projection import InvestigationCaseDetailProjection
+from app.investigation_role_snapshot_36_4 import BoundCaseSourceRole
 
 
 ENDPOINT_PATH = "/api/v1/investigations/checklist"
@@ -101,8 +102,10 @@ class ChecklistExplanationResponse(BaseModel):
 class ChecklistResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True,
                               serialize_by_alias=True, populate_by_name=True)
-    schema_name: Literal["investigation-checklist/v1"] = Field(alias="schema")
+    schema_name: Literal["investigation-checklist/v2"] = Field(alias="schema")
     status: Literal["available", "refused", "unavailable"]
+    source_role: Literal["application", "ssh", "access", "unknown"]
+    source_role_label: Literal["애플리케이션 로그", "SSH 인증 로그", "접근 로그", "역할 정보 미확인"]
     review_priority: Literal["review_now", "review_soon", "review_later", "undetermined"]
     priority_meaning: Literal["analyst_review_order_only_not_security_risk"]
     category: Literal["authentication", "web_request", "relation", "unknown"]
@@ -156,7 +159,12 @@ def _bucket_count(count: int) -> str:
     return "21_plus"
 
 
-def trusted_case_fields_from_projection(case: InvestigationCaseDetailProjection) -> dict:
+def trusted_case_fields_from_projection(
+    case: InvestigationCaseDetailProjection,
+    role_snapshot: BoundCaseSourceRole | None = None,
+    analysis: object = None,
+    projection: object = None,
+) -> dict:
     """Project only closed categories from the trusted internal case; discard identifiers."""
     if type(case) is not InvestigationCaseDetailProjection:
         raise ValueError("Case adapter contract failed.") from None
@@ -201,12 +209,17 @@ def trusted_case_fields_from_projection(case: InvestigationCaseDetailProjection)
         limitations.add("DETECTION_IS_NOT_COMPROMISE")
     if relation_codes:
         limitations.add("CORRELATION_IS_NOT_CAUSATION")
+    verified_role = "unknown"
+    if (type(role_snapshot) is BoundCaseSourceRole
+        and role_snapshot.is_current(case, analysis, projection)
+        and type(role_snapshot.source_role) is str
+        and role_snapshot.source_role in {"application", "ssh", "access"}):
+        verified_role = role_snapshot.source_role
     return {
         "schema_version": 1,
         "request_id": None,
         "case_ref": None,
-        # Source role is not preserved by the current multi-source case projection.
-        "source_role": "unknown",
+        "source_role": verified_role,
         "observation_categories": tuple(sorted(categories)),
         "detection_codes": detection_codes,
         "relation_codes": relation_codes,
@@ -345,8 +358,15 @@ def _response(item: SafeInvestigationDTO, checklist: InvestigationChecklist) -> 
         citation_ids=tuple(step["citation_ids"]),
         limitation_codes=tuple(step["limitation_codes"]),
     ) for step in mapping["steps"])
+    role_labels = {
+        "application": "애플리케이션 로그",
+        "ssh": "SSH 인증 로그",
+        "access": "접근 로그",
+        "unknown": "역할 정보 미확인",
+    }
     return ChecklistResponse(
-        schema_name="investigation-checklist/v1", status=checklist.status,
+        schema_name="investigation-checklist/v2", status=checklist.status,
+        source_role=item.source_role, source_role_label=role_labels[item.source_role],
         review_priority=mapping["review_priority"],
         priority_meaning="analyst_review_order_only_not_security_risk",
         category=_category(item.to_mapping()), steps=steps,

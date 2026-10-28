@@ -958,16 +958,19 @@
   }
 
   function validateChecklistResponse(value) {
-    closedRecord(value, ["schema", "status", "review_priority", "priority_meaning", "category",
+    closedRecord(value, ["schema", "status", "source_role", "source_role_label", "review_priority", "priority_meaning", "category",
       "steps", "explanation", "uncertainty_codes", "limitation_codes", "citations",
       "citation_meaning", "generated_by"]);
-    if (value.schema !== "investigation-checklist/v1" ||
+    if (value.schema !== "investigation-checklist/v2" ||
         !["available", "refused", "unavailable"].includes(value.status) ||
+        !["application", "ssh", "access", "unknown"].includes(value.source_role) ||
+        !["애플리케이션 로그", "SSH 인증 로그", "접근 로그", "역할 정보 미확인"].includes(value.source_role_label) ||
         !["review_now", "review_soon", "review_later", "undetermined"].includes(value.review_priority) ||
         value.priority_meaning !== "analyst_review_order_only_not_security_risk" ||
         !["authentication", "web_request", "relation", "unknown"].includes(value.category) ||
         value.citation_meaning !== "general_reference_not_case_evidence" ||
-        value.generated_by !== "deterministic_lexical_template") failContract();
+        value.generated_by !== "deterministic_lexical_template" ||
+        ({application: "애플리케이션 로그", ssh: "SSH 인증 로그", access: "접근 로그", unknown: "역할 정보 미확인"})[value.source_role] !== value.source_role_label) failContract();
     items(value.steps, 5).forEach((step) => {
       closedRecord(step, ["text", "purpose_code", "citation_ids", "limitation_codes"]);
       boundedText(step.text); boundedText(step.purpose_code);
@@ -1054,8 +1057,13 @@
           checklist.status === "unavailable" ? "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다." :
             "검토 우선순위는 기존 위험도와 별개인 참고 제안입니다.";
         result.append(element("h6", `검토 우선순위: ${checklist.review_priority}`));
-        if (checklist.review_priority === "undetermined") {
-          result.append(element("p", "현재 공개된 사례 정보에는 로그 역할이 없어 역할을 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
+        if (checklist.source_role === "unknown") {
+          result.append(element("p", "신뢰된 내부 관찰에서 단일 역할을 확인할 수 없어 역할을 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
+        } else {
+          result.append(element("p", `검증된 관찰 역할: ${checklist.source_role_label}`));
+        }
+        if (checklist.review_priority === "undetermined" && checklist.source_role !== "unknown") {
+          result.append(element("p", "현재 근거만으로 검토 순서를 정하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
         }
         result.append(element("p", `사례 범주: ${checklist.category}`));
         result.append(element("p", checklist.explanation.text));
