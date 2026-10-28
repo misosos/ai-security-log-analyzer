@@ -32,12 +32,16 @@ def test_result_is_a_selected_workspace_view_after_explicit_action():
     assert 'independentDetails.hidden = observations.length === 0' in APP
 
 
-def test_navigation_does_not_restart_stream_or_use_storage_or_hash():
+def test_navigation_does_not_restart_stream_or_persist_analysis_state():
     assert 'new EventSource(EVENTS_URL)' in LIVE
     assert LIVE.count('new EventSource(EVENTS_URL)') == 1
     for source in (APP, LIVE):
-        for forbidden in ("localStorage", "sessionStorage", "innerHTML", "insertAdjacentHTML", "history.pushState", "location.hash"):
+        for forbidden in ("localStorage", "sessionStorage", "innerHTML", "insertAdjacentHTML"):
             assert forbidden not in source
+    assert 'history.pushState({reviewWorkspaceDetail: true}' in APP
+    assert 'history.pushState({reviewWorkspaceDetail: true}, "", `#/investigations/${caseRef}`)' in APP
+    assert 'const match = /^#\\/investigations\\/(c_[0-9a-f]{24})$/' in APP
+    assert "reviewListScrollY" in APP and "reviewFocusId" in APP
 
 
 def test_responsive_navigation_is_text_based_and_does_not_fix_sidebar():

@@ -22,6 +22,7 @@ const CHECKLIST_STATES = [
   'CHECKLIST_TIMEOUT', 'CHECKLIST_RATE', 'CHECKLIST_UNAVAILABLE', 'CHECKLIST_RETRY',
   'CHECKLIST_REAL',
 ];
+let currentScenario = 'startup';
 
 function checklistPayload(state) {
   if (state === 'CHECKLIST_AVAILABLE') return {
@@ -45,6 +46,12 @@ function checklistPayload(state) {
 
 function requireSafe(condition, code) {
   if (!condition) throw new Error(code);
+}
+
+async function openReviewCase(page, index = 0) {
+  await page.locator(`#review-case-link-${index}`).click();
+  await page.locator('#case-detail-view').waitFor({state: 'visible'});
+  return page.locator('#case-detail-view .case-card');
 }
 
 function summarizeMs(values) {
@@ -208,7 +215,7 @@ async function scan(page, state) {
     const buttons = [...document.querySelectorAll('button')].filter(shown);
     const ids = [...document.querySelectorAll('[id]')].map((node) => node.id);
     return {
-      title: Boolean(document.title.trim()), h1: document.querySelectorAll('h1').length,
+      title: Boolean(document.title.trim()), h1: [...document.querySelectorAll('h1')].filter(shown).length,
       landmarks: ['nav', 'header', 'main'].every((tag) => document.querySelector(tag)) &&
         document.querySelector('nav').compareDocumentPosition(document.querySelector('header')) === Node.DOCUMENT_POSITION_FOLLOWING &&
         document.querySelector('header').compareDocumentPosition(document.querySelector('main')) === Node.DOCUMENT_POSITION_FOLLOWING,
@@ -223,7 +230,7 @@ async function scan(page, state) {
   });
   const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
-      'three-file-error', 'linux-audit-error'].includes(state);
+      'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
     if (key === 'hiddenLive') continue;
@@ -321,6 +328,7 @@ async function main() {
     });
 
     for (const stateName of STATES) {
+      currentScenario = stateName;
       stateForPage = stateName === 'base' || stateName.includes('error') ||
         stateName === 'checkpoint-reset-explanation' ? 'DISABLED' :
         stateName === 'degraded' ? 'DEGRADED' : stateName === 'failed' ? 'FAILED' : 'RUNNING';
@@ -488,12 +496,10 @@ async function main() {
     const guidancePage = await context.newPage();
     await guidancePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
     await guidancePage.locator('#sample-button').click();
-    await guidancePage.locator('.guidance-request').first().waitFor({state: 'attached'});
-    requireSafe(await guidancePage.locator('.guidance-request').count() === 2,
+    await guidancePage.locator('#case-list .case-card').nth(1).waitFor({state: 'attached'});
+    const guidanceCard = await openReviewCase(guidancePage);
+    requireSafe(await guidancePage.locator('.guidance-request').count() === 1,
       'GUIDANCE_CASE_CONTROLS_MISSING');
-    const guidanceCard = guidancePage.locator('#case-list .case-card').first();
-    await guidanceCard.locator(':scope > summary').focus();
-    await guidancePage.keyboard.press('Enter');
     const guidanceButton = guidanceCard.locator('.guidance-request');
     const helpCalls = [];
     guidancePage.on('request', (request) => {
@@ -521,9 +527,7 @@ async function main() {
     const realGuidancePage = await context.newPage();
     await realGuidancePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
     await realGuidancePage.locator('#sample-button').click();
-    const realGuidanceCard = realGuidancePage.locator('#case-list .case-card').first();
-    await realGuidanceCard.locator(':scope > summary').focus();
-    await realGuidancePage.keyboard.press('Enter');
+    const realGuidanceCard = await openReviewCase(realGuidancePage);
     const realGuidanceCalls = [];
     realGuidancePage.on('request', (request) => {
       if (new URL(request.url()).pathname === '/api/v1/investigations/guidance')
@@ -550,14 +554,13 @@ async function main() {
     'REAL_GUIDANCE_STALE_OR_MUTATED');
     await realGuidancePage.close();
     for (const checklistState of CHECKLIST_STATES) {
+      currentScenario = checklistState;
       stateForPage = checklistState;
       checklistRouteCalls = 0;
       const checklistPage = await context.newPage();
       await checklistPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
       await checklistPage.locator('#sample-button').click();
-      const card = checklistPage.locator('#case-list .case-card').first();
-      await card.locator(':scope > summary').focus();
-      await checklistPage.keyboard.press('Enter');
+      const card = await openReviewCase(checklistPage);
       const control = card.locator('.checklist-request');
       const calls = [];
       checklistPage.on('request', (request) => {
@@ -579,7 +582,7 @@ async function main() {
       await checklistPage.waitForFunction(() => !document.querySelector('.checklist-status')?.textContent.includes('확인하고 있습니다'));
       if (checklistState === 'CHECKLIST_RETRY') {
         await control.click();
-        await checklistPage.waitForSelector('.checklist-result article');
+        await checklistPage.waitForSelector('.checklist-result .checklist-tasks > li');
       }
       requireSafe(calls.length === (checklistState === 'CHECKLIST_RETRY' ? 2 : 1), 'CHECKLIST_OPT_IN_COUNT_FAILED');
       const requestBody = JSON.parse(calls[0].postData() || '{}');
@@ -590,10 +593,19 @@ async function main() {
           checklistState === 'CHECKLIST_REAL') {
         requireSafe(rendered.includes('이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.'),
           'CHECKLIST_ANALYSIS_INVARIANCE_EXPLANATION_MISSING');
-        requireSafe(rendered.includes('review_soon'),
+        requireSafe(rendered.includes('우선 확인') && !rendered.includes('review_soon'),
           'CHECKLIST_PRIORITY_RENDER_FAILED');
-        requireSafe(rendered.includes('일반 조사 참고 자료') && rendered.includes('사례 발생의 증거가 아닙니다'),
-          'CHECKLIST_CITATION_BOUNDARY_RENDER_FAILED');
+        const why = card.locator('.checklist-task details').first();
+        requireSafe(await why.count() === 1 && !(await why.evaluate((node) => node.open)),
+          'CHECKLIST_CITATION_NOT_PROGRESSIVE');
+        const whySummary = why.locator('summary').first();
+        requireSafe(await whySummary.count() === 1, 'CHECKLIST_WHY_SUMMARY_MISSING');
+        await whySummary.press('Enter');
+        requireSafe(await why.evaluate((node) => node.open), 'CHECKLIST_WHY_DISCLOSURE_FAILED');
+        const expandedChecklist = await card.locator('.investigation-checklist').innerText();
+        requireSafe(expandedChecklist.includes('일반 조사 방법과 한계') &&
+          expandedChecklist.includes('이 사례의 직접 증거가 아닙니다'),
+        'CHECKLIST_CITATION_BOUNDARY_RENDER_FAILED');
         if (checklistState === 'CHECKLIST_REAL') {
           requireSafe(rendered.includes('검증된 관찰 역할: SSH 인증 로그') &&
             !rendered.includes('역할 정보 미확인'), 'CHECKLIST_VERIFIED_ROLE_LABEL_MISSING');
@@ -627,6 +639,101 @@ async function main() {
       await checklistPage.close();
     }
     stateForPage = 'DISABLED';
+    const reviewWorkspacePage = await context.newPage();
+    await reviewWorkspacePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await reviewWorkspacePage.locator('#sample-button').click();
+    await reviewWorkspacePage.locator('#case-list .case-card').nth(1).waitFor({state: 'attached'});
+    requireSafe(await reviewWorkspacePage.locator('#case-list .case-detail').count() === 0 &&
+      await reviewWorkspacePage.locator('#case-list .timeline').count() === 0 &&
+      await reviewWorkspacePage.locator('#case-list .checklist-result').count() === 0 &&
+      await reviewWorkspacePage.locator('#case-list .progressive-knowledge, #case-list .technical-details, #case-list .investigation-checklist').count() === 0,
+    'REVIEW_LIST_RENDERED_DETAIL');
+    requireSafe(await reviewWorkspacePage.locator('#case-list-heading').isVisible() &&
+      await reviewWorkspacePage.locator('#case-list-heading').textContent() === '검토 건',
+      'REVIEW_LIST_HEADING_FAILED');
+    requireSafe(await reviewWorkspacePage.locator('#case-list').getByRole('link', {name: '상세 분석 보기'}).count() === 2,
+      'REVIEW_LIST_LINKS_FAILED');
+    await scan(reviewWorkspacePage, 'review-list');
+    for (const width of [320, 640, 1024, 1440]) {
+      await reviewWorkspacePage.setViewportSize({width, height: 900});
+      requireSafe(await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        'REVIEW_LIST_HORIZONTAL_OVERFLOW');
+    }
+    await reviewWorkspacePage.setViewportSize({width: 1280, height: 900});
+    const checklistCallsBeforeRoute = [];
+    reviewWorkspacePage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/checklist')
+        checklistCallsBeforeRoute.push(request);
+    });
+    const dashboardBeforeRoute = await reviewWorkspacePage.locator('#results-dashboard').textContent();
+    const detailLink = reviewWorkspacePage.locator('#case-list').getByRole('link', {name: '상세 분석 보기'}).first();
+    await detailLink.focus();
+    await reviewWorkspacePage.keyboard.press('Enter');
+    await reviewWorkspacePage.getByRole('heading', {name: /검토 건 #1/}).waitFor({state: 'visible'});
+    requireSafe(/^#\/investigations\/c_[0-9a-f]{24}$/.test(new URL(reviewWorkspacePage.url()).hash) &&
+      await reviewWorkspacePage.locator('#case-detail-view .case-detail').count() === 1 &&
+      await reviewWorkspacePage.locator('#case-list .case-detail').count() === 0 &&
+      checklistCallsBeforeRoute.length === 0,
+    'REVIEW_DETAIL_ROUTE_OR_OPT_IN_FAILED');
+    requireSafe(await reviewWorkspacePage.evaluate(() => {
+      const state = history.state;
+      return Object.keys(state || {}).sort().join(',') === 'reviewWorkspaceDetail' &&
+        JSON.stringify(state).length < 64 && !location.hash.includes('account') && !location.hash.includes('hostname');
+    }), 'REVIEW_ROUTE_HISTORY_PRIVACY_FAILED');
+    requireSafe(await reviewWorkspacePage.evaluate(() =>
+      document.activeElement?.matches('#workspace-current-title')),
+    'REVIEW_DETAIL_FOCUS_FAILED');
+    await scan(reviewWorkspacePage, 'review-detail');
+    for (const width of [320, 640, 1024, 1440]) {
+      await reviewWorkspacePage.setViewportSize({width, height: 900});
+      requireSafe(await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        'REVIEW_DETAIL_HORIZONTAL_OVERFLOW');
+    }
+    await reviewWorkspacePage.setViewportSize({width: 640, height: 900});
+    await reviewWorkspacePage.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    requireSafe(await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      'REVIEW_DETAIL_200_PERCENT_REFLOW_FAILED');
+    await reviewWorkspacePage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await reviewWorkspacePage.setViewportSize({width: 1280, height: 900});
+    await reviewWorkspacePage.goBack();
+    await reviewWorkspacePage.waitForFunction(() => location.hash === '');
+    requireSafe(await reviewWorkspacePage.locator('#case-list').isVisible() &&
+      await reviewWorkspacePage.evaluate(() => document.activeElement?.textContent?.includes('상세 분석 보기')) &&
+      await reviewWorkspacePage.locator('#results-dashboard').textContent() === dashboardBeforeRoute &&
+      checklistCallsBeforeRoute.length === 0,
+    'REVIEW_BACK_FOCUS_OR_OPT_IN_FAILED');
+    const reviewTransitionTimes = [];
+    let reviewDomNodes = 0;
+    let reviewHtmlBytes = 0;
+    for (let iteration = 0; iteration < 40; iteration += 1) {
+      const started = performance.now();
+      await detailLink.click();
+      await reviewWorkspacePage.getByRole('heading', {name: /검토 건 #1/}).waitFor({state: 'visible'});
+      const detailStats = await reviewWorkspacePage.locator('#case-detail-view').evaluate((node) => ({
+        nodes: node.querySelectorAll('*').length,
+        bytes: new TextEncoder().encode(new XMLSerializer().serializeToString(node)).length,
+      }));
+      await reviewWorkspacePage.locator('#review-back-link').click();
+      await reviewWorkspacePage.waitForFunction(() => location.hash === '');
+      if (iteration >= 10) reviewTransitionTimes.push(performance.now() - started);
+      reviewDomNodes = detailStats.nodes;
+      reviewHtmlBytes = detailStats.bytes;
+    }
+    console.log(`REVIEW_WORKSPACE_BENCHMARK warmup=10 samples=30 transition_ms=${JSON.stringify(summarizeMs(reviewTransitionTimes))} detail_dom_nodes=${reviewDomNodes} detail_html_bytes=${reviewHtmlBytes}`);
+    await reviewWorkspacePage.close();
+    const expiredRoutePage = await context.newPage();
+    const expiredChecklistCalls = [];
+    expiredRoutePage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/checklist') expiredChecklistCalls.push(request);
+    });
+    await expiredRoutePage.goto(`${server.origin}/#/investigations/c_0123456789abcdef01234567`, {waitUntil: 'networkidle'});
+    requireSafe(await expiredRoutePage.locator('#review-route-expired').isVisible() &&
+      await expiredRoutePage.getByRole('button', {name: '분석 결과로 돌아가기'}).isVisible() &&
+      expiredChecklistCalls.length === 0, 'REVIEW_EXPIRED_ROUTE_FALLBACK_FAILED');
+    await scan(expiredRoutePage, 'review-route-expired');
+    await expiredRoutePage.getByRole('button', {name: '분석 결과로 돌아가기'}).click();
+    requireSafe(new URL(expiredRoutePage.url()).hash === '', 'REVIEW_EXPIRED_RETURN_FAILED');
+    await expiredRoutePage.close();
     stateForPage = 'MULTI';
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);
@@ -708,6 +815,8 @@ async function main() {
 
 main().catch((error) => {
   const safe = /^([A-Z0-9_]+)$/.test(error.message) ? error.message : 'ACCESSIBILITY_PILOT_FAILED';
-  console.error(safe);
+  const kind = /^[A-Za-z]+$/.test(error?.name || '') ? error.name : 'Error';
+  const line = /ui_accessibility_axe_pilot_28_1\.mjs:(\d+):(\d+)/.exec(error?.stack || '');
+  console.error(`${safe} scenario=${currentScenario} kind=${kind}${line ? ` line=${line[1]}` : ''}`);
   process.exitCode = 1;
 });

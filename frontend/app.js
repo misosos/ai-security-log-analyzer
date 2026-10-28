@@ -157,6 +157,15 @@
   const errorRecovery = document.getElementById("error-recovery");
   const errorRetry = document.getElementById("error-retry");
   const results = document.getElementById("results");
+  const resultsDashboard = document.getElementById("results-dashboard");
+  const caseDetailView = document.getElementById("case-detail-view");
+  const caseDetailContent = document.getElementById("case-detail-content");
+  const reviewDetailContext = document.getElementById("review-detail-context");
+  const reviewBackLink = document.getElementById("review-back-link");
+  const workspaceCurrentTitle = document.getElementById("workspace-current-title");
+  const workspaceCurrentDescription = document.getElementById("workspace-current-description");
+  const reviewRouteExpired = document.getElementById("review-route-expired");
+  const reviewExpiredReturn = document.getElementById("review-expired-return");
   const resultJump = document.getElementById("result-jump");
   const summaryCards = document.getElementById("summary-cards");
   const caseList = document.getElementById("case-list");
@@ -178,6 +187,11 @@
   let pending = false;
   let currentReport = null;
   let currentReportMode = null;
+  let currentInvestigation = null;
+  let currentInvestigationMode = null;
+  let caseByRef = new Map();
+  let reviewReturnFocusId = null;
+  let reviewReturnScrollY = 0;
   const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
   const workspaceNav = document.getElementById("workspace-nav");
   const workspaceNavigation = (() => {
@@ -277,6 +291,101 @@
     return {show: showView, showResult, setAvailable, setPending};
   })();
   window.workspaceNavigation = workspaceNavigation;
+
+  function reviewRouteRef() {
+    const match = /^#\/investigations\/(c_[0-9a-f]{24})$/.exec(window.location.hash);
+    return match ? match[1] : null;
+  }
+
+  function showReviewDashboard(focusTarget = false) {
+    resultsDashboard.hidden = false;
+    caseDetailView.hidden = true;
+    reviewRouteExpired.hidden = true;
+    if (currentInvestigation !== null) results.hidden = false;
+    workspaceCurrentTitle.textContent = resultsHeading.textContent;
+    workspaceCurrentDescription.textContent = "검토 건 목록과 분석 결과 요약입니다.";
+    if (focusTarget) resultsHeading.focus();
+  }
+
+  function showExpiredReviewRoute() {
+    caseDetailView.hidden = true;
+    resultsDashboard.hidden = true;
+    reviewRouteExpired.hidden = false;
+    results.hidden = false;
+    window.workspaceNavigation.showResult("batch");
+    workspaceCurrentTitle.textContent = "상세 정보 만료";
+    workspaceCurrentDescription.textContent = "현재 탭에 분석 결과가 없습니다.";
+    reviewExpiredReturn.focus();
+  }
+
+  function openReviewCase(caseRef, focusHeading = true) {
+    const entry = caseByRef.get(caseRef);
+    if (!entry || currentInvestigation === null) {
+      showExpiredReviewRoute();
+      return;
+    }
+    caseDetailContent.replaceChildren(renderCaseDetail(entry.item, entry.index));
+    reviewDetailContext.textContent = currentInvestigationMode === "sample" ?
+      "합성 예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
+      "현재 탭 메모리에 있는 분석 결과입니다.";
+    resultsDashboard.hidden = true;
+    reviewRouteExpired.hidden = true;
+    caseDetailView.hidden = false;
+    workspaceCurrentTitle.textContent = `검토 건 #${entry.index + 1}`;
+    workspaceCurrentDescription.textContent = "선택한 검토 건의 활동 흐름과 확인할 작업입니다.";
+    if (focusHeading) {
+      workspaceCurrentTitle.tabIndex = -1;
+      workspaceCurrentTitle.focus();
+    }
+  }
+
+  function restoreReviewList(state) {
+    showReviewDashboard(false);
+    const scrollY = Number.isFinite(state?.reviewListScrollY) ? state.reviewListScrollY : reviewReturnScrollY;
+    window.scrollTo(0, Math.max(0, scrollY));
+    const focusId = typeof state?.reviewFocusId === "string" && /^review-case-link-\d+$/.test(state.reviewFocusId) ?
+      state.reviewFocusId : reviewReturnFocusId;
+    const target = focusId ? document.getElementById(focusId) : null;
+    if (target && !target.hidden) target.focus({preventScroll: true});
+  }
+
+  caseList.addEventListener("click", (event) => {
+    const link = event.target.closest("a[data-review-case-ref]");
+    if (!link) return;
+    const caseRef = link.dataset.reviewCaseRef;
+    if (!/^c_[0-9a-f]{24}$/.test(caseRef) || !caseByRef.has(caseRef)) return;
+    event.preventDefault();
+    reviewReturnFocusId = link.id;
+    reviewReturnScrollY = window.scrollY;
+    history.replaceState({reviewWorkspaceReturn: true, reviewListScrollY: reviewReturnScrollY,
+      reviewFocusId: reviewReturnFocusId}, "", `${location.pathname}${location.search}${location.hash}`);
+    history.pushState({reviewWorkspaceDetail: true}, "", `#/investigations/${caseRef}`);
+    openReviewCase(caseRef);
+  });
+
+  reviewBackLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (history.state?.reviewWorkspaceReturn === true) history.back();
+    else {
+      history.replaceState(null, "", `${location.pathname}${location.search}`);
+      restoreReviewList(null);
+    }
+  });
+
+  window.addEventListener("popstate", (event) => {
+    const caseRef = reviewRouteRef();
+    if (caseRef !== null) openReviewCase(caseRef);
+    else if (currentInvestigation !== null && !results.hidden) restoreReviewList(event.state);
+  });
+
+  reviewExpiredReturn.addEventListener("click", () => {
+    history.replaceState(null, "", `${location.pathname}${location.search}`);
+    caseDetailView.hidden = true;
+    reviewRouteExpired.hidden = true;
+    resultsDashboard.hidden = true;
+    window.workspaceNavigation.show("start", true);
+  });
+
   localSection.hidden = workspaceNav ? true : !loopbackPage;
   localChoiceButton.hidden = !loopbackPage;
   document.getElementById("local-action-card").hidden = !loopbackPage;
@@ -721,7 +830,7 @@
             guidance.citations.forEach((citation) => {
               const item = document.createElement("article");
               item.className = "guidance-citation";
-              item.append(element("h6", citation.title), element("p", citation.summary),
+              item.append(element("h4", citation.title), element("p", citation.summary),
                 element("p", `출처: ${citation.source_ref}`, "guidance-source"));
               result.append(item);
             });
@@ -763,7 +872,7 @@
     return node;
   }
 
-  const ICON_NAMES = new Set(["search", "link", "folder-search", "circle-help", "shield-alert"]);
+  const ICON_NAMES = new Set(["search", "link", "folder-search", "circle-help", "shield-alert", "triangle-alert"]);
   function icon(name, className = "icon") {
     if (!ICON_NAMES.has(name)) throw new Error("Unsupported fixed icon");
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -840,10 +949,18 @@
     return `${first}~${last.slice(0, 10) === first.slice(0, 10) ? last.slice(11) : last} KST`;
   }
 
+  function compactKstRange(start, end) {
+    const value = document.createElement("time");
+    value.className = "case-short-time";
+    value.textContent = shortKstRange(start, end);
+    if (start) value.setAttribute("datetime", start.display_utc);
+    return value;
+  }
+
   function detailSection(title) {
     const section = document.createElement("section");
     section.className = "case-section";
-    section.append(element("h5", title));
+    section.append(element("h3", title));
     return section;
   }
 
@@ -865,9 +982,9 @@
   }
 
   function renderTimeline(caseItem) {
-    const section = detailSection("시간순 조사 흐름");
+    const section = detailSection("활동 흐름");
     if (caseItem.timeline.length === 0) {
-      section.append(element("p", "표시할 시간순 조사 항목이 없습니다."));
+      section.append(element("p", "표시할 활동이 없습니다."));
       return section;
     }
     const list = document.createElement("ol");
@@ -878,12 +995,24 @@
         OBSERVED_FACT: "timeline-fact", DETECTION_OBSERVATION: "timeline-detection",
         SUPPORTED_RELATION: "timeline-relation"
       }[entry.category]}`;
-      row.append(element("span", entry.category_label, "category-label"),
-        element("strong", entry.title));
-      const time = document.createElement("div");
-      time.className = "timeline-time";
-      appendTime(time, entry.start_time, entry.end_time);
-      row.append(time, element("p", entry.fact));
+      const categoryLabel = {
+        OBSERVED_FACT: "확인된 사실", DETECTION_OBSERVATION: "탐지된 활동",
+        SUPPORTED_RELATION: "분석상 연결 · 인과관계 미확정"
+      }[entry.category];
+      const categoryIcon = {OBSERVED_FACT: "circle-help", DETECTION_OBSERVATION: "triangle-alert",
+        SUPPORTED_RELATION: "link"}[entry.category];
+      row.append(icon(categoryIcon, "icon timeline-icon"), element("span", categoryLabel, "category-label"));
+      const timeValue = entry.start_time ? entry.start_time.display_kst.slice(11, 19) : "시간 정보 없음";
+      const line = document.createElement("div");
+      line.className = "timeline-line";
+      if (entry.start_time) {
+        const time = element("time", timeValue);
+        time.setAttribute("datetime", entry.start_time.display_utc);
+        line.append(time);
+      } else line.append(element("span", timeValue));
+      const title = humanActivity(entry.title);
+      line.append(element("strong", title));
+      row.append(line, element("p", entry.fact));
       list.append(row);
     });
     section.append(list);
@@ -913,47 +1042,133 @@
     return section;
   }
 
-  function renderCaseDetail(caseItem) {
+  function limitedList(title, values, limit = 3) {
+    const section = detailSection(title);
+    textList(section, values.slice(0, limit), false, "현재 표시할 항목이 없습니다.");
+    if (values.length > limit) {
+      const extra = document.createElement("details");
+      extra.className = "progressive-list";
+      const summary = element("summary", `전체 ${values.length}개 보기`);
+      extra.append(summary);
+      textList(extra, values.slice(limit), false, "");
+      extra.addEventListener("toggle", () => {
+        summary.textContent = extra.open ? "접기" : `전체 ${values.length}개 보기`;
+      });
+      section.append(extra);
+    }
+    return section;
+  }
+
+  function humanActivity(value) {
+    return new Map([
+      ["Brute Force", "반복 인증 실패"],
+      ["Password Spraying-like", "여러 계정 대상 인증 실패"],
+      ["Path Traversal", "웹 경로 탐색 요청"],
+      ["SQL Injection-like", "SQL 관련 요청 패턴"],
+      ["XSS-like", "스크립트 관련 요청 패턴"],
+      ["Sensitive Resource Probing-like", "민감 경로 탐색 요청"],
+      ["Web Scanning-like", "여러 웹 경로 요청"],
+      ["Failed Login → Successful Login", "인증 실패 후 성공 기록"],
+      ["Brute Force → Successful Login", "반복 실패 후 성공 기록"]
+    ]).get(value) || "연결된 활동";
+  }
+
+  function appendCompactTime(parent, value) {
+    if (!value) {
+      parent.append(element("span", "시간 정보 없음"));
+      return;
+    }
+    const time = element("time", `${value.display_kst.slice(11, 19)} KST`);
+    time.setAttribute("datetime", value.display_utc);
+    parent.append(time);
+  }
+
+  function renderExactTimes(caseItem) {
+    const details = document.createElement("details");
+    details.className = "exact-time-details";
+    details.append(element("summary", "정확한 시각 보기"));
+    const values = [];
+    [caseItem.start_time, caseItem.end_time, ...caseItem.timeline.map((entry) => entry.start_time)]
+      .filter(Boolean).forEach((value) => {
+        if (!values.some((item) => item.display_utc === value.display_utc)) values.push(value);
+      });
+    const list = document.createElement("ol");
+    values.forEach((value) => {
+      const row = document.createElement("li");
+      const time = element("time", `${value.display_kst} · ${value.display_utc}`);
+      time.setAttribute("datetime", value.display_utc);
+      row.append(time);
+      list.append(row);
+    });
+    details.append(list);
+    return details;
+  }
+
+  function renderCaseDetail(caseItem, index) {
     const body = document.createElement("div");
     body.className = "case-detail";
-    body.append(element("p", caseItem.grouping_explanation, "grouping-explanation"));
-    const meta = document.createElement("dl");
-    meta.className = "card-meta";
-    detail(meta, "관찰 수", String(caseItem.observation_count));
-    detail(meta, "분석 대상", caseItem.subject_alias);
-    body.append(meta);
-    const range = detailSection("시간 범위");
-    const time = document.createElement("div");
-    appendTime(time, caseItem.start_time, caseItem.end_time);
-    range.append(time);
-    const timelineDisclosure = document.createElement("details");
-    timelineDisclosure.className = "timeline-disclosure";
-    timelineDisclosure.append(element("summary", `시간순 기록 ${caseItem.timeline.length}건 보기`), renderTimeline(caseItem));
-    const relationNames = detailSection("지원 관계 유형 전체");
-    textList(relationNames, caseItem.supported_relations, false, "표시할 지원되는 관계가 없습니다.");
-    const detectionNames = detailSection("주요 활동 유형 전체");
-    textList(detectionNames, caseItem.supported_detections, false, "표시할 지원 탐지 관찰이 없습니다.");
-    body.append(range, detectionNames, relationNames, timelineDisclosure,
-      renderObservedSection(caseItem, "DETECTION_OBSERVATION", "탐지 관찰", "표시할 지원 탐지 관찰이 없습니다."),
-      renderObservedSection(caseItem, "SUPPORTED_RELATION", "지원되는 관계", "표시할 지원되는 관계가 없습니다."));
-    const assessment = detailSection("위험도 평가");
-    const assessmentValues = document.createElement("dl");
-    assessmentValues.className = "card-meta";
-    detail(assessmentValues, "포함된 최고 위험도", caseItem.included_highest_risk);
-    detail(assessmentValues, "포함된 최고 신뢰도", caseItem.included_highest_confidence);
-    assessment.append(assessmentValues, element("p",
-      "이 위험도는 사례 안에 포함된 기존 분석 결과 중 가장 높은 값입니다. 새로운 사건 점수나 침해 확률이 아닙니다."));
-    body.append(assessment);
-    const limitations = detailSection("해석 시 유의사항");
-    textList(limitations, caseItem.limitations.map((item) => item.text), false,
-      "추가로 표시할 사례별 해석 한계가 없습니다. 공통 해석 주의사항도 확인하십시오.");
-    const unverified = detailSection("확인되지 않은 사항");
-    textList(unverified, caseItem.unverified_items.map((item) => item.text), false,
-      "추가로 표시할 미확인 사항이 없습니다.");
-    const nextSteps = detailSection("다음 조사 단계");
-    textList(nextSteps, caseItem.next_steps.map((item) => item.text), true,
-      "표시할 고정 조사 단계가 없습니다.");
-    body.append(limitations, unverified, nextSteps, renderGuidance(caseItem), renderChecklist(caseItem));
+    const title = humanActivity(caseItem.supported_detections[0] || caseItem.supported_relations[0] || "연결된 활동");
+    const header = document.createElement("header");
+    header.className = "review-detail-header";
+    const heading = element("h2", title);
+    heading.id = "case-detail-heading";
+    header.append(heading, element("span",
+      currentInvestigationMode === "sample" ? "합성 예시" : "로컬 분석", "synthetic-badge"));
+    body.append(header, element("p", caseItem.grouping_explanation, "grouping-explanation"));
+
+    const summary = document.createElement("dl");
+    summary.className = "review-summary-meta";
+    detail(summary, "위험도", ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[caseItem.included_highest_risk]);
+    detail(summary, "목록 위치", `#${caseItem.review_order}`);
+    const roleRow = document.createElement("div");
+    const roleValue = element("dd", "확인 전 — 점검표를 요청하면 검증된 역할을 확인할 수 있습니다.");
+    roleValue.className = "verified-role-value";
+    roleRow.append(element("dt", "로그 역할"), roleValue);
+    const timeRow = document.createElement("div");
+    const timeValue = document.createElement("dd");
+    appendCompactTime(timeValue, caseItem.start_time);
+    if (caseItem.end_time && caseItem.end_time.display_utc !== caseItem.start_time?.display_utc) {
+      timeValue.append(document.createTextNode(" – "));
+      appendCompactTime(timeValue, caseItem.end_time);
+    }
+    timeRow.append(element("dt", "시간 범위"), timeValue);
+    summary.append(roleRow, timeRow);
+    body.append(summary, renderExactTimes(caseItem), element("p",
+      "위험도는 기존 분석 값이고 확인 순서는 목록의 검토 순서입니다. 두 값은 서로 다릅니다.",
+      "review-priority-note"));
+
+    const metrics = document.createElement("dl");
+    metrics.className = "review-metrics";
+    detail(metrics, "확인된 활동", `${caseItem.observation_count}건`);
+    detail(metrics, "연결된 흐름", `${caseItem.supporting_relation_count}건`);
+    detail(metrics, "확인할 작업", "요청 전");
+    detail(metrics, "추가 확인 필요", `${caseItem.unverified_items.length}개`);
+    const metricSection = detailSection("요약");
+    metricSection.append(metrics);
+    body.append(metricSection, renderTimeline(caseItem));
+
+    const confirmed = [...caseItem.supported_detections.map(humanActivity),
+      ...caseItem.timeline.filter((entry) => entry.category === "OBSERVED_FACT").map((entry) => entry.title)];
+    body.append(limitedList("확인된 내용", [...new Set(confirmed)]));
+    body.append(limitedList("추가 확인 필요", caseItem.unverified_items.map((item) => item.text)));
+
+    const assessment = detailSection("위험도 설명");
+    assessment.append(element("p", `기존 분석에서 포함된 가장 높은 위험도는 ${({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[caseItem.included_highest_risk]}입니다. 이는 새로운 사건 점수나 침해 확률이 아닙니다.`));
+    const knowledge = document.createElement("details");
+    knowledge.className = "progressive-knowledge";
+    const limitationNames = caseItem.limitations.map((item) => item.text);
+    knowledge.append(element("summary", `판단 근거 ${caseItem.supported_detections.length + caseItem.supported_relations.length}개 · 분석 한계 ${limitationNames.length}개 · 근거와 한계 보기`));
+    const detectionNames = detailSection("탐지된 활동 유형");
+    textList(detectionNames, caseItem.supported_detections.map(humanActivity), false, "탐지된 활동이 없습니다.");
+    const relationNames = detailSection("연결 근거");
+    textList(relationNames, caseItem.supported_relations.map(humanActivity), false, "연결 근거가 없습니다.");
+    const technical = document.createElement("details");
+    technical.className = "technical-details";
+    technical.append(element("summary", "기술 정보 보기"));
+    textList(technical, caseItem.limitations.map((item) => `${item.code}: ${item.text}`), false, "표시할 내부 코드가 없습니다.");
+    knowledge.append(detectionNames, relationNames,
+      limitedList("이 결과로 알 수 없는 것", limitationNames, MAX_ITEMS), technical);
+    body.append(assessment, knowledge, renderGuidance(caseItem), renderChecklist(caseItem));
     return body;
   }
 
@@ -1008,13 +1223,13 @@
   }
 
   function renderChecklist(caseItem) {
-    const section = detailSection("조사 점검표");
+    const section = detailSection("확인할 작업");
     section.classList.add("investigation-checklist");
     section.append(element("p", "검토 우선순위는 기존 위험도가 아니라 분석가의 검토 순서에 관한 별도 제안입니다."));
     const button = document.createElement("button");
     button.type = "button";
     button.className = "checklist-request";
-    button.textContent = "조사 점검표 보기";
+    button.textContent = "확인할 작업 불러오기";
     const status = element("p", "점검표는 요청할 때만 준비됩니다.", "checklist-status");
     status.setAttribute("aria-live", "polite");
     const result = document.createElement("div");
@@ -1057,7 +1272,9 @@
           checklist.status === "unavailable" ? "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다." :
             "검토 우선순위는 기존 위험도와 별개인 참고 제안입니다.";
         result.append(element("p", "이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다."));
-        result.append(element("h6", `검토 우선순위: ${checklist.review_priority}`));
+        const priorityLabel = ({review_now: "즉시 확인", review_soon: "우선 확인",
+          review_later: "일반 확인", undetermined: "확인 순서 미정"})[checklist.review_priority];
+        result.append(element("h4", `확인 순서: ${priorityLabel}`));
         if (checklist.source_role === "unknown") {
           result.append(element("p", "신뢰된 내부 관찰에서 단일 역할을 확인할 수 없어 역할을 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
         } else {
@@ -1066,20 +1283,48 @@
         if (checklist.review_priority === "undetermined" && checklist.source_role !== "unknown") {
           result.append(element("p", "현재 근거만으로 검토 순서를 정하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
         }
-        result.append(element("p", `사례 범주: ${checklist.category}`));
+        result.append(element("p", `활동 유형: ${{authentication: "인증 활동", web_request: "웹 요청 활동",
+          relation: "연결된 활동", unknown: "분류 정보 없음"}[checklist.category]}`));
         result.append(element("p", checklist.explanation.text));
-        checklist.steps.forEach((step) => result.append(element("p", step.text)));
-        checklist.uncertainty_codes.forEach((code) => result.append(element("p", `불확실성: ${code}`)));
-        checklist.limitation_codes.forEach((code) => result.append(element("p", `한계: ${code}`)));
-        if (checklist.citations.length) {
-          result.append(element("p", "아래 참고 근거는 일반 조사 지식이며 이 사례의 직접 증거가 아닙니다."));
-          checklist.citations.forEach((citation) => {
-            const item = document.createElement("article");
-            item.append(element("h6", citation.title), element("p", citation.summary),
-              element("p", `참고 ID: ${citation.citation_id}`));
-            result.append(item);
-          });
-        }
+        const tasks = document.createElement("ol");
+        tasks.className = "checklist-tasks";
+        const purposeLabels = {
+          authentication_scope: "대상과 범위를 확인합니다.", relation_scope: "기록의 순서와 연결 근거를 확인합니다.",
+          evidence_completeness: "자료의 포함 범위와 누락 여부를 확인합니다.",
+          evidence_conflict: "서로 다른 근거를 분리해 확인합니다.",
+          analysis_limit: "분석이 다루지 못한 범위를 확인합니다.",
+          manual_coverage: "관련 자료와 시간 범위를 수동으로 확인합니다."
+        };
+        checklist.steps.forEach((step, index) => {
+          const task = document.createElement("li");
+          task.className = "checklist-task";
+          task.append(element("h4", `${index + 1}. ${step.text}`));
+          const why = document.createElement("details");
+          why.append(element("summary", "왜 확인하나요?"),
+            element("p", purposeLabels[step.purpose_code] || "관련 자료의 범위와 확인 근거를 살펴봅니다."));
+          const references = checklist.citations.filter((citation) => step.citation_ids.includes(citation.citation_id));
+          if (references.length) {
+            why.append(element("p", "참고자료는 일반 조사 방법과 한계를 설명하며, 이 사례의 직접 증거가 아닙니다."));
+            references.forEach((citation) => {
+              const item = document.createElement("article");
+              item.append(element("h5", citation.title), element("p", citation.summary));
+              const technical = document.createElement("details");
+              technical.className = "technical-details";
+              technical.append(element("summary", "참고 ID 보기"), element("p", citation.citation_id));
+              item.append(technical);
+              why.append(item);
+            });
+          }
+          task.append(why);
+          tasks.append(task);
+        });
+        if (checklist.steps.length) result.append(tasks);
+        const technical = document.createElement("details");
+        technical.className = "technical-details checklist-codes";
+        technical.append(element("summary", "기술 정보 보기"));
+        textList(technical, [...checklist.uncertainty_codes.map((code) => `확인 필요: ${code}`),
+          ...checklist.limitation_codes.map((code) => `한계: ${code}`)], false, "표시할 내부 코드가 없습니다.");
+        result.append(technical);
         result.hidden = false;
       } catch (_error) {
         status.textContent = "점검표를 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
@@ -1093,10 +1338,10 @@
 
   function renderSummary(data) {
     const cards = [
-      ["확인할 활동", data.analysis_summary.supported_detection_count, "search"],
-      ["관련된 활동", data.analysis_summary.supported_relation_count, "link"],
-      ["조사 사례", data.case_summary.case_count, "folder-search"],
-      ["별도 확인", data.case_summary.independent_observation_count, "circle-help"]
+      ["확인된 활동", data.analysis_summary.supported_detection_count, "search"],
+      ["연결된 활동", data.analysis_summary.supported_relation_count, "link"],
+      ["검토 건", data.case_summary.case_count, "folder-search"],
+      ["추가 확인 필요", data.case_summary.independent_observation_count, "circle-help"]
     ];
     cards.forEach(([label, value, symbol]) => {
       const card = document.createElement("div");
@@ -1111,40 +1356,56 @@
 
   function renderCaseOverview(cases) {
     caseSection.hidden = cases.length === 0;
-    cases.forEach((item) => {
-      const card = document.createElement("details");
+    caseByRef = new Map();
+    cases.forEach((item, index) => {
+      const card = document.createElement("article");
       card.className = "case-card";
-      const summary = document.createElement("summary");
-      summary.className = "case-summary";
+      card.classList.add("review-case-card");
       const headingRow = document.createElement("div");
       headingRow.className = "case-heading-row";
       const lead = document.createElement("div");
       lead.className = "case-lead";
-      const caseHeading = document.createElement("h4");
-      caseHeading.append(icon("folder-search"), document.createTextNode(item.case_label));
-      lead.append(caseHeading, element("p", `주요 활동: ${item.supported_detections[0] || "표시할 지원 탐지 관찰이 없습니다."}`));
+      lead.append(element("h4", `검토 건 #${index + 1}`),
+        element("p", humanActivity(item.supported_detections[0] || item.supported_relations[0] || "연결된 활동")));
       const state = document.createElement("div");
       state.className = "case-state";
       const riskMarker = document.createElement("span");
       riskMarker.className = "risk-marker";
       riskMarker.append(icon("shield-alert"), riskBadge(item.included_highest_risk));
-      state.append(element("span", "위험도"), riskMarker,
-        element("span", `신뢰도 ${item.included_highest_confidence}`));
+      state.append(element("span", `위험도 ${({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[item.included_highest_risk]}`),
+        element("span", `목록 위치 #${item.review_order}`));
       headingRow.append(lead, state);
       const meta = document.createElement("dl");
       meta.className = "case-summary-meta";
-      detail(meta, "관찰", `${item.observation_count}건`);
-      const loginAfterFailures = item.supported_relations.some((name) => RELATION_NAMES.has(name));
-      detail(meta, "관련된 활동", `${item.supporting_relation_count}건${loginAfterFailures ? " · 로그인 실패 후 성공 기록 포함" : ""}`);
+      detail(meta, "로그 역할", "점검표 요청 후 확인");
+      detail(meta, "확인된 활동", `${item.observation_count}건`);
+      detail(meta, "연결된 활동", `${item.supporting_relation_count}건`);
       const timePair = document.createElement("div");
       const timeValue = document.createElement("dd");
-      timeValue.append(element("span", shortKstRange(item.start_time, item.end_time), "case-short-time"));
-      timePair.append(element("dt", "관찰 시간"), timeValue);
+      timeValue.append(compactKstRange(item.start_time, item.end_time));
+      timePair.append(element("dt", "시간 범위"), timeValue);
       meta.append(timePair);
-      summary.append(headingRow, meta, element("span", "상세 보기", "case-disclosure-label"));
-      card.append(summary, renderCaseDetail(item));
+      card.append(headingRow, meta, element("p", caseItemShortSummary(item), "review-card-summary"));
+      if (item.checklist_ref !== null) {
+        const link = element("a", "상세 분석 보기", "review-detail-link");
+        link.href = `#/investigations/${item.checklist_ref}`;
+        link.id = `review-case-link-${index}`;
+        link.dataset.reviewCaseRef = item.checklist_ref;
+        card.append(link);
+        caseByRef.set(item.checklist_ref, {item, index});
+      } else {
+        const unavailable = document.createElement("button");
+        unavailable.type = "button";
+        unavailable.disabled = true;
+        unavailable.textContent = "상세 정보를 사용할 수 없음";
+        card.append(unavailable);
+      }
       caseList.append(card);
     });
+  }
+
+  function caseItemShortSummary(item) {
+    return item.grouping_explanation.length > 180 ? `${item.grouping_explanation.slice(0, 177)}…` : item.grouping_explanation;
   }
 
   function renderIndependentObservations(observations) {
@@ -1152,10 +1413,9 @@
     observations.forEach((item) => {
       const card = document.createElement("article");
       card.className = "independent-card";
-      card.append(element("h4", `별도로 확인할 활동 ${item.review_order}: ${item.display_type}`));
+      card.append(element("h4", `추가 확인 필요 ${item.review_order}: ${humanActivity(item.display_type)}`));
       const meta = document.createElement("dl");
       meta.className = "card-meta";
-      detail(meta, "분석 대상", item.subject_alias);
       const riskPair = document.createElement("div");
       riskPair.append(element("dt", "기존 위험도"));
       const riskValue = document.createElement("dd");
@@ -1164,9 +1424,13 @@
       meta.append(riskPair);
       detail(meta, "기존 신뢰도", item.existing_confidence);
       card.append(meta);
-      const time = document.createElement("div");
+      const time = document.createElement("p");
       time.className = "independent-time";
-      appendTime(time, item.start_time, item.end_time);
+      appendCompactTime(time, item.start_time);
+      if (item.end_time && item.end_time.display_utc !== item.start_time?.display_utc) {
+        time.append(document.createTextNode(" – "));
+        appendCompactTime(time, item.end_time);
+      }
       card.append(time, element("p", INDEPENDENT_REASON_COPY.get(item.reason)));
       if (item.limitation !== null) card.append(element("p", `해석 한계: ${item.limitation}`));
       if (item.next_step !== null) card.append(element("p", `다음 조사 단계: ${item.next_step}`));
@@ -1194,6 +1458,14 @@
     summaryCards.replaceChildren();
     caseList.replaceChildren();
     independentList.replaceChildren();
+    caseDetailContent.replaceChildren();
+    caseByRef = new Map();
+    currentInvestigation = null;
+    currentInvestigationMode = null;
+    resultsDashboard.hidden = false;
+    caseDetailView.hidden = true;
+    reviewRouteExpired.hidden = true;
+    if (reviewRouteRef() !== null) history.replaceState(null, "", `${location.pathname}${location.search}`);
     capabilityMessage.textContent = "";
   }
 
@@ -1273,6 +1545,9 @@
   }
 
   function renderResult(data, mode) {
+    currentInvestigation = data;
+    currentInvestigationMode = mode;
+    if (reviewRouteRef() !== null) history.replaceState(null, "", `${location.pathname}${location.search}`);
     resultsHeading.textContent = mode === "sample" ? "예시 데이터 결과" : "내 로그 분석 결과";
     resultContext.textContent = mode === "sample" ?
       "예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
@@ -1288,6 +1563,9 @@
     currentReportMode = mode;
     reportDownload.hidden = false;
     results.hidden = false;
+    resultsDashboard.hidden = false;
+    caseDetailView.hidden = true;
+    reviewRouteExpired.hidden = true;
     resultJump.hidden = false;
     window.workspaceNavigation.showResult("batch");
   }
@@ -1359,4 +1637,5 @@
   button.addEventListener("click", requestSampleInvestigation);
   localForm.addEventListener("submit", requestLocalInvestigation);
   reportButton.addEventListener("click", downloadReport);
+  if (window.location.hash.startsWith("#/investigations/")) showExpiredReviewRoute();
 })();

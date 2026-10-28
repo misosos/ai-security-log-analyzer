@@ -94,3 +94,5 @@ TDD 첫 단계에서는 모듈 import 테스트가 새 모듈 부재로 실패�
 - 합성 fixture 결과는 production readiness나 탐지 정확도 증거가 아닙니다.
 
 Phase 36.3A는 이 checklist를 실제 사례 상세 UI에서 명시적으로 요청하는 별도 경로를 대상으로 10개 이해도 항목을 검수했습니다. 최종 10/10 PASS와 item 7의 최초 FAIL·고정 UI 문구 수정은 [Phase 36.3A 기록](investigation_checklist_acceptance_36_3a.md)에 있습니다. 이 결과는 Phase 36.2 내부 adapter 평가와 구분되며 실제 자료·조직 운영을 승인하지 않습니다.
+
+Phase 36.5A moves checklist presentation into the selected review-detail view as numbered task cards. The existing explicit POST and response semantics are unchanged; see the [workspace redesign record](investigation_review_workspace_redesign_36_5a.md). New SHA Ubuntu CI and new-screen comprehension review remain pending.

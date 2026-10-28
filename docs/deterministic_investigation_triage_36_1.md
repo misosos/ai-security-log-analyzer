@@ -97,6 +97,8 @@ These small local measurements are noisy, depend on the host, and are not an ope
 
 Analysis summaries, publication, checkpoint, SSE cursor and corpus digest must remain unchanged across use. These are internal synthetic tests; this module is not connected to those systems.
 
+Phase 36.5A presents cases in a compact list and renders only the selected case detail. The UI does not change the DTO, priority policy, or authoritative analysis; see the [review workspace redesign record](investigation_review_workspace_redesign_36_5a.md). New Ubuntu CI and user review of the redesigned screen are pending.
+
 ## Roadmap and limitations
 
 - **36.2:** lexical retrieval and fixed checklist templates, only after citation semantic review, synthetic evaluation and privacy/invariance contracts pass.

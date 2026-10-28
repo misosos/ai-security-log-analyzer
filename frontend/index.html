@@ -283,16 +283,17 @@
       </div>
       <div class="info-panel">
         <h2>결과에서 볼 수 있는 것</h2>
-        <p>위험도, 조사 사례, 함께 묶인 이유와 별도로 확인할 활동을 볼 수 있습니다.</p>
-        <p>사례 상세를 펼치면 시간순 조사 흐름, 관찰 근거, 해석 한계와 다음 조사 단계를 확인할 수 있습니다.</p>
+        <p>위험도, 검토 건, 연결 근거와 추가 확인이 필요한 활동을 볼 수 있습니다.</p>
+        <p>검토 건의 상세 분석에서 활동 흐름과 확인할 작업을 살펴볼 수 있습니다.</p>
       </div>
     </section>
     </details>
 
     <section id="results" class="results" aria-labelledby="results-heading" hidden>
+      <div id="results-dashboard">
       <h2 id="results-heading">분석 결과</h2>
       <p id="result-context" class="result-notice"><strong>예시 데이터 결과입니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
-      <p>확인할 활동과 조사 사례는 침해나 공격 성공의 확정이 아닙니다.</p>
+      <p>확인된 활동과 검토 건은 침해나 공격 성공의 확정이 아닙니다.</p>
       <section aria-labelledby="summary-heading">
         <h3 id="summary-heading">결과 요약</h3>
         <div id="summary-cards" class="summary-grid"></div>
@@ -300,13 +301,13 @@
       <p id="result-empty" class="sample-notice" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-circle-help"></use></svg>확인할 항목이 없습니다. 지원 범위나 입력 내용을 다시 확인해 주세요. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
       <div id="result-body" class="result-body">
         <section id="case-section" aria-labelledby="case-list-heading">
-          <h3 id="case-list-heading">조사 사례</h3>
-          <p>이 순서는 새로운 보안 점수가 아닌 검토 순서입니다.</p>
+          <h3 id="case-list-heading">검토 건</h3>
+          <p>확인 순서는 기존 위험도와 별개의 목록 순서입니다.</p>
           <div id="case-list" class="card-stack"></div>
         </section>
         <div id="result-rail" class="result-rail">
           <details id="independent-details" class="secondary-details">
-            <summary id="independent-heading">별도로 확인할 활동</summary>
+            <summary id="independent-heading">추가 확인이 필요한 활동</summary>
             <p>다른 결과와 묶을 근거가 부족한 기록입니다. 중요하지 않거나 안전하다는 뜻은 아닙니다.</p>
             <div id="independent-list" class="card-stack"></div>
           </details>
@@ -334,6 +335,19 @@
           </section>
         </div>
       </div>
+      </div>
+      <section id="case-detail-view" class="review-detail-view" aria-labelledby="case-detail-heading" hidden>
+        <a id="review-back-link" class="review-back-link" href="#">← 분석 결과로 돌아가기</a>
+        <p id="review-detail-context" class="sample-notice"></p>
+        <article class="case-card" aria-labelledby="case-detail-heading">
+          <div id="case-detail-content"></div>
+        </article>
+      </section>
+      <section id="review-route-expired" class="sample-notice" aria-labelledby="review-expired-heading" hidden>
+        <h2 id="review-expired-heading">이 검토 건의 상세 정보는 만료되었습니다</h2>
+        <p>분석 결과가 현재 탭 메모리에 없습니다. 새로고침 뒤에는 상세 정보를 복원할 수 없습니다.</p>
+        <button id="review-expired-return" type="button">분석 결과로 돌아가기</button>
+      </section>
     </section>
 
     <details id="boundaries" class="boundaries secondary-details">

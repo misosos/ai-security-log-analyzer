@@ -69,7 +69,7 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
     for phrase in (
         "예시 데이터로 둘러보기", "내 로그 분석하기", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
-        "침해 확정", "별도로 확인할 활동", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
+        "침해 확정", "추가 확인이 필요한 활동", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
         "HTML 보고서 다운로드", "현재 형식: 대상별 결정적 조사 보고서", "민감한 조사 자료",
         "서버에 영구 저장되지 않으며", "Timeline이 포함되지 않습니다",
     ):
@@ -125,39 +125,36 @@ def test_case_detail_source_uses_native_ordered_semantics_and_fixed_mappings():
     js = (FRONTEND / "app.js").read_text(encoding="utf-8")
     css = (FRONTEND / "style.css").read_text(encoding="utf-8")
     assert 'document.createElement("details")' in js
-    assert 'document.createElement("summary")' in js
     assert 'document.createElement("ol")' in js
     assert 'document.createElement("dl")' in js
-    assert 'element("time", value.display_kst)' in js
-    assert 'node.setAttribute("datetime", value.display_utc)' in js
-    assert 'element("dt", "시작")' in js
-    assert 'element("dt", "종료")' in js
-    assert 'element("span", "KST", "time-zone-label")' in js
-    assert 'element("span", "UTC", "time-zone-label")' in js
-    assert 'appendTimeRange' not in js
-    assert 'time-connector' not in js
-    assert '"부터"' not in js
-    assert 'UTC: ${' not in js
-    assert '${start.display_kst} ~ ${end.display_kst}' not in js
-    assert 'item.append(evidenceList(entry.evidence))' in js
     assert 'card.className = "case-card"' in js
-    assert 'card.open = item.included_highest_risk' not in js
     assert 'caseItem.timeline.forEach' in js
-    assert 'caseItem.next_steps.map' in js
-    assert 'item.evidence' in js
-    assert 'DETECTION_EVIDENCE' in js and 'RELATION_EVIDENCE' in js
-    assert 'NEXT_STEP_SEQUENCES' in js and 'LIMITATION_TEXTS' in js
-    assert 'category === "SUPPORTED_RELATION"' in js
-    assert '.sort(' not in js
+    assert 'timeline-relation' in css
+    assert '분석상 연결 · 인과관계 미확정' in js
+    assert 'function renderCaseOverview(cases)' in js
+    assert 'function renderCaseDetail(caseItem, index)' in js
+    assert 'resultsDashboard.hidden = true' in js
+    assert 'caseDetailView.hidden = false' in js
+    assert 'history.pushState({reviewWorkspaceDetail: true}' in js
+    assert 'reviewListScrollY' in js and 'reviewFocusId' in js
+    assert 'checklist-task' in js
+    assert '왜 확인하나요?' in js
+    assert '상세 분석 보기' in js
+    assert '확인할 작업 불러오기' in js
+    assert 'review_soon: "우선 확인"' in js
+    assert 'review_later: "일반 확인"' in js
+    assert 'undetermined: "확인 순서 미정"' in js
+    assert 'case-list' in js and 'renderCaseDetail(item, index)' not in js
     assert 'JSON.stringify({schema_version: 1,' in js
     assert 'JSON.stringify(caseItem)' not in js
     assert 'Object.entries(' not in js
+    assert 'window.location.hash.startsWith("#/investigations/")' in js
     assert 'case-summary:focus-visible' in css
     assert '.timeline' in css and '.evidence-list' in css
-    assert '.time-range' in css and '.time-row' in css
-    assert '.time-line' in css and '.time-utc' in css
-    assert 'overflow-wrap: anywhere' in css
+    assert '.timeline-item' in css
+    assert '.review-detail-view' in css
     assert '@media (max-width: 47.9375rem)' in css
+    assert 'overflow-wrap: anywhere' in css
 
 
 def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):

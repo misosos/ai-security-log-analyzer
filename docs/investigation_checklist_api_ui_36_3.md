@@ -76,3 +76,5 @@ Current limits:
 - Vector/VM remains `USER_ACTION_REQUIRED / ISOLATION_BLOCKED`; this phase did not alter or validate it.
 - The source-role provenance gap remains; unknown role is kept unknown and review priority remains undetermined.
 - Long-duration operational load and use by other analysts are `NOT_TESTED`.
+
+Phase 36.5A redesigns the frontend into a compact result list plus one selected detail view. It does not change this read-only endpoint or explicit request contract; the redesign remains conditional pending new Ubuntu CI and Phase 36.5B user review. See [the workspace record](investigation_review_workspace_redesign_36_5a.md).

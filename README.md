@@ -111,7 +111,7 @@ npm run test:a11y
 | 개인정보·API | [개인정보 projection](docs/public_analysis_privacy.md) |
 | Linux Audit | [프로세스 실행 조사](docs/linux_audit_process_execution.md) |
 | 근거 도움말 | 조사 사례 상세의 선택형 lexical citation 도움말; [계약과 검증](docs/local_investigation_guidance_33_4.md) |
-| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [작업 화면 Safari 수용 기록](docs/ui_safari_acceptance_28_5.md), [v0.3.0 Safari 수용 기록](docs/v030_safari_acceptance_27_1.md) |
+| 접근성·수용 검증 | [개발용 접근성 검사](docs/ui_accessibility_axe_pilot_28_1.md), [작업 화면 Safari 수용 기록](docs/ui_safari_acceptance_28_5.md), [v0.3.0 Safari 수용 기록](docs/v030_safari_acceptance_27_1.md), [검토 작업공간 재설계](docs/investigation_review_workspace_redesign_36_5a.md) — CONDITIONAL_GO |
 | 릴리스 | [v0.4.0 노트](docs/releases/v0.4.0.md), [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
 | 개발·보안 검증 기록 | [전체 문서 지도](docs/index.md) |
 

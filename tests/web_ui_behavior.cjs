@@ -14,6 +14,7 @@ class Node {
     this.tagName = tagName;
     this.children = [];
     this.attributes = {};
+    this.dataset = {};
     this._text = "";
     this.classList = {add: (...names) => { this.className = [...new Set(`${this.className || ""} ${names.join(" ")}`.trim().split(/\s+/))].join(" "); }};
     this.hidden = false;
@@ -38,7 +39,9 @@ class Node {
 
 const ids = [
   "sample-button", "sample-status", "error-summary", "error-message",
-  "error-recovery", "error-retry", "results", "result-jump", "summary-cards",
+  "error-recovery", "error-retry", "results", "results-dashboard", "case-detail-view",
+  "case-detail-content", "review-detail-context", "review-back-link", "review-route-expired",
+  "review-expired-return", "result-jump", "summary-cards",
   "case-list", "case-section", "independent-list", "independent-details", "result-empty",
   "capability-message", "report-download", "report-button",
   "local-form", "local-upload", "local-choice-button", "local-choice-details", "local-button", "local-status", "results-heading", "result-context",
@@ -78,6 +81,9 @@ function makeApp(initial, hostname = "127.0.0.1") {
     },
     revokeObjectURL: (value) => revoked.push(value)
   };
+  const location = {hostname, hash: "", pathname: "/", search: ""};
+  const history = {state: null, replaceState(state, _title, url) { this.state = state; location.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; },
+    pushState(state, _title, url) { this.state = state; location.hash = url.includes("#") ? url.slice(url.indexOf("#")) : ""; }, back() {}};
   const document = {
     getElementById: (id) => nodes[id],
     body,
@@ -117,8 +123,8 @@ function makeApp(initial, hostname = "127.0.0.1") {
       })}
     };
   };
-  vm.runInNewContext(script, {document, fetch, FormData: FormDataStub,
-    window: {location: {hostname}},
+  vm.runInNewContext(script, {document, fetch, FormData: FormDataStub, history, location,
+    window: {location, history, addEventListener() {}, scrollTo() {}},
     TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
   return {
     nodes, downloads, revoked, body,
@@ -152,7 +158,7 @@ async function main() {
   assert.equal(app.nodes["local-upload"].scrolled, undefined, "workspace choice does not jump down the page");
   await app.click();
   const nodes = app.nodes;
-  assert.equal(nodes.results.hidden, false);
+  assert.equal(nodes.results.hidden, false, `sample render failure: ${nodes["error-message"].textContent}`);
   assert.equal(nodes["error-summary"].hidden, true);
   assert.equal(nodes["case-list"].children.length, 2);
   assert.equal(nodes["summary-cards"].children.length, 4);
@@ -170,80 +176,28 @@ async function main() {
   assert.equal(input.report_export.html.includes("교육용 합성 샘플 결과입니다"), true);
   assert.deepEqual(app.revoked, ["test-object-url"]);
   assert.equal(app.body.children.length, 0, "temporary anchor removed");
-  const [high, low] = nodes["case-list"].children;
-  assert.equal(nodesOf(high, "button").filter((button) => button.textContent === "근거 도움말 보기").length, 1);
-  assert.equal(high.textContent.includes("이 도움말은 탐지 결과를 변경하지 않습니다."), true);
+  const [high] = nodes["case-list"].children;
+  assert.equal(nodesOf(high, "a").some((link) => link.textContent === "상세 분석 보기"), true);
+  assert.equal(high.textContent.includes("검토 건 #1"), true);
+  assert.equal(high.textContent.includes("위험도 높음"), true);
+  assert.equal(high.textContent.includes("목록 위치 #1"), true);
+  assert.equal(nodesOf(nodes["case-list"], "details").length, 0, "dashboard omits detail disclosures");
+  assert.equal(nodesOf(nodes["case-list"], "ol").length, 0, "dashboard omits timeline and checklist");
+  assert.equal(nodes["case-list"].textContent.includes("CORRELATION_IS_NOT_CAUSATION"), false);
   assert.equal(app.fetchCalls.filter((call) => call.url.includes("/guidance")).length, 0,
     "guidance is never fetched before an explicit click");
   assert.equal(app.fetchCalls.filter((call) => call.url.includes("/checklist")).length, 0,
     "checklist is never fetched before an explicit click");
-  assert.equal(high.tagName, "details");
-  assert.equal(high.open, false, "case detail starts collapsed");
-  assert.equal(low.open, false);
-  const checklistButton = nodesOf(high, "button").find((button) => button.textContent === "조사 점검표 보기");
-  assert.ok(checklistButton, "case detail exposes an explicit checklist button");
-  app.setResponse({
-    schema: "investigation-checklist/v2", status: "refused", source_role: "unknown", source_role_label: "역할 정보 미확인", review_priority: "undetermined",
-    priority_meaning: "analyst_review_order_only_not_security_risk", category: "relation", steps: [],
-    explanation: {text: "현재 승인된 근거로는 이 범주의 점검표를 만들 수 없습니다. 이는 안전 또는 비위험 판정이 아닙니다. 기존 결정적 분석 결과를 확인하고, 원본 자료는 승인된 내부 분석 경로에서 별도로 확인하세요. 승인 근거가 검토되기 전에는 추측하지 않습니다.", citation_ids: []},
-    uncertainty_codes: ["insufficient_context"], limitation_codes: ["INCOMPLETE_EVIDENCE"], citations: [],
-    citation_meaning: "general_reference_not_case_evidence", generated_by: "deterministic_lexical_template"
-  });
-  await checklistButton.listener();
-  const checklistCall = app.fetchCalls.find((call) => call.url === "/api/v1/investigations/checklist");
-  assert.ok(checklistCall, "explicit click requests the checklist");
-  assert.equal(checklistCall.options.method, "POST");
-  assert.deepEqual(Object.keys(JSON.parse(checklistCall.options.body)), ["schema_version", "case_ref"]);
-  assert.equal(JSON.parse(checklistCall.options.body).case_ref, input.cases[0].checklist_ref);
-  assert.equal(nodesOf(high, "section").some((section) => section.className.includes("investigation-checklist") &&
-    section.textContent.includes("이는 안전 또는 비위험 판정이 아닙니다.")), true);
-  assert.equal(checklistCall.options.body.includes(input.cases[0].subject_alias), false);
-  assert.equal(checklistButton.disabled, false);
-  assert.equal(nodesOf(high, "summary").length, 2);
-  assert.equal(nodesOf(high, "details").length, 2, "timeline has its own closed disclosure");
-  assert.equal(nodesOf(high, "summary")[0].textContent.includes("상세 보기"), true);
-  assert.equal(nodesOf(high, "summary")[0].textContent.includes("관련된 활동"), true);
-  assert.equal(nodesOf(high, "summary")[0].textContent.includes("2건"), true);
-  assert.equal(nodesOf(high, "summary")[0].textContent.includes("KST"), true);
-  assert.equal(nodesOf(high, "summary")[0].textContent.includes("UTC"), false);
+  assert.equal(nodesOf(high, "button").length, 0, "checklist action belongs to the selected detail view");
   assert.equal(nodesOf(high, "time").length > 0, true);
   assert.equal(nodesOf(high, "time")[0].attributes.datetime.endsWith("Z"), true);
-  assert.equal(nodesOf(high, "time")[0].textContent.includes("KST"), true);
-  const caseRange = sectionNamed(high, "시간 범위");
-  assert.ok(caseRange);
-  const caseRangeList = nodesOf(caseRange, "dl")[0];
-  assert.deepEqual(nodesOf(caseRangeList, "dt").map((item) => item.textContent), ["시작", "종료"]);
-  assert.equal(caseRangeList.children.length, 2);
-  for (const row of caseRangeList.children) {
-    assert.deepEqual(nodesOf(row, "span").filter((item) => item.className === "time-zone-label")
-      .map((item) => item.textContent), ["KST", "UTC"]);
-    assert.equal(nodesOf(row, "time").length, 1);
-  }
-  const timeline = sectionNamed(high, "시간순 조사 흐름");
-  const timelineList = nodesOf(timeline, "ol")[0];
-  assert.equal(timelineList.children.length, input.cases[0].timeline.length);
-  assert.equal(nodesOf(timelineList.children[0], "dl").length, 1, "Timeline range uses start/end blocks");
-  assert.equal(nodesOf(timelineList.children[1], "dl").length, 0, "Timeline point uses two visible lines");
-  assert.deepEqual(nodesOf(timelineList.children[1], "span").filter((item) => item.className === "time-zone-label")
-    .map((item) => item.textContent), ["KST", "UTC"]);
-  assert.equal(timelineList.textContent.includes("endpoint"), false);
-  assert.equal(timelineList.textContent.includes("기존 상관분석에서 관계가 확인된 인증 관찰입니다."), true);
-  assert.equal(nodesOf(high, "dl").some((list) => nodesOf(list, "dt").some((item) => item.textContent === "실패 횟수")), true);
-  const detections = sectionNamed(high, "탐지 관찰");
-  const relations = sectionNamed(high, "지원되는 관계");
-  assert.equal(nodesOf(detections, "time").length, 0);
-  assert.equal(nodesOf(relations, "time").length, 0);
-  assert.equal(nodesOf(detections, "dt").some((item) => item.textContent === "실패 횟수"), true);
-  assert.equal(nodesOf(detections, "dt").some((item) => item.textContent === "대상 계정 수"), true);
-  assert.equal(nodesOf(detections, "dt").some((item) => item.textContent === "시간 범위"), true);
-  assert.equal(nodesOf(relations, "dt").some((item) => item.textContent === "시간 차이"), true);
-  assert.equal(high.textContent.includes("확인되지 않은 사항"), true);
-  assert.equal(high.textContent.includes("다음 조사 단계"), true);
-  assert.equal(high.textContent.includes("계정 별칭을 표시할 수 없음"), true);
-  assert.equal(high.textContent.includes("ACCOUNT_REFERENCE_UNAVAILABLE"), false);
-  assert.equal(nodes["independent-list"].textContent.includes("Password Spraying-like"), true);
-  assert.equal(nodes["independent-list"].textContent.includes("Path Traversal"), true);
-  assert.equal(nodes["independent-list"].textContent.includes("SQL Injection-like"), true);
+  assert.equal(nodes["case-list"].textContent.includes("KST"), true);
+  assert.equal(nodes["case-list"].textContent.includes("UTC"), false);
+  assert.equal(nodes["case-list"].textContent.includes("review_soon"), false);
+  assert.equal(nodes["case-list"].textContent.includes("조사 사례"), false);
+  assert.equal(nodes["independent-list"].textContent.includes("여러 계정 대상 인증 실패"), true);
+  assert.equal(nodes["independent-list"].textContent.includes("웹 경로 탐색 요청"), true);
+  assert.equal(nodes["independent-list"].textContent.includes("SQL 관련 요청 패턴"), true);
   assert.equal(nodes["independent-list"].textContent.includes("SQL 결합 조회 구문"), true);
   assert.equal(nodes["independent-list"].textContent.includes("UNION SELECT"), false);
   assert.equal(nodes["independent-list"].textContent.includes("V1"), false);
@@ -255,17 +209,19 @@ async function main() {
   medium.case_summary.low_case_count = 0;
   app.setResponse(medium);
   await app.click();
-  assert.equal(nodes["case-list"].children[1].open, false, "MEDIUM detail also starts collapsed");
+  assert.equal(nodes["case-list"].children.length, 2, "result list remains compact across risk bands");
+  assert.equal(nodesOf(nodes["case-list"], "details").length, 0);
 
   const microseconds = copy();
   const firstTime = microseconds.cases[0].timeline[0].start_time;
   firstTime.display_utc = firstTime.display_utc.replace("Z", ".123456Z");
   firstTime.display_kst = firstTime.display_kst.replace(" KST", ".123456 KST");
+  microseconds.cases[0].start_time = JSON.parse(JSON.stringify(firstTime));
   app.setResponse(microseconds);
   await app.click();
   assert.equal(nodes.results.hidden, false, "microsecond response accepted");
   assert.equal(nodesOf(nodes["case-list"], "time").some((node) => node.attributes.datetime.includes(".123456Z")), true, "microseconds retained");
-  assert.equal(nodesOf(nodes["case-list"], "time").some((node) => node.textContent.includes(".123456 KST")), true, "microseconds visible");
+  assert.equal(nodes["case-list"].textContent.includes("UTC"), false, "UTC remains out of the compact list");
 
   const noTime = copy();
   const finalEntry = noTime.cases[0].timeline.at(-1);
@@ -273,6 +229,8 @@ async function main() {
   finalEntry.end_time = null;
   finalEntry.timestamp_state = "NO_TIME";
   finalEntry.timestamp_state_label = "시간 정보 없음";
+  noTime.cases[0].start_time = null;
+  noTime.cases[0].end_time = null;
   app.setResponse(noTime);
   await app.click();
   assert.equal(nodes.results.hidden, false, "no-time response accepted");
@@ -430,6 +388,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error.name}: ${error.message}\n`);
+  process.stderr.write(`${error.name}: ${error.message}\n${error.stack || ""}`);
   process.exitCode = 1;
 });
