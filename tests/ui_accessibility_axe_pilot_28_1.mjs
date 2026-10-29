@@ -54,6 +54,212 @@ function targetGapPx(first, second) {
   return Math.hypot(horizontalGap, verticalGap);
 }
 
+async function assertWorkspaceReflow(page, label) {
+  const viewports = [
+    {width: 1440, height: 900}, {width: 1024, height: 768}, {width: 768, height: 1024},
+    {width: 390, height: 844}, {width: 320, height: 568},
+  ];
+  const measurements = [];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    const measurement = await page.evaluate(() => {
+      const visible = (node) => {
+        if (!node || node.closest('[hidden]')) return false;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      };
+      const selectors = [
+        '.app-shell', '#main', '.app-content', '#workspace-results', '#results-dashboard',
+        '#summary-cards', '#case-list', '.review-case-card', '.review-status-badges',
+        '#case-detail-view', '.workspace-detail-shell-36-6b', '.workspace-detail-header-36-6c',
+        '.workspace-overview-36-6c', '.workspace-overview-metrics-36-6c', '.workspace-detail-tabs-36-6d',
+        '#workspace-timeline-panel-36-6d', '.workspace-timeline-36-6d', '.workspace-timeline-item-36-6d',
+        '#workspace-tasks-panel-36-6e', '.workspace-task-master-detail-36-6e',
+        '.workspace-task-list-36-6e', '.workspace-task-choice-36-6e', '.workspace-task-detail-36-6e',
+        '#workspace-evidence-panel-36-6e', '.workspace-evidence-disclosure-36-6e',
+        '.workspace-evidence-citation-36-6e', '.workspace-checklist-status-36-6e',
+        '.workspace-checklist-output-36-6e', '.guidance-citation',
+      ];
+      const panel_overflow = [];
+      for (const selector of selectors) {
+        for (const node of document.querySelectorAll(selector)) {
+          if (!visible(node)) continue;
+          if (node.scrollWidth > node.clientWidth + 1) panel_overflow.push(selector);
+        }
+      }
+      const clipped = [...document.querySelectorAll('body *')].filter((node) => {
+        if (!visible(node) || node.matches('.review-card-summary, .icon-sprite')) return false;
+        const style = getComputedStyle(node);
+        const clipsX = ['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1;
+        const clipsY = ['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1;
+        return clipsX || clipsY;
+      }).length;
+      const targetSelectors = '#workspace-nav-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
+        '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
+        '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
+        '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
+        '.workspace-evidence-panel-36-6e .guidance-request';
+      const targets = [...document.querySelectorAll(targetSelectors)].filter(visible).map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
+          node.matches('.workspace-nav-list button') ? '.workspace-nav-list button' :
+          node.matches('#case-list .review-detail-link') ? '#case-list .review-detail-link' :
+          node.matches('#review-back-link') ? '#review-back-link' :
+          node.matches('.workspace-detail-tabs-36-6d button') ? '.workspace-detail-tabs-36-6d button' :
+          node.matches('.workspace-checklist-request-36-6e') ? '.workspace-checklist-request-36-6e' :
+          node.matches('.workspace-task-choice-36-6e') ? '.workspace-task-choice-36-6e' :
+          node.matches('.workspace-task-detail-36-6e summary') ? '.workspace-task-detail-36-6e summary' :
+          node.matches('.workspace-evidence-panel-36-6e summary') ? '.workspace-evidence-panel-36-6e summary' :
+          node.matches('.workspace-evidence-panel-36-6e select') ? '.workspace-evidence-panel-36-6e select' :
+          '.workspace-evidence-panel-36-6e .guidance-request',
+        left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+        width: rect.width, height: rect.height};
+      });
+      const target_gap_failures = [];
+      for (let first = 0; first < targets.length; first += 1) {
+        for (let second = first + 1; second < targets.length; second += 1) {
+          const a = targets[first]; const b = targets[second];
+          const dx = Math.max(0, a.left - b.right, b.left - a.right);
+          const dy = Math.max(0, a.top - b.bottom, b.top - a.bottom);
+          const gap = Math.hypot(dx, dy);
+          if (gap < 8) target_gap_failures.push({first: a.selector, second: b.selector, gap,
+            first_rect: {left: a.left, top: a.top, right: a.right, bottom: a.bottom},
+            second_rect: {left: b.left, top: b.top, right: b.right, bottom: b.bottom}});
+        }
+      }
+      return {
+        viewport: {width: innerWidth, height: innerHeight},
+        document: {scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth},
+        body: {scrollWidth: document.body.scrollWidth, clientWidth: document.body.clientWidth},
+        panel_overflow, clipped, target_count: targets.length,
+        target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44)
+          .map(({selector, width, height}) => ({selector, width, height})),
+        target_gap_failures,
+      };
+    });
+    measurements.push(measurement);
+    if (measurement.document.scrollWidth > measurement.document.clientWidth ||
+        measurement.body.scrollWidth > measurement.body.clientWidth || measurement.panel_overflow.length ||
+        measurement.clipped || measurement.target_size_failures.length || measurement.target_gap_failures.length) {
+      console.log(`${label}_REFLOW_DIAGNOSTIC ${JSON.stringify(measurement)}`);
+    }
+    requireSafe(measurement.document.scrollWidth <= measurement.document.clientWidth &&
+      measurement.body.scrollWidth <= measurement.body.clientWidth &&
+      measurement.panel_overflow.length === 0 && measurement.clipped === 0 &&
+      measurement.target_size_failures.length === 0 && measurement.target_gap_failures.length === 0,
+    `${label}_REFLOW_FAILED`);
+  }
+  await page.setViewportSize({width: 320, height: 568});
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  const equivalent200 = await page.evaluate(() => {
+    const selectors = ['.app-shell', '#main', '.app-content', '#workspace-results', '#results-dashboard',
+      '#case-list', '.review-case-card', '#case-detail-view', '.workspace-detail-shell-36-6b',
+      '.workspace-detail-tabs-36-6d', '.workspace-timeline-panel-36-6d', '#workspace-tasks-panel-36-6e',
+      '.workspace-task-master-detail-36-6e', '#workspace-evidence-panel-36-6e', '.workspace-evidence-disclosure-36-6e'];
+    const shown = (node) => {
+      if (!node || node.closest('[hidden]')) return false;
+      for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+      }
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const panel_overflow = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]
+      .filter(shown).filter((node) => node.scrollWidth > node.clientWidth + 1).map((node) => ({selector,
+        scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
+        descendants: [...node.querySelectorAll('*')].filter((child) => shown(child) &&
+          child.scrollWidth > child.clientWidth + 1).slice(0, 8).map((child) => ({
+          tag: child.tagName.toLowerCase(), id: child.id, className: String(child.className).slice(0, 100),
+          scrollWidth: child.scrollWidth, clientWidth: child.clientWidth,
+          width: Math.round(child.getBoundingClientRect().width * 100) / 100,
+        }))})));
+    const targetSelectors = '#workspace-nav-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
+      '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
+      '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
+      '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
+      '.workspace-evidence-panel-36-6e .guidance-request';
+    const targets = [...document.querySelectorAll(targetSelectors)].filter(shown).map((node) => {
+      const rect = node.getBoundingClientRect();
+      return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
+        node.matches('.workspace-nav-list button') ? `.workspace-nav-list button#${node.id}` :
+        node.matches('#case-list .review-detail-link') ? '#case-list .review-detail-link' :
+        node.matches('#review-back-link') ? '#review-back-link' :
+        node.matches('.workspace-detail-tabs-36-6d button') ? '.workspace-detail-tabs-36-6d button' :
+        node.matches('.workspace-checklist-request-36-6e') ? '.workspace-checklist-request-36-6e' :
+        node.matches('.workspace-task-choice-36-6e') ? '.workspace-task-choice-36-6e' :
+        node.matches('.workspace-task-detail-36-6e summary') ? '.workspace-task-detail-36-6e summary' :
+        node.matches('.workspace-evidence-panel-36-6e summary') ? '.workspace-evidence-panel-36-6e summary' :
+        node.matches('.workspace-evidence-panel-36-6e select') ? '.workspace-evidence-panel-36-6e select' :
+        '.workspace-evidence-panel-36-6e .guidance-request',
+        left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+        width: rect.width, height: rect.height};
+    });
+    const target_gap_failures = [];
+    for (let first = 0; first < targets.length; first += 1) for (let second = first + 1; second < targets.length; second += 1) {
+      const a = targets[first]; const b = targets[second];
+      const dx = Math.max(0, a.left - b.right, b.left - a.right);
+      const dy = Math.max(0, a.top - b.bottom, b.top - a.bottom);
+      if (Math.hypot(dx, dy) < 8) target_gap_failures.push({first: a.selector, second: b.selector,
+        gap: Math.round(Math.hypot(dx, dy) * 100) / 100,
+        first_rect: {left: a.left, top: a.top, right: a.right, bottom: a.bottom},
+        second_rect: {left: b.left, top: b.top, right: b.right, bottom: b.bottom}});
+    }
+    const clipped = [...document.querySelectorAll('body *')].filter((node) => {
+      if (!shown(node) || node.matches('.review-card-summary, .icon-sprite')) return false;
+      const style = getComputedStyle(node);
+      return (['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1) ||
+        (['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1);
+    }).length;
+    const layout_boxes = ['.app-shell', '#workspace-nav', '#workspace-nav details', '.workspace-nav-list',
+      '.app-area', '.app-content', '#review-back-link'].flatMap((selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return [];
+      const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+      return [{selector, top: rect.top, bottom: rect.bottom, height: rect.height,
+        minHeight: style.minHeight, heightStyle: style.height, display: style.display,
+        flexShrink: style.flexShrink, rowGap: style.rowGap, position: style.position,
+        overflow: style.overflow, open: node instanceof HTMLDetailsElement ? node.open : undefined,
+        childRects: selector === '#workspace-nav details' ? [...node.children].map((child) => {
+          const childRect = child.getBoundingClientRect(); const childStyle = getComputedStyle(child);
+          return {tag: child.tagName, top: childRect.top, bottom: childRect.bottom, height: childRect.height,
+            display: childStyle.display, position: childStyle.position};
+        }) : undefined}];
+    });
+    return {viewport: {width: innerWidth, height: innerHeight}, root_font_size: getComputedStyle(document.documentElement).fontSize,
+      document: {scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth},
+      body: {scrollWidth: document.body.scrollWidth, clientWidth: document.body.clientWidth}, panel_overflow,
+      clipped, target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44).length,
+      target_gap_failures, layout_boxes};
+  });
+  measurements.push({equivalent200});
+  if (equivalent200.document.scrollWidth > equivalent200.document.clientWidth ||
+      equivalent200.body.scrollWidth > equivalent200.body.clientWidth || equivalent200.panel_overflow.length ||
+      equivalent200.clipped || equivalent200.target_size_failures || equivalent200.target_gap_failures.length) {
+    console.log(`${label}_200_PERCENT_DIAGNOSTIC ${JSON.stringify(equivalent200)}`);
+  }
+  requireSafe(equivalent200.root_font_size === '32px' &&
+    equivalent200.document.scrollWidth <= equivalent200.document.clientWidth &&
+    equivalent200.body.scrollWidth <= equivalent200.body.clientWidth && equivalent200.panel_overflow.length === 0 &&
+    equivalent200.clipped === 0 && equivalent200.target_size_failures === 0 && equivalent200.target_gap_failures.length === 0,
+  `${label}_200_PERCENT_REFLOW_FAILED`);
+  await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+  await page.setViewportSize({width: 1440, height: 900});
+  console.log(`${label}_FULL_APP_LAYOUT ${JSON.stringify(measurements.map((measurement) => {
+    if (measurement.equivalent200) return {equivalent200: {
+      root_font_size: measurement.equivalent200.root_font_size,
+      document: measurement.equivalent200.document, body: measurement.equivalent200.body,
+      panel_overflow_count: measurement.equivalent200.panel_overflow.length,
+      clipped: measurement.equivalent200.clipped,
+      target_size_failures: measurement.equivalent200.target_size_failures,
+      target_gap_failures: measurement.equivalent200.target_gap_failures.length,
+    }};
+    return {...measurement, target_gap_failures: measurement.target_gap_failures.length};
+  }))}`);
+  return measurements;
+}
+
 function assertTargetGapGeometryContract() {
   const first = {left: 0, top: 0, right: 44, bottom: 44};
   requireSafe(targetGapPx(first, {left: 52, top: 0, right: 96, bottom: 44}) === 8,
@@ -258,6 +464,7 @@ async function scan(page, state) {
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
       'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired',
       'workspace-projection-shell', 'workspace-timeline', 'workspace-direct-entry-expired', 'workspace-checklist-race',
+      'workspace-evidence',
       'workspace-checklist-invalid-response',
       'workspace-tasks-evidence-available'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
@@ -683,6 +890,7 @@ async function main() {
     stateForPage = 'DISABLED';
     const reviewWorkspacePage = await context.newPage();
     await reviewWorkspacePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await assertWorkspaceReflow(reviewWorkspacePage, 'WORKSPACE_START');
     await reviewWorkspacePage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
     await reviewWorkspacePage.locator('#sample-button').click();
     await reviewWorkspacePage.locator('#case-list .case-card').nth(1).waitFor({state: 'attached'});
@@ -699,6 +907,40 @@ async function main() {
     'WORKSPACE_DASHBOARD_COUNTS_MISMATCH');
     requireSafe(await reviewWorkspacePage.locator('#independent-list .independent-card').count() === 4,
       'WORKSPACE_INDEPENDENT_OBSERVATION_AGGREGATE_MISMATCH');
+    await assertWorkspaceReflow(reviewWorkspacePage, 'WORKSPACE_DASHBOARD');
+    await reviewWorkspacePage.locator('#workspace-nav-details').evaluate((node) => { node.open = true; });
+    const workspaceNavigationGeometry = [];
+    for (const width of [1440, 1024, 768, 390, 320]) {
+      await reviewWorkspacePage.setViewportSize({width, height: width === 768 ? 1024 : 844});
+      await reviewWorkspacePage.waitForTimeout(50);
+      if (!await reviewWorkspacePage.locator('#workspace-nav-details').evaluate((node) => node.open)) {
+        await reviewWorkspacePage.locator('#workspace-nav-toggle').click();
+      }
+      const geometry = await reviewWorkspacePage.locator('#workspace-nav-toggle, .workspace-nav-list button').evaluateAll((nodes) =>
+        nodes.filter((node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+        }).map((node) => {
+          const rect = node.getBoundingClientRect();
+          return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+            width: rect.width, height: rect.height};
+        }));
+      const adjacentGapPx = geometry.slice(1).map((rect, index) => targetGapPx(geometry[index], rect));
+      workspaceNavigationGeometry.push({width, geometry, adjacent_gap_px: adjacentGapPx});
+      console.log(`WORKSPACE_PRIMARY_NAV_GEOMETRY ${JSON.stringify(workspaceNavigationGeometry.at(-1))}`);
+      requireSafe(geometry.length > 1 && geometry.every((rect) => rect.width >= 44 && rect.height >= 44) &&
+        adjacentGapPx.every((gap) => gap >= 8), 'WORKSPACE_PRIMARY_NAV_TARGET_GEOMETRY_FAILED');
+    }
+    console.log(`WORKSPACE_PRIMARY_NAV_GEOMETRY ${JSON.stringify(workspaceNavigationGeometry)}`);
+    await reviewWorkspacePage.locator('#workspace-nav-toggle').click();
+    requireSafe(!await reviewWorkspacePage.locator('#workspace-nav-details').evaluate((node) => node.open) &&
+      !await reviewWorkspacePage.locator('#nav-results').isVisible(),
+    'WORKSPACE_CLOSED_NAV_CONTENT_REMAINS_VISIBLE');
+    await reviewWorkspacePage.locator('#workspace-nav-toggle').click();
+    requireSafe(await reviewWorkspacePage.locator('#nav-results').isVisible(),
+      'WORKSPACE_OPEN_NAV_CONTENT_MISSING');
+    await reviewWorkspacePage.setViewportSize({width: 1280, height: 900});
     requireSafe(await reviewWorkspacePage.locator('#case-list').evaluate((node) =>
       getComputedStyle(node).gridTemplateColumns.split(' ').length === 1),
     'WORKSPACE_DASHBOARD_CASES_NOT_SINGLE_COLUMN');
@@ -817,6 +1059,7 @@ async function main() {
       await reviewWorkspacePage.locator('#case-list .case-detail').count() === 0 &&
       checklistCallsBeforeRoute.length === 0,
     'REVIEW_DETAIL_ROUTE_OR_OPT_IN_FAILED');
+    await assertWorkspaceReflow(reviewWorkspacePage, 'REVIEW_DETAIL');
     requireSafe(await reviewWorkspacePage.evaluate(() => {
       const state = history.state;
       return Object.keys(state || {}).sort().join(',') === 'reviewWorkspaceDetail' &&
@@ -965,6 +1208,18 @@ async function main() {
       shellChecklistCalls === 0 && shellAnalysisCalls === 0 &&
       await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute,
     'WORKSPACE_SHELL_ROUTE_OR_INVARIANCE_FAILED');
+    await projectionShellPage.locator('#review-back-link').focus();
+    await projectionShellPage.keyboard.press('Tab');
+    requireSafe(await projectionShellPage.evaluate(() => document.activeElement?.matches('#workspace-overview-tab-36-6d')),
+      'WORKSPACE_KEYBOARD_TAB_ORDER_FAILED');
+    await projectionShellPage.keyboard.press('Shift+Tab');
+    requireSafe(await projectionShellPage.evaluate(() => document.activeElement?.matches('#review-back-link')),
+      'WORKSPACE_KEYBOARD_REVERSE_TAB_ORDER_FAILED');
+    await projectionShellPage.getByRole('tab', {name: '개요'}).focus();
+    await projectionShellPage.keyboard.press('Space');
+    requireSafe(await projectionShellPage.getByRole('tab', {name: '개요'}).getAttribute('aria-selected') === 'true' &&
+      shellChecklistCalls === 0 && shellGuidanceCalls === 0,
+    'WORKSPACE_KEYBOARD_SPACE_TAB_OR_AUTOMATIC_REQUEST_FAILED');
     const initialTimelineContract = await projectionShellPage.evaluate((ref) => {
       const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent.trim());
       const list = document.querySelector('#workspace-timeline-panel-36-6d ol[aria-label="시간순 활동"]');
@@ -1034,6 +1289,7 @@ async function main() {
     requireSafe(await projectionShellPage.locator('.workspace-task-choice-36-6e').first().getAttribute('aria-pressed') === 'true',
       'WORKSPACE_TASK_KEYBOARD_SELECTION_FAILED');
     requireSafe(workspaceChecklistCalls.length === 1, 'WORKSPACE_TASK_SELECTION_REQUESTED_NETWORK');
+    await assertWorkspaceReflow(projectionShellPage, 'WORKSPACE_TASKS_AVAILABLE');
     await tasksTabContract.click();
     const taskTabViewportGeometry = [];
     for (const width of [1440, 1024, 768, 390, 320]) {
@@ -1098,15 +1354,26 @@ async function main() {
     await projectionShellPage.setViewportSize({width: 1280, height: 900});
     await scan(projectionShellPage, 'workspace-checklist-available');
     await evidenceTabContract.click();
+    const meaningDisclosureSummary = projectionShellPage.locator('#workspace-evidence-panel-36-6e .workspace-evidence-disclosure-36-6e summary').first();
+    await meaningDisclosureSummary.focus();
+    await projectionShellPage.keyboard.press('Space');
+    requireSafe(await meaningDisclosureSummary.evaluate((node) => node.parentElement.open) &&
+      workspaceChecklistCalls.length === 1 && shellGuidanceCalls === 0,
+    'WORKSPACE_EVIDENCE_DISCLOSURE_KEYBOARD_OR_REQUEST_FAILED');
+    await projectionShellPage.keyboard.press('Space');
+    requireSafe(!(await meaningDisclosureSummary.evaluate((node) => node.parentElement.open)),
+      'WORKSPACE_EVIDENCE_DISCLOSURE_CLOSE_FAILED');
     const guidanceTargets = await projectionShellPage.evaluate(() =>
       ['.workspace-evidence-panel-36-6e .guidance-request', '.workspace-evidence-panel-36-6e select',
         '.workspace-evidence-panel-36-6e details summary'].map((selector) => {
         const rect = document.querySelector(selector).getBoundingClientRect();
-        return {selector, width: rect.width, height: rect.height, left: rect.left, right: rect.right};
+        return {selector, width: rect.width, height: rect.height, left: rect.left, top: rect.top,
+          right: rect.right, bottom: rect.bottom};
       }));
+    console.log(`WORKSPACE_GUIDANCE_TARGET_GEOMETRY ${JSON.stringify(guidanceTargets)}`);
     requireSafe(guidanceTargets.every((target) => target.width >= 44 && target.height >= 44),
       'WORKSPACE_EVIDENCE_TARGET_GEOMETRY_FAILED');
-    requireSafe(guidanceTargets[0].left - guidanceTargets[1].right >= 8,
+    requireSafe(targetGapPx(guidanceTargets[0], guidanceTargets[1]) >= 8,
       'WORKSPACE_GUIDANCE_TARGET_SPACING_FAILED');
     console.log(`WORKSPACE_EVIDENCE_TARGET_GEOMETRY ${JSON.stringify(guidanceTargets)}`);
     requireSafe(await evidenceTabContract.getAttribute('aria-selected') === 'true' &&
@@ -1122,6 +1389,7 @@ async function main() {
     await projectionShellPage.locator('#workspace-evidence-panel-36-6e .guidance-citation').waitFor({state: 'visible'});
     requireSafe(shellGuidanceCalls === 1 && workspaceChecklistCalls.length === 1,
       'WORKSPACE_GUIDANCE_NOT_EXPLICIT_OR_MIXED');
+    await assertWorkspaceReflow(projectionShellPage, 'WORKSPACE_EVIDENCE_GUIDANCE_AVAILABLE');
     requireSafe(await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute &&
       await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').count() === 1,
     'WORKSPACE_ANALYSIS_MUTATION_OR_GUIDANCE_CHECKLIST_MIX_FAILED');
@@ -1225,9 +1493,14 @@ async function main() {
     await projectionShellPage.keyboard.press('Home');
     requireSafe(await projectionShellPage.getByRole('tab', {name: '개요'}).getAttribute('aria-selected') === 'true',
       'WORKSPACE_TIMELINE_KEYBOARD_HOME_FAILED');
+    await projectionShellPage.keyboard.press('ArrowRight');
+    await assertWorkspaceReflow(projectionShellPage, 'WORKSPACE_TIMELINE');
+    await scan(projectionShellPage, 'workspace-timeline');
+    await evidenceTabContract.click();
     await projectionShellPage.keyboard.press('End');
     requireSafe(await evidenceTabContract.getAttribute('aria-selected') === 'true', 'WORKSPACE_TIMELINE_KEYBOARD_END_FAILED');
-    await scan(projectionShellPage, 'workspace-timeline');
+    await assertWorkspaceReflow(projectionShellPage, 'WORKSPACE_EVIDENCE');
+    await scan(projectionShellPage, 'workspace-evidence');
     const timelinePanelMetrics = await projectionShellPage.locator('#workspace-timeline-panel-36-6d').evaluate((node) => ({
       items: node.querySelectorAll('.workspace-timeline-item-36-6d').length,
       nodes: node.querySelectorAll('*').length,
@@ -1453,6 +1726,7 @@ async function main() {
         (await projectionShellPage.locator('.workspace-checklist-status-36-6e').textContent()).includes('안전 판정이 아닙니다'),
         'WORKSPACE_CHECKLIST_REFUSAL_MEANING_FAILED');
       await scan(projectionShellPage, `workspace-checklist-${scenario.toLowerCase()}`);
+      await assertWorkspaceReflow(projectionShellPage, `WORKSPACE_CHECKLIST_${scenario}`);
     }
     const workspaceRequestCountsAfterRace = {checklist: shellChecklistCalls, guidance: shellGuidanceCalls};
     stateForPage = 'DISABLED';
