@@ -48,6 +48,30 @@ function requireSafe(condition, code) {
   if (!condition) throw new Error(code);
 }
 
+function targetGapPx(first, second) {
+  const horizontalGap = Math.max(0, first.left - second.right, second.left - first.right);
+  const verticalGap = Math.max(0, first.top - second.bottom, second.top - first.bottom);
+  return Math.hypot(horizontalGap, verticalGap);
+}
+
+function assertTargetGapGeometryContract() {
+  const first = {left: 0, top: 0, right: 44, bottom: 44};
+  requireSafe(targetGapPx(first, {left: 52, top: 0, right: 96, bottom: 44}) === 8,
+    'TARGET_GAP_SAME_ROW_GEOMETRY_FAILED');
+  requireSafe(targetGapPx(first, {left: 0, top: 52, right: 44, bottom: 96}) === 8,
+    'TARGET_GAP_WRAPPED_ROW_GEOMETRY_FAILED');
+  requireSafe(targetGapPx(first, {left: 40, top: 40, right: 84, bottom: 84}) === 0,
+    'TARGET_GAP_OVERLAP_NOT_DETECTED');
+  requireSafe(targetGapPx(first, {left: 51.99, top: 0, right: 95.99, bottom: 44}) < 8,
+    'TARGET_GAP_SHORT_HORIZONTAL_NOT_DETECTED');
+  requireSafe(targetGapPx(first, {left: 0, top: 51.99, right: 44, bottom: 95.99}) < 8,
+    'TARGET_GAP_SHORT_VERTICAL_NOT_DETECTED');
+  requireSafe(targetGapPx(first, {left: 48, top: 48, right: 92, bottom: 92}) < 8,
+    'TARGET_GAP_SHORT_DIAGONAL_NOT_DETECTED');
+  requireSafe(0 - first.right < 8 && targetGapPx(first, {left: 0, top: 52, right: 44, bottom: 96}) === 8,
+    'TARGET_GAP_WRAP_FALSE_FAILURE_REPRODUCTION_FAILED');
+}
+
 async function openReviewCase(page, index = 0) {
   await page.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
   await page.locator(`#review-case-link-${index}`).click();
@@ -253,6 +277,7 @@ async function scan(page, state) {
 }
 
 async function main() {
+  assertTargetGapGeometryContract();
   const start = performance.now();
   const home = await mkdtemp(join(tmpdir(), 'ui-a11y-28-1-'));
   await mkdir(join(home, 'config'));
@@ -1010,12 +1035,29 @@ async function main() {
       'WORKSPACE_TASK_KEYBOARD_SELECTION_FAILED');
     requireSafe(workspaceChecklistCalls.length === 1, 'WORKSPACE_TASK_SELECTION_REQUESTED_NETWORK');
     await tasksTabContract.click();
+    const taskTabViewportGeometry = [];
     for (const width of [1440, 1024, 768, 390, 320]) {
       await projectionShellPage.setViewportSize({width, height: 844});
-      requireSafe(await projectionShellPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth) &&
+      const layout = await projectionShellPage.evaluate(() => {
+        const tablist = document.querySelector('.workspace-detail-tabs-36-6d');
+        const style = getComputedStyle(tablist);
+        const rects = [...tablist.querySelectorAll('[role="tab"]')].map((node) => {
+          const rect = node.getBoundingClientRect();
+          return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+            width: rect.width, height: rect.height};
+        });
+        return {overflow: document.documentElement.scrollWidth > innerWidth || tablist.scrollWidth > tablist.clientWidth,
+          row_gap: style.rowGap, column_gap: style.columnGap, flex_wrap: style.flexWrap, font_size: style.fontSize, rects};
+      });
+      taskTabViewportGeometry.push({width, ...layout});
+      requireSafe(!layout.overflow &&
         await projectionShellPage.locator('.workspace-task-master-detail-36-6e').evaluate((node) => node.scrollWidth <= node.clientWidth),
       'WORKSPACE_TASKS_RESPONSIVE_OVERFLOW');
+      requireSafe(layout.rects.every((rect) => rect.width >= 44 && rect.height >= 44) &&
+        layout.rects.slice(1).every((rect, index) => targetGapPx(layout.rects[index], rect) >= 8),
+      'WORKSPACE_TASK_TAB_TARGET_GEOMETRY_OR_SPACING_FAILED');
     }
+    console.log(`WORKSPACE_TASK_TAB_VIEWPORT_GEOMETRY ${JSON.stringify(taskTabViewportGeometry)}`);
     const taskTarget = await projectionShellPage.locator('.workspace-task-choice-36-6e').first().boundingBox();
     requireSafe(taskTarget && taskTarget.height >= 44, 'WORKSPACE_TASK_TARGET_BELOW_MINIMUM');
     const taskTargets = await projectionShellPage.evaluate(() => {
@@ -1024,12 +1066,12 @@ async function main() {
         '.workspace-task-detail-36-6e summary'];
       return selectors.map((selector) => {
         const rect = document.querySelector(selector).getBoundingClientRect();
-        return {selector, width: rect.width, height: rect.height, top: rect.top, left: rect.left, right: rect.right};
+        return {selector, width: rect.width, height: rect.height, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right};
       });
     });
     requireSafe(taskTargets.every((target) => target.width >= 44 && target.height >= 44),
       'WORKSPACE_TASK_FOCUS_TARGET_GEOMETRY_FAILED');
-    requireSafe(taskTargets[1].left - taskTargets[0].right >= 8,
+    requireSafe(targetGapPx(taskTargets[0], taskTargets[1]) >= 8,
       'WORKSPACE_TASK_TAB_TARGET_SPACING_FAILED');
     console.log(`WORKSPACE_TASK_TARGET_GEOMETRY ${JSON.stringify(taskTargets)}`);
     await projectionShellPage.setViewportSize({width: 320, height: 844});
@@ -1037,6 +1079,21 @@ async function main() {
     requireSafe(await projectionShellPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth) &&
       await projectionShellPage.locator('.workspace-task-master-detail-36-6e').evaluate((node) => node.scrollWidth <= node.clientWidth),
     'WORKSPACE_TASKS_200_PERCENT_REFLOW_FAILED');
+    const zoomTabGeometry = await projectionShellPage.evaluate(() => {
+      const tablist = document.querySelector('.workspace-detail-tabs-36-6d');
+      const style = getComputedStyle(tablist);
+      const rects = [...tablist.querySelectorAll('[role="tab"]')].map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+          width: rect.width, height: rect.height};
+      });
+      return {row_gap: style.rowGap, column_gap: style.columnGap, flex_wrap: style.flexWrap,
+        font_size: style.fontSize, rects};
+    });
+    requireSafe(zoomTabGeometry.rects.every((rect) => rect.width >= 44 && rect.height >= 44) &&
+      zoomTabGeometry.rects.slice(1).every((rect, index) => targetGapPx(zoomTabGeometry.rects[index], rect) >= 8),
+    'WORKSPACE_TASK_TAB_200_PERCENT_TARGET_GEOMETRY_FAILED');
+    console.log(`WORKSPACE_TASK_TAB_200_PERCENT_GEOMETRY ${JSON.stringify(zoomTabGeometry)}`);
     await projectionShellPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await projectionShellPage.setViewportSize({width: 1280, height: 900});
     await scan(projectionShellPage, 'workspace-checklist-available');
@@ -1238,13 +1295,14 @@ async function main() {
           rects.every((rect, index) => index === 0 || rect.top >= rects[index - 1].bottom);
       }),
       'WORKSPACE_TIMELINE_RESPONSIVE_OVERFLOW');
-      requireSafe(await projectionShellPage.locator('[role="tab"]').evaluateAll((nodes) =>
-        nodes.every((node) => { const rect = node.getBoundingClientRect(); return rect.width >= 44 && rect.height >= 44; }) &&
-        nodes.slice(1).every((node, index) => {
-          const previous = nodes[index].getBoundingClientRect();
-          const current = node.getBoundingClientRect();
-          return current.left - previous.right >= 8 || current.top - previous.bottom >= 8;
-        })),
+      const tabRects = await projectionShellPage.locator('[role="tab"]').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const rect = node.getBoundingClientRect();
+          return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+            width: rect.width, height: rect.height};
+        }));
+      requireSafe(tabRects.every((rect) => rect.width >= 44 && rect.height >= 44) &&
+        tabRects.slice(1).every((rect, index) => targetGapPx(tabRects[index], rect) >= 8),
       'WORKSPACE_TIMELINE_TAB_TARGET_TOO_SMALL');
     }
     await projectionShellPage.setViewportSize({width: 640, height: 900});
