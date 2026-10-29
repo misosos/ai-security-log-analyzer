@@ -101,6 +101,8 @@ def test_text_response_registers_only_real_case_refs_and_checklist_is_explicit()
     assert checklist.status_code == 200, checklist.text
     assert checklist.json()["schema"] == "investigation-checklist/v2"
     assert checklist.json()["source_role"] == "ssh"
+    citation_ids = {item["citation_id"] for item in checklist.json()["citations"]}
+    assert all(set(step["citation_ids"]) <= citation_ids for step in checklist.json()["steps"])
     assert json.dumps(result, sort_keys=True) == before
 
 
@@ -182,7 +184,11 @@ def test_closed_request_and_source_validation(payload, code, status):
     (b'{"schema_version":1,"source":"ssh","log_text":"\xff"}', "INVALID_UTF8"),
     (b'{"schema_version":1,"source":"ssh","log_text":"\\ud800"}', "INVALID_UTF8"),
     (b'{"schema_version":1,"source":"ssh","log_text":"x","unknown":1}', "INVALID_SCHEMA"),
-], ids=["malformed", "duplicate-key", "invalid-utf8", "lone-surrogate", "unknown-field"])
+    (b'{"schema_version":NaN,"source":"ssh","log_text":"x"}', "INVALID_JSON"),
+    (b'{"schema_version":Infinity,"source":"ssh","log_text":"x"}', "INVALID_JSON"),
+    (b'[{"schema_version":1,"source":"ssh","log_text":"x"}]', "INVALID_SCHEMA"),
+], ids=["malformed", "duplicate-key", "invalid-utf8", "lone-surrogate", "unknown-field",
+        "nan", "infinity", "array-root"])
 def test_json_decode_duplicate_keys_and_utf8_errors_are_closed(body, code):
     response = _post(_client(), content=body)
     assert response.status_code in (400, 422)
@@ -192,12 +198,13 @@ def test_json_decode_duplicate_keys_and_utf8_errors_are_closed(body, code):
 @pytest.mark.parametrize("text,code", [
     ("2025-01-01 00:00:00 sshd: x\x00", "INVALID_TEXT"),
     ("2025-01-01 00:00:00 sshd: x\x01", "INVALID_TEXT"),
+    ("2025-01-01 00:00:00 sshd: x\x7f", "INVALID_TEXT"),
     ("2025-01-01 00:00:00 sshd: x\r", "INVALID_TEXT"),
     ("2025-01-01 00:00:00 sshd: " + "x" * 3000, "LINE_TOO_LONG"),
     (("2025-01-01 00:00:00 x Failed password for u from 1.1.1.1\n" * 513), "LINE_COUNT_EXCEEDED"),
     (("2025-01-01 00:00:00 sshd: Failed password for user from 192.0.2.1 port 1 ssh2\n" * 500), "TEXT_TOO_LARGE"),
     (SAMPLES["access"].read_text(encoding="utf-8"), "PARSER_INCOMPATIBLE"),
-], ids=["nul", "control", "cr-only", "long-line", "too-many-lines", "text-too-large", "wrong-source"])
+    ], ids=["nul", "control", "del", "cr-only", "long-line", "too-many-lines", "text-too-large", "wrong-source"])
 def test_text_bytes_lines_controls_and_source_format_are_enforced(text, code):
     response = _post(_client(), _payload("ssh", text))
     assert response.status_code == 413 if code in {"LINE_TOO_LONG", "LINE_COUNT_EXCEEDED", "TEXT_TOO_LARGE"} else response.status_code == 400
@@ -261,6 +268,177 @@ def test_declared_content_length_is_checked_without_unbounded_integer_parse():
     assert caught.value.code == "ENVELOPE_TOO_LARGE"
 
 
+def test_text_utf8_size_line_size_and_line_count_exact_boundaries():
+    import app.local_investigation_api as local
+
+    prefix = "2025-01-01 00:00:00 app event"
+    exact_line = prefix + " " * (local._MAX_LINE_BYTES - len(prefix))
+    assert len(exact_line.encode("utf-8")) == local._MAX_LINE_BYTES
+    assert local._validate_text("application", exact_line)
+    with pytest.raises(local._TextInputError) as caught:
+        local._validate_text("application", exact_line + " ")
+    assert caught.value.code == "LINE_TOO_LONG"
+
+    # Each line remains individually valid; separators are counted as UTF-8 bytes.
+    lengths = [local._MAX_LINE_BYTES - 1] * 15 + [local._MAX_LINE_BYTES]
+    lines = [prefix + " " * (length - len(prefix)) for length in lengths]
+    exact_text = "\n".join(lines)
+    assert len(exact_text.encode("utf-8")) == local._MAX_TEXT_BYTES
+    assert local._validate_text("application", exact_text)
+    over_text = "\n".join([lines[0] + " ", *lines[1:]])
+    assert len(over_text.encode("utf-8")) == local._MAX_TEXT_BYTES + 1
+    with pytest.raises(local._TextInputError) as caught:
+        local._validate_text("application", over_text)
+    assert caught.value.code == "TEXT_TOO_LARGE"
+
+    one_line = "2025-01-01 00:00:00 app event"
+    exact_line_count = "\n".join([one_line] * local._MAX_LINES_PER_FILE)
+    assert local._validate_text("application", exact_line_count)
+    with pytest.raises(local._TextInputError) as caught:
+        local._validate_text("application", "\n".join([one_line] * (local._MAX_LINES_PER_FILE + 1)))
+    assert caught.value.code == "LINE_COUNT_EXCEEDED"
+
+    unicode_line = prefix + " " + "가" * 700
+    assert len(unicode_line) < len(unicode_line.encode("utf-8"))
+    with pytest.raises(local._TextInputError) as caught:
+        local._validate_text("application", unicode_line)
+    assert caught.value.code == "LINE_TOO_LONG"
+
+
+def test_bounded_json_body_accepts_exact_wire_limit_and_rejects_one_byte_over():
+    import app.local_investigation_api as local
+    from starlette.requests import Request
+
+    async def request_for(body):
+        chunks = [body[index:index + 8192] for index in range(0, len(body), 8192)]
+
+        async def receive():
+            if chunks:
+                chunk = chunks.pop(0)
+                return {"type": "http.request", "body": chunk, "more_body": bool(chunks)}
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        return Request({
+            "type": "http", "method": "POST", "path": "/api/v1/investigations/text",
+            "headers": [], "client": ("127.0.0.1", 50000),
+        }, receive)
+
+    async def exercise():
+        exact = b"{}" + b" " * (local._MAX_TEXT_REQUEST_BYTES - 2)
+        assert len(await local._bounded_json_body(await request_for(exact))) == local._MAX_TEXT_REQUEST_BYTES
+        over = exact + b" "
+        with pytest.raises(local._TextInputError) as caught:
+            await local._bounded_json_body(await request_for(over))
+        assert caught.value.code == "ENVELOPE_TOO_LARGE"
+
+    asyncio.run(exercise())
+
+
+def test_body_receive_timeout_returns_slot_and_does_not_start_analysis(monkeypatch):
+    import app.local_investigation_api as local
+    from app.api import (
+        _analyze_checklist_input, build_investigation_report_projection,
+        project_investigation_cases_from_analysis,
+    )
+    from starlette.requests import Request
+
+    monkeypatch.setattr(local, "_UPLOAD_TIMEOUT_SECONDS", 0.001)
+    admission = local.create_local_admission()
+    endpoint = local.create_local_text_endpoint(
+        _analyze_checklist_input, project_investigation_cases_from_analysis,
+        build_investigation_report_projection, admission=admission,
+    )
+
+    async def receive():
+        await asyncio.sleep(0.02)
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    request = Request({
+        "type": "http", "scheme": "http", "method": "POST",
+        "path": "/api/v1/investigations/text", "query_string": b"",
+        "client": ("127.0.0.1", 50000),
+        "headers": [(b"host", b"127.0.0.1:8000"),
+                    (b"content-type", b"application/json")],
+    }, receive)
+    response = asyncio.run(endpoint(request))
+    assert response.status_code == 503
+    assert json.loads(response.body)["error_code"] == "BODY_TIMEOUT"
+    assert admission.admit() is None
+    admission.release()
+
+
+def test_rate_limit_state_is_scoped_to_each_app_instance():
+    first = _client()
+    second = _client()
+    for _ in range(6):
+        assert _post(first, content=b"{").json()["error_code"] == "INVALID_JSON"
+    assert _post(first, content=b"{").json()["error_code"] == "RATE_LIMITED"
+    assert _post(second, content=b"{").json()["error_code"] == "INVALID_JSON"
+
+
+@pytest.mark.parametrize("source", ["application", "ssh", "access"])
+def test_text_api_semantic_summary_matches_direct_existing_pipeline(source):
+    from app.analyzer.incident_case_adapter import project_investigation_cases_from_analysis
+    from app.main import analyze_with_source_role_snapshot
+
+    path = SAMPLES[source]
+    direct = analyze_with_source_role_snapshot(({"source": source, "path": str(path)},))
+    projection = project_investigation_cases_from_analysis(direct.analysis)
+    client = _client()
+    response = _post(client, _payload(source))
+    assert response.status_code == 200
+    public = response.json()["result"]
+    summary = projection.summary
+    assert public["case_summary"]["case_count"] == summary.case_count
+    assert public["case_summary"]["independent_observation_count"] == summary.independent_observation_count
+    assert public["case_summary"]["high_case_count"] == summary.high_case_count
+    assert public["case_summary"]["medium_case_count"] == summary.medium_case_count
+    assert public["case_summary"]["low_case_count"] == summary.low_case_count
+    assert public["case_summary"]["relation_case_count"] == summary.cases_with_supported_relation_count
+    assert public["analysis_summary"]["supported_detection_count"] == summary.supported_detection_observation_count
+    assert public["analysis_summary"]["supported_relation_count"] == summary.supported_relation_observation_count
+    public_risks = sorted(case["included_highest_risk"] for case in public["cases"])
+    direct_risks = sorted(case.row.included_highest_risk for case in projection.cases)
+    assert public_risks == direct_risks
+    assert len(public["cases"]) == len(projection.cases)
+    for public_case, direct_case in zip(public["cases"], projection.cases, strict=True):
+        assert public_case["observation_count"] == direct_case.row.observation_count
+        assert public_case["supporting_relation_count"] == direct_case.row.supporting_relation_count
+        assert public_case["included_highest_confidence"] == direct_case.row.included_highest_confidence
+        assert public_case["supported_detections"] == list(dict.fromkeys(
+            entry.detection_display_name
+            for entry in direct_case.timeline_entries + direct_case.timeline_entries_without_time
+            if entry.detection_display_name is not None
+        ))
+        assert public_case["supported_relations"] == list(dict.fromkeys(
+            entry.relation_display_name
+            for entry in direct_case.timeline_entries + direct_case.timeline_entries_without_time
+            if entry.relation_display_name is not None
+        ))
+        expected_timeline = direct_case.timeline_entries + direct_case.timeline_entries_without_time
+        assert len(public_case["timeline"]) == len(expected_timeline)
+        for public_event, direct_event in zip(public_case["timeline"], expected_timeline, strict=True):
+            assert (public_event["sequence"], public_event["category"],
+                    public_event["category_label"], public_event["timestamp_state"],
+                    public_event["title"], public_event["detection_display_name"],
+                    public_event["relation_display_name"]) == (
+                direct_event.sequence, direct_event.category, direct_event.category_label,
+                direct_event.timestamp_state, direct_event.display_title,
+                direct_event.detection_display_name, direct_event.relation_display_name,
+            )
+            assert [(item["label"], item["value"], item["unit"]) for item in public_event["evidence"]] == [
+                (item.label, item.value, item.unit) for item in direct_event.evidence
+            ]
+    if public["cases"]:
+        case_ref = public["cases"][0]["checklist_ref"]
+        assert case_ref and case_ref.startswith("c_") and len(case_ref) == 26
+        checklist = client.post("/api/v1/investigations/checklist", json={
+            "schema_version": 1, "case_ref": case_ref
+        })
+        assert checklist.status_code == 200
+        assert checklist.json()["source_role"] == source
+
+
 @pytest.mark.parametrize("host,headers,query,code", [
     ("192.0.2.10", {}, "", "LOCAL_ONLY"),
     ("127.0.0.1", {"Host": "attacker.invalid"}, "", "LOCAL_ONLY"),
@@ -295,6 +473,14 @@ def test_response_scope_and_report_never_echo_text_canaries(caplog):
     material = response.text + repr(response.json()) + caplog.text
     assert all(value not in material for value in canaries)
     assert TEXT_NOTICE in response.json()["result"]["report_export"]["html"]
+
+
+def test_unicode_bidi_input_is_not_projected_or_logged(caplog):
+    text = SAMPLES["ssh"].read_text(encoding="utf-8").replace("admin", "adm\u202ein")
+    response = _post(_client(), _payload("ssh", text))
+    assert response.status_code == 200
+    assert "\u202e" not in response.text
+    assert "\u202e" not in caplog.text
 
 
 def test_api_contract_and_linux_audit_app_do_not_expose_text_route():

@@ -520,7 +520,7 @@ async function main() {
       '--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE 127.0.0.1',
     ]});
     context = await browser.newContext({
-      serviceWorkers: 'block', acceptDownloads: false,
+      serviceWorkers: 'block', acceptDownloads: true,
       proxy: {server: 'http://127.0.0.1:9', bypass: '127.0.0.1,localhost'},
     });
     await context.route('**/*', async (route) => {
@@ -797,7 +797,12 @@ async function main() {
       await textApiPage.locator('#local-choice-details summary').click();
     await textApiPage.locator('#input-mode-text').check();
     await textApiPage.locator('#text-source').selectOption('ssh');
-    const syntheticSsh = await readFile(join(ROOT, 'sample_logs', 'ssh_auth.log'), 'utf8');
+    const textCanary = 'TEXT_E2E_PRIVATE_CANARY';
+    const syntheticSsh = (await readFile(join(ROOT, 'sample_logs', 'ssh_auth.log'), 'utf8'))
+      .replace('admin', textCanary);
+    const textConsoleMessages = [];
+    textApiPage.on('console', (message) => textConsoleMessages.push(message.text()));
+    textApiPage.on('pageerror', (error) => textConsoleMessages.push(error.name));
     await textApiPage.locator('#log-text').fill(syntheticSsh);
     const textRequests = [];
     textApiPage.on('request', (request) => {
@@ -820,9 +825,69 @@ async function main() {
       await textApiPage.locator('#text-input-scope-notice').textContent().then((text) =>
         text.includes('다른 로그나 누락된 시간대') && text.includes('검증된 역할')),
     'TEXT_API_REAL_SCOPE_OR_CLEAR_FAILED');
+    const storageState = await textApiPage.evaluate(async () => ({
+      local: localStorage.length,
+      session: sessionStorage.length,
+      databases: typeof indexedDB.databases === 'function' ? (await indexedDB.databases()).length : 0
+    }));
+    requireSafe(!JSON.stringify(textResponse).includes(textCanary) &&
+      !textConsoleMessages.some((message) => message.includes(textCanary)) &&
+      !textApiPage.url().includes(textCanary) && storageState.local === 0 &&
+      storageState.session === 0 && storageState.databases === 0,
+    'TEXT_API_PRIVACY_BOUNDARY_FAILED');
+    requireSafe(textRequestBody.log_text.includes(textCanary), 'TEXT_API_EXPLICIT_BODY_MISSING_SYNTHETIC_INPUT');
     const textReport = textResponse.result.report_export.html;
     requireSafe(textReport.includes('입력한 로그 범위에서만 분석한 결과입니다') &&
-      textReport.includes('다른 로그나 누락된 시간대'), 'TEXT_API_REPORT_SCOPE_NOTICE_MISSING');
+      textReport.includes('다른 로그나 누락된 시간대') && !textReport.includes(textCanary),
+    'TEXT_API_REPORT_SCOPE_NOTICE_MISSING');
+    const textDownload = textApiPage.waitForEvent('download');
+    await textApiPage.locator('#report-button').click();
+    const downloadedReport = await textDownload;
+    const downloadedPath = await downloadedReport.path();
+    requireSafe(downloadedPath && !(await readFile(downloadedPath, 'utf8')).includes(textCanary),
+      'TEXT_API_DOWNLOADED_REPORT_PRIVACY_FAILED');
+    await downloadedReport.delete();
+    const textChecklistCalls = [];
+    textApiPage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/checklist')
+        textChecklistCalls.push(request);
+    });
+    const textCaseCard = await openReviewCase(textApiPage, 0, false);
+    await textApiPage.getByRole('tab', {name: '확인할 작업'}).click();
+    requireSafe(textChecklistCalls.length === 0, 'TEXT_RESULT_CHECKLIST_TAB_AUTOMATIC_POST');
+    await textCaseCard.locator('.workspace-checklist-request-36-6e').click();
+    await textCaseCard.locator('.workspace-checklist-status-36-6e').waitFor({state: 'visible'});
+    await textApiPage.waitForFunction(() => {
+      const status = document.querySelector('.workspace-checklist-status-36-6e');
+      return status && status.dataset.checklistState !== 'loading';
+    });
+    const textChecklistResponse = await (await textChecklistCalls[0].response()).json();
+    const textChecklistUi = {
+      requests: textChecklistCalls.length,
+      schemaOk: textChecklistResponse.schema === 'investigation-checklist/v2',
+      responseStatus: textChecklistResponse.status,
+      responseSteps: Array.isArray(textChecklistResponse.steps) ? textChecklistResponse.steps.length : -1,
+      taskChoices: await textCaseCard.locator('.workspace-task-choice-36-6e').count(),
+      uiStatus: await textCaseCard.locator('.workspace-checklist-status-36-6e').getAttribute('data-checklist-state'),
+      failureMessage: await textCaseCard.locator('.workspace-checklist-status-36-6e').textContent()
+        .then((text) => text.includes('점검표를 준비하지 못했습니다'))
+    };
+    console.log(`TEXT_CHECKLIST_STATE ${JSON.stringify(textChecklistUi)}`);
+    requireSafe(textChecklistUi.requests === 1 && textChecklistUi.schemaOk &&
+      ['available', 'refused', 'unavailable'].includes(textChecklistUi.responseStatus) &&
+      textChecklistUi.uiStatus === textChecklistUi.responseStatus && !textChecklistUi.failureMessage &&
+      (textChecklistUi.responseStatus === 'available' ?
+        textChecklistUi.taskChoices === textChecklistUi.responseSteps : textChecklistUi.taskChoices === 0),
+    'TEXT_RESULT_EXPLICIT_CHECKLIST_E2E_FAILED');
+    const textAllRendered = await textApiPage.locator('#results').innerText();
+    const finalStorage = await textApiPage.evaluate(async () => ({
+      local: localStorage.length,
+      session: sessionStorage.length,
+      databases: typeof indexedDB.databases === 'function' ? (await indexedDB.databases()).length : 0
+    }));
+    requireSafe(!textAllRendered.includes(textCanary) && !textApiPage.url().includes(textCanary) &&
+      finalStorage.local === 0 && finalStorage.session === 0 && finalStorage.databases === 0,
+    'TEXT_RESULT_RENDERED_PRIVACY_FAILED');
     await textApiPage.setViewportSize({width: 320, height: 568});
     requireSafe(await textApiPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       'TEXT_RESULT_320_OVERFLOW');
