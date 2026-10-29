@@ -517,7 +517,7 @@ async function main() {
       await guidanceCard.locator('.guidance-status').textContent().then((text) =>
         text.includes('결과를 변경하지 않습니다')),
     'GUIDANCE_DOM_OR_OPT_IN_FAILED');
-    for (const width of [320, 640, 1024, 1440]) {
+    for (const width of [1440, 1024, 768, 390, 320]) {
       await guidancePage.setViewportSize({width, height: 900});
       requireSafe(await guidancePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
         'GUIDANCE_HORIZONTAL_OVERFLOW');
@@ -645,6 +645,22 @@ async function main() {
     await reviewWorkspacePage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
     await reviewWorkspacePage.locator('#sample-button').click();
     await reviewWorkspacePage.locator('#case-list .case-card').nth(1).waitFor({state: 'attached'});
+    requireSafe(await reviewWorkspacePage.locator('#results-heading').textContent() === '분석 결과' &&
+      await reviewWorkspacePage.locator('#results-dashboard.workspace-dashboard-36-6c').isVisible() &&
+      await reviewWorkspacePage.locator('#summary-cards .workspace-summary-card-36-6c').count() === 4,
+    'WORKSPACE_DASHBOARD_STRUCTURE_MISSING');
+    const dashboardCounts = await reviewWorkspacePage.locator('#summary-cards .workspace-summary-card-36-6c').allTextContents();
+    requireSafe(dashboardCounts.some((value) => value.includes('확인된 활동') && value.includes('5')) &&
+      dashboardCounts.some((value) => value.includes('연결된 활동') && value.includes('3')) &&
+      dashboardCounts.some((value) => value.includes('검토 건') && value.includes('2')) &&
+      dashboardCounts.some((value) => value.includes('독립 관찰') && value.includes('4')) &&
+      !dashboardCounts.some((value) => value.includes('추가 확인 필요')),
+    'WORKSPACE_DASHBOARD_COUNTS_MISMATCH');
+    requireSafe(await reviewWorkspacePage.locator('#independent-list .independent-card').count() === 4,
+      'WORKSPACE_INDEPENDENT_OBSERVATION_AGGREGATE_MISMATCH');
+    requireSafe(await reviewWorkspacePage.locator('#case-list').evaluate((node) =>
+      getComputedStyle(node).gridTemplateColumns.split(' ').length === 1),
+    'WORKSPACE_DASHBOARD_CASES_NOT_SINGLE_COLUMN');
     requireSafe(await reviewWorkspacePage.locator('#case-list .case-detail').count() === 0 &&
       await reviewWorkspacePage.locator('#case-list .timeline').count() === 0 &&
       await reviewWorkspacePage.locator('#case-list .checklist-result').count() === 0 &&
@@ -661,7 +677,7 @@ async function main() {
       const badges = card.locator('.review-status-badges .review-status-badge');
       requireSafe(await badges.count() === 3 &&
         (await badges.nth(0).textContent()).includes('위험도') &&
-        (await badges.nth(1).textContent()).includes('확인 순서 요청 전') &&
+        (await badges.nth(1).textContent()).includes('확인 순서 미정') &&
         (await badges.nth(2).textContent()).includes('역할 미확인') &&
         !(await card.textContent()).includes('목록 위치'),
       'REVIEW_LIST_STATUS_HIERARCHY_FAILED');
@@ -700,6 +716,11 @@ async function main() {
         spacing.summaryButtonGap >= 16 && spacing.cardGap >= 16,
       'REVIEW_CARD_SPACING_FAILED');
     }
+    requireSafe(await reviewWorkspacePage.locator('#case-list').evaluate((node) =>
+      Array.from(node.children).filter((child) => child.matches('.review-case-card')).length === 2 &&
+      Array.from(node.children).filter((child) => child.matches('.review-case-card'))
+        .every((child) => child.querySelector('.workspace-detail-header-36-6c, .timeline, .checklist-result') === null)),
+    'WORKSPACE_LIST_DETAIL_DOM_DUPLICATION');
     await reviewWorkspacePage.setViewportSize({width: 320, height: 900});
     await reviewWorkspacePage.locator('.review-card-summary').first().evaluate((node) => {
       node.textContent = '합성 검수용 긴 한국어 문장입니다. 레이아웃이 줄바꿈과 두 줄 제한을 유지해야 합니다. '.repeat(8) +
@@ -724,7 +745,7 @@ async function main() {
       if (projection && firstSummary) firstSummary.textContent = projection.summary;
     });
     await scan(reviewWorkspacePage, 'review-list');
-    for (const width of [320, 640, 1024, 1440]) {
+    for (const width of [1440, 1024, 768, 390, 320]) {
       await reviewWorkspacePage.setViewportSize({width, height: 900});
       requireSafe(await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
         'REVIEW_LIST_HORIZONTAL_OVERFLOW');
@@ -737,6 +758,16 @@ async function main() {
     });
     const dashboardBeforeRoute = await reviewWorkspacePage.locator('#results-dashboard').textContent();
     const detailLink = reviewWorkspacePage.locator('#case-list').getByRole('link', {name: '상세 분석 보기'}).first();
+    const targetMetrics = await detailLink.evaluate((link) => {
+      const rect = link.getBoundingClientRect();
+      const previous = link.previousElementSibling?.getBoundingClientRect();
+      const card = link.closest('.review-case-card').getBoundingClientRect();
+      return {width: rect.width, height: rect.height,
+        gapAbove: previous ? rect.top - previous.bottom : 0,
+        insideCard: rect.left >= card.left && rect.right <= card.right};
+    });
+    requireSafe(targetMetrics.width >= 44 && targetMetrics.height >= 44 && targetMetrics.gapAbove >= 8 &&
+      targetMetrics.insideCard, 'REVIEW_DETAIL_LINK_TARGET_OR_SPACING_FAILED');
     await detailLink.focus();
     await reviewWorkspacePage.keyboard.press('Enter');
     await reviewWorkspacePage.getByRole('heading', {name: /검토 건 #1/}).waitFor({state: 'visible'});
@@ -753,6 +784,11 @@ async function main() {
     requireSafe(await reviewWorkspacePage.evaluate(() =>
       document.activeElement?.matches('#workspace-current-title')),
     'REVIEW_DETAIL_FOCUS_FAILED');
+    requireSafe(await reviewWorkspacePage.evaluate(() => {
+      const heading = document.activeElement;
+      return heading && heading.matches('#workspace-current-title') &&
+        (getComputedStyle(heading).outlineStyle !== 'none' || getComputedStyle(heading).boxShadow !== 'none');
+    }), 'REVIEW_DETAIL_FOCUS_INDICATOR_MISSING');
     await scan(reviewWorkspacePage, 'review-detail');
     for (const width of [320, 640, 1024, 1440]) {
       await reviewWorkspacePage.setViewportSize({width, height: 900});
@@ -817,8 +853,10 @@ async function main() {
     await projectionShellPage.locator('#case-list .review-case-card').nth(1).waitFor({state: 'attached'});
     requireSafe(await projectionShellPage.evaluate(async () => {
       const source = await fetch('/assets/app.js', {cache: 'no-store'}).then((response) => response.text());
-      return source.includes('element("p", projection?.summary ?? caseItemShortSummary(item), "review-card-summary")') &&
-        source.includes('caseByRef.set(item.checklist_ref, {item, index, projection})');
+      return source.includes('element("p", projection.summary, "review-card-summary")') &&
+        source.includes('caseByRef.set(projection.case_ref, {item, index, projection})') &&
+        source.includes('limitation_count: item.limitations.length') &&
+        !source.includes('limitation_count: item.unverified_items.length');
     }), 'WORKSPACE_PROJECTION_SOURCE_NOT_SERVED');
     const firstProjection = await projectionShellPage.evaluate(() => {
       const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
@@ -836,6 +874,9 @@ async function main() {
       ].sort().join(',') && firstProjection.source_role === 'unknown' &&
       firstProjection.review_priority === 'undetermined' && firstProjection.checklist_status === 'not_requested',
     'WORKSPACE_CLOSED_PROJECTION_MISSING');
+    requireSafe(!Object.hasOwn(firstProjection, 'unverified_items') &&
+      !Object.hasOwn(firstProjection, 'additional_confirmation_count'),
+    'WORKSPACE_LIMITATION_COUNT_SEMANTICS_FAILED');
     const projectionSnapshotContract = await projectionShellPage.evaluate(() => {
       const ref = document.querySelector('#case-list a[data-review-case-ref]')?.dataset.reviewCaseRef;
       const projection = window.workspaceNavigation.projectionForRef(ref);
@@ -868,6 +909,8 @@ async function main() {
     }), 'WORKSPACE_PROJECTION_MISSING_OR_TYPE_ACCEPTED');
     const firstRef = await projectionShellPage.locator('#case-list a[data-review-case-ref]').nth(0).getAttribute('data-review-case-ref');
     const secondRef = await projectionShellPage.locator('#case-list a[data-review-case-ref]').nth(1).getAttribute('data-review-case-ref');
+    const secondProjection = await projectionShellPage.evaluate((ref) =>
+      window.workspaceNavigation.projectionForRef(ref), secondRef);
     requireSafe(firstRef !== secondRef, 'WORKSPACE_CASE_REFS_NOT_DISTINCT');
     const analysisBeforeShellRoute = await projectionShellPage.evaluate(() => document.querySelector('#results-dashboard').textContent);
     await projectionShellPage.locator(`#review-case-link-0`).click();
@@ -889,6 +932,8 @@ async function main() {
     await projectionShellPage.locator('#review-case-link-1').click();
     await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
     requireSafe(await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === secondRef &&
+      await projectionShellPage.locator('.workspace-detail-shell-36-6b .workspace-overview-title').textContent() === secondProjection.display_title &&
+      (await projectionShellPage.locator('.workspace-detail-shell-36-6b').textContent()).includes(`${secondProjection.observation_count}건`) &&
       !(await projectionShellPage.locator('.workspace-detail-shell-36-6b').textContent()).includes(firstRef) &&
       shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
     const projectionBenchmarks = [];
@@ -917,14 +962,44 @@ async function main() {
       await projectionShellPage.locator('#review-back-link').click();
       await projectionShellPage.waitForFunction(() => location.hash === '');
       await projectionShellPage.locator('#review-case-link-0').click();
-      await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+      await projectionShellPage.locator('.workspace-overview-36-6c').waitFor({state: 'visible'});
+      const overviewContract = await projectionShellPage.locator('.workspace-detail-shell-36-6b').evaluate((node) => ({
+        title: node.querySelector('.workspace-overview-title')?.textContent,
+        labels: [...node.querySelector('.workspace-overview-metrics-36-6c').querySelectorAll('dt')].map((item) => item.textContent),
+        values: [...node.querySelector('.workspace-overview-metrics-36-6c').querySelectorAll('dd')].map((item) => item.textContent),
+        has_limitations: Boolean(node.querySelector('.workspace-overview-limit')),
+        forbidden_panels: node.querySelectorAll('.timeline, .checklist-result, .progressive-knowledge').length,
+        content: node.textContent,
+      }));
+      requireSafe(overviewContract.title === firstProjection.display_title &&
+        overviewContract.labels.includes('확인된 활동') && overviewContract.labels.includes('연결 근거') &&
+        overviewContract.labels.includes('분석 한계') && !overviewContract.labels.includes('추가 확인 필요') &&
+        !overviewContract.labels.includes('확인할 작업') &&
+        overviewContract.values.includes(`${firstProjection.observation_count}건`) &&
+        overviewContract.values.includes(`${firstProjection.relation_count}건`) &&
+        overviewContract.values.includes(`${firstProjection.limitation_count}개`) &&
+        overviewContract.has_limitations && overviewContract.forbidden_panels === 0,
+      'WORKSPACE_OVERVIEW_PANEL_CONTRACT_FAILED');
+      requireSafe(!/추가 확인 필요\s*\d+/.test(overviewContract.content) &&
+        !/확인할 작업\s*0/.test(overviewContract.content), 'WORKSPACE_OVERVIEW_INFERRED_COUNT_PRESENT');
       if (iteration >= 2) shellRouteTimes.push(performance.now() - started);
     }
     const shellDomNodes = await projectionShellPage.locator('#case-detail-view').evaluate((node) => node.querySelectorAll('*').length);
     const shellHtmlBytes = await projectionShellPage.locator('#case-detail-view').evaluate((node) =>
       new TextEncoder().encode(new XMLSerializer().serializeToString(node)).byteLength);
+    const overviewStats = await projectionShellPage.evaluate(() => {
+      const dashboard = document.querySelector('#results-dashboard');
+      const detail = document.querySelector('#case-detail-view .workspace-detail-shell-36-6b');
+      const assetBytes = performance.getEntriesByType('resource')
+        .filter((entry) => /\/assets\/(?:app\.js|style\.css)$/.test(new URL(entry.name).pathname))
+        .reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
+      const bytes = (node) => new TextEncoder().encode(new XMLSerializer().serializeToString(node)).length;
+      return {dashboard_nodes: dashboard.querySelectorAll('*').length, dashboard_html_bytes: bytes(dashboard),
+        overview_nodes: detail.querySelectorAll('*').length, overview_html_bytes: bytes(detail), asset_bytes: assetBytes};
+    });
     console.log(`WORKSPACE_36_6B_PROJECTION_BENCHMARK warmup=10 samples=100 batches=${JSON.stringify(projectionBenchmarks)}`);
     console.log(`WORKSPACE_36_6B_ROUTE_BENCHMARK warmup=2 samples=8 transition_ms=${JSON.stringify(summarizeMs(shellRouteTimes))} dom_nodes=${shellDomNodes} html_bytes=${shellHtmlBytes}`);
+    console.log(`WORKSPACE_36_6C_DOM_SIZE ${JSON.stringify(overviewStats)}`);
     await scan(projectionShellPage, 'workspace-projection-shell');
     await projectionShellPage.reload({waitUntil: 'networkidle'});
     requireSafe(await projectionShellPage.locator('#review-route-expired').isVisible() &&

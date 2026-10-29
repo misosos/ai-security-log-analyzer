@@ -342,6 +342,7 @@
     if (currentInvestigation !== null) results.hidden = false;
     workspaceCurrentTitle.textContent = resultsHeading.textContent;
     workspaceCurrentDescription.textContent = "검토 건 목록과 분석 결과 요약입니다.";
+    document.title = "분석 결과 | AI Security Log Analyzer";
     if (focusTarget) resultsHeading.focus();
   }
 
@@ -353,6 +354,7 @@
     window.workspaceNavigation.showResult("batch");
     workspaceCurrentTitle.textContent = "상세 정보 만료";
     workspaceCurrentDescription.textContent = "현재 탭에 분석 결과가 없습니다.";
+    document.title = "상세 정보 만료 | AI Security Log Analyzer";
     reviewExpiredReturn.focus();
   }
 
@@ -374,6 +376,7 @@
     caseDetailView.hidden = false;
     workspaceCurrentTitle.textContent = `검토 건 #${entry.index + 1}`;
     workspaceCurrentDescription.textContent = "선택한 검토 건의 활동 흐름과 확인할 작업입니다.";
+    document.title = "검토 건 상세 | AI Security Log Analyzer";
     if (focusHeading) {
       workspaceCurrentTitle.tabIndex = -1;
       workspaceCurrentTitle.focus();
@@ -1382,15 +1385,16 @@
       ["확인된 활동", data.analysis_summary.supported_detection_count, "search"],
       ["연결된 활동", data.analysis_summary.supported_relation_count, "link"],
       ["검토 건", data.case_summary.case_count, "folder-search"],
-      ["추가 확인 필요", data.case_summary.independent_observation_count, "circle-help"]
+      ["독립 관찰", data.case_summary.independent_observation_count, "circle-help"]
     ];
     cards.forEach(([label, value, symbol]) => {
       const card = document.createElement("div");
-      card.className = "summary-card";
+      card.className = "summary-card workspace-summary-card-36-6c";
+      card.setAttribute("role", "listitem");
       const top = document.createElement("div");
       top.className = "summary-top";
       top.append(icon(symbol, "icon summary-icon"), element("p", label));
-      card.append(top, element("p", String(value), "summary-value"));
+      card.append(top, element("p", String(value), "summary-value workspace-summary-value-36-6c"));
       summaryCards.append(card);
     });
   }
@@ -1403,23 +1407,35 @@
     cases.forEach((item, index) => {
       const projection = item.checklist_ref === null ? null :
         createWorkspaceProjection(item, index, item.checklist_ref);
-      const card = document.createElement("article");
+      if (!projection) {
+        const unavailable = document.createElement("div");
+        unavailable.className = "case-card review-case-card workspace-case-unavailable-36-6c";
+        unavailable.setAttribute("role", "listitem");
+        unavailable.setAttribute("aria-label", "검토 건 상세 정보를 사용할 수 없음");
+        unavailable.append(element("h4", "검토 건"), element("p", "안전한 상세 참조가 없어 이 검토 건의 요약을 표시할 수 없습니다."));
+        caseList.append(unavailable);
+        return;
+      }
+      const card = document.createElement("div");
       card.className = "case-card";
       card.classList.add("review-case-card");
-      card.append(element("h4", `검토 건 #${projection?.display_order ?? index + 1}`, "review-card-number"));
-      card.append(element("h5", projection?.display_title ?? "연결된 활동", "review-card-title"));
+      card.setAttribute("role", "listitem");
+      card.setAttribute("aria-label", `검토 건 ${projection.display_order}: ${projection.display_title}`);
+      card.append(element("h4", `검토 건 #${projection.display_order}`, "review-card-number"));
+      card.append(element("h5", projection.display_title, "review-card-title"));
       const badges = document.createElement("div");
       badges.className = "review-status-badges";
-      const riskBand = projection?.risk_band ?? item.included_highest_risk;
+      const riskBand = projection.risk_band;
       const risk = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[riskBand];
       badges.append(element("span", `위험도 ${risk}`, `review-status-badge ${RISK_CLASSES[riskBand]}`));
-      badges.append(element("span", item.checklist_ref === null ? "확인 순서 확인 불가" : "확인 순서 요청 전",
+      badges.append(element("span", priorityDisplayLabel(projection.review_priority),
         "review-status-badge review-priority-pending"));
-      badges.append(element("span", "역할 미확인", "review-status-badge review-role-pending"));
+      badges.append(element("span", sourceRoleDisplayLabel(projection.source_role),
+        "review-status-badge review-role-pending"));
       const facts = element("p", "", "review-card-facts");
-      if (projection) {
+      if (projection.start_time_kst !== null) {
         const startTime = document.createElement("time");
-        startTime.textContent = projection.start_time_kst ?? "시간 정보 없음";
+        startTime.textContent = projection.start_time_kst;
         if (projection.start_time_utc) startTime.setAttribute("datetime", projection.start_time_utc);
         facts.append(startTime);
         if (projection.end_time_kst && projection.end_time_kst !== projection.start_time_kst) {
@@ -1428,29 +1444,30 @@
           if (projection.end_time_utc) endTime.setAttribute("datetime", projection.end_time_utc);
           facts.append(endTime);
         }
-        facts.append(document.createTextNode(
-          ` · 활동 ${projection.observation_count}개 · 연결 ${projection.relation_count}개`));
       } else {
-        facts.append(compactKstRange(item.start_time, item.end_time), document.createTextNode(
-          ` · 활동 ${item.observation_count}개 · 연결 ${item.supporting_relation_count}개`));
+        facts.append(document.createTextNode("시간 정보 없음"));
       }
-      card.append(badges, facts, element("p", projection?.summary ?? caseItemShortSummary(item), "review-card-summary"));
-      if (item.checklist_ref !== null) {
-        const link = element("a", "상세 분석 보기", "review-detail-link");
-        link.href = `#/investigations/${item.checklist_ref}`;
-        link.id = `review-case-link-${index}`;
-        link.dataset.reviewCaseRef = item.checklist_ref;
-        card.append(link);
-        caseByRef.set(item.checklist_ref, {item, index, projection});
-      } else {
-        const unavailable = document.createElement("button");
-        unavailable.type = "button";
-        unavailable.disabled = true;
-        unavailable.textContent = "상세 정보를 사용할 수 없음";
-        card.append(unavailable);
-      }
+      facts.append(document.createTextNode(
+        ` · 활동 ${projection.observation_count}개 · 연결 ${projection.relation_count}개`));
+      card.append(badges, facts, element("p", projection.summary, "review-card-summary"));
+      const link = element("a", "상세 분석 보기", "review-detail-link");
+      link.href = `#/investigations/${projection.case_ref}`;
+      link.id = `review-case-link-${index}`;
+      link.dataset.reviewCaseRef = projection.case_ref;
+      card.append(link);
+      caseByRef.set(projection.case_ref, {item, index, projection});
       caseList.append(card);
     });
+  }
+
+  function priorityDisplayLabel(priority) {
+    return ({review_now: "먼저 확인", review_soon: "우선 확인", review_later: "일반 확인",
+      undetermined: "확인 순서 미정"})[priority] ?? "확인 순서 미정";
+  }
+
+  function sourceRoleDisplayLabel(role) {
+    return ({application: "애플리케이션 로그", ssh: "SSH 인증 로그", access: "접근 로그",
+      unknown: "역할 미확인"})[role] ?? "역할 미확인";
   }
 
   const WORKSPACE_CASE_INPUT_FIELDS_36_6B = Object.freeze([
@@ -1530,26 +1547,60 @@
     const shell = document.createElement("div");
     shell.className = "workspace-detail-shell-36-6b";
     shell.dataset.caseRef = projection.case_ref;
+    shell.dataset.projectionVersion = projection.schema_version;
     const heading = element("h2", "검토 건 상세");
     heading.id = "workspace-shell-heading";
-    const title = element("h3", projection.display_title);
+    const header = document.createElement("header");
+    header.className = "workspace-detail-header-36-6c";
+    header.append(element("p", `검토 건 #${projection.display_order}`, "workspace-detail-number-36-6c"),
+      element("h3", projection.display_title, "workspace-overview-title"));
+    const badges = document.createElement("div");
+    badges.className = "workspace-detail-badges-36-6c";
+    const riskLabel = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[projection.risk_band];
+    badges.append(element("span", `위험도 ${riskLabel}`, `review-status-badge ${RISK_CLASSES[projection.risk_band]}`),
+      element("span", priorityDisplayLabel(projection.review_priority), "review-status-badge review-priority-pending"),
+      element("span", sourceRoleDisplayLabel(projection.source_role), "review-status-badge review-role-pending"));
+    const timeRange = element("p", "", "workspace-overview-time-36-6c");
+    if (projection.start_time_kst !== null) {
+      const start = document.createElement("time");
+      start.textContent = projection.start_time_kst;
+      if (projection.start_time_utc) start.setAttribute("datetime", projection.start_time_utc);
+      timeRange.append(start);
+      if (projection.end_time_kst && projection.end_time_kst !== projection.start_time_kst) {
+        const end = document.createElement("time");
+        end.textContent = ` – ${projection.end_time_kst}`;
+        if (projection.end_time_utc) end.setAttribute("datetime", projection.end_time_utc);
+        timeRange.append(end);
+      }
+    } else {
+      timeRange.textContent = "시간 정보 없음";
+    }
+    const summary = element("p", projection.summary, "workspace-overview-summary-36-6c");
+    header.append(badges, timeRange, summary);
     const status = document.createElement("p");
     status.className = "workspace-shell-status";
-    status.setAttribute("role", "status");
-    status.textContent = "확인할 작업은 아직 요청되지 않았습니다.";
-    const badges = document.createElement("dl");
-    badges.className = "workspace-shell-summary";
-    detail(badges, "기존 위험도", ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[projection.risk_band]);
-    detail(badges, "확인 순서", "확인 순서 미정");
-    detail(badges, "로그 역할", "역할 미확인");
-    detail(badges, "보호된 대상 별칭", projection.subject_alias);
-    const facts = document.createElement("p");
-    facts.className = "workspace-shell-facts";
-    facts.textContent = `활동 ${projection.observation_count}개 · 연결 ${projection.relation_count}개 · 분석 한계 ${projection.limitation_count}개`;
-    const note = document.createElement("p");
-    note.className = "workspace-shell-note";
-    note.textContent = `${projection.summary} 이 화면은 단계별 이식용 기본 shell이며, 확인 작업·타임라인·근거 화면은 아직 연결되지 않았습니다.`;
-    shell.append(heading, title, badges, facts, status, note);
+    status.textContent = "확인할 작업 목록은 이 단계에서 제공하지 않습니다.";
+    const overview = document.createElement("section");
+    overview.className = "workspace-overview-36-6c";
+    overview.setAttribute("aria-labelledby", "workspace-overview-heading-36-6c");
+    const overviewHeading = element("h4", "개요");
+    overviewHeading.id = "workspace-overview-heading-36-6c";
+    const metrics = document.createElement("dl");
+    metrics.className = "workspace-overview-metrics-36-6c";
+    detail(metrics, "확인된 활동", `${projection.observation_count}건`);
+    detail(metrics, "연결 근거", `${projection.relation_count}건`);
+    detail(metrics, "분석 한계", `${projection.limitation_count}개`);
+    const next = document.createElement("section");
+    next.className = "workspace-overview-next-36-6c";
+    next.append(element("h5", "먼저 확인할 내용"),
+      element("p", "기존 위험도는 결정적 분석 결과이고, 확인 순서는 별도의 검토 안내입니다. 현재 역할 정보는 확인되지 않았습니다."));
+    const meaning = document.createElement("section");
+    meaning.className = "workspace-overview-limit";
+    meaning.append(element("h5", "기존 결과의 의미와 한계"),
+      element("p", "탐지와 연결 근거는 침해나 공격 성공을 확정하지 않습니다. 분석 한계 수는 확인이 필요한 활동 수나 확인할 작업 수를 뜻하지 않습니다."),
+      element("p", "추가 확인 항목의 수는 현재 화면에서 표시하지 않습니다. 세부 활동 흐름과 확인 작업은 이후 단계에서 다룹니다."));
+    overview.append(overviewHeading, metrics, next, meaning);
+    shell.append(heading, header, status, overview);
     return shell;
   }
 
@@ -1697,7 +1748,7 @@
     currentInvestigation = data;
     currentInvestigationMode = mode;
     if (reviewRouteRef() !== null) history.replaceState(null, "", `${location.pathname}${location.search}`);
-    resultsHeading.textContent = mode === "sample" ? "예시 데이터 결과" : "내 로그 분석 결과";
+    resultsHeading.textContent = "분석 결과";
     resultContext.textContent = mode === "sample" ?
       "예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
       "사용자가 제공한 로그를 로컬에서 분석했습니다. 탐지와 관계는 침해 확정이 아닙니다.";

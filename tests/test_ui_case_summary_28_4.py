@@ -15,7 +15,7 @@ def test_case_summary_is_compact_and_full_detail_is_route_scoped():
     assert 'function renderCaseDetail(caseItem, index)' in APP
     assert 'id="case-detail-view"' in HTML
     assert 'id="case-list"' in HTML
-    assert 'caseByRef.set(item.checklist_ref' in APP
+    assert 'caseByRef.set(projection.case_ref' in APP
     assert 'resultsDashboard.hidden = true' in APP
     assert 'caseDetailView.hidden = false' in APP
     assert "case-short-time" in APP

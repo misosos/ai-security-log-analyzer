@@ -150,17 +150,53 @@ a { color: #064f96; text-underline-offset: .2em; }
 .independent-card { padding: .85rem; }
 .independent-card .independent-evidence { margin-top: .5rem; }
 .review-detail-view[hidden], .review-route-expired[hidden] { display: none; }
-.workspace-detail-shell-36-6b { display: grid; gap: 1rem; padding: 1rem; }
+.workspace-detail-shell-36-6b { display: grid; gap: 1.25rem; padding: clamp(1rem, 2vw, 1.5rem); }
 .workspace-detail-shell-36-6b h2, .workspace-detail-shell-36-6b h3,
+.workspace-detail-shell-36-6b h4, .workspace-detail-shell-36-6b h5,
 .workspace-detail-shell-36-6b p { margin: 0; }
 .workspace-detail-shell-36-6b h3 { font-size: 1.25rem; line-height: 1.4; }
-.workspace-shell-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin: 0; }
-.workspace-shell-summary > div { min-width: 0; }
-.workspace-shell-summary dt { color: #344d69; font-weight: 650; }
-.workspace-shell-summary dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
-.workspace-shell-facts { color: #344d69; }
-.workspace-shell-status { font-weight: 700; }
-.workspace-shell-note { max-width: 70ch; line-height: 1.55; }
+.workspace-dashboard-36-6c { display: grid; gap: 1.5rem; max-width: 84rem; margin-inline: auto; }
+.workspace-dashboard-36-6c > h2 { margin: 0; font-size: clamp(1.6rem, 2.4vw, 2.1rem); line-height: 1.25; }
+.workspace-dashboard-36-6c > .result-notice { max-width: 72ch; margin: 0; line-height: 1.55; }
+.workspace-dashboard-36-6c > section > h3, .workspace-case-section-36-6c > h3 { margin: 0 0 .8rem; }
+.workspace-dashboard-36-6c #summary-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.workspace-summary-card-36-6c { min-height: 6.25rem; padding: 1rem 1.1rem; }
+.workspace-summary-card-36-6c .summary-top { gap: .55rem; }
+.workspace-summary-card-36-6c .summary-top p { font-size: .92rem; line-height: 1.4; }
+.workspace-summary-value-36-6c { margin-top: .45rem !important; font-size: clamp(1.6rem, 2.5vw, 2rem); line-height: 1.15; font-weight: 800; font-variant-numeric: tabular-nums; }
+.workspace-case-section-36-6c { border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
+.workspace-case-section-36-6c > p { max-width: 70ch; margin: 0 0 1rem; line-height: 1.55; color: #344d69; }
+.workspace-dashboard-36-6c #result-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; margin-top: 0; }
+.workspace-dashboard-36-6c #case-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+#results .workspace-dashboard-36-6c .result-body #case-list { grid-template-columns: minmax(0, 1fr); }
+.workspace-dashboard-36-6c #result-rail { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.workspace-dashboard-36-6c #result-rail > * { min-width: 0; }
+.workspace-case-unavailable-36-6c { display: grid; gap: .65rem; padding: 1.25rem; }
+.workspace-detail-header-36-6c { display: grid; gap: .75rem; min-width: 0; }
+.workspace-detail-number-36-6c { color: #344d69; font-size: .9rem; font-weight: 700; }
+.workspace-overview-title { overflow-wrap: anywhere; font-size: clamp(1.45rem, 2.5vw, 2rem) !important; }
+.workspace-detail-badges-36-6c { display: flex; flex-wrap: wrap; gap: .5rem; }
+.workspace-overview-time-36-6c { color: #344d69; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.workspace-overview-summary-36-6c { max-width: 68ch; line-height: 1.6; }
+.workspace-shell-status { color: #344d69; line-height: 1.5; }
+.workspace-overview-36-6c { display: grid; gap: 1rem; min-width: 0; border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
+.workspace-overview-36-6c > h4 { margin: 0; font-size: 1.2rem; }
+.workspace-overview-metrics-36-6c { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; margin: 0; }
+.workspace-overview-metrics-36-6c > div { min-width: 0; padding: .85rem 1rem; background: #f4f7fb; border-radius: .4rem; }
+.workspace-overview-metrics-36-6c dt { color: #344d69; font-size: .9rem; line-height: 1.4; font-weight: 700; }
+.workspace-overview-metrics-36-6c dd { margin: .25rem 0 0; font-size: 1.25rem; line-height: 1.3; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.workspace-overview-next-36-6c, .workspace-overview-limit { display: grid; gap: .45rem; max-width: 70ch; }
+.workspace-overview-next-36-6c h5, .workspace-overview-limit h5 { font-size: 1rem; }
+.workspace-overview-next-36-6c p, .workspace-overview-limit p { line-height: 1.6; }
+.review-case-card .review-detail-link { min-height: 2.75rem; padding: .65rem .9rem; margin-top: .1rem; }
+@media (max-width: 48rem) {
+  .workspace-dashboard-36-6c #summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-overview-metrics-36-6c { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 21rem) {
+  .workspace-dashboard-36-6c #summary-cards,
+  .workspace-overview-metrics-36-6c { grid-template-columns: minmax(0, 1fr); }
+}
 .results > details { border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; }
 #results .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

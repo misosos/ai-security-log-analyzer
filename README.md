@@ -111,7 +111,7 @@ npm run test:a11y
 | 개인정보·API | [개인정보 projection](docs/public_analysis_privacy.md) |
 | Linux Audit | [프로세스 실행 조사](docs/linux_audit_process_execution.md) |
 | 근거 도움말 | 조사 사례 상세의 선택형 lexical citation 도움말; [계약과 검증](docs/local_investigation_guidance_33_4.md) |
-| 접근성·수용 검증 | [axe 검사](docs/ui_accessibility_axe_pilot_28_1.md), [작업 화면 Safari 수용 기록](docs/ui_safari_acceptance_28_5.md), [v0.3.0 Safari 수용 기록](docs/v030_safari_acceptance_27_1.md), [검토 작업공간 재설계](docs/investigation_review_workspace_redesign_36_5a.md), [production 이식 설계](docs/investigation_workspace_production_migration_design_36_6a.md), [projection·navigation shell](docs/investigation_workspace_projection_navigation_36_6b.md) — prototype 수용; 이식 중, 기존 UI 미대체, 200%·Safari 미검증, 실제 자료·조직 운영 NO_GO |
+| 접근성·수용 검증 | [axe 검사](docs/ui_accessibility_axe_pilot_28_1.md), [v0.3 Safari](docs/v030_safari_acceptance_27_1.md), [이식 설계](docs/investigation_workspace_production_migration_design_36_6a.md), [projection shell](docs/investigation_workspace_projection_navigation_36_6b.md), [dashboard·개요](docs/investigation_workspace_dashboard_overview_36_6c.md) — prototype 수용; dashboard·개요 이식, 기존 UI 미대체·rollback, 새 화면 Chromium 200% 통과·Safari 미검증, 실제 자료·조직 운영 NO_GO |
 | 릴리스 | [v0.4.0 노트](docs/releases/v0.4.0.md), [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
 | 개발·보안 검증 기록 | [전체 문서 지도](docs/index.md) |
 

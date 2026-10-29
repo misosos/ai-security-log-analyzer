@@ -162,6 +162,8 @@ async function main() {
   assert.equal(nodes["error-summary"].hidden, true);
   assert.equal(nodes["case-list"].children.length, 2);
   assert.equal(nodes["summary-cards"].children.length, 4);
+  assert.equal(nodes["summary-cards"].textContent.includes("독립 관찰"), true);
+  assert.equal(nodes["summary-cards"].textContent.includes("추가 확인 필요"), false);
   assert.equal(nodes["independent-list"].children.length, 4);
   assert.equal(nodes["report-download"].hidden, false);
   assert.equal(app.downloads.length, 0, "no automatic download");
@@ -180,7 +182,7 @@ async function main() {
   assert.equal(nodesOf(high, "a").some((link) => link.textContent === "상세 분석 보기"), true);
   assert.equal(high.textContent.includes("검토 건 #1"), true);
   assert.equal(high.textContent.includes("위험도 높음"), true);
-  assert.equal(high.textContent.includes("확인 순서 요청 전"), true);
+  assert.equal(high.textContent.includes("확인 순서 미정"), true);
   assert.equal(high.textContent.includes("역할 미확인"), true);
   assert.equal(high.textContent.includes("목록 위치"), false);
   assert.equal(nodesOf(high, "p").some((item) => item.className === "review-card-facts" &&
@@ -295,7 +297,7 @@ async function main() {
     });
     await local.submit();
     assert.equal(local.nodes.results.hidden, false);
-    assert.equal(local.nodes["results-heading"].textContent, "내 로그 분석 결과");
+    assert.equal(local.nodes["results-heading"].textContent, "분석 결과");
     assert.equal(local.nodes["result-context"].textContent.includes("합성 샘플"), false);
     assert.equal(local.nodes["case-list"].children.length, 2);
     assert.equal(local.nodes["independent-list"].children.length, 4);
