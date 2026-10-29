@@ -214,7 +214,7 @@ def test_factory_is_fail_closed_and_keeps_the_default_app_disabled():
         "/api/v1/investigations",
         "/api/v1/investigations/linux-audit",
         "/api/v1/investigations/guidance",
-        "/api/v1/investigations/checklist",
+        "/api/v1/investigations/checklist", "/api/v1/investigations/text",
     }
     assert "securitySchemes" not in api_module.app.openapi().get(
         "components", {}

@@ -187,7 +187,7 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
     assert client.get("/api/health").json() == {"status": "ok"}
     assert client.get("/docs").status_code == 200
     schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit", "/api/v1/investigations/guidance", "/api/v1/investigations/checklist"}
+    assert set(schema["paths"]) == {"/api/health", "/api/analyze", "/api/v1/investigations/sample", "/api/v1/investigations", "/api/v1/investigations/linux-audit", "/api/v1/investigations/guidance", "/api/v1/investigations/checklist", "/api/v1/investigations/text"}
     assert client.post("/api/analyze").status_code == 422
 
 

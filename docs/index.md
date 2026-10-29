@@ -68,7 +68,7 @@
 
 - [웹 UI 설계](web_application_design.md) · [실시간 UI 수용](live_monitoring_acceptance_15_1.md) · [live 수용 기록](live_monitoring_acceptance_17.md)
 - [v0.3.0 Safari 수용 기록](v030_safari_acceptance_27_1.md) · [오픈소스 UI 품질 gate](ui_open_source_quality_gate_28_0.md) · [axe/Playwright pilot](ui_accessibility_axe_pilot_28_1.md)
-- [Phase 36.8A 로그 텍스트 직접 입력 설계](log_text_paste_input_design_36_8a.md) — 단일 source 직접 입력의 경계와 후속 구현 gate; 이번 단계는 설계 전용이며 기능은 미구현
+- [Phase 36.8A 로그 텍스트 직접 입력 설계](log_text_paste_input_design_36_8a.md) · [36.8B bounded local backend](log_text_paste_backend_36_8b.md) — 단일 source 텍스트 API 구현; 브라우저 입력 UI는 Phase 36.8C 예정
 - [독립 보안 대시보드 비교안](ui_dashboard_prototype_28_2.md) · [첫 조사 화면 정보 구조](ui_investigation_experience_28_3.md) · [작업 화면 탐색](ui_workspace_navigation_28_4.md) · [아이콘과 시각 계층](ui_visual_language_28_4.md) · [Safari 수용 검수](ui_safari_acceptance_28_5.md)
 
 ## 개발·보안 검증 기록

@@ -686,12 +686,15 @@ def _linux_audit_lines(linux_audit):
 
 def render_investigation_report_html(
     projection, *, synthetic_sample=False, local_upload=False,
+    partial_single_source=False,
 ):
     if type(projection) is not InvestigationReportProjection:
         _fail()
-    if type(synthetic_sample) is not bool or type(local_upload) is not bool:
+    if (type(synthetic_sample) is not bool or type(local_upload) is not bool
+        or type(partial_single_source) is not bool):
         _fail()
-    if synthetic_sample and local_upload:
+    if ((synthetic_sample and local_upload)
+        or (partial_single_source and not local_upload)):
         _fail()
     if type(projection.schema_version) is not str:
         _fail()
@@ -739,6 +742,11 @@ def render_investigation_report_html(
             '<p class="notice">사용자가 제공한 로그를 로컬에서 분석한 결과입니다. '
             '탐지와 관계는 침해 확정이 아닙니다.</p>',
         ])
+    if partial_single_source:
+        lines.append(
+            '<p class="notice">입력한 로그 범위에서만 분석한 결과입니다. '
+            '다른 로그나 누락된 시간대에 발생한 활동은 포함되지 않을 수 있습니다.</p>'
+        )
     lines.extend(_coverage_lines(summary, linux_audit))
     lines.extend(_summary_lines(summary))
     lines.extend(_review_table_lines(subjects, aliases))

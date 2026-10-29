@@ -32,7 +32,13 @@ from app.models.investigation_sample_api import (
     LocalInvestigationResponse,
 )
 from app.sample_investigation_api import create_sample_endpoint
-from app.local_investigation_api import create_local_endpoint
+from app.local_investigation_api import (
+    create_local_admission, create_local_endpoint, create_local_text_endpoint,
+)
+from app.models.local_text_investigation import (
+    LOCAL_TEXT_INVESTIGATION_OPENAPI_REQUEST,
+    LocalTextInvestigationErrorResponse, LocalTextInvestigationResponse,
+)
 from app.local_guidance_33_4 import (
     GuidanceErrorResponse, GuidanceResponse, GUIDANCE_OPENAPI_REQUEST,
     create_guidance_endpoint,
@@ -458,6 +464,7 @@ def create_app(
         lifespan=live_lifespan if live_monitoring_runner is not None else None,
     )
     if not enable_linux_audit_api:
+        local_admission = create_local_admission()
         configured_app.add_api_route(
             "/", serve_demo_index, methods=["GET"], include_in_schema=False,
         )
@@ -575,11 +582,29 @@ def create_app(
                 project_investigation_cases_from_analysis,
                 build_investigation_report_projection,
                 checklist_registry=checklist_registry,
+                admission=local_admission,
             ),
             methods=["POST"],
             response_model=LocalInvestigationResponse,
             responses={
                 code: {"model": LocalInvestigationErrorResponse}
+                for code in (400, 403, 413, 415, 422, 429, 500, 503)
+            },
+        )
+        configured_app.add_api_route(
+            "/api/v1/investigations/text",
+            create_local_text_endpoint(
+                _analyze_checklist_input,
+                project_investigation_cases_from_analysis,
+                build_investigation_report_projection,
+                checklist_registry=checklist_registry,
+                admission=local_admission,
+            ),
+            methods=["POST"],
+            response_model=LocalTextInvestigationResponse,
+            openapi_extra={"requestBody": LOCAL_TEXT_INVESTIGATION_OPENAPI_REQUEST},
+            responses={
+                code: {"model": LocalTextInvestigationErrorResponse}
                 for code in (400, 403, 413, 415, 422, 429, 500, 503)
             },
         )

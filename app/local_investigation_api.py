@@ -4,6 +4,7 @@ import asyncio
 import codecs
 from collections import deque
 from datetime import datetime
+import json
 import multiprocessing
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import tempfile
 from threading import Lock
 import time
 from typing import Callable
+import unicodedata
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -24,6 +26,12 @@ from app.analyzer.incident_case_projection import InvestigationCaseProjection
 from app.models.investigation_sample_api import (
     AnalysisSummary, CaseSummary, LocalCapabilities, LocalContext,
     LocalInvestigationErrorResponse, LocalInvestigationResponse, ReportExport,
+)
+from app.models.local_text_investigation import (
+    LocalTextInputScope,
+    LocalTextInvestigationErrorResponse,
+    LocalTextInvestigationRequest,
+    LocalTextInvestigationResponse,
 )
 from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
 from app.parser.ssh_auth import AUTHENTICATION_MESSAGE
@@ -48,6 +56,8 @@ _CONCURRENT_CAPACITY = 1
 _RATE_CAPACITY = 6
 _RATE_WINDOW_SECONDS = 60.0
 _MAX_RESPONSE_BYTES = 128 * 1024
+_MAX_TEXT_REQUEST_BYTES = 96 * 1024
+_MAX_TEXT_BYTES = 32 * 1024
 _ARCHIVE_PREFIX_BYTES = 262
 _ARCHIVE_SIGNATURES = (
     b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08", b"\x1f\x8b", b"BZh",
@@ -90,6 +100,30 @@ _ERRORS = {
     "CASE_PROJECTION_FAILED": (500, "조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
     "REPORT_GENERATION_FAILED": (500, "HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
     "RESPONSE_INVALID": (500, "결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True),
+}
+_TEXT_ERRORS = {
+    "LOCAL_ONLY": (403, "이 기능은 로컬 서버에서만 사용할 수 있습니다.", "127.0.0.1에 직접 연결하십시오.", False, None),
+    "INVALID_MEDIA_TYPE": (415, "JSON 텍스트 입력 요청이 필요합니다.", "application/json UTF-8 요청을 사용하십시오.", False, None),
+    "QUERY_NOT_ALLOWED": (400, "조회 조건을 받을 수 없습니다.", "조회 조건 없이 다시 시도하십시오.", False, None),
+    "INVALID_JSON": (400, "요청 본문을 읽을 수 없습니다.", "JSON 문법과 UTF-8 인코딩을 확인하십시오.", False, None),
+    "INVALID_SCHEMA": (422, "요청 형식을 확인할 수 없습니다.", "필수 항목과 허용된 형식을 확인하십시오.", False, None),
+    "UNKNOWN_SOURCE": (422, "지원하지 않는 로그 종류입니다.", "애플리케이션, SSH 또는 접근 로그를 선택하십시오.", False, "source"),
+    "EMPTY_INPUT": (400, "로그가 비었거나 공백만 있습니다.", "내용이 있는 로그를 입력하십시오.", False, "log_text"),
+    "INVALID_UTF8": (400, "UTF-8 로그로 읽을 수 없습니다.", "유효한 UTF-8 텍스트를 사용하십시오.", False, "log_text"),
+    "INVALID_TEXT": (400, "로그 텍스트에 허용되지 않는 문자가 있습니다.", "제어 문자를 제거하고 UTF-8 텍스트를 확인하십시오.", False, "log_text"),
+    "PARSER_INCOMPATIBLE": (400, "선택한 로그 종류와 입력 형식이 맞지 않습니다.", "로그 종류와 지원 형식을 확인하십시오.", False, "log_text"),
+    "TEXT_TOO_LARGE": (413, "로그 텍스트 크기가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", False, "log_text"),
+    "ENVELOPE_TOO_LARGE": (413, "요청 크기가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", False, None),
+    "LINE_TOO_LONG": (413, "로그 한 줄이 길이 한도를 넘었습니다.", "입력 범위를 줄이거나 줄 형식을 확인하십시오.", False, "log_text"),
+    "LINE_COUNT_EXCEEDED": (413, "로그 줄 수가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", False, "log_text"),
+    "BODY_TIMEOUT": (503, "요청 본문 처리 시간이 초과되었습니다.", "잠시 후 다시 요청하십시오.", True, None),
+    "ANALYSIS_TIMEOUT": (503, "분석 응답 시간이 초과되었습니다.", "더 작은 로그 범위로 다시 시도하십시오.", True, None),
+    "CONCURRENCY_LIMIT": (429, "현재 처리 가능한 요청 수를 넘었습니다.", "현재 분석이 끝난 뒤 다시 시도하십시오.", True, None),
+    "RATE_LIMITED": (429, "요청 횟수 한도에 도달했습니다.", "잠시 후 다시 시도하십시오.", True, None),
+    "ANALYSIS_FAILED": (500, "분석을 완료하지 못했습니다.", "입력 형식을 확인한 뒤 다시 시도하십시오.", True, None),
+    "CASE_PROJECTION_FAILED": (500, "조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", True, None),
+    "REPORT_GENERATION_FAILED": (500, "HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True, None),
+    "RESPONSE_INVALID": (500, "결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", True, None),
 }
 
 
@@ -207,6 +241,153 @@ def _compatible(source: str, line: str) -> bool:
         return True
     except (ValueError, IndexError):
         return False
+
+
+class _TextInputError(ValueError):
+    def __init__(self, code: str):
+        super().__init__("Local text input contract failed.")
+        self.code = code if code in _TEXT_ERRORS else "INVALID_SCHEMA"
+
+
+def _text_error(code: str) -> JSONResponse:
+    status, message, action, retryable, field = _TEXT_ERRORS[code]
+    response = LocalTextInvestigationErrorResponse(
+        error_code=code, user_message=message, recovery_action=action,
+        retryable=retryable, field=field,
+    )
+    return JSONResponse(status_code=status, content=response.model_dump())
+
+
+def _reject_duplicate_json_pairs(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("Duplicate JSON member.") from None
+        value[key] = item
+    return value
+
+
+def _reject_json_constant(_value):
+    raise ValueError("Invalid JSON constant.") from None
+
+
+def _parse_text_request(raw: bytes) -> LocalTextInvestigationRequest:
+    try:
+        decoded = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        raise _TextInputError("INVALID_UTF8") from None
+    try:
+        value = json.loads(
+            decoded,
+            object_pairs_hook=_reject_duplicate_json_pairs,
+            parse_constant=_reject_json_constant,
+        )
+    except (ValueError, RecursionError):
+        raise _TextInputError("INVALID_JSON") from None
+    if type(value) is not dict:
+        raise _TextInputError("INVALID_SCHEMA")
+    if set(value) != {"schema_version", "source", "log_text"}:
+        raise _TextInputError("INVALID_SCHEMA")
+    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
+        raise _TextInputError("INVALID_SCHEMA")
+    if type(value["source"]) is not str:
+        raise _TextInputError("INVALID_SCHEMA")
+    if value["source"] not in _SOURCES:
+        raise _TextInputError("UNKNOWN_SOURCE")
+    if type(value["log_text"]) is not str:
+        raise _TextInputError("INVALID_SCHEMA")
+    try:
+        request = LocalTextInvestigationRequest.model_validate(value)
+    except ValidationError:
+        raise _TextInputError("INVALID_SCHEMA") from None
+    return request
+
+
+def _validate_text(source: str, text: str) -> bytes:
+    if type(source) is not str or source not in _SOURCES or type(text) is not str:
+        raise _TextInputError("INVALID_SCHEMA")
+    try:
+        raw = text.encode("utf-8", "strict")
+    except UnicodeEncodeError:
+        raise _TextInputError("INVALID_UTF8") from None
+    if len(raw) > _MAX_TEXT_BYTES:
+        raise _TextInputError("TEXT_TOO_LARGE")
+    if not text or not any(not char.isspace() for char in text):
+        raise _TextInputError("EMPTY_INPUT")
+    if any(
+        unicodedata.category(char) == "Cc" and char not in "\t\r\n"
+        for char in text
+    ):
+        raise _TextInputError("INVALID_TEXT")
+    if "\r" in text.replace("\r\n", ""):
+        raise _TextInputError("INVALID_TEXT")
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    if len(lines) > _MAX_LINES_PER_FILE:
+        raise _TextInputError("LINE_COUNT_EXCEEDED")
+    for line in lines:
+        if len(line.encode("utf-8")) > _MAX_LINE_BYTES:
+            raise _TextInputError("LINE_TOO_LONG")
+        if not _compatible(source, line.removesuffix("\r")):
+            raise _TextInputError("PARSER_INCOMPATIBLE")
+    return raw
+
+
+async def _bounded_json_body(request: Request) -> bytes:
+    lengths = request.headers.getlist("content-length")
+    if len(lengths) > 1:
+        raise _TextInputError("INVALID_JSON")
+    if lengths:
+        value = lengths[0]
+        if not value or any(character < "0" or character > "9" for character in value):
+            raise _TextInputError("INVALID_JSON")
+        significant = value.lstrip("0") or "0"
+        limit = str(_MAX_TEXT_REQUEST_BYTES)
+        if len(significant) > len(limit) or (
+            len(significant) == len(limit) and significant > limit
+        ):
+            raise _TextInputError("ENVELOPE_TOO_LARGE")
+    body = bytearray()
+    async for chunk in request.stream():
+        if type(chunk) is not bytes:
+            raise _TextInputError("INVALID_JSON")
+        if len(body) + len(chunk) > _MAX_TEXT_REQUEST_BYTES:
+            raise _TextInputError("ENVELOPE_TOO_LARGE")
+        body.extend(chunk)
+    return bytes(body)
+
+
+def _stage_text(raw: bytes, directory: Path) -> Path:
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise _TextInputError("ANALYSIS_FAILED") from None
+    path = directory / "input-1.log"
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as staged:
+            staged.write(raw)
+    except OSError:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        raise _TextInputError("ANALYSIS_FAILED") from None
+    try:
+        if stat.S_IMODE(path.stat().st_mode) != 0o600:
+            raise OSError("Unexpected staging mode.")
+    except OSError:
+        raise _TextInputError("ANALYSIS_FAILED") from None
+    return path
+
+
+def _render_text_local_report(projection):
+    from app.analyzer.html_report import render_investigation_report_html
+
+    return render_investigation_report_html(
+        projection, local_upload=True, partial_single_source=True,
+    )
 
 
 async def _stage_file(
@@ -483,12 +664,17 @@ async def _run_worker(sources, analyze, project, build_report_projection, render
         sending.close()
 
 
+def create_local_admission():
+    """Create the per-application admission gate shared by local analysis routes."""
+    return _LocalLimit()
+
+
 def create_local_endpoint(
     analyze: Callable, project: Callable,
     build_report_projection: Callable, render_report: Callable = _render_local_report,
-    checklist_registry=None,
+    checklist_registry=None, admission=None,
 ):
-    limiter = _LocalLimit()
+    limiter = admission if admission is not None else create_local_admission()
 
     async def local_investigation(request: Request):
         if not _loopback_request(request):
@@ -543,3 +729,105 @@ def create_local_endpoint(
                 limiter.release()
 
     return local_investigation
+
+
+def create_local_text_endpoint(
+    analyze: Callable, project: Callable, build_report_projection: Callable,
+    checklist_registry=None, admission=None,
+):
+    limiter = admission if admission is not None else create_local_admission()
+
+    async def local_text_investigation(request: Request):
+        if not _loopback_request(request):
+            return _text_error("LOCAL_ONLY")
+        if request.scope.get("query_string"):
+            return _text_error("QUERY_NOT_ALLOWED")
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or re.fullmatch(
+                r"application/json(?:\s*;\s*charset\s*=\s*(?:utf-8|\"utf-8\"))?\s*",
+                content_types[0], re.IGNORECASE,
+            ) is None
+            or request.headers.get("content-encoding", "identity").lower() not in ("", "identity")
+        ):
+            return _text_error("INVALID_MEDIA_TYPE")
+        rejection = limiter.admit()
+        if rejection is not None:
+            return _text_error(rejection)
+        try:
+            try:
+                async with asyncio.timeout(_UPLOAD_TIMEOUT_SECONDS):
+                    raw_body = await _bounded_json_body(request)
+                text_request = _parse_text_request(raw_body)
+                raw_text = _validate_text(text_request.source, text_request.log_text)
+            except TimeoutError:
+                return _text_error("BODY_TIMEOUT")
+            except _TextInputError as error:
+                return _text_error(error.code)
+
+            with tempfile.TemporaryDirectory(prefix="investigation-local-text-") as name:
+                directory = Path(name)
+                if stat.S_IMODE(directory.stat().st_mode) != 0o700:
+                    return _text_error("ANALYSIS_FAILED")
+                try:
+                    path = _stage_text(raw_text, directory)
+                except _TextInputError as error:
+                    return _text_error(error.code)
+                sources = [{"source": text_request.source, "path": str(path)}]
+                worker_result = await _run_worker(
+                    sources, analyze, project, build_report_projection,
+                    _render_text_local_report,
+                )
+                if isinstance(worker_result, JSONResponse):
+                    try:
+                        error_body = json.loads(worker_result.body)
+                        error_code = error_body.get("error_code")
+                    except (ValueError, TypeError, AttributeError):
+                        error_code = None
+                    if error_code not in _TEXT_ERRORS:
+                        error_code = "ANALYSIS_FAILED"
+                    return _text_error(error_code)
+                if (
+                    type(worker_result) is not tuple
+                    or len(worker_result) != 2
+                    or not isinstance(worker_result[0], LocalInvestigationResponse)
+                    or type(worker_result[1]) is not tuple
+                ):
+                    return _text_error("RESPONSE_INVALID")
+                response, safe_case_inputs = worker_result
+                if checklist_registry is not None:
+                    if any(item is None for item in safe_case_inputs):
+                        return _text_error("RESPONSE_INVALID")
+                    try:
+                        response = checklist_registry.attach(response, safe_case_inputs)
+                    except (TypeError, ValueError):
+                        return _text_error("RESPONSE_INVALID")
+                try:
+                    envelope = LocalTextInvestigationResponse(
+                        schema_version="1",
+                        input_scope=LocalTextInputScope(
+                            mode="text", source=text_request.source,
+                            notice_code="PARTIAL_SINGLE_SOURCE",
+                        ),
+                        result=response,
+                    )
+                    rendered = JSONResponse(
+                        status_code=200,
+                        content=envelope.model_dump(mode="json"),
+                    )
+                    if len(rendered.body) > _MAX_RESPONSE_BYTES:
+                        return _text_error("RESPONSE_INVALID")
+                except (ValidationError, TypeError, ValueError):
+                    return _text_error("RESPONSE_INVALID")
+                return rendered
+        except TimeoutError:
+            return _text_error("ANALYSIS_TIMEOUT")
+        except asyncio.CancelledError:
+            raise
+        except (OSError, ValueError):
+            return _text_error("ANALYSIS_FAILED")
+        finally:
+            limiter.release()
+
+    return local_text_investigation
