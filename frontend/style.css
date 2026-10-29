@@ -205,6 +205,39 @@ a { color: #064f96; text-underline-offset: .2em; }
 .workspace-timeline-title-36-6d { line-height: 1.5; overflow-wrap: anywhere; }
 .workspace-timeline-description-36-6d { margin: 0; max-width: 70ch; color: #344d69; line-height: 1.55; }
 .workspace-timeline-range-label-36-6d { color: #52657a; }
+.workspace-tasks-panel-36-6e, .workspace-evidence-panel-36-6e { display: grid; gap: 1rem; min-width: 0; }
+.workspace-tasks-panel-36-6e > h4, .workspace-evidence-panel-36-6e > h4 { margin: 0; font-size: 1.2rem; }
+.workspace-checklist-36-6e { display: grid; gap: .8rem; min-width: 0; }
+.workspace-checklist-36-6e > p, .workspace-evidence-panel-36-6e > p { max-width: 72ch; line-height: 1.55; }
+.workspace-checklist-request-36-6e { min-height: 2.75rem; width: fit-content; max-width: 100%; white-space: normal; }
+.workspace-checklist-status-36-6e { min-height: 1.5rem; }
+.workspace-checklist-output-36-6e { display: grid; gap: 1rem; min-width: 0; }
+.workspace-checklist-explanation-36-6e { max-width: 72ch; line-height: 1.55; }
+.workspace-task-master-detail-36-6e { display: grid; grid-template-columns: minmax(14rem, .8fr) minmax(0, 1.4fr); gap: 1rem; align-items: start; }
+.workspace-task-list-36-6e { display: grid; gap: .5rem; min-width: 0; margin: 0; padding-inline-start: 2rem; }
+.workspace-task-list-36-6e li { min-width: 0; padding-inline-start: .25rem; }
+.workspace-task-choice-36-6e { min-width: 0; width: 100%; min-height: 44px; padding: .65rem .75rem; border: 1px solid #bccbdb; border-radius: .4rem; background: #fff; color: #172b4d; text-align: start; line-height: 1.5; overflow-wrap: anywhere; }
+.workspace-task-choice-36-6e[aria-pressed="true"] { border: 2px solid #164c89; background: #eaf2fb; font-weight: 750; }
+.workspace-task-detail-36-6e { display: grid; gap: .8rem; min-width: 0; padding: 1rem; border-inline-start: 3px solid #9badc3; background: #f7f9fc; }
+.workspace-task-detail-36-6e h5, .workspace-task-detail-36-6e p { margin: 0; }
+.workspace-task-detail-36-6e h5 { line-height: 1.5; }
+.workspace-task-detail-36-6e p { max-width: 72ch; line-height: 1.55; overflow-wrap: anywhere; }
+.workspace-task-detail-36-6e summary, .workspace-evidence-panel-36-6e summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #164c89; font-weight: 750; }
+.workspace-task-citation-36-6e, .workspace-evidence-citation-36-6e { min-width: 0; margin-block: .65rem; padding: .75rem; border-inline-start: 3px solid #8295aa; background: #f7f9fc; overflow-wrap: anywhere; }
+.workspace-task-citation-36-6e h5, .workspace-evidence-citation-36-6e h5 { margin: 0 0 .35rem; }
+.workspace-task-citation-36-6e p, .workspace-evidence-citation-36-6e p { margin: .3rem 0; line-height: 1.55; }
+.workspace-evidence-group-36-6e { display: grid; gap: .6rem; min-width: 0; max-width: 80ch; }
+.workspace-evidence-group-36-6e h4, .workspace-evidence-group-36-6e h5, .workspace-evidence-group-36-6e p { margin: 0; }
+.workspace-evidence-group-36-6e p { line-height: 1.55; }
+.workspace-evidence-disclosure-36-6e { max-width: 80ch; }
+.workspace-checklist-evidence-36-6e { display: grid; gap: 1rem; min-width: 0; }
+.workspace-detail-tabs-36-6d button { min-height: 44px; padding-inline: .9rem; }
+.workspace-evidence-panel-36-6e .guidance-request,
+.workspace-evidence-panel-36-6e select { min-height: 44px; }
+@media (max-width: 48rem) {
+  .workspace-task-master-detail-36-6e { grid-template-columns: minmax(0, 1fr); }
+  .workspace-task-detail-36-6e { border-inline-start: 0; border-top: 3px solid #9badc3; }
+}
 .review-case-card .review-detail-link { min-height: 2.75rem; padding: .65rem .9rem; margin-top: .1rem; }
 @media (max-width: 48rem) {
   .workspace-dashboard-36-6c #summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -214,6 +247,11 @@ a { color: #064f96; text-underline-offset: .2em; }
   .workspace-dashboard-36-6c #summary-cards,
   .workspace-overview-metrics-36-6c { grid-template-columns: minmax(0, 1fr); }
 }
+.workspace-evidence-panel-36-6e .investigation-guidance select,
+.workspace-evidence-panel-36-6e .guidance-request,
+.workspace-evidence-panel-36-6e .workspace-evidence-disclosure-36-6e summary,
+.workspace-evidence-panel-36-6e .workspace-evidence-group-36-6e details summary,
+.workspace-evidence-panel-36-6e .technical-details summary { min-height: 44px; }
 .results > details { border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .75rem; }
 #results .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -230,9 +230,12 @@ async function scan(page, state) {
     };
   });
   const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
+    state.startsWith('workspace-checklist-') ||
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
       'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired',
-      'workspace-projection-shell', 'workspace-timeline', 'workspace-direct-entry-expired'].includes(state);
+      'workspace-projection-shell', 'workspace-timeline', 'workspace-direct-entry-expired', 'workspace-checklist-race',
+      'workspace-checklist-invalid-response',
+      'workspace-tasks-evidence-available'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
     if (key === 'hiddenLive') continue;
@@ -297,6 +300,19 @@ async function main() {
           })});
       } else if (url.pathname === '/api/v1/investigations/checklist') {
         if (stateForPage === 'CHECKLIST_REAL') await route.continue();
+        else if (stateForPage === 'WORKSPACE_RACE') {
+          await new Promise((resolveRequest) => setTimeout(resolveRequest, 300));
+          await route.fulfill({status: 200, contentType: 'application/json',
+            body: JSON.stringify(checklistPayload('CHECKLIST_AVAILABLE'))});
+        } else if (stateForPage === 'CHECKLIST_MALFORMED') {
+          const malformed = checklistPayload('CHECKLIST_AVAILABLE');
+          malformed.account = 'account-response-canary';
+          await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(malformed)});
+        } else if (stateForPage === 'CHECKLIST_INVALID_CITATION') {
+          const malformed = checklistPayload('CHECKLIST_AVAILABLE');
+          malformed.steps[0].citation_ids = ['forged:unverified'];
+          await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(malformed)});
+        }
         else if (stateForPage === 'CHECKLIST_LOADING') {
           await new Promise((resolveRequest) => setTimeout(resolveRequest, 150));
           await route.fulfill({status: 200, contentType: 'application/json',
@@ -955,6 +971,125 @@ async function main() {
       initialTimelineContract.rendered_sequences_match && initialTimelineContract.rendered_titles_match &&
       initialTimelineContract.safe_keys && initialTimelineContract.projection_fields === 19,
     'WORKSPACE_TIMELINE_VIEW_OR_CLOSED_ADAPTER_MISSING');
+    requireSafe(initialTimelineContract.tabs.includes('확인할 작업') &&
+      initialTimelineContract.tabs.includes('근거와 한계'),
+    'WORKSPACE_TASKS_EVIDENCE_TABS_MISSING');
+    const tasksTabContract = projectionShellPage.getByRole('tab', {name: '확인할 작업'});
+    const evidenceTabContract = projectionShellPage.getByRole('tab', {name: '근거와 한계'});
+    requireSafe(await projectionShellPage.locator('#workspace-tasks-panel-36-6e').isHidden() &&
+      await projectionShellPage.locator('#workspace-evidence-panel-36-6e').isHidden(),
+    'WORKSPACE_TASKS_EVIDENCE_PANEL_ARIA_MISSING');
+    await tasksTabContract.click();
+    requireSafe(await tasksTabContract.getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e').isVisible() &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-list-36-6e').count() === 0 &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .checklist-request').count() === 1 &&
+      shellChecklistCalls === 0,
+    'WORKSPACE_CHECKLIST_NOT_EXPLICIT_OR_PREMATURE_TASKS');
+    stateForPage = 'CHECKLIST_AVAILABLE';
+    const workspaceChecklistCalls = [];
+    projectionShellPage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/checklist') workspaceChecklistCalls.push(request);
+    });
+    await projectionShellPage.locator('#workspace-tasks-panel-36-6e .checklist-request').evaluate((button) => {
+      button.click(); button.click(); button.click();
+    });
+    await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').first().waitFor({state: 'visible'});
+    requireSafe(workspaceChecklistCalls.length === 1 &&
+      await workspaceChecklistCalls[0].method() === 'POST' &&
+      JSON.stringify(workspaceChecklistCalls[0].postDataJSON()).includes(firstRef) &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').count() === 1 &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-detail-36-6e').isVisible() &&
+      await projectionShellPage.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('우선 확인')) &&
+      await projectionShellPage.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('애플리케이션 로그')) &&
+      await projectionShellPage.locator('.workspace-detail-header-36-6c .risk-high').count() === 1,
+    'WORKSPACE_CHECKLIST_MASTER_DETAIL_OR_VERIFIED_ROLE_FAILED');
+    await projectionShellPage.locator('.workspace-task-choice-36-6e').first().focus();
+    await projectionShellPage.keyboard.press('Enter');
+    requireSafe(await projectionShellPage.locator('.workspace-task-choice-36-6e').first().getAttribute('aria-pressed') === 'true',
+      'WORKSPACE_TASK_KEYBOARD_SELECTION_FAILED');
+    requireSafe(workspaceChecklistCalls.length === 1, 'WORKSPACE_TASK_SELECTION_REQUESTED_NETWORK');
+    await tasksTabContract.click();
+    for (const width of [1440, 1024, 768, 390, 320]) {
+      await projectionShellPage.setViewportSize({width, height: 844});
+      requireSafe(await projectionShellPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth) &&
+        await projectionShellPage.locator('.workspace-task-master-detail-36-6e').evaluate((node) => node.scrollWidth <= node.clientWidth),
+      'WORKSPACE_TASKS_RESPONSIVE_OVERFLOW');
+    }
+    const taskTarget = await projectionShellPage.locator('.workspace-task-choice-36-6e').first().boundingBox();
+    requireSafe(taskTarget && taskTarget.height >= 44, 'WORKSPACE_TASK_TARGET_BELOW_MINIMUM');
+    const taskTargets = await projectionShellPage.evaluate(() => {
+      const selectors = ['#workspace-tasks-tab-36-6e', '#workspace-evidence-tab-36-6e',
+        '.workspace-checklist-request-36-6e', '.workspace-task-choice-36-6e',
+        '.workspace-task-detail-36-6e summary'];
+      return selectors.map((selector) => {
+        const rect = document.querySelector(selector).getBoundingClientRect();
+        return {selector, width: rect.width, height: rect.height, top: rect.top, left: rect.left, right: rect.right};
+      });
+    });
+    requireSafe(taskTargets.every((target) => target.width >= 44 && target.height >= 44),
+      'WORKSPACE_TASK_FOCUS_TARGET_GEOMETRY_FAILED');
+    requireSafe(taskTargets[1].left - taskTargets[0].right >= 8,
+      'WORKSPACE_TASK_TAB_TARGET_SPACING_FAILED');
+    console.log(`WORKSPACE_TASK_TARGET_GEOMETRY ${JSON.stringify(taskTargets)}`);
+    await projectionShellPage.setViewportSize({width: 320, height: 844});
+    await projectionShellPage.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    requireSafe(await projectionShellPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth) &&
+      await projectionShellPage.locator('.workspace-task-master-detail-36-6e').evaluate((node) => node.scrollWidth <= node.clientWidth),
+    'WORKSPACE_TASKS_200_PERCENT_REFLOW_FAILED');
+    await projectionShellPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await projectionShellPage.setViewportSize({width: 1280, height: 900});
+    await scan(projectionShellPage, 'workspace-checklist-available');
+    await evidenceTabContract.click();
+    const guidanceTargets = await projectionShellPage.evaluate(() =>
+      ['.workspace-evidence-panel-36-6e .guidance-request', '.workspace-evidence-panel-36-6e select',
+        '.workspace-evidence-panel-36-6e details summary'].map((selector) => {
+        const rect = document.querySelector(selector).getBoundingClientRect();
+        return {selector, width: rect.width, height: rect.height, left: rect.left, right: rect.right};
+      }));
+    requireSafe(guidanceTargets.every((target) => target.width >= 44 && target.height >= 44),
+      'WORKSPACE_EVIDENCE_TARGET_GEOMETRY_FAILED');
+    requireSafe(guidanceTargets[0].left - guidanceTargets[1].right >= 8,
+      'WORKSPACE_GUIDANCE_TARGET_SPACING_FAILED');
+    console.log(`WORKSPACE_EVIDENCE_TARGET_GEOMETRY ${JSON.stringify(guidanceTargets)}`);
+    requireSafe(await evidenceTabContract.getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-evidence-panel-36-6e').isVisible() &&
+      (await projectionShellPage.locator('#workspace-evidence-panel-36-6e').innerText()).includes('일반 조사 참고자료') &&
+      (await projectionShellPage.locator('#workspace-evidence-panel-36-6e').innerText()).includes('직접 증거가 아닙니다') &&
+      await projectionShellPage.locator('#workspace-evidence-panel-36-6e').getByText(`분석 한계 ${firstProjection.limitation_count}개`).count() === 1 &&
+      await projectionShellPage.locator('#workspace-evidence-panel-36-6e .workspace-evidence-citation-36-6e').count() === 1 &&
+      await projectionShellPage.locator('#workspace-evidence-panel-36-6e .guidance-request').count() === 1 &&
+      shellGuidanceCalls === 0,
+    'WORKSPACE_EVIDENCE_REFERENCE_SEMANTICS_FAILED');
+    await projectionShellPage.locator('#workspace-evidence-panel-36-6e .guidance-request').click();
+    await projectionShellPage.locator('#workspace-evidence-panel-36-6e .guidance-citation').waitFor({state: 'visible'});
+    requireSafe(shellGuidanceCalls === 1 && workspaceChecklistCalls.length === 1,
+      'WORKSPACE_GUIDANCE_NOT_EXPLICIT_OR_MIXED');
+    requireSafe(await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').count() === 1,
+    'WORKSPACE_ANALYSIS_MUTATION_OR_GUIDANCE_CHECKLIST_MIX_FAILED');
+    const workspaceTaskPanelStats = await projectionShellPage.locator('#workspace-tasks-panel-36-6e').evaluate((node) => ({
+      steps: node.querySelectorAll('.workspace-task-choice-36-6e').length,
+      dom_nodes: node.querySelectorAll('*').length,
+      html_bytes: new TextEncoder().encode(new XMLSerializer().serializeToString(node)).byteLength,
+    }));
+    const checklistResponse = await workspaceChecklistCalls[0].response();
+    const checklistResponseBytes = (await checklistResponse.body()).byteLength;
+    const evidenceSwitchSamples = [];
+    for (let sample = 0; sample < 110; sample += 1) {
+      const elapsed = await projectionShellPage.evaluate(() => {
+        const tasks = document.querySelector('#workspace-tasks-tab-36-6e');
+        const evidence = document.querySelector('#workspace-evidence-tab-36-6e');
+        const started = performance.now();
+        tasks.click(); evidence.click();
+        return performance.now() - started;
+      });
+      if (sample >= 10) evidenceSwitchSamples.push(elapsed);
+    }
+    console.log(`WORKSPACE_TASK_EVIDENCE_BENCHMARK warmup=10 samples=100 steps=${workspaceTaskPanelStats.steps} task_panel_nodes=${workspaceTaskPanelStats.dom_nodes} task_panel_html_bytes=${workspaceTaskPanelStats.html_bytes} checklist_response_bytes=${checklistResponseBytes} tasks_evidence_switch_ms=${JSON.stringify(summarizeMs(evidenceSwitchSamples))}`);
+    await scan(projectionShellPage, 'workspace-tasks-evidence-available');
+    const workspaceRequestCountsAfterExplicit = {checklist: shellChecklistCalls, guidance: shellGuidanceCalls};
+    stateForPage = 'DISABLED';
     const timelineSafetyContract = await projectionShellPage.evaluate((ref) => {
       const timeline = window.workspaceNavigation.timelineForRef(ref);
       const projection = window.workspaceNavigation.projectionForRef(ref);
@@ -1023,14 +1158,18 @@ async function main() {
     'WORKSPACE_TIMELINE_KEYBOARD_LEFT_FAILED');
     await projectionShellPage.keyboard.press('ArrowRight');
     requireSafe(await timelineTab.getAttribute('aria-selected') === 'true' &&
-      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').isVisible() &&
-      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').isVisible(),
+    'WORKSPACE_TIMELINE_KEYBOARD_RIGHT_FAILED');
+    await projectionShellPage.keyboard.press('ArrowRight');
+    requireSafe(await projectionShellPage.getByRole('tab', {name: '확인할 작업'}).getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e').isVisible() &&
+      shellChecklistCalls === workspaceRequestCountsAfterExplicit.checklist && shellAnalysisCalls === 0,
     'WORKSPACE_TIMELINE_KEYBOARD_RIGHT_OR_AUTOMATIC_REQUEST_FAILED');
     await projectionShellPage.keyboard.press('Home');
     requireSafe(await projectionShellPage.getByRole('tab', {name: '개요'}).getAttribute('aria-selected') === 'true',
       'WORKSPACE_TIMELINE_KEYBOARD_HOME_FAILED');
     await projectionShellPage.keyboard.press('End');
-    requireSafe(await timelineTab.getAttribute('aria-selected') === 'true', 'WORKSPACE_TIMELINE_KEYBOARD_END_FAILED');
+    requireSafe(await evidenceTabContract.getAttribute('aria-selected') === 'true', 'WORKSPACE_TIMELINE_KEYBOARD_END_FAILED');
     await scan(projectionShellPage, 'workspace-timeline');
     const timelinePanelMetrics = await projectionShellPage.locator('#workspace-timeline-panel-36-6d').evaluate((node) => ({
       items: node.querySelectorAll('.workspace-timeline-item-36-6d').length,
@@ -1121,14 +1260,14 @@ async function main() {
     await projectionShellPage.goForward();
     await projectionShellPage.waitForFunction((expected) => location.hash === `#/investigations/${expected}`, firstRef);
     requireSafe(await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === firstRef &&
-      shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_HISTORY_OR_AUTOMATIC_POST_FAILED');
+      shellChecklistCalls === workspaceRequestCountsAfterExplicit.checklist && shellAnalysisCalls === 0, 'WORKSPACE_HISTORY_OR_AUTOMATIC_POST_FAILED');
     await projectionShellPage.locator('#review-back-link').click();
     await projectionShellPage.waitForFunction(() => location.hash === '');
     await projectionShellPage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
     await projectionShellPage.locator('#review-case-link-0').click();
     await projectionShellPage.locator('#case-detail-view .case-detail .timeline').waitFor({state: 'visible'});
     requireSafe(await projectionShellPage.locator('#case-detail-view .investigation-checklist button').count() === 1 &&
-      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+      shellChecklistCalls === workspaceRequestCountsAfterExplicit.checklist && shellAnalysisCalls === 0,
     'WORKSPACE_TIMELINE_ROLLBACK_RENDERER_FAILED');
     await projectionShellPage.locator('#review-back-link').click();
     await projectionShellPage.waitForFunction(() => location.hash === '');
@@ -1143,7 +1282,8 @@ async function main() {
       await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-item-36-6d').count() === secondTimeline.items.length &&
       await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-title-36-6d').allTextContents().then((titles) =>
         titles.join('|') === secondTimeline.items.map((item) => item.title).join('|')) &&
-      shellChecklistCalls === 0 && shellGuidanceCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
+      shellChecklistCalls === workspaceRequestCountsAfterExplicit.checklist &&
+      shellGuidanceCalls === workspaceRequestCountsAfterExplicit.guidance && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
     const projectionBenchmarks = [];
     for (const count of [1, 32, 256]) {
       for (let warmup = 0; warmup < 10; warmup += 1) {
@@ -1209,9 +1349,58 @@ async function main() {
     console.log(`WORKSPACE_36_6B_ROUTE_BENCHMARK warmup=2 samples=8 transition_ms=${JSON.stringify(summarizeMs(shellRouteTimes))} dom_nodes=${shellDomNodes} html_bytes=${shellHtmlBytes}`);
     console.log(`WORKSPACE_36_6C_DOM_SIZE ${JSON.stringify(overviewStats)}`);
     await scan(projectionShellPage, 'workspace-projection-shell');
+    stateForPage = 'WORKSPACE_RACE';
+    const raceResponsePending = projectionShellPage.waitForRequest((request) =>
+      new URL(request.url()).pathname === '/api/v1/investigations/checklist');
+    await projectionShellPage.getByRole('tab', {name: '확인할 작업'}).click();
+    await projectionShellPage.locator('.workspace-checklist-request-36-6e').click();
+    const raceRequest = await raceResponsePending;
+    requireSafe(await projectionShellPage.locator('.workspace-checklist-status-36-6e').getAttribute('data-checklist-state') === 'loading',
+      'WORKSPACE_CHECKLIST_LOADING_STATE_MISSING');
+    const raceFirstRef = firstRef;
+    const raceSecondRef = secondRef;
+    await projectionShellPage.locator('#review-back-link').click();
+    await projectionShellPage.waitForFunction(() => location.hash === '');
+    await projectionShellPage.locator('#review-case-link-1').click();
+    await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+    await projectionShellPage.waitForTimeout(400);
+    requireSafe(raceRequest.postDataJSON().case_ref === raceFirstRef && raceFirstRef !== raceSecondRef &&
+      shellChecklistCalls === workspaceRequestCountsAfterExplicit.checklist + 1 && shellAnalysisCalls === 0 &&
+      await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === raceSecondRef &&
+      await projectionShellPage.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('역할 미확인')) &&
+      await projectionShellPage.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('확인 순서 미정')) &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .checklist-status').getAttribute('data-checklist-state') === 'not_requested' &&
+      await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').count() === 0 &&
+      !(await projectionShellPage.locator('#case-detail-view').textContent()).includes('합성 자료의 coverage를 확인하세요'),
+    'WORKSPACE_CHECKLIST_ASYNC_CASE_ISOLATION_FAILED');
+    await scan(projectionShellPage, 'workspace-checklist-race');
+    await projectionShellPage.getByRole('tab', {name: '확인할 작업'}).click();
+    const stateButton = projectionShellPage.locator('.workspace-checklist-request-36-6e');
+    for (const [scenario, expected] of [
+      ['CHECKLIST_REFUSED', 'refused'], ['CHECKLIST_STALE', 'stale'],
+      ['CHECKLIST_TIMEOUT', 'error'], ['CHECKLIST_RATE', 'error'],
+      ['CHECKLIST_UNAVAILABLE', 'unavailable'], ['CHECKLIST_MALFORMED', 'unavailable'],
+      ['CHECKLIST_INVALID_CITATION', 'unavailable']
+    ]) {
+      stateForPage = scenario;
+      await stateButton.click();
+      await projectionShellPage.waitForFunction((state) =>
+        document.querySelector('.workspace-checklist-status-36-6e')?.dataset.checklistState === state, expected);
+      requireSafe(await projectionShellPage.locator('.workspace-task-choice-36-6e').count() === 0 &&
+        await projectionShellPage.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('역할 미확인')) &&
+        await projectionShellPage.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('확인 순서 미정')) &&
+        !(await projectionShellPage.locator('#case-detail-view').textContent()).includes('account-response-canary'),
+      'WORKSPACE_CHECKLIST_FAILURE_STATE_PRIVACY_FAILED');
+      if (scenario === 'CHECKLIST_REFUSED') requireSafe(
+        (await projectionShellPage.locator('.workspace-checklist-status-36-6e').textContent()).includes('안전 판정이 아닙니다'),
+        'WORKSPACE_CHECKLIST_REFUSAL_MEANING_FAILED');
+      await scan(projectionShellPage, `workspace-checklist-${scenario.toLowerCase()}`);
+    }
+    const workspaceRequestCountsAfterRace = {checklist: shellChecklistCalls, guidance: shellGuidanceCalls};
+    stateForPage = 'DISABLED';
     await projectionShellPage.reload({waitUntil: 'networkidle'});
     requireSafe(await projectionShellPage.locator('#review-route-expired').isVisible() &&
-      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+      shellChecklistCalls === workspaceRequestCountsAfterRace.checklist && shellAnalysisCalls === 0,
     'WORKSPACE_DIRECT_ENTRY_DID_NOT_EXPIRE');
     await scan(projectionShellPage, 'workspace-direct-entry-expired');
     await projectionShellPage.close();

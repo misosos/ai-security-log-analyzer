@@ -9,7 +9,7 @@ from fastapi.responses import Response
 
 
 _FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
-_MAX_ASSET_BYTES = 128 * 1024
+_MAX_ASSET_BYTES = 160 * 1024
 _HEADERS = {
     "Content-Security-Policy": (
         "default-src 'none'; base-uri 'none'; form-action 'self'; "

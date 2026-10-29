@@ -207,6 +207,7 @@
   let reviewReturnScrollY = 0;
   const USE_WORKSPACE_DETAIL_SHELL_36_6B = true;
   let legacyWorkspaceDetailForTests = false;
+  let workspaceDetailGeneration = 0;
   const loopbackPage = ["127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
   const workspaceNav = document.getElementById("workspace-nav");
   const workspaceNavigation = (() => {
@@ -414,6 +415,7 @@
   }
 
   function showExpiredReviewRoute() {
+    workspaceDetailGeneration += 1;
     caseDetailView.hidden = true;
     resultsDashboard.hidden = true;
     reviewRouteExpired.hidden = false;
@@ -426,6 +428,7 @@
   }
 
   function openReviewCase(caseRef, focusHeading = true) {
+    const generation = ++workspaceDetailGeneration;
     const entry = caseByRef.get(caseRef);
     if (!entry || currentInvestigation === null) {
       showExpiredReviewRoute();
@@ -433,7 +436,7 @@
     }
     const useWorkspaceShell = USE_WORKSPACE_DETAIL_SHELL_36_6B && !legacyWorkspaceDetailForTests;
     caseDetailContent.replaceChildren(useWorkspaceShell ?
-      renderWorkspaceDetailShell(entry.projection, entry.timeline) : renderCaseDetail(entry.item, entry.index));
+      renderWorkspaceDetailShell(entry.projection, entry.timeline, entry.item, generation) : renderCaseDetail(entry.item, entry.index));
     caseDetailView.setAttribute("aria-labelledby", useWorkspaceShell ? "workspace-shell-heading" : "case-detail-heading");
     reviewDetailContext.textContent = currentInvestigationMode === "sample" ?
       "합성 예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
@@ -451,6 +454,7 @@
   }
 
   function restoreReviewList(state) {
+    workspaceDetailGeneration += 1;
     showReviewDashboard(false);
     const scrollY = Number.isFinite(state?.reviewListScrollY) ? state.reviewListScrollY : reviewReturnScrollY;
     window.scrollTo(0, Math.max(0, scrollY));
@@ -881,7 +885,7 @@
     return `c_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24)}`;
   }
 
-  function renderGuidance(caseItem) {
+  function renderGuidance(caseItem, isCurrent = () => true) {
     const section = detailSection("근거 도움말");
     section.classList.add("investigation-guidance");
     section.append(element("p", "승인된 보안 지식의 짧은 요약과 출처를 확인합니다. 이 도움말은 탐지 결과를 변경하지 않습니다."));
@@ -919,6 +923,7 @@
       try {
         const fields = guidanceCaseFields(caseItem);
         const caseId = await guidanceCaseId(fields);
+        if (!isCurrent()) return;
         const response = await fetch(GUIDANCE_ENDPOINT, {
           method: "POST", credentials: "omit",
           headers: {Accept: "application/json", "Content-Type": "application/json"},
@@ -927,6 +932,7 @@
             corpus_digest: GUIDANCE_CORPUS_DIGEST})
         });
         const payload = await boundedJson(response, 6144);
+        if (!isCurrent()) return;
         if (!response.ok) {
           if (payload === null || typeof payload !== "object" || Array.isArray(payload) ||
               Object.keys(payload).length !== 2 || !Object.hasOwn(payload, "error_code") ||
@@ -950,9 +956,9 @@
           }
         }
       } catch (_error) {
-        status.textContent = "도움말을 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
+        if (isCurrent()) status.textContent = "도움말을 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
       } finally {
-        button.disabled = false;
+        if (isCurrent()) button.disabled = false;
       }
     });
     section.append(label, button, status, result);
@@ -1284,6 +1290,29 @@
     return body;
   }
 
+  const CHECKLIST_PURPOSE_LABELS_36_6E = Object.freeze({
+    authentication_scope: "대상과 자료 범위",
+    relation_scope: "관찰별 순서와 연결 근거",
+    evidence_completeness: "자료 범위와 누락",
+    evidence_conflict: "서로 다른 근거",
+    analysis_limit: "분석 범위의 한계",
+    manual_coverage: "관련 자료와 시간 범위"
+  });
+  const CHECKLIST_LIMITATION_COPY_36_6E = Object.freeze({
+    CORRELATION_IS_NOT_CAUSATION: "시간상 연결은 확인됐지만 원인 관계는 확정되지 않았습니다.",
+    DETECTION_IS_NOT_COMPROMISE: "탐지된 활동만으로 침해를 확정할 수 없습니다.",
+    INCOMPLETE_EVIDENCE: "현재 자료만으로 확인할 수 있는 범위가 제한됩니다.",
+    NO_FINDING_IS_NOT_SAFE: "탐지되지 않았다는 사실만으로 안전을 판단할 수 없습니다."
+  });
+  const CHECKLIST_ERROR_COPY_36_6E = Object.freeze({
+    INVALID_REQUEST: ["error", "요청 형식을 확인할 수 없습니다."],
+    NOT_FOUND: ["stale", "현재 분석 결과에서 사례를 찾을 수 없습니다. 최신 결과에서 다시 선택하세요."],
+    RATE_LIMITED: ["error", "요청 한도에 도달했습니다. 잠시 뒤 직접 다시 요청하세요."],
+    BUSY: ["error", "다른 점검표 요청이 진행 중입니다. 완료 후 직접 다시 요청하세요."],
+    TIMEOUT: ["error", "점검표 준비 시간이 초과되었습니다. 기존 분석 결과는 그대로 유지됩니다."],
+    UNAVAILABLE: ["unavailable", "승인 근거를 확인할 수 없습니다. 기존 분석 결과를 확인하세요."]
+  });
+
   function validateChecklistResponse(value) {
     closedRecord(value, ["schema", "status", "source_role", "source_role_label", "review_priority", "priority_meaning", "category",
       "steps", "explanation", "uncertainty_codes", "limitation_codes", "citations",
@@ -1301,12 +1330,17 @@
     items(value.steps, 5).forEach((step) => {
       closedRecord(step, ["text", "purpose_code", "citation_ids", "limitation_codes"]);
       boundedText(step.text); boundedText(step.purpose_code);
+      if (!Object.hasOwn(CHECKLIST_PURPOSE_LABELS_36_6E, step.purpose_code)) failContract();
       if (new TextEncoder().encode(step.text).length > 512) failContract();
-      texts(step.citation_ids, 2); texts(step.limitation_codes, 4);
+      const stepCitationIds = texts(step.citation_ids, 2);
+      if (new Set(stepCitationIds).size !== stepCitationIds.length) failContract();
+      texts(step.limitation_codes, 4);
     });
     closedRecord(value.explanation, ["text", "citation_ids"]);
     boundedText(value.explanation.text);
     if (new TextEncoder().encode(value.explanation.text).length > 1024) failContract();
+    const explanationCitationIds = texts(value.explanation.citation_ids, 8);
+    if (new Set(explanationCitationIds).size !== explanationCitationIds.length) failContract();
     texts(value.uncertainty_codes, 4); texts(value.limitation_codes, 16);
     items(value.citations, 8).forEach((citation) => {
       closedRecord(citation, ["citation_id", "title", "summary"]);
@@ -1316,7 +1350,7 @@
     });
     const citationIds = value.citations.map((citation) => citation.citation_id);
     if (new Set(citationIds).size !== citationIds.length) failContract();
-    const used = [...value.explanation.citation_ids];
+    const used = [...explanationCitationIds];
     if (value.status === "available") {
       if (value.steps.length === 0 || used.length === 0) failContract();
       value.steps.forEach((step) => {
@@ -1711,11 +1745,163 @@
     return value.replace(/ \(UTC\+09:00\)$/, "");
   }
 
-  function renderWorkspaceDetailShell(projection, timelineProjection) {
+  function renderWorkspaceChecklistPanel(projection, caseItem, controller) {
+    const section = document.createElement("div");
+    section.className = "workspace-checklist-36-6e investigation-checklist";
+    section.append(element("h4", "확인할 작업"),
+      element("p", "점검표는 이 버튼을 눌렀을 때만 요청됩니다. 요청 전에는 작업 수를 표시하거나 추정하지 않습니다."),
+      element("p", "기존 위험도는 분석 결과이고, 검토 우선순위는 검토 순서를 돕는 별도 제안입니다."));
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "checklist-request workspace-checklist-request-36-6e";
+    button.textContent = "확인할 작업 불러오기";
+    const status = element("p", "점검표를 아직 요청하지 않았습니다.", "checklist-status workspace-checklist-status-36-6e");
+    status.setAttribute("aria-live", "polite");
+    status.dataset.checklistState = "not_requested";
+    const output = document.createElement("div");
+    output.className = "workspace-checklist-output-36-6e";
+    output.hidden = true;
+    if (caseItem === null || caseItem.checklist_ref === null) {
+      button.disabled = true;
+      status.dataset.checklistState = "unavailable";
+      status.textContent = "현재 사례에서는 점검표를 요청할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
+    } else {
+      button.addEventListener("click", async () => {
+        if (button.disabled) return;
+        const requestId = controller.nextRequestId();
+        const isCurrentRequest = () => controller.isCurrent() && controller.isLatest(requestId);
+        button.disabled = true;
+        output.replaceChildren();
+        output.hidden = true;
+        controller.onReset();
+        status.dataset.checklistState = "loading";
+        status.textContent = "승인된 참고 근거를 확인하고 있습니다.";
+        try {
+          const response = await fetch(CHECKLIST_ENDPOINT, {
+            method: "POST", credentials: "omit",
+            headers: {Accept: "application/json", "Content-Type": "application/json"},
+            body: JSON.stringify({schema_version: 1, case_ref: caseItem.checklist_ref})
+          });
+          const payload = await boundedJson(response, 8192);
+          if (!isCurrentRequest()) return;
+          if (!response.ok) {
+            closedRecord(payload, ["error_code", "user_message"]);
+            const errorCopy = CHECKLIST_ERROR_COPY_36_6E[payload.error_code];
+            const expectedMessages = {
+              INVALID_REQUEST: "요청 형식을 확인할 수 없습니다.",
+              NOT_FOUND: "현재 분석 결과에서 사례를 찾을 수 없습니다.",
+              RATE_LIMITED: "조사 점검표 요청 한도에 도달했습니다.",
+              BUSY: "다른 조사 점검표 요청을 처리하고 있습니다.",
+              TIMEOUT: "조사 점검표 준비 시간이 초과되었습니다.",
+              UNAVAILABLE: "승인 근거를 확인할 수 없어 점검표를 준비하지 못했습니다."
+            };
+            if (!errorCopy || payload.user_message !== expectedMessages[payload.error_code]) failContract();
+            status.dataset.checklistState = errorCopy[0];
+            status.textContent = errorCopy[1];
+            output.hidden = false;
+            if (errorCopy[0] === "stale") output.append(element("p", "최신 분석 결과에서 사례를 다시 선택하세요."));
+            else if (errorCopy[0] === "unavailable") output.append(element("p", "이 응답은 안전 또는 비위험 판정이 아닙니다. 기존 분석 결과를 확인하세요."));
+            return;
+          }
+          let checklist;
+          try {
+            checklist = validateChecklistResponse(payload);
+          } catch (_validationError) {
+            if (!isCurrentRequest()) return;
+            status.dataset.checklistState = "unavailable";
+            status.textContent = "점검표 응답을 검증할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
+            output.hidden = false;
+            output.append(element("p", "검증 실패는 안전 또는 비위험 판정이 아닙니다."));
+            return;
+          }
+          if (!isCurrentRequest()) return;
+          controller.onValidated(checklist);
+          status.dataset.checklistState = checklist.status;
+          if (checklist.status === "refused") {
+            status.textContent = "승인된 근거로 점검표를 만들 수 없습니다. 이는 안전 판정이 아닙니다.";
+            output.append(element("p", checklist.explanation.text),
+              element("p", "참고자료는 일반 조사 방법과 한계이며, 사례의 직접 증거가 아닙니다."));
+          } else if (checklist.status === "unavailable") {
+            status.textContent = "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
+            output.append(element("p", "이 상태는 위협이 없다는 뜻이 아닙니다."));
+          } else {
+            status.textContent = "검증된 점검표를 불러왔습니다. 확인 순서는 기존 위험도와 별개입니다.";
+            output.append(element("p", "이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다."),
+              element("p", "검증된 관찰 역할과 확인 순서는 기존 위험도와 별도 정보입니다."),
+              element("p", "참고자료는 일반적인 조사 방법과 한계이며 사례의 직접 증거가 아닙니다."),
+              element("p", checklist.explanation.text, "workspace-checklist-explanation-36-6e"));
+            if (checklist.source_role === "unknown") output.append(element("p",
+              "역할을 안전하게 확인할 수 없어 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
+            if (checklist.review_priority === "undetermined") output.append(element("p",
+              "확인 순서는 정해지지 않았습니다. 이는 안전·낮은 위험·검토 불필요를 뜻하지 않습니다."));
+            const masterDetail = document.createElement("div");
+            masterDetail.className = "workspace-task-master-detail-36-6e";
+            const list = document.createElement("ol");
+            list.className = "workspace-task-list-36-6e";
+            list.setAttribute("aria-label", "번호가 있는 확인 작업");
+            const detailPanel = document.createElement("section");
+            detailPanel.className = "workspace-task-detail-36-6e";
+            detailPanel.setAttribute("aria-live", "polite");
+            const renderSelectedTask = (selectedIndex) => {
+              const step = checklist.steps[selectedIndex];
+              if (!step) return;
+              [...list.querySelectorAll(".workspace-task-choice-36-6e")].forEach((choice, index) => {
+                choice.setAttribute("aria-pressed", String(index === selectedIndex));
+              });
+              detailPanel.replaceChildren(element("h5", `${selectedIndex + 1}. ${step.text}`),
+                element("p", CHECKLIST_PURPOSE_LABELS_36_6E[step.purpose_code], "workspace-task-purpose-36-6e"),
+                element("p", "이 선택은 화면 표시만 바꾸며 실제 작업 완료나 대응을 실행·저장하지 않습니다."));
+              const limitationCopies = [...new Set(step.limitation_codes.map((code) => CHECKLIST_LIMITATION_COPY_36_6E[code]).filter(Boolean))];
+              if (limitationCopies.length) {
+                const limits = document.createElement("details");
+                limits.append(element("summary", "확인 시 유의할 점"));
+                textList(limits, limitationCopies, false, "추가로 표시할 한계가 없습니다.");
+                detailPanel.append(limits);
+              }
+              const references = checklist.citations.filter((citation) => step.citation_ids.includes(citation.citation_id));
+              const refs = document.createElement("details");
+              refs.className = "workspace-task-references-36-6e";
+              refs.append(element("summary", `관련 근거 ${references.length}개`),
+                element("p", "일반적인 조사 참고자료이며 이 사례의 직접 증거가 아닙니다."));
+              references.forEach((citation) => renderChecklistCitation(refs, citation, "workspace-task-citation-36-6e"));
+              detailPanel.append(refs);
+            };
+            checklist.steps.forEach((step, index) => {
+              const item = document.createElement("li");
+              const choice = element("button", `${index + 1}. ${step.text}`, "workspace-task-choice-36-6e");
+              choice.type = "button";
+              choice.setAttribute("aria-pressed", "false");
+              choice.addEventListener("click", () => renderSelectedTask(index));
+              item.append(choice);
+              list.append(item);
+            });
+            masterDetail.append(list, detailPanel);
+            output.append(masterDetail);
+            renderSelectedTask(0);
+          }
+          output.hidden = false;
+        } catch (_error) {
+          if (isCurrentRequest()) {
+            status.dataset.checklistState = "error";
+            status.textContent = "점검표를 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
+            output.hidden = false;
+            output.append(element("p", "내부 오류 내용은 표시하지 않습니다. 다시 확인하려면 버튼을 직접 누르세요."));
+          }
+        } finally {
+          if (isCurrentRequest()) button.disabled = false;
+        }
+      });
+    }
+    section.append(button, status, output);
+    return section;
+  }
+
+  function renderWorkspaceDetailShell(projection, timelineProjection, caseItem = null, generation = workspaceDetailGeneration) {
     const shell = document.createElement("div");
     shell.className = "workspace-detail-shell-36-6b";
     shell.dataset.caseRef = projection.case_ref;
     shell.dataset.projectionVersion = projection.schema_version;
+    let latestChecklistRequest = 0;
     const heading = element("h2", "검토 건 상세");
     heading.id = "workspace-shell-heading";
     const header = document.createElement("header");
@@ -1745,9 +1931,6 @@
     }
     const summary = element("p", projection.summary, "workspace-overview-summary-36-6c");
     header.append(badges, timeRange, summary);
-    const status = document.createElement("p");
-    status.className = "workspace-shell-status";
-    status.textContent = "확인할 작업 목록은 이 단계에서 제공하지 않습니다.";
     const tablist = document.createElement("div");
     tablist.className = "workspace-detail-tabs-36-6d";
     tablist.setAttribute("role", "tablist");
@@ -1768,7 +1951,26 @@
     timelineTab.setAttribute("aria-controls", "workspace-timeline-panel-36-6d");
     timelineTab.tabIndex = -1;
     timelineTab.textContent = "활동 흐름";
-    tablist.append(overviewTab, timelineTab);
+    const tasksTab = document.createElement("button");
+    tasksTab.type = "button";
+    tasksTab.id = "workspace-tasks-tab-36-6e";
+    tasksTab.dataset.workspaceTab = "tasks";
+    tasksTab.setAttribute("role", "tab");
+    tasksTab.setAttribute("aria-selected", "false");
+    tasksTab.setAttribute("aria-controls", "workspace-tasks-panel-36-6e");
+    tasksTab.tabIndex = -1;
+    tasksTab.textContent = "확인할 작업";
+    const evidenceTab = document.createElement("button");
+    evidenceTab.type = "button";
+    evidenceTab.id = "workspace-evidence-tab-36-6e";
+    evidenceTab.dataset.workspaceTab = "evidence";
+    evidenceTab.setAttribute("role", "tab");
+    evidenceTab.setAttribute("aria-selected", "false");
+    evidenceTab.setAttribute("aria-controls", "workspace-evidence-panel-36-6e");
+    evidenceTab.tabIndex = -1;
+    evidenceTab.textContent = "근거와 한계";
+    const tabs = [overviewTab, timelineTab, tasksTab, evidenceTab];
+    tablist.append(...tabs);
     const overview = document.createElement("section");
     overview.className = "workspace-overview-36-6c";
     overview.id = "workspace-overview-panel-36-6d";
@@ -1835,22 +2037,122 @@
       });
       timelinePanel.append(timelineHeading, timelineNotice, timelineList);
     }
-    const selectTab = (next, moveFocus) => {
-      const selected = next === "timeline" ? timelineTab : overviewTab;
-      overviewTab.setAttribute("aria-selected", String(selected === overviewTab));
-      timelineTab.setAttribute("aria-selected", String(selected === timelineTab));
-      overviewTab.tabIndex = selected === overviewTab ? 0 : -1;
-      timelineTab.tabIndex = selected === timelineTab ? 0 : -1;
-      overview.hidden = selected !== overviewTab;
-      timelinePanel.hidden = selected !== timelineTab;
-      if (moveFocus) selected.focus();
+    const tasksPanel = document.createElement("section");
+    tasksPanel.id = "workspace-tasks-panel-36-6e";
+    tasksPanel.className = "workspace-tasks-panel-36-6e";
+    tasksPanel.setAttribute("role", "tabpanel");
+    tasksPanel.setAttribute("aria-labelledby", tasksTab.id);
+    tasksPanel.tabIndex = 0;
+    tasksPanel.hidden = true;
+    const evidencePanel = document.createElement("section");
+    evidencePanel.id = "workspace-evidence-panel-36-6e";
+    evidencePanel.className = "workspace-evidence-panel-36-6e";
+    evidencePanel.setAttribute("role", "tabpanel");
+    evidencePanel.setAttribute("aria-labelledby", evidenceTab.id);
+    evidencePanel.tabIndex = 0;
+    evidencePanel.hidden = true;
+
+    const currentCase = () => {
+      const entry = caseByRef.get(projection.case_ref);
+      return generation === workspaceDetailGeneration && shell.isConnected && caseDetailContent.contains(shell) &&
+        reviewRouteRef() === projection.case_ref && entry?.projection === projection && entry?.item === caseItem;
+    };
+    let evidenceChecklistSlot;
+    let roleBadge = badges.querySelector(".review-role-pending");
+    let priorityBadge = badges.querySelector(".review-priority-pending");
+    const setVerifiedLabels = (role, priority) => {
+      roleBadge.textContent = sourceRoleDisplayLabel(role);
+      priorityBadge.textContent = priorityDisplayLabel(priority);
+      roleBadge.className = "review-status-badge review-role-pending";
+      priorityBadge.className = "review-status-badge review-priority-pending";
+    };
+    const resetVerifiedLabels = () => setVerifiedLabels("unknown", "undetermined");
+    const renderChecklistCitation = (container, citation, className = "workspace-evidence-citation-36-6e") => {
+      const article = document.createElement("article");
+      article.className = className;
+      article.append(element("h5", citation.title), element("p", citation.summary));
+      const technical = document.createElement("details");
+      technical.className = "technical-details";
+      technical.append(element("summary", "참고 ID 보기"), element("p", citation.citation_id));
+      article.append(technical);
+      container.append(article);
+    };
+    const renderEvidenceChecklist = (checklist) => {
+      evidenceChecklistSlot.replaceChildren();
+      if (!checklist || checklist.status !== "available") return;
+      const group = document.createElement("section");
+      group.className = "workspace-evidence-group-36-6e";
+      group.append(element("h4", "점검표에서 확인한 참고 근거"),
+        element("p", "일반적인 조사 방법과 한계를 설명하는 참고자료입니다. 이 검토 건의 공격이나 침해를 입증하는 직접 증거가 아닙니다."));
+      checklist.citations.forEach((citation) => renderChecklistCitation(group, citation));
+      evidenceChecklistSlot.append(group);
+    };
+
+    const taskPanelContent = renderWorkspaceChecklistPanel(projection, caseItem, {
+      isCurrent: () => currentCase(),
+      isLatest: (requestId) => requestId === latestChecklistRequest,
+      nextRequestId: () => ++latestChecklistRequest,
+      onReset: () => { resetVerifiedLabels(); renderEvidenceChecklist(null); },
+      onValidated: (checklist) => {
+        setVerifiedLabels(checklist.source_role, checklist.review_priority);
+        renderEvidenceChecklist(checklist);
+      }
+    });
+    tasksPanel.append(taskPanelContent);
+
+    evidencePanel.append(element("h4", "판단 근거와 분석 한계"),
+      element("p", "기존 분석 결과가 확인한 범위와 해석의 한계를 표시합니다. 원본 증거와 원문 로그는 이 화면에 포함하지 않습니다."));
+    const limitationGroup = document.createElement("section");
+    limitationGroup.className = "workspace-evidence-group-36-6e";
+    limitationGroup.append(element("h5", `분석 한계 ${projection.limitation_count}개`),
+      element("p", "분석 한계 수는 추가 확인 항목 수나 확인할 작업 수가 아닙니다."));
+    const safeLimitationCopy = new Map([
+      ["동일 계정의 후속 로그인 관계만으로 계정 탈취를 판단할 수 없습니다.", "동일 계정의 시간 관계만으로 계정 탈취를 판단할 수 없습니다."],
+      ["실패 후 성공 관계만으로 이전 실패의 주체와 성공 주체가 동일하다고 판단할 수 없습니다.", "실패와 성공 기록의 시간 관계만으로 같은 주체인지 판단할 수 없습니다."]
+    ]);
+    const safeLimitations = caseItem?.limitations.map((item) => safeLimitationCopy.get(item.text)).filter(Boolean) ?? [];
+    if (safeLimitations.length) textList(limitationGroup, [...new Set(safeLimitations)], false, "안전한 상세 설명을 표시할 수 없습니다.");
+    else limitationGroup.append(element("p", "세부 한계를 안전한 고정 문구로 표시할 수 없습니다."));
+    evidencePanel.append(limitationGroup);
+    const meaningDisclosure = document.createElement("details");
+    meaningDisclosure.className = "workspace-evidence-disclosure-36-6e";
+    meaningDisclosure.append(element("summary", "판단 의미와 해석 한계 보기"),
+      element("p", "탐지된 활동은 침해나 공격 성공을 확정하지 않습니다."),
+      element("p", "분석상 연결은 관찰 사이의 지원 관계이며 인과관계를 확정하지 않습니다."),
+      element("p", "역할은 신뢰된 내부 관찰 metadata에서 검증된 경우에만 표시됩니다. 검토 우선순위는 위험도와 별개의 검토 순서 제안입니다."));
+    const technicalDisclosure = document.createElement("details");
+    technicalDisclosure.className = "technical-details workspace-evidence-disclosure-36-6e";
+    technicalDisclosure.append(element("summary", "기술 정보 보기"),
+      element("p", `내부 projection: ${projection.schema_version}`),
+      element("p", `분석 한계 수: ${projection.limitation_count}`));
+    evidencePanel.append(meaningDisclosure, technicalDisclosure);
+    evidenceChecklistSlot = document.createElement("div");
+    evidenceChecklistSlot.className = "workspace-checklist-evidence-36-6e";
+    evidencePanel.append(evidenceChecklistSlot);
+    const guidanceIntro = document.createElement("section");
+    guidanceIntro.className = "workspace-evidence-group-36-6e";
+    guidanceIntro.append(element("h4", "일반 조사 참고자료"),
+      element("p", "도움말은 일반적인 조사 방법을 설명하며, 이 검토 건의 직접 증거가 아닙니다. 도움말과 점검표는 각각 별도로 요청됩니다."));
+    const guidance = renderGuidance(caseItem, currentCase);
+    guidanceIntro.append(guidance);
+    evidencePanel.append(guidanceIntro);
+
+    const panels = [overview, timelinePanel, tasksPanel, evidencePanel];
+    const selectTab = (nextIndex, moveFocus) => {
+      const selectedIndex = Math.max(0, Math.min(tabs.length - 1, nextIndex));
+      tabs.forEach((tab, index) => {
+        const selected = index === selectedIndex;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        panels[index].hidden = !selected;
+      });
+      if (moveFocus) tabs[selectedIndex].focus();
     };
     tablist.addEventListener("click", (event) => {
-      const selected = event.target === timelineTab ? "timeline" : "overview";
-      selectTab(selected, false);
+      const index = tabs.indexOf(event.target.closest('[role="tab"]'));
+      if (index >= 0) selectTab(index, false);
     });
     tablist.addEventListener("keydown", (event) => {
-      const tabs = [overviewTab, timelineTab];
       const current = tabs.indexOf(event.target);
       if (current < 0) return;
       let next = current;
@@ -1860,9 +2162,9 @@
       else if (event.key === "End") next = tabs.length - 1;
       else return;
       event.preventDefault();
-      selectTab(next === 1 ? "timeline" : "overview", true);
+      selectTab(next, true);
     });
-    shell.append(heading, header, tablist, overview, timelinePanel, status);
+    shell.append(heading, header, tablist, ...panels);
     return shell;
   }
 
@@ -1909,6 +2211,7 @@
   }
 
   function clearPreviousResult() {
+    workspaceDetailGeneration += 1;
     currentReport = null;
     currentReportMode = null;
     reportDownload.hidden = true;

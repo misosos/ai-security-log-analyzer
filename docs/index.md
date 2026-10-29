@@ -48,6 +48,7 @@
 - [Phase 36.6A production 이식 설계](investigation_workspace_production_migration_design_36_6a.md) — 기존 API/projection을 유지하는 단계별 이식과 rollback 계약; dashboard·개요 구현 진행, 기존 UI rollback 유지, 실제 자료·조직 운영 `NO_GO`
 - [Phase 36.6B closed UI projection·navigation shell](investigation_workspace_projection_navigation_36_6b.md) · [Phase 36.6C dashboard·상세 개요](investigation_workspace_dashboard_overview_36_6c.md) — closed projection과 기존 hash route 사용; 기존 UI를 대체하지 않음, limitation은 분석 한계로만 표시하고 추가 확인 count는 생략; 새 화면 Chromium 200% equivalent 통과, 전체 앱 확대·Safari 미검증
 - [Phase 36.6D 활동 흐름 Timeline·비인과적 Relation](investigation_workspace_timeline_relation_36_6d.md) — 기존 19필드 projection을 유지하고 검증된 동일 snapshot의 순서·시간을 별도 불변 adapter로 표시; Safari·실제 기기 및 실제 자료·조직 운영은 미검증/NO_GO
+- [Phase 36.6E 확인할 작업·근거·명시적 점검표](investigation_workspace_tasks_evidence_36_6e.md) — 기존 checklist v2와 guidance를 명시적 사용자 요청으로 표시; projection·분석 결과 불변, Safari·실제 기기 NOT_TESTED, 실제 자료·조직 운영 NO_GO
 - [결정적 로컬 지식 검색·citation baseline](local_ai_lexical_retrieval_33_1.md) — Phase 33.1 시점의 internal/test-only 기준선; production 사례 도움말 연결은 [Phase 33.4](local_investigation_guidance_33_4.md) 참조
 - [Phase 33.4 근거 도움말](local_investigation_guidance_33_4.md) · [33.4A 수용 검수](local_investigation_guidance_acceptance_33_4a.md) — synthetic IP canary가 기존 public case/report 응답에 노출되어 `NO_GO`; Safari 검수 중단
 - [33.4B 공개 사례·보고서 개인정보 projection](public_investigation_privacy_33_4b.md) — schema 2 별칭 migration과 API·HTML·UI 경계; Safari 수동 재검수는 NOT_TESTED
