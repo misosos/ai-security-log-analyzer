@@ -19,13 +19,13 @@ const STATES = [
 ];
 const CHECKLIST_STATES = [
   'CHECKLIST_LOADING', 'CHECKLIST_AVAILABLE', 'CHECKLIST_REFUSED', 'CHECKLIST_STALE',
-  'CHECKLIST_TIMEOUT', 'CHECKLIST_RATE', 'CHECKLIST_UNAVAILABLE', 'CHECKLIST_RETRY',
+  'CHECKLIST_TIMEOUT', 'CHECKLIST_RATE', 'CHECKLIST_UNAVAILABLE', 'CHECKLIST_NETWORK', 'CHECKLIST_RETRY',
   'CHECKLIST_REAL',
 ];
 let currentScenario = 'startup';
 
 function checklistPayload(state) {
-  if (state === 'CHECKLIST_AVAILABLE') return {
+  if (state === 'CHECKLIST_AVAILABLE' || state === 'CHECKLIST_RENDER_EXCEPTION') return {
     schema: 'investigation-checklist/v2', status: 'available', source_role: 'application', source_role_label: '애플리케이션 로그', review_priority: 'review_soon',
     priority_meaning: 'analyst_review_order_only_not_security_risk', category: 'authentication',
     steps: [{text: '합성 자료의 coverage를 확인하세요.', purpose_code: 'manual_coverage',
@@ -230,19 +230,20 @@ async function assertWorkspaceReflow(page, label) {
     return {viewport: {width: innerWidth, height: innerHeight}, root_font_size: getComputedStyle(document.documentElement).fontSize,
       document: {scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth},
       body: {scrollWidth: document.body.scrollWidth, clientWidth: document.body.clientWidth}, panel_overflow,
-      clipped, target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44).length,
+      clipped, target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44).map((target) => ({
+        selector: target.selector, width: target.width, height: target.height})),
       target_gap_failures, layout_boxes};
   });
   measurements.push({equivalent200});
   if (equivalent200.document.scrollWidth > equivalent200.document.clientWidth ||
       equivalent200.body.scrollWidth > equivalent200.body.clientWidth || equivalent200.panel_overflow.length ||
-      equivalent200.clipped || equivalent200.target_size_failures || equivalent200.target_gap_failures.length) {
+      equivalent200.clipped || equivalent200.target_size_failures.length || equivalent200.target_gap_failures.length) {
     console.log(`${label}_200_PERCENT_DIAGNOSTIC ${JSON.stringify(equivalent200)}`);
   }
   requireSafe(equivalent200.root_font_size === '32px' &&
     equivalent200.document.scrollWidth <= equivalent200.document.clientWidth &&
     equivalent200.body.scrollWidth <= equivalent200.body.clientWidth && equivalent200.panel_overflow.length === 0 &&
-    equivalent200.clipped === 0 && equivalent200.target_size_failures === 0 && equivalent200.target_gap_failures.length === 0,
+    equivalent200.clipped === 0 && equivalent200.target_size_failures.length === 0 && equivalent200.target_gap_failures.length === 0,
   `${label}_200_PERCENT_REFLOW_FAILED`);
   await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
   await page.setViewportSize({width: 1440, height: 900});
@@ -278,8 +279,8 @@ function assertTargetGapGeometryContract() {
     'TARGET_GAP_WRAP_FALSE_FAILURE_REPRODUCTION_FAILED');
 }
 
-async function openReviewCase(page, index = 0) {
-  await page.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
+async function openReviewCase(page, index = 0, useLegacy = true) {
+  if (useLegacy) await page.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
   await page.locator(`#review-case-link-${index}`).click();
   await page.locator('#case-detail-view').waitFor({state: 'visible'});
   return page.locator('#case-detail-view .case-card');
@@ -494,6 +495,7 @@ async function main() {
   let externalRequests = 0;
   let stateForPage = 'DISABLED';
   let checklistRouteCalls = 0;
+  let cachedSyntheticSampleBody = null;
   try {
     server = await startServer(home);
     const response = await fetch(`${server.origin}/`);
@@ -519,7 +521,15 @@ async function main() {
         else await route.fulfill({status: 200, contentType: 'application/json',
           body: JSON.stringify(stateForPage === 'MULTI' ? pairStatus() : status(stateForPage))});
       } else if (url.pathname === '/api/v1/investigations/sample') {
-        await route.continue();
+        if (cachedSyntheticSampleBody !== null) {
+          await route.fulfill({status: 200, contentType: 'application/json', body: cachedSyntheticSampleBody});
+        } else {
+          const sampleResponse = await route.fetch();
+          const sampleBody = await sampleResponse.text();
+          if (!sampleResponse.ok) throw new Error('SYNTHETIC_SAMPLE_FIXTURE_UNAVAILABLE');
+          cachedSyntheticSampleBody = sampleBody;
+          await route.fulfill({response: sampleResponse, body: sampleBody});
+        }
       } else if (url.pathname === '/api/v1/investigations/guidance') {
         if (stateForPage === 'GUIDANCE_REAL') await route.continue();
         else await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -532,6 +542,9 @@ async function main() {
           })});
       } else if (url.pathname === '/api/v1/investigations/checklist') {
         if (stateForPage === 'CHECKLIST_REAL') await route.continue();
+        else if (stateForPage === 'CHECKLIST_RENDER_EXCEPTION') await route.fulfill({status: 200,
+          contentType: 'application/json', body: JSON.stringify(checklistPayload(stateForPage))});
+        else if (stateForPage === 'CHECKLIST_NETWORK') await route.abort('failed');
         else if (stateForPage === 'WORKSPACE_RACE') {
           await new Promise((resolveRequest) => setTimeout(resolveRequest, 300));
           await route.fulfill({status: 200, contentType: 'application/json',
@@ -809,7 +822,9 @@ async function main() {
       const checklistPage = await context.newPage();
       await checklistPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
       await checklistPage.locator('#sample-button').click();
-      const card = await openReviewCase(checklistPage);
+      const workspaceChecklist = checklistState === 'CHECKLIST_REAL';
+      const card = await openReviewCase(checklistPage, 0, !workspaceChecklist);
+      if (workspaceChecklist) await checklistPage.getByRole('tab', {name: '확인할 작업'}).click();
       const control = card.locator('.checklist-request');
       const calls = [];
       checklistPage.on('request', (request) => {
@@ -817,6 +832,9 @@ async function main() {
       });
       const before = await checklistPage.locator('#results').evaluate((node) => {
         const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
+        copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
+        copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+        copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
         return copy.innerText;
       });
       requireSafe(calls.length === 0, 'CHECKLIST_AUTOMATIC_REQUEST');
@@ -827,24 +845,43 @@ async function main() {
       if (checklistState === 'CHECKLIST_LOADING') {
         requireSafe(await card.locator('.checklist-status').textContent().then((text) => text.includes('확인하고 있습니다')) &&
           await control.isDisabled(), 'CHECKLIST_LOADING_STATE_MISSING');
+        await control.evaluate((node) => node.click());
       }
       await checklistPage.waitForFunction(() => !document.querySelector('.checklist-status')?.textContent.includes('확인하고 있습니다'));
       if (checklistState === 'CHECKLIST_RETRY') {
         await control.click();
         await checklistPage.waitForSelector('.checklist-result .checklist-tasks > li');
       }
+      if (checklistState === 'CHECKLIST_REAL') {
+        console.log(`CHECKLIST_REQUEST_COUNT scenario=${checklistState} count=${calls.length}`);
+      }
       requireSafe(calls.length === (checklistState === 'CHECKLIST_RETRY' ? 2 : 1), 'CHECKLIST_OPT_IN_COUNT_FAILED');
       const requestBody = JSON.parse(calls[0].postData() || '{}');
       requireSafe(Object.keys(requestBody).sort().join(',') === 'case_ref,schema_version' &&
         /^c_[0-9a-f]{24}$/.test(requestBody.case_ref), 'CHECKLIST_REQUEST_PRIVACY_FAILED');
       const rendered = await card.locator('.investigation-checklist').innerText();
+      if (checklistState === 'CHECKLIST_REAL') {
+        const responsePayload = await (await calls[0].response()).json();
+        const verifiedRole = await card.locator('.workspace-detail-header-36-6c .review-role-pending').textContent();
+        const verifiedPriority = await card.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent();
+        console.log(`CHECKLIST_REAL_STATE status=${responsePayload.status} steps=${responsePayload.steps.length} role=${responsePayload.source_role} priority=${responsePayload.review_priority} ui_state=${await card.locator('.workspace-checklist-status-36-6e').getAttribute('data-checklist-state')} task_buttons=${await card.locator('.workspace-task-choice-36-6e').count()} error_copy=${rendered.includes('점검표를 준비하지 못했습니다')} verified_role=${verifiedRole?.includes('SSH 인증 로그') === true} verified_priority=${verifiedPriority?.includes('우선 확인') === true}`);
+        requireSafe(await card.locator('.workspace-checklist-status-36-6e').getAttribute('data-checklist-state') === 'available' &&
+          !rendered.includes('점검표를 준비하지 못했습니다') &&
+          await card.locator('.workspace-task-choice-36-6e').count() > 0 &&
+          await card.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('SSH 인증 로그')) &&
+          await card.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('우선 확인')) &&
+          !rendered.includes('역할 정보 미확인'), 'CHECKLIST_REAL_AVAILABLE_UI_STATE_MISMATCH');
+      }
       if (checklistState === 'CHECKLIST_AVAILABLE' || checklistState === 'CHECKLIST_RETRY' ||
           checklistState === 'CHECKLIST_REAL') {
         requireSafe(rendered.includes('이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다.'),
           'CHECKLIST_ANALYSIS_INVARIANCE_EXPLANATION_MISSING');
-        requireSafe(rendered.includes('우선 확인') && !rendered.includes('review_soon'),
+        requireSafe((checklistState === 'CHECKLIST_REAL' ?
+          await card.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('우선 확인')) :
+          rendered.includes('우선 확인')) && !rendered.includes('review_soon'),
           'CHECKLIST_PRIORITY_RENDER_FAILED');
-        const why = card.locator('.checklist-task details').first();
+        const why = card.locator(checklistState === 'CHECKLIST_REAL' ?
+          '.workspace-task-references-36-6e' : '.checklist-task details').first();
         requireSafe(await why.count() === 1 && !(await why.evaluate((node) => node.open)),
           'CHECKLIST_CITATION_NOT_PROGRESSIVE');
         const whySummary = why.locator('summary').first();
@@ -852,15 +889,18 @@ async function main() {
         await whySummary.press('Enter');
         requireSafe(await why.evaluate((node) => node.open), 'CHECKLIST_WHY_DISCLOSURE_FAILED');
         const expandedChecklist = await card.locator('.investigation-checklist').innerText();
-        requireSafe(expandedChecklist.includes('일반 조사 방법과 한계') &&
-          expandedChecklist.includes('이 사례의 직접 증거가 아닙니다'),
+        requireSafe((checklistState === 'CHECKLIST_REAL' ?
+          expandedChecklist.includes('일반적인 조사 참고자료이며 이 사례의 직접 증거가 아닙니다') :
+          expandedChecklist.includes('일반 조사 방법과 한계') &&
+            expandedChecklist.includes('이 사례의 직접 증거가 아닙니다')),
         'CHECKLIST_CITATION_BOUNDARY_RENDER_FAILED');
         if (checklistState === 'CHECKLIST_REAL') {
-          requireSafe(rendered.includes('검증된 관찰 역할: SSH 인증 로그') &&
+          requireSafe(await card.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('SSH 인증 로그')) &&
             !rendered.includes('역할 정보 미확인'), 'CHECKLIST_VERIFIED_ROLE_LABEL_MISSING');
         }
       } else if (checklistState === 'CHECKLIST_STALE' || checklistState === 'CHECKLIST_TIMEOUT' ||
-                 checklistState === 'CHECKLIST_RATE' || checklistState === 'CHECKLIST_UNAVAILABLE') {
+                 checklistState === 'CHECKLIST_RATE' || checklistState === 'CHECKLIST_UNAVAILABLE' ||
+                 checklistState === 'CHECKLIST_NETWORK') {
         requireSafe(rendered.length > 0, 'CHECKLIST_FIXED_ERROR_NOT_RENDERED');
       } else {
         requireSafe(rendered.includes('안전 또는 비위험 판정이 아닙니다'), 'CHECKLIST_REFUSAL_SEMANTICS_FAILED');
@@ -872,8 +912,46 @@ async function main() {
       }
       requireSafe(await checklistPage.locator('#results').evaluate((node) => {
         const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
+        copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
+        copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+        copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
         return copy.innerText;
       }) === before, 'CHECKLIST_ANALYSIS_MUTATION');
+      if (checklistState === 'CHECKLIST_REAL') {
+        await checklistPage.evaluate(() => {
+          const originalReplaceChildren = Element.prototype.replaceChildren;
+          Element.prototype.replaceChildren = function (...nodes) {
+            const result = originalReplaceChildren.apply(this, nodes);
+            if (this.matches('.workspace-task-detail-36-6e') && !window.__checklistRenderFailureInjected) {
+              window.__checklistRenderFailureInjected = true;
+              throw new Error('SYNTHETIC_RENDER_FAILURE_CANARY');
+            }
+            return result;
+          };
+        });
+        stateForPage = 'CHECKLIST_RENDER_EXCEPTION';
+        currentScenario = 'CHECKLIST_RENDER_EXCEPTION';
+        calls.length = 0;
+        await control.click();
+        await checklistPage.waitForFunction(() => document.querySelector('.workspace-checklist-status-36-6e')?.dataset.checklistState === 'error');
+        const failedRender = await card.locator('.investigation-checklist').innerText();
+        requireSafe(calls.length === 1 &&
+          await card.locator('.workspace-checklist-status-36-6e').getAttribute('data-checklist-state') === 'error' &&
+          failedRender.includes('점검표를 준비하지 못했습니다') &&
+          await card.locator('.workspace-task-choice-36-6e').count() === 0 &&
+          await card.locator('.workspace-checklist-evidence-36-6e .workspace-evidence-citation-36-6e').count() === 0 &&
+          await card.locator('.workspace-detail-header-36-6c .review-role-pending').textContent().then((text) => text.includes('역할 미확인')) &&
+          await card.locator('.workspace-detail-header-36-6c .review-priority-pending').textContent().then((text) => text.includes('확인 순서 미정')) &&
+          !failedRender.includes('SYNTHETIC_RENDER_FAILURE_CANARY'), 'CHECKLIST_RENDER_EXCEPTION_PARTIAL_UI_REMAINS');
+        console.log('CHECKLIST_RENDER_EXCEPTION count=1 status=error partial_steps=0 role=unknown priority=undetermined');
+        requireSafe(await checklistPage.locator('#results').evaluate((node) => {
+          const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
+          copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
+          copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+          copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
+          return copy.innerText;
+        }) === before, 'CHECKLIST_RENDER_EXCEPTION_ANALYSIS_MUTATION');
+      }
       for (const width of [320, 640, 1024, 1440]) {
         await checklistPage.setViewportSize({width, height: 900});
         requireSafe(await checklistPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),

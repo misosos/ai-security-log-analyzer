@@ -222,7 +222,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 .workspace-task-detail-36-6e h5, .workspace-task-detail-36-6e p { margin: 0; }
 .workspace-task-detail-36-6e h5 { line-height: 1.5; }
 .workspace-task-detail-36-6e p { max-width: 72ch; line-height: 1.55; overflow-wrap: anywhere; }
-.workspace-task-detail-36-6e summary, .workspace-evidence-panel-36-6e summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #164c89; font-weight: 750; }
+.workspace-task-detail-36-6e summary, .workspace-evidence-panel-36-6e summary { min-width: 44px; min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #164c89; font-weight: 750; }
 .workspace-task-citation-36-6e, .workspace-evidence-citation-36-6e { min-width: 0; margin-block: .65rem; padding: .75rem; border-inline-start: 3px solid #8295aa; background: #f7f9fc; overflow-wrap: anywhere; }
 .workspace-task-citation-36-6e h5, .workspace-evidence-citation-36-6e h5 { margin: 0 0 .35rem; }
 .workspace-task-citation-36-6e p, .workspace-evidence-citation-36-6e p { margin: .3rem 0; line-height: 1.55; }

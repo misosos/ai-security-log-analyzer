@@ -1770,6 +1770,7 @@
         if (button.disabled) return;
         const requestId = controller.nextRequestId();
         const isCurrentRequest = () => controller.isCurrent() && controller.isLatest(requestId);
+        const stagedOutput = document.createElement("div");
         button.disabled = true;
         output.replaceChildren();
         output.hidden = true;
@@ -1796,11 +1797,14 @@
               UNAVAILABLE: "승인 근거를 확인할 수 없어 점검표를 준비하지 못했습니다."
             };
             if (!errorCopy || payload.user_message !== expectedMessages[payload.error_code]) failContract();
+            stagedOutput.replaceChildren();
+            if (errorCopy[0] === "stale") stagedOutput.append(element("p", "최신 분석 결과에서 사례를 다시 선택하세요."));
+            else if (errorCopy[0] === "unavailable") stagedOutput.append(element("p", "이 응답은 안전 또는 비위험 판정이 아닙니다. 기존 분석 결과를 확인하세요."));
+            if (!isCurrentRequest()) return;
+            output.replaceChildren(...stagedOutput.childNodes);
+            output.hidden = false;
             status.dataset.checklistState = errorCopy[0];
             status.textContent = errorCopy[1];
-            output.hidden = false;
-            if (errorCopy[0] === "stale") output.append(element("p", "최신 분석 결과에서 사례를 다시 선택하세요."));
-            else if (errorCopy[0] === "unavailable") output.append(element("p", "이 응답은 안전 또는 비위험 판정이 아닙니다. 기존 분석 결과를 확인하세요."));
             return;
           }
           let checklist;
@@ -1808,31 +1812,32 @@
             checklist = validateChecklistResponse(payload);
           } catch (_validationError) {
             if (!isCurrentRequest()) return;
+            stagedOutput.append(element("p", "검증 실패는 안전 또는 비위험 판정이 아닙니다."));
+            if (!isCurrentRequest()) return;
+            output.replaceChildren(...stagedOutput.childNodes);
+            output.hidden = false;
             status.dataset.checklistState = "unavailable";
             status.textContent = "점검표 응답을 검증할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
-            output.hidden = false;
-            output.append(element("p", "검증 실패는 안전 또는 비위험 판정이 아닙니다."));
             return;
           }
           if (!isCurrentRequest()) return;
-          controller.onValidated(checklist);
-          status.dataset.checklistState = checklist.status;
+          let successMessage;
           if (checklist.status === "refused") {
-            status.textContent = "승인된 근거로 점검표를 만들 수 없습니다. 이는 안전 판정이 아닙니다.";
-            output.append(element("p", checklist.explanation.text),
+            successMessage = "승인된 근거로 점검표를 만들 수 없습니다. 이는 안전 판정이 아닙니다.";
+            stagedOutput.append(element("p", checklist.explanation.text),
               element("p", "참고자료는 일반 조사 방법과 한계이며, 사례의 직접 증거가 아닙니다."));
           } else if (checklist.status === "unavailable") {
-            status.textContent = "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
-            output.append(element("p", "이 상태는 위협이 없다는 뜻이 아닙니다."));
+            successMessage = "점검표를 준비할 수 없습니다. 기존 분석 결과는 그대로 유지됩니다.";
+            stagedOutput.append(element("p", "이 상태는 위협이 없다는 뜻이 아닙니다."));
           } else {
-            status.textContent = "검증된 점검표를 불러왔습니다. 확인 순서는 기존 위험도와 별개입니다.";
-            output.append(element("p", "이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다."),
+            successMessage = "검증된 점검표를 불러왔습니다. 확인 순서는 기존 위험도와 별개입니다.";
+            stagedOutput.append(element("p", "이 점검표는 기존 탐지·관계·위험도·사례 결과를 변경하지 않습니다."),
               element("p", "검증된 관찰 역할과 확인 순서는 기존 위험도와 별도 정보입니다."),
               element("p", "참고자료는 일반적인 조사 방법과 한계이며 사례의 직접 증거가 아닙니다."),
               element("p", checklist.explanation.text, "workspace-checklist-explanation-36-6e"));
-            if (checklist.source_role === "unknown") output.append(element("p",
+            if (checklist.source_role === "unknown") stagedOutput.append(element("p",
               "역할을 안전하게 확인할 수 없어 추측하지 않았습니다. 이는 낮은 위험이나 검토 불필요를 뜻하지 않습니다. 기존 분석 결과를 확인하세요."));
-            if (checklist.review_priority === "undetermined") output.append(element("p",
+            if (checklist.review_priority === "undetermined") stagedOutput.append(element("p",
               "확인 순서는 정해지지 않았습니다. 이는 안전·낮은 위험·검토 불필요를 뜻하지 않습니다."));
             const masterDetail = document.createElement("div");
             masterDetail.className = "workspace-task-master-detail-36-6e";
@@ -1863,7 +1868,7 @@
               refs.className = "workspace-task-references-36-6e";
               refs.append(element("summary", `관련 근거 ${references.length}개`),
                 element("p", "일반적인 조사 참고자료이며 이 사례의 직접 증거가 아닙니다."));
-              references.forEach((citation) => renderChecklistCitation(refs, citation, "workspace-task-citation-36-6e"));
+              references.forEach((citation) => controller.renderCitation(refs, citation, "workspace-task-citation-36-6e"));
               detailPanel.append(refs);
             };
             checklist.steps.forEach((step, index) => {
@@ -1876,15 +1881,22 @@
               list.append(item);
             });
             masterDetail.append(list, detailPanel);
-            output.append(masterDetail);
+            stagedOutput.append(masterDetail);
             renderSelectedTask(0);
           }
+          if (!isCurrentRequest()) return;
+          controller.onValidated(checklist);
+          output.replaceChildren(...stagedOutput.childNodes);
           output.hidden = false;
+          status.dataset.checklistState = checklist.status;
+          status.textContent = successMessage;
         } catch (_error) {
           if (isCurrentRequest()) {
+            output.replaceChildren();
+            output.hidden = false;
+            controller.onReset();
             status.dataset.checklistState = "error";
             status.textContent = "점검표를 준비하지 못했습니다. 기존 분석 결과는 그대로 유지됩니다.";
-            output.hidden = false;
             output.append(element("p", "내부 오류 내용은 표시하지 않습니다. 다시 확인하려면 버튼을 직접 누르세요."));
           }
         } finally {
@@ -2092,6 +2104,7 @@
       isCurrent: () => currentCase(),
       isLatest: (requestId) => requestId === latestChecklistRequest,
       nextRequestId: () => ++latestChecklistRequest,
+      renderCitation: renderChecklistCitation,
       onReset: () => { resetVerifiedLabels(); renderEvidenceChecklist(null); },
       onValidated: (checklist) => {
         setVerifiedLabels(checklist.source_role, checklist.review_priority);
