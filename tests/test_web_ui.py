@@ -79,10 +79,14 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "legend" for tag, _ in nodes)
     assert any(attrs.get("id") == "local-upload" and "hidden" in attrs for _, attrs in nodes)
     assert {attrs.get("name") for tag, attrs in nodes if tag == "input"} == {
-        "application_file", "ssh_file", "access_file", "audit_file"
+        "application_file", "ssh_file", "access_file", "audit_file", "input_mode"
     }
     assert all("required" in attrs and attrs.get("type") == "file"
-               for tag, attrs in nodes if tag == "input")
+               for tag, attrs in nodes if tag == "input" and attrs.get("type") == "file")
+    assert any(tag == "textarea" and attrs.get("id") == "log-text" and
+               attrs.get("aria-describedby") == "text-help text-byte-count text-line-count text-error"
+               for tag, attrs in nodes)
+    assert any(tag == "select" and attrs.get("id") == "text-source" for tag, attrs in nodes)
     assert not any(attr.startswith("on") or attr == "style" for _, attrs in nodes for attr in attrs)
     assert not any(attrs.get("src", "").startswith(("http:", "https:", "data:")) for _, attrs in nodes)
     assert "<style" not in source.lower() and "<script>" not in source.lower()

@@ -178,6 +178,25 @@ a { color: #064f96; text-underline-offset: .2em; }
 .workspace-detail-badges-36-6c { display: flex; flex-wrap: wrap; gap: .5rem; }
 .workspace-overview-time-36-6c { color: #344d69; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
 .workspace-overview-summary-36-6c { max-width: 68ch; line-height: 1.6; }
+.input-mode-choice { display: flex; flex-wrap: wrap; gap: .75rem 1rem; }
+.input-mode-choice label { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; padding: .35rem .5rem; }
+.input-mode-choice input { width: 1.1rem; height: 1.1rem; }
+.text-input-panel { display: grid; gap: .75rem; margin-block: 1rem; min-width: 0; }
+.text-input-panel h3, .text-input-panel p { margin: 0; }
+.text-input-panel label { font-weight: 700; }
+.text-input-panel select, .text-input-panel textarea { width: 100%; max-width: 72ch; min-width: 0; padding: .7rem .8rem; border: 1px solid #9aaabd; border-radius: .35rem; background: #fff; color: #17253a; font: inherit; }
+.text-input-panel select { min-height: 44px; }
+.text-input-panel textarea { min-height: 12rem; line-height: 1.55; resize: vertical; overflow-wrap: anywhere; }
+.text-input-panel textarea::placeholder { color: #52657a; opacity: 1; }
+.text-input-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.text-input-scope-notice { display: grid; gap: .5rem; padding: 1rem 1.1rem; border-inline-start: .25rem solid #164c89; background: #edf4fb; }
+.text-input-scope-notice h3, .text-input-scope-notice p { margin: 0; }
+.text-input-scope-notice p { line-height: 1.55; }
+@media (max-width: 40rem) {
+  .input-mode-choice { align-items: flex-start; flex-direction: column; gap: .5rem; }
+  .text-input-panel textarea { min-height: 10rem; }
+  .text-input-actions > button, #local-button { min-height: 44px; }
+}
 .workspace-shell-status { color: #344d69; line-height: 1.5; }
 .workspace-overview-36-6c { display: grid; gap: 1rem; min-width: 0; border-top: 1px solid #d3dce7; padding-top: 1.25rem; }
 .workspace-overview-36-6c > h4 { margin: 0; font-size: 1.2rem; }

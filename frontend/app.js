@@ -3,11 +3,44 @@
 (() => {
   const ENDPOINT = "/api/v1/investigations/sample";
   const LOCAL_ENDPOINT = "/api/v1/investigations";
+  const LOCAL_TEXT_ENDPOINT_36_8C = "/api/v1/investigations/text";
   const GUIDANCE_ENDPOINT = "/api/v1/investigations/guidance";
   const CHECKLIST_ENDPOINT = "/api/v1/investigations/checklist";
   const GUIDANCE_CORPUS_DIGEST = "fe7cc8cbd77319c4ce9a1af731da004eeffc08d272c0ee04174db96eb2897ac6";
   const MAX_RESPONSE_BYTES = 128 * 1024;
   const MAX_REPORT_BYTES = 32 * 1024;
+  const MAX_PASTED_TEXT_BYTES_36_8C = 32 * 1024;
+  const MAX_PASTED_WIRE_BYTES_36_8C = 96 * 1024;
+  const MAX_PASTED_LINE_BYTES_36_8C = 2048;
+  const MAX_PASTED_LINES_36_8C = 512;
+  const TEXT_SOURCE_LABELS_36_8C = Object.freeze({
+    application: "애플리케이션 인증 로그", ssh: "SSH 인증 로그", access: "웹 접근 로그"
+  });
+  const TEXT_SCOPE_NOTICE_36_8C = "입력한 로그 범위에서만 분석한 결과입니다. 다른 로그나 누락된 시간대에 발생한 활동은 포함되지 않을 수 있습니다.";
+  const TEXT_API_ERRORS_36_8C = Object.freeze({
+    LOCAL_ONLY: [403, "이 기능은 로컬 서버에서만 사용할 수 있습니다.", "127.0.0.1에 직접 연결하십시오.", false, null],
+    INVALID_MEDIA_TYPE: [415, "JSON 텍스트 입력 요청이 필요합니다.", "application/json UTF-8 요청을 사용하십시오.", false, null],
+    QUERY_NOT_ALLOWED: [400, "조회 조건을 받을 수 없습니다.", "조회 조건 없이 다시 시도하십시오.", false, null],
+    INVALID_JSON: [400, "요청 본문을 읽을 수 없습니다.", "JSON 문법과 UTF-8 인코딩을 확인하십시오.", false, null],
+    INVALID_SCHEMA: [422, "요청 형식을 확인할 수 없습니다.", "필수 항목과 허용된 형식을 확인하십시오.", false, null],
+    UNKNOWN_SOURCE: [422, "지원하지 않는 로그 종류입니다.", "애플리케이션, SSH 또는 접근 로그를 선택하십시오.", false, "source"],
+    EMPTY_INPUT: [400, "로그가 비었거나 공백만 있습니다.", "내용이 있는 로그를 입력하십시오.", false, "log_text"],
+    INVALID_UTF8: [400, "UTF-8 로그로 읽을 수 없습니다.", "유효한 UTF-8 텍스트를 사용하십시오.", false, "log_text"],
+    INVALID_TEXT: [400, "로그 텍스트에 허용되지 않는 문자가 있습니다.", "제어 문자를 제거하고 UTF-8 텍스트를 확인하십시오.", false, "log_text"],
+    PARSER_INCOMPATIBLE: [400, "선택한 로그 종류와 입력 형식이 맞지 않습니다.", "로그 종류와 지원 형식을 확인하십시오.", false, "log_text"],
+    TEXT_TOO_LARGE: [413, "로그 텍스트 크기가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", false, "log_text"],
+    ENVELOPE_TOO_LARGE: [413, "요청 크기가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", false, null],
+    LINE_TOO_LONG: [413, "로그 한 줄이 길이 한도를 넘었습니다.", "입력 범위를 줄이거나 줄 형식을 확인하십시오.", false, "log_text"],
+    LINE_COUNT_EXCEEDED: [413, "로그 줄 수가 한도를 넘었습니다.", "더 작은 로그 범위를 선택하십시오.", false, "log_text"],
+    BODY_TIMEOUT: [503, "요청 본문 처리 시간이 초과되었습니다.", "잠시 후 다시 요청하십시오.", true, null],
+    ANALYSIS_TIMEOUT: [503, "분석 응답 시간이 초과되었습니다.", "더 작은 로그 범위로 다시 시도하십시오.", true, null],
+    CONCURRENCY_LIMIT: [429, "현재 처리 가능한 요청 수를 넘었습니다.", "현재 분석이 끝난 뒤 다시 시도하십시오.", true, null],
+    RATE_LIMITED: [429, "요청 횟수 한도에 도달했습니다.", "잠시 후 다시 시도하십시오.", true, null],
+    ANALYSIS_FAILED: [500, "분석을 완료하지 못했습니다.", "입력 형식을 확인한 뒤 다시 시도하십시오.", true, null],
+    CASE_PROJECTION_FAILED: [500, "조사 사례를 구성하지 못했습니다.", "잠시 후 다시 시도하십시오.", true, null],
+    REPORT_GENERATION_FAILED: [500, "HTML 보고서를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true, null],
+    RESPONSE_INVALID: [500, "결과를 준비하지 못했습니다.", "잠시 후 다시 시도하십시오.", true, null]
+  });
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
   const MAX_CASES = 64;
@@ -195,9 +228,23 @@
   const localChoiceDetails = document.getElementById("local-choice-details");
   const localButton = document.getElementById("local-button");
   const localStatus = document.getElementById("local-status");
+  const inputModeFile = document.getElementById("input-mode-file");
+  const inputModeText = document.getElementById("input-mode-text");
+  const fileInputPanel = document.getElementById("file-input-panel");
+  const textInputPanel = document.getElementById("text-input-panel");
+  const textSource = document.getElementById("text-source");
+  const logText = document.getElementById("log-text");
+  const textError = document.getElementById("text-error");
+  const textByteCount = document.getElementById("text-byte-count");
+  const textLineCount = document.getElementById("text-line-count");
+  const textClear = document.getElementById("text-clear");
+  const textScopeNotice = document.getElementById("text-input-scope-notice");
+  const textScopeSourceLabel = document.getElementById("text-input-source-label");
   const resultsHeading = document.getElementById("results-heading");
   const resultContext = document.getElementById("result-context");
   let pending = false;
+  let localInputMode36_8C = "file";
+  let localTextRequestGeneration36_8C = 0;
   let currentReport = null;
   let currentReportMode = null;
   let currentInvestigation = null;
@@ -745,12 +792,36 @@
         !value.html.includes('http-equiv="Content-Security-Policy"') ||
         !value.html.includes(mode === "sample" ? "교육용 합성 샘플 결과입니다." :
           "사용자가 제공한 로그를 로컬에서 분석한 결과입니다.") ||
-        (mode === "local" && value.html.includes("교육용 합성 샘플 결과입니다.")) ||
+        (mode !== "sample" && value.html.includes("교육용 합성 샘플 결과입니다.")) ||
+        (mode === "text" && !value.html.includes(TEXT_SCOPE_NOTICE_36_8C)) ||
         !value.html.includes("script-src 'none'") ||
         !value.html.includes("connect-src 'none'") ||
         !value.html.includes("style-src 'sha256-") ||
         /<(?:script|iframe|object|embed|link|img)\b|\b(?:src|href|onload|onclick)\s*=|https?:\/\/|@import|url\s*\(/i.test(value.html)) failContract();
     return value;
+  }
+
+  function validateTextInvestigationEnvelope36_8C(value, submittedSource) {
+    closedRecord(value, ["schema_version", "input_scope", "result"]);
+    if (value.schema_version !== "1") failContract();
+    closedRecord(value.input_scope, ["mode", "source", "notice_code"]);
+    if (value.input_scope.mode !== "text" ||
+        !Object.hasOwn(TEXT_SOURCE_LABELS_36_8C, value.input_scope.source) ||
+        value.input_scope.source !== submittedSource ||
+        value.input_scope.notice_code !== "PARTIAL_SINGLE_SOURCE") failContract();
+    const result = validateInvestigationResponse(value.result, "local");
+    if (!result.report_export.html.includes(TEXT_SCOPE_NOTICE_36_8C)) failContract();
+    return {result, source: value.input_scope.source};
+  }
+
+  function validateTextApiError36_8C(value, status) {
+    closedRecord(value, ["error_code", "user_message", "recovery_action", "retryable", "field"]);
+    const expected = TEXT_API_ERRORS_36_8C[value.error_code];
+    if (!expected || status !== expected[0] || value.user_message !== expected[1] ||
+        value.recovery_action !== expected[2] || value.retryable !== expected[3] ||
+        value.field !== expected[4]) failContract();
+    return {user_message: expected[1], recovery_action: expected[2],
+      retryable: expected[3], field: expected[4]};
   }
 
   function validateInvestigationResponse(value, mode = "sample") {
@@ -2245,6 +2316,8 @@
     reviewRouteExpired.hidden = true;
     if (reviewRouteRef() !== null) history.replaceState(null, "", `${location.pathname}${location.search}`);
     capabilityMessage.textContent = "";
+    textScopeNotice.hidden = true;
+    textScopeSourceLabel.textContent = "";
   }
 
   function renderError(failure, mode = "sample") {
@@ -2322,7 +2395,7 @@
     }
   }
 
-  function renderResult(data, mode) {
+  function renderResult(data, mode, textScope = null) {
     currentInvestigation = data;
     currentInvestigationMode = mode;
     if (reviewRouteRef() !== null) history.replaceState(null, "", `${location.pathname}${location.search}`);
@@ -2330,6 +2403,8 @@
     resultContext.textContent = mode === "sample" ?
       "예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
       "사용자가 제공한 로그를 로컬에서 분석했습니다. 탐지와 관계는 침해 확정이 아닙니다.";
+    textScopeNotice.hidden = textScope === null;
+    textScopeSourceLabel.textContent = textScope === null ? "" : TEXT_SOURCE_LABELS_36_8C[textScope.source];
     renderSummary(data);
     renderCaseOverview(data.cases);
     renderIndependentObservations(data.independent_observations);
@@ -2338,7 +2413,7 @@
       "실제 로그 웹 업로드, LLM 설명과 Linux Audit 집계는 이 체험에서 제공되지 않습니다." :
       "실제 로그는 이 로컬 요청에서만 분석합니다. LLM 설명과 Linux Audit 집계는 제공되지 않습니다.";
     currentReport = data.report_export;
-    currentReportMode = mode;
+    currentReportMode = textScope === null ? mode : "text";
     reportDownload.hidden = false;
     results.hidden = false;
     resultsDashboard.hidden = false;
@@ -2368,11 +2443,158 @@
     error.hidden = false;
   }
 
+  function clearTextFieldError36_8C() {
+    textSource.removeAttribute("aria-invalid");
+    logText.removeAttribute("aria-invalid");
+    textError.textContent = "";
+    textError.hidden = true;
+  }
+
+  function textFieldError36_8C(field, message) {
+    const target = field === "source" ? textSource : logText;
+    target.setAttribute("aria-invalid", "true");
+    textError.textContent = message;
+    textError.hidden = false;
+  }
+
+  function updateTextCounts36_8C() {
+    const value = logText.value;
+    textByteCount.textContent = String(new TextEncoder().encode(value).byteLength);
+    const lines = value === "" ? 0 : value.split("\n").length - (value.endsWith("\n") ? 1 : 0);
+    textLineCount.textContent = String(lines);
+  }
+
+  function validateTextInputLocally36_8C(source, value) {
+    if (!Object.hasOwn(TEXT_SOURCE_LABELS_36_8C, source)) {
+      return ["source", "지원하는 로그 종류를 선택하십시오."];
+    }
+    if (typeof value !== "string" || !value.trim()) return ["log_text", "로그가 비었거나 공백만 있습니다."];
+    if ([...value].some((character) => /\p{Cc}/u.test(character) && !"\t\r\n".includes(character)) ||
+        /\r(?!\n)/.test(value)) {
+      return ["log_text", "로그 텍스트에 허용되지 않는 문자가 있습니다."];
+    }
+    if (new TextEncoder().encode(value).byteLength > MAX_PASTED_TEXT_BYTES_36_8C) {
+      return ["log_text", "로그 텍스트 크기가 한도를 넘었습니다."];
+    }
+    if (new TextEncoder().encode(JSON.stringify({schema_version: 1, source, log_text: value})).byteLength >
+        MAX_PASTED_WIRE_BYTES_36_8C) return [null, "요청 크기가 한도를 넘었습니다."];
+    const lines = value.split("\n");
+    if (lines.at(-1) === "") lines.pop();
+    if (lines.length > MAX_PASTED_LINES_36_8C) return ["log_text", "로그 줄 수가 한도를 넘었습니다."];
+    if (lines.some((line) => new TextEncoder().encode(line).byteLength > MAX_PASTED_LINE_BYTES_36_8C)) {
+      return ["log_text", "로그 한 줄이 길이 한도를 넘었습니다."];
+    }
+    return null;
+  }
+
+  function setLocalInputMode36_8C(nextMode) {
+    if (pending) {
+      inputModeFile.checked = localInputMode36_8C === "file";
+      inputModeText.checked = localInputMode36_8C === "text";
+      return;
+    }
+    if (nextMode === localInputMode36_8C) return;
+    const hasPendingInput = localInputMode36_8C === "text" ? logText.value.length > 0 :
+      FILE_FIELDS.some(([, id]) => document.getElementById(id).files.length > 0);
+    if (hasPendingInput && !window.confirm("입력 방식을 바꾸면 현재 입력 내용이 지워집니다. 계속하시겠습니까?")) {
+      inputModeFile.checked = localInputMode36_8C === "file";
+      inputModeText.checked = localInputMode36_8C === "text";
+      return;
+    }
+    localTextRequestGeneration36_8C += 1;
+    if (localInputMode36_8C === "text") {
+      logText.value = "";
+      clearTextFieldError36_8C();
+      updateTextCounts36_8C();
+    } else {
+      FILE_FIELDS.forEach(([, id]) => { document.getElementById(id).value = ""; });
+      clearFieldErrors();
+    }
+    localInputMode36_8C = nextMode;
+    inputModeFile.checked = nextMode === "file";
+    inputModeText.checked = nextMode === "text";
+    fileInputPanel.disabled = nextMode !== "file";
+    fileInputPanel.hidden = nextMode !== "file";
+    textInputPanel.hidden = nextMode !== "text";
+    localButton.textContent = nextMode === "text" ? "로그 분석하기" : "실제 로그 분석하기";
+    localStatus.textContent = nextMode === "text" ?
+      "로그를 붙여넣고 명시적으로 분석을 요청할 수 있습니다." :
+      "로컬 서버에서 세 파일을 선택해 분석할 수 있습니다.";
+  }
+
+  function lockLocalInputControls36_8C(locked) {
+    inputModeFile.disabled = locked;
+    inputModeText.disabled = locked;
+    fileInputPanel.disabled = locked || localInputMode36_8C !== "file";
+    textSource.disabled = locked;
+    logText.disabled = locked;
+    textClear.disabled = locked;
+  }
+
+  function clearTextInputOnExit36_8C() {
+    localTextRequestGeneration36_8C += 1;
+    logText.value = "";
+    clearTextFieldError36_8C();
+    updateTextCounts36_8C();
+  }
+
   async function requestLocalInvestigation(event) {
     event.preventDefault();
     if (pending || !loopbackPage) return;
     clearFieldErrors();
+    clearTextFieldError36_8C();
     clearPreviousResult();
+    if (localInputMode36_8C === "text") {
+      const source = textSource.value;
+      const logValue = logText.value;
+      const invalid = validateTextInputLocally36_8C(source, logValue);
+      if (invalid) {
+        if (invalid[0] !== null) textFieldError36_8C(invalid[0], invalid[1]);
+        renderError(new PublicFailure(invalid[1], "로그 종류와 입력 한도를 확인한 뒤 다시 시도하십시오.", false), "local");
+        return;
+      }
+      const generation = ++localTextRequestGeneration36_8C;
+      pending = true;
+      button.disabled = true;
+      localButton.disabled = true;
+      lockLocalInputControls36_8C(true);
+      localButton.textContent = "로그 분석 중";
+      localStatus.textContent = "붙여넣은 로그를 로컬 서버에서 분석하고 있습니다.";
+      try {
+        const response = await fetch(LOCAL_TEXT_ENDPOINT_36_8C, {
+          method: "POST",
+          headers: {Accept: "application/json", "Content-Type": "application/json"},
+          credentials: "omit",
+          body: JSON.stringify({schema_version: 1, source, log_text: logValue})
+        });
+        const payload = await boundedJson(response);
+        if (!response.ok) {
+          const error = validateTextApiError36_8C(payload, response.status);
+          if (error.field) textFieldError36_8C(error.field, error.user_message);
+          throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
+        }
+        const validated = validateTextInvestigationEnvelope36_8C(payload, source);
+        if (generation !== localTextRequestGeneration36_8C || localInputMode36_8C !== "text" || localSection.hidden) return;
+        renderResult(validated.result, "local", {source: validated.source});
+        currentReportMode = "text";
+        localStatus.textContent = "텍스트 로그 분석이 완료되었습니다. 입력 내용은 화면에서 지웠습니다.";
+        logText.value = "";
+        updateTextCounts36_8C();
+      } catch (failure) {
+        if (generation !== localTextRequestGeneration36_8C) return;
+        clearPreviousResult();
+        logText.value = "";
+        updateTextCounts36_8C();
+        renderError(failure, "local");
+      } finally {
+        pending = false;
+        button.disabled = false;
+        localButton.disabled = false;
+        lockLocalInputControls36_8C(false);
+        localButton.textContent = localInputMode36_8C === "text" ? "로그 분석하기" : "실제 로그 분석하기";
+      }
+      return;
+    }
     const files = FILE_FIELDS.map(([field, inputId]) => [field, document.getElementById(inputId).files]);
     const missing = files.find(([, selected]) => selected.length !== 1);
     if (missing) {
@@ -2385,6 +2607,7 @@
     button.disabled = true;
     localButton.disabled = true;
     localButton.textContent = "로컬 로그 분석 중";
+    lockLocalInputControls36_8C(true);
     localStatus.textContent = "로그를 전송하고 조사 결과를 준비하고 있습니다.";
     const form = new FormData();
     files.forEach(([field, selected]) => form.append(field, selected[0]));
@@ -2409,9 +2632,24 @@
       button.disabled = false;
       localButton.disabled = false;
       localButton.textContent = "실제 로그 분석하기";
+      lockLocalInputControls36_8C(false);
     }
   }
 
+  inputModeFile.addEventListener("change", () => setLocalInputMode36_8C("file"));
+  inputModeText.addEventListener("change", () => setLocalInputMode36_8C("text"));
+  logText.addEventListener("input", () => { clearTextFieldError36_8C(); updateTextCounts36_8C(); });
+  textClear.addEventListener("click", () => {
+    if (pending) return;
+    clearTextInputOnExit36_8C();
+    localStatus.textContent = "붙여넣은 로그 입력을 지웠습니다.";
+    logText.focus();
+  });
+  ["nav-start", "nav-audit", "nav-live", "nav-results"].forEach((id) => {
+    const navigationButton = document.getElementById(id);
+    if (navigationButton) navigationButton.addEventListener("click", clearTextInputOnExit36_8C);
+  });
+  window.addEventListener("pagehide", clearTextInputOnExit36_8C);
   button.addEventListener("click", requestSampleInvestigation);
   localForm.addEventListener("submit", requestLocalInvestigation);
   reportButton.addEventListener("click", downloadReport);

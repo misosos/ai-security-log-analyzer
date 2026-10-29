@@ -204,10 +204,15 @@
       <details id="local-choice-details" class="secondary-details">
         <summary>파일 선택과 분석 안내</summary>
       <p class="local-warning">직접 실행한 로컬 서버에서만 사용하세요. 공개 서버에는 민감한 로그를 업로드하지 마세요.</p>
-      <p>애플리케이션 인증·SSH 인증·웹 접근 로그를 각각 해당 입력칸에 선택해야 합니다. 세 파일 모두 필요합니다.</p>
+      <p>파일 업로드에서는 애플리케이션 인증·SSH 인증·웹 접근 로그 세 파일이 모두 필요합니다. 텍스트 직접 입력은 로그 종류 하나를 선택합니다.</p>
       <p>이 분석은 외부 LLM을 호출하지 않으며 로그·결과·보고서를 서버에 영구 저장하지 않습니다. 비정상 종료 뒤 임시 파일이 남을 수 있습니다.</p>
       <form id="local-form" novalidate>
-        <fieldset>
+        <fieldset class="input-mode-choice">
+          <legend>입력 방식</legend>
+          <label for="input-mode-file"><input id="input-mode-file" name="input_mode" type="radio" value="file" checked> 파일 업로드</label>
+          <label for="input-mode-text"><input id="input-mode-text" name="input_mode" type="radio" value="text"> 텍스트 직접 입력</label>
+        </fieldset>
+        <fieldset id="file-input-panel">
           <legend>분석할 로그 선택 — 세 파일 모두 필수</legend>
           <div class="file-field">
             <label for="application-file">애플리케이션 인증 로그 (필수)</label>
@@ -227,8 +232,29 @@
             <input id="access-file" name="access_file" type="file" required aria-describedby="access-help access-error">
             <p id="access-error" class="field-error" hidden></p>
           </div>
+          <p id="local-limits">UTF-8 텍스트만 지원합니다(압축 파일 제외). 각 파일 32 KiB, 합계 80 KiB, 요청 전체 96 KiB 이하이며 한 줄 2048바이트·파일당 512줄 이하입니다.</p>
         </fieldset>
-        <p id="local-limits">UTF-8 텍스트만 지원합니다(압축 파일 제외). 각 파일 32 KiB, 합계 80 KiB, 요청 전체 96 KiB 이하이며 한 줄 2048바이트·파일당 512줄 이하입니다.</p>
+        <section id="text-input-panel" class="text-input-panel" aria-labelledby="text-input-heading" hidden>
+          <h3 id="text-input-heading">로그 텍스트 직접 입력</h3>
+          <label for="text-source">로그 종류</label>
+          <select id="text-source" name="text_source" aria-describedby="text-help text-error">
+            <option value="application">애플리케이션 인증 로그</option>
+            <option value="ssh">SSH 인증 로그</option>
+            <option value="access">웹 접근 로그</option>
+          </select>
+          <label for="log-text">로그 내용</label>
+          <textarea id="log-text" name="log_text" rows="10" spellcheck="false" autocomplete="off"
+            aria-describedby="text-help text-byte-count text-line-count text-error"
+            placeholder="합성 또는 검토가 승인된 로그 내용을 직접 붙여넣으세요."></textarea>
+          <p id="text-help">최대 32 KiB, 512줄, 한 줄 최대 2048바이트입니다. JSON 요청 전체는 96 KiB 이하입니다. 서버에서도 다시 검증합니다.</p>
+          <p><span id="text-byte-count">0</span> / 32 KiB · <span id="text-line-count">0</span> / 512줄</p>
+          <p id="text-error" class="field-error" hidden></p>
+          <p class="local-warning">붙여넣은 로그는 사용자가 분석을 요청할 때 이 로컬 서버로 전송됩니다. 외부 서버로 보내지 않으며 브라우저 저장소에는 저장하지 않습니다. 실제 사용자 자료는 현재 검증 범위 밖입니다.</p>
+          <p>부분 입력 범위만 분석되며, 다른 로그나 시간대는 포함되지 않을 수 있습니다. 결과가 없다고 안전하다는 뜻은 아니며 탐지나 관계가 침해를 확정하지 않습니다.</p>
+          <div class="text-input-actions">
+            <button id="text-clear" type="button">입력 지우기</button>
+          </div>
+        </section>
         <button id="local-button" type="submit">실제 로그 분석하기</button>
       </form>
       <p id="local-status" class="status" aria-live="polite">로컬 서버에서 파일을 선택해 분석할 수 있습니다.</p>
@@ -293,6 +319,12 @@
       <div id="results-dashboard" class="workspace-dashboard-36-6c">
       <h2 id="results-heading">분석 결과</h2>
       <p id="result-context" class="result-notice"><strong>예시 데이터 결과입니다.</strong> 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다.</p>
+      <aside id="text-input-scope-notice" class="text-input-scope-notice" aria-labelledby="text-input-source-label" hidden>
+        <h3>텍스트 입력 분석 범위</h3>
+        <p><strong id="text-input-source-label"></strong> 한 종류의 입력 로그만 분석했습니다.</p>
+        <p>입력한 로그 범위에서만 분석한 결과입니다. 다른 로그나 누락된 시간대에 발생한 활동은 포함되지 않을 수 있습니다.</p>
+        <p>입력한 로그 종류는 사례의 검증된 역할과 다를 수 있습니다. 관계가 발견되지 않아도 공격 경로가 없다는 뜻은 아니며, 탐지 결과는 침해 확정이 아닙니다.</p>
+      </aside>
       <p>확인된 활동과 검토 건은 침해나 공격 성공의 확정이 아닙니다.</p>
       <section aria-labelledby="summary-heading">
         <h3 id="summary-heading">결과 요약</h3>

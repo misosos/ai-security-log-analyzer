@@ -2,7 +2,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import {chromium} from '@playwright/test';
 import {spawn} from 'node:child_process';
-import {mkdtemp, mkdir, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, rm} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
@@ -14,7 +14,7 @@ const eventId = (n) => `LIVE-EVENT-000001-${String(n).padStart(6, '0')}`;
 const CANARY = ['synthetic', 'private', 'account', '28', '1'].join('-');
 const STATES = [
   'base', 'live-empty', 'pending', 'applied', 'paused', 'no-longer-matches',
-  'private-event-rejected', 'degraded', 'failed', 'replay-gap', 'checkpoint-reset-explanation',
+  'private-event-rejected', 'degraded', 'failed', 'replay-gap', 'checkpoint-reset-explanation', 'text-input',
   'three-file-error', 'linux-audit-error',
 ];
 const CHECKLIST_STATES = [
@@ -88,18 +88,20 @@ async function assertWorkspaceReflow(page, label) {
           if (node.scrollWidth > node.clientWidth + 1) panel_overflow.push(selector);
         }
       }
-      const clipped = [...document.querySelectorAll('body *')].filter((node) => {
+      const clippedNodes = [...document.querySelectorAll('body *')].filter((node) => {
         if (!visible(node) || node.matches('.review-card-summary, .icon-sprite')) return false;
         const style = getComputedStyle(node);
         const clipsX = ['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1;
         const clipsY = ['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1;
         return clipsX || clipsY;
-      }).length;
+      });
+      const clipped = clippedNodes.length;
       const targetSelectors = '#workspace-nav-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
         '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
         '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
         '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
-        '.workspace-evidence-panel-36-6e .guidance-request';
+        '.workspace-evidence-panel-36-6e .guidance-request, .input-mode-choice label, ' +
+        '#text-source, #log-text, #text-clear, #local-button';
       const targets = [...document.querySelectorAll(targetSelectors)].filter(visible).map((node) => {
         const rect = node.getBoundingClientRect();
         return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
@@ -112,7 +114,10 @@ async function assertWorkspaceReflow(page, label) {
           node.matches('.workspace-task-detail-36-6e summary') ? '.workspace-task-detail-36-6e summary' :
           node.matches('.workspace-evidence-panel-36-6e summary') ? '.workspace-evidence-panel-36-6e summary' :
           node.matches('.workspace-evidence-panel-36-6e select') ? '.workspace-evidence-panel-36-6e select' :
-          '.workspace-evidence-panel-36-6e .guidance-request',
+          node.matches('.workspace-evidence-panel-36-6e .guidance-request') ? '.workspace-evidence-panel-36-6e .guidance-request' :
+          node.matches('.input-mode-choice label') ? '.input-mode-choice label' :
+          node.matches('#text-source') ? '#text-source' : node.matches('#log-text') ? '#log-text' :
+          node.matches('#text-clear') ? '#text-clear' : '#local-button',
         left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
         width: rect.width, height: rect.height};
       });
@@ -179,7 +184,8 @@ async function assertWorkspaceReflow(page, label) {
       '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
       '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
       '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
-      '.workspace-evidence-panel-36-6e .guidance-request';
+      '.workspace-evidence-panel-36-6e .guidance-request, .input-mode-choice label, ' +
+      '#text-source, #log-text, #text-clear, #local-button';
     const targets = [...document.querySelectorAll(targetSelectors)].filter(shown).map((node) => {
       const rect = node.getBoundingClientRect();
       return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
@@ -192,7 +198,10 @@ async function assertWorkspaceReflow(page, label) {
         node.matches('.workspace-task-detail-36-6e summary') ? '.workspace-task-detail-36-6e summary' :
         node.matches('.workspace-evidence-panel-36-6e summary') ? '.workspace-evidence-panel-36-6e summary' :
         node.matches('.workspace-evidence-panel-36-6e select') ? '.workspace-evidence-panel-36-6e select' :
-        '.workspace-evidence-panel-36-6e .guidance-request',
+        node.matches('.workspace-evidence-panel-36-6e .guidance-request') ? '.workspace-evidence-panel-36-6e .guidance-request' :
+        node.matches('.input-mode-choice label') ? '.input-mode-choice label' :
+        node.matches('#text-source') ? '#text-source' : node.matches('#log-text') ? '#log-text' :
+        node.matches('#text-clear') ? '#text-clear' : '#local-button',
         left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
         width: rect.width, height: rect.height};
     });
@@ -206,12 +215,13 @@ async function assertWorkspaceReflow(page, label) {
         first_rect: {left: a.left, top: a.top, right: a.right, bottom: a.bottom},
         second_rect: {left: b.left, top: b.top, right: b.right, bottom: b.bottom}});
     }
-    const clipped = [...document.querySelectorAll('body *')].filter((node) => {
+    const clippedNodes = [...document.querySelectorAll('body *')].filter((node) => {
       if (!shown(node) || node.matches('.review-card-summary, .icon-sprite')) return false;
       const style = getComputedStyle(node);
       return (['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1) ||
         (['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1);
-    }).length;
+    });
+    const clipped = clippedNodes.length;
     const layout_boxes = ['.app-shell', '#workspace-nav', '#workspace-nav details', '.workspace-nav-list',
       '.app-area', '.app-content', '#review-back-link'].flatMap((selector) => {
       const node = document.querySelector(selector);
@@ -230,7 +240,8 @@ async function assertWorkspaceReflow(page, label) {
     return {viewport: {width: innerWidth, height: innerHeight}, root_font_size: getComputedStyle(document.documentElement).fontSize,
       document: {scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth},
       body: {scrollWidth: document.body.scrollWidth, clientWidth: document.body.clientWidth}, panel_overflow,
-      clipped, target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44).map((target) => ({
+      clipped, clipped_nodes: clippedNodes.slice(0, 8).map((node) => ({tag: node.tagName.toLowerCase(), id: node.id, className: String(node.className).slice(0, 80)})),
+      target_size_failures: targets.filter((target) => target.width < 44 || target.height < 44).map((target) => ({
         selector: target.selector, width: target.width, height: target.height})),
       target_gap_failures, layout_boxes};
   });
@@ -253,6 +264,7 @@ async function assertWorkspaceReflow(page, label) {
       document: measurement.equivalent200.document, body: measurement.equivalent200.body,
       panel_overflow_count: measurement.equivalent200.panel_overflow.length,
       clipped: measurement.equivalent200.clipped,
+      clipped_nodes: measurement.equivalent200.clipped_nodes,
       target_size_failures: measurement.equivalent200.target_size_failures,
       target_gap_failures: measurement.equivalent200.target_gap_failures.length,
     }};
@@ -463,7 +475,7 @@ async function scan(page, state) {
   const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
     state.startsWith('workspace-checklist-') ||
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
-      'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired',
+      'three-file-error', 'linux-audit-error', 'text-input', 'TEXT_API_REAL', 'review-list', 'review-detail', 'review-route-expired',
       'workspace-projection-shell', 'workspace-timeline', 'workspace-direct-entry-expired', 'workspace-checklist-race',
       'workspace-evidence',
       'workspace-checklist-invalid-response',
@@ -520,6 +532,10 @@ async function main() {
         if (stateForPage === 'DISABLED') await route.continue();
         else await route.fulfill({status: 200, contentType: 'application/json',
           body: JSON.stringify(stateForPage === 'MULTI' ? pairStatus() : status(stateForPage))});
+      } else if (url.pathname === '/api/v1/investigations/text') {
+        await route.continue();
+      } else if (url.pathname === '/api/v1/investigations') {
+        await route.continue();
       } else if (url.pathname === '/api/v1/investigations/sample') {
         if (cachedSyntheticSampleBody !== null) {
           await route.fulfill({status: 200, contentType: 'application/json', body: cachedSyntheticSampleBody});
@@ -745,6 +761,24 @@ async function main() {
           await page.locator('#linux-audit-file').getAttribute('aria-invalid') === 'true' &&
           await page.locator('#linux-audit-field-error').isVisible(), 'LINUX_ERROR_LINK_FAILED');
       }
+      if (stateName === 'text-input') {
+        await page.locator('#nav-local').click();
+        if (!(await page.locator('#local-choice-details').evaluate((node) => node.open)))
+          await page.locator('#local-choice-details summary').click();
+        await page.locator('#input-mode-text').check();
+        requireSafe(await page.locator('#text-input-panel').isVisible() &&
+          await page.locator('#log-text').isVisible() && await page.locator('#text-source').isVisible(),
+        'TEXT_INPUT_CONTROLS_MISSING');
+        await page.locator('#log-text').fill('보안');
+        requireSafe(await page.locator('#text-byte-count').textContent() === '6' &&
+          await page.locator('#text-line-count').textContent() === '1', 'TEXT_UTF8_COUNTER_FAILED');
+        await page.locator('#text-clear').click();
+        requireSafe(await page.locator('#log-text').inputValue() === '' &&
+          await page.locator('#text-byte-count').textContent() === '0', 'TEXT_CLEAR_CONTROL_FAILED');
+        requireSafe(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          'TEXT_INPUT_HORIZONTAL_OVERFLOW');
+        await assertWorkspaceReflow(page, 'TEXT_INPUT');
+      }
       for (const width of [320, 640, 1024, 1440]) {
         await page.setViewportSize({width, height: 900});
         requireSafe(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -754,6 +788,103 @@ async function main() {
       await scan(page, stateName);
       await page.close();
     }
+    stateForPage = 'DISABLED';
+    currentScenario = 'TEXT_API_REAL';
+    const textApiPage = await context.newPage();
+    await textApiPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await textApiPage.locator('#nav-local').click();
+    if (!(await textApiPage.locator('#local-choice-details').evaluate((node) => node.open)))
+      await textApiPage.locator('#local-choice-details summary').click();
+    await textApiPage.locator('#input-mode-text').check();
+    await textApiPage.locator('#text-source').selectOption('ssh');
+    const syntheticSsh = await readFile(join(ROOT, 'sample_logs', 'ssh_auth.log'), 'utf8');
+    await textApiPage.locator('#log-text').fill(syntheticSsh);
+    const textRequests = [];
+    textApiPage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations/text') textRequests.push(request);
+    });
+    requireSafe(textRequests.length === 0, 'TEXT_API_AUTOMATIC_POST');
+    await textApiPage.locator('#local-button').click();
+    await textApiPage.locator('#results').waitFor({state: 'visible'});
+    await textApiPage.waitForFunction(() => document.querySelector('#local-status')?.textContent.includes('완료'));
+    const textResponse = await (await textRequests[0].response()).json();
+    const textRequestBody = JSON.parse(textRequests[0].postData() || '{}');
+    requireSafe(textRequests.length === 1 && textResponse.schema_version === '1' &&
+      textResponse.input_scope.mode === 'text' && textResponse.input_scope.source === 'ssh' &&
+      textResponse.input_scope.notice_code === 'PARTIAL_SINGLE_SOURCE' &&
+      Object.keys(textRequestBody).sort().join(',') === 'log_text,schema_version,source' &&
+      textRequestBody.source === 'ssh' && textRequestBody.schema_version === 1 &&
+      await textApiPage.locator('#text-input-scope-notice').isVisible() &&
+      await textApiPage.locator('#text-input-source-label').textContent().then((text) => text === 'SSH 인증 로그') &&
+      await textApiPage.locator('#log-text').inputValue().then((value) => value === '') &&
+      await textApiPage.locator('#text-input-scope-notice').textContent().then((text) =>
+        text.includes('다른 로그나 누락된 시간대') && text.includes('검증된 역할')),
+    'TEXT_API_REAL_SCOPE_OR_CLEAR_FAILED');
+    const textReport = textResponse.result.report_export.html;
+    requireSafe(textReport.includes('입력한 로그 범위에서만 분석한 결과입니다') &&
+      textReport.includes('다른 로그나 누락된 시간대'), 'TEXT_API_REPORT_SCOPE_NOTICE_MISSING');
+    await textApiPage.setViewportSize({width: 320, height: 568});
+    requireSafe(await textApiPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      'TEXT_RESULT_320_OVERFLOW');
+    await scan(textApiPage, 'TEXT_API_REAL');
+    await textApiPage.close();
+    for (const source of ['application', 'access']) {
+      currentScenario = `TEXT_API_REAL_${source.toUpperCase()}`;
+      const sourcePage = await context.newPage();
+      await sourcePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+      await sourcePage.locator('#nav-local').click();
+      if (!(await sourcePage.locator('#local-choice-details').evaluate((node) => node.open)))
+        await sourcePage.locator('#local-choice-details summary').click();
+      await sourcePage.locator('#input-mode-text').check();
+      await sourcePage.locator('#text-source').selectOption(source);
+      const logText = await readFile(join(ROOT, 'sample_logs',
+        source === 'application' ? 'brute_force.log' : 'web_shell.log'), 'utf8');
+      await sourcePage.locator('#log-text').fill(logText);
+      const requests = [];
+      sourcePage.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/api/v1/investigations/text') requests.push(request);
+      });
+      requireSafe(requests.length === 0, `TEXT_API_${source.toUpperCase()}_AUTOMATIC_POST`);
+      await sourcePage.locator('#local-button').click();
+      await sourcePage.locator('#results').waitFor({state: 'visible'});
+      await sourcePage.waitForFunction(() => document.querySelector('#local-status')?.textContent.includes('완료'));
+      const responseBody = await (await requests[0].response()).json();
+      requireSafe(requests.length === 1 && responseBody.input_scope.source === source &&
+        await sourcePage.locator('#text-input-source-label').textContent().then((text) =>
+          text === (source === 'application' ? '애플리케이션 인증 로그' : '웹 접근 로그')) &&
+        responseBody.result.report_export.html.includes('입력한 로그 범위에서만 분석한 결과입니다'),
+      `TEXT_API_${source.toUpperCase()}_REAL_RESULT_FAILED`);
+      if (source === 'access') requireSafe(responseBody.result.case_summary.case_count === 0 &&
+        responseBody.result.case_summary.independent_observation_count > 0 &&
+        await sourcePage.locator('#result-empty').isHidden(), 'TEXT_API_ACCESS_SCOPE_MISREPRESENTED');
+      console.log(`TEXT_API_REAL_SOURCE source=${source} cases=${responseBody.result.case_summary.case_count} independent=${responseBody.result.case_summary.independent_observation_count}`);
+      await sourcePage.close();
+    }
+    currentScenario = 'FILE_API_REAL';
+    const fileApiPage = await context.newPage();
+    await fileApiPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await fileApiPage.locator('#nav-local').click();
+    if (!(await fileApiPage.locator('#local-choice-details').evaluate((node) => node.open)))
+      await fileApiPage.locator('#local-choice-details summary').click();
+    const filePaths = [
+      join(ROOT, 'sample_logs', 'brute_force.log'),
+      join(ROOT, 'sample_logs', 'ssh_auth.log'),
+      join(ROOT, 'sample_logs', 'web_shell.log'),
+    ];
+    for (const [index, field] of ['application-file', 'ssh-file', 'access-file'].entries())
+      await fileApiPage.locator(`#${field}`).setInputFiles(filePaths[index]);
+    const fileRequests = [];
+    fileApiPage.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/investigations') fileRequests.push(request);
+    });
+    await fileApiPage.locator('#local-button').click();
+    await fileApiPage.locator('#results').waitFor({state: 'visible'});
+    requireSafe(fileRequests.length === 1 &&
+      (await fileRequests[0].response()).status() === 200 &&
+      !await fileApiPage.locator('#text-input-scope-notice').isVisible(),
+    'FILE_UPLOAD_EXISTING_ENDPOINT_REGRESSION');
+    console.log('FILE_API_REAL status=200 posts=1 text_scope_notice=false');
+    await fileApiPage.close();
     stateForPage = 'DISABLED';
     const guidancePage = await context.newPage();
     await guidancePage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});

@@ -22,6 +22,9 @@ class Node {
     this.disabled = false;
     this.focused = false;
     this.files = [];
+    this.value = "";
+    this.checked = false;
+    this.required = false;
   }
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((child) => child.textContent).join(""); }
@@ -31,7 +34,7 @@ class Node {
   removeAttribute(name) { delete this.attributes[name]; }
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolled = true; }
-  addEventListener(name, listener) { this.listener = listener; }
+  addEventListener(name, listener) { this.listeners ||= {}; this.listeners[name] = listener; this.listener = listener; }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
@@ -46,7 +49,10 @@ const ids = [
   "capability-message", "report-download", "report-button",
   "local-form", "local-upload", "local-choice-button", "local-choice-details", "local-button", "local-status", "results-heading", "result-context",
   "application-file", "ssh-file", "access-file",
-  "application-error", "ssh-error", "access-error"
+  "application-error", "ssh-error", "access-error", "input-mode-file", "input-mode-text",
+  "file-input-panel", "text-input-panel", "text-source", "log-text", "text-help", "text-error",
+  "text-byte-count", "text-line-count", "text-clear", "text-input-scope-notice", "text-input-source-label",
+  "nav-start", "nav-audit", "nav-live", "nav-results"
   ,"local-action-card", "audit-action-card", "audit-choice-button", "linux-audit-file",
   "workspace-current-title", "workspace-current-description"
 ];
@@ -65,11 +71,23 @@ function sectionNamed(root, name) {
 
 function makeApp(initial, hostname = "127.0.0.1") {
   const nodes = Object.fromEntries(ids.map((id) => [id, new Node("div")]));
+  nodes["input-mode-file"].tagName = "input";
+  nodes["input-mode-text"].tagName = "input";
+  nodes["input-mode-file"].checked = true;
+  nodes["file-input-panel"].tagName = "fieldset";
+  nodes["text-input-panel"].tagName = "section";
+  nodes["text-input-panel"].hidden = true;
+  nodes["text-source"].tagName = "select";
+  nodes["text-source"].value = "application";
+  nodes["log-text"].tagName = "textarea";
+  nodes["text-input-scope-notice"].hidden = true;
+  nodes["text-error"].hidden = true;
   let response = initial;
   let httpStatus = 200;
   let fetchCount = 0;
   let pendingFetch = null;
   let failFetch = false;
+  let confirmResult = true;
   const fetchCalls = [];
   const downloads = [];
   const revoked = [];
@@ -111,6 +129,7 @@ function makeApp(initial, hostname = "127.0.0.1") {
     let used = false;
     return {
       ok: httpStatus < 400,
+      status: httpStatus,
       headers: {get: (name) => name === "content-type" ? "application/json" : String(bytes.length)},
       body: {getReader: () => ({
         read: async () => {
@@ -124,12 +143,12 @@ function makeApp(initial, hostname = "127.0.0.1") {
     };
   };
   vm.runInNewContext(script, {document, fetch, FormData: FormDataStub, history, location,
-    window: {location, history, addEventListener() {}, scrollTo() {}},
+    window: {location, history, addEventListener() {}, scrollTo() {}, confirm: () => confirmResult},
     TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
   return {
     nodes, downloads, revoked, body,
     click: () => nodes["sample-button"].listener(),
-    submit: () => nodes["local-form"].listener({preventDefault: () => {}}),
+    submit: () => nodes["local-form"].listeners.submit({preventDefault: () => {}}),
     download: () => nodes["report-button"].listener(),
     fetchCount: () => fetchCount,
     fetchCalls,
@@ -140,7 +159,8 @@ function makeApp(initial, hostname = "127.0.0.1") {
       pendingFetch = new Promise((resolve) => { release = resolve; });
       return () => { pendingFetch = null; release(); };
     },
-    setNetworkFailure: (value) => { failFetch = value; }
+    setNetworkFailure: (value) => { failFetch = value; },
+    setConfirmResult: (value) => { confirmResult = value; }
   };
 }
 
@@ -293,6 +313,11 @@ async function main() {
   assert.equal(nodes["result-empty"].hidden, false, "one empty state carries the safety limit");
   if (supplied.local) {
     const local = makeApp(supplied.local);
+    assert.equal(local.nodes["input-mode-file"].checked, true, "file upload remains the default mode");
+    assert.equal(local.nodes["text-input-panel"].hidden, true);
+    assert.equal(local.nodes["text-source"].tagName, "select");
+    assert.equal(local.nodes["log-text"].tagName, "textarea");
+    assert.equal(local.fetchCount(), 0, "opening the input screen never submits text");
     const selected = {name: "browser-only-name.log"};
     ["application-file", "ssh-file", "access-file"].forEach((id) => {
       local.nodes[id].files = [selected];
@@ -391,6 +416,72 @@ async function main() {
     await local.click();
     assert.equal(local.nodes["ssh-error"].hidden, true, "sample restart clears local field errors");
     assert.equal(local.nodes.results.hidden, false);
+
+    const text = makeApp(supplied.local);
+    text.nodes["input-mode-text"].checked = true;
+    text.nodes["input-mode-text"].listeners.change();
+    assert.equal(text.nodes["text-input-panel"].hidden, false);
+    assert.equal(text.fetchCount(), 0, "choosing text mode never submits automatically");
+    text.nodes["text-source"].value = "ssh";
+    text.nodes["log-text"].value = "synthetic ssh line";
+    const textResult = JSON.parse(JSON.stringify(supplied.local));
+    const notice = "입력한 로그 범위에서만 분석한 결과입니다. 다른 로그나 누락된 시간대에 발생한 활동은 포함되지 않을 수 있습니다.";
+    textResult.report_export.html = textResult.report_export.html.replace("</body>", `<p>${notice}</p></body>`);
+    textResult.report_export.byte_count = new TextEncoder().encode(textResult.report_export.html).byteLength;
+    text.setResponse({schema_version: "1", input_scope: {
+      mode: "text", source: "ssh", notice_code: "PARTIAL_SINGLE_SOURCE"
+    }, result: textResult});
+    await text.submit();
+    assert.equal(text.fetchCalls.length, 1);
+    assert.equal(text.fetchCalls[0].url, "/api/v1/investigations/text");
+    assert.equal(text.fetchCalls[0].options.credentials, "omit");
+    assert.equal(text.fetchCalls[0].options.headers["Content-Type"], "application/json");
+    assert.deepEqual(Object.keys(JSON.parse(text.fetchCalls[0].options.body)).sort(),
+      ["log_text", "schema_version", "source"]);
+    assert.equal(JSON.parse(text.fetchCalls[0].options.body).source, "ssh");
+    assert.equal(text.nodes.results.hidden, false, `closed text envelope renders validated result: ${text.nodes["error-message"].textContent}`);
+    assert.equal(text.nodes["text-input-scope-notice"].hidden, false);
+    assert.equal(text.nodes["text-input-source-label"].textContent, "SSH 인증 로그");
+    assert.equal(text.nodes["log-text"].value, "", "successful submission clears sensitive input");
+    text.download();
+    assert.equal(text.downloads.length, 1, "text report uses existing safe download path");
+    text.nodes["log-text"].value = "unsent text cleared on navigation";
+    text.nodes["nav-start"].listener();
+    assert.equal(text.nodes["log-text"].value, "", "leaving the input screen clears unsent text");
+    text.nodes["log-text"].value = "synthetic unsent draft";
+    text.setConfirmResult(false);
+    text.nodes["input-mode-file"].checked = true;
+    text.nodes["input-mode-file"].listeners.change();
+    assert.equal(text.nodes["input-mode-text"].checked, true, "cancelled switch preserves selected mode");
+    assert.equal(text.nodes["log-text"].value, "synthetic unsent draft", "cancelled switch preserves text");
+    text.setConfirmResult(true);
+    text.nodes["input-mode-file"].checked = true;
+    text.nodes["input-mode-file"].listeners.change();
+    assert.equal(text.nodes["log-text"].value, "", "approved switch clears previous text");
+    assert.equal(text.nodes["text-input-panel"].hidden, true);
+
+    const invalidEnvelope = {schema_version: "1", input_scope: {
+      mode: "text", source: "application", notice_code: "PARTIAL_SINGLE_SOURCE"
+    }, result: supplied.local};
+    text.nodes["input-mode-text"].checked = true;
+    text.nodes["input-mode-text"].listeners.change();
+    text.nodes["text-source"].value = "ssh";
+    text.nodes["log-text"].value = "synthetic input";
+    text.setResponse(invalidEnvelope);
+    await text.submit();
+    assert.equal(text.nodes.results.hidden, true, "mismatched response scope is rejected without partial rendering");
+    assert.equal(text.nodes["text-input-scope-notice"].hidden, true);
+    assert.equal(text.nodes["error-message"].textContent, "결과 형식을 확인할 수 없습니다.");
+
+    text.setResponse({error_code: "EMPTY_INPUT", user_message: "로그가 비었거나 공백만 있습니다.",
+      recovery_action: "내용이 있는 로그를 입력하십시오.", retryable: false, field: "log_text"});
+    text.setHttpStatus(400);
+    text.nodes["log-text"].value = "synthetic input";
+    await text.submit();
+    assert.equal(text.nodes["log-text"].attributes["aria-invalid"], "true");
+    assert.equal(text.nodes["text-error"].hidden, false);
+    assert.equal(text.nodes["error-message"].textContent, "로그가 비었거나 공백만 있습니다.");
+    assert.equal(text.nodes["error-message"].textContent.includes("synthetic input"), false);
   }
   process.stdout.write("renderer logic verified\n");
 }
