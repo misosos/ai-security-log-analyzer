@@ -232,7 +232,7 @@ async function scan(page, state) {
   const hiddenExpected = state.startsWith('checklist-') || state.startsWith('checklist_') ||
     ['base', 'guidance', 'applied', 'no-longer-matches', 'checkpoint-reset-explanation',
       'three-file-error', 'linux-audit-error', 'review-list', 'review-detail', 'review-route-expired',
-      'workspace-projection-shell', 'workspace-direct-entry-expired'].includes(state);
+      'workspace-projection-shell', 'workspace-timeline', 'workspace-direct-entry-expired'].includes(state);
   requireSafe(structure.hiddenLive === hiddenExpected, 'HIDDEN_LIVE_CONTRACT_FAILED');
   for (const [key, value] of Object.entries(structure)) {
     if (key === 'hiddenLive') continue;
@@ -844,17 +844,20 @@ async function main() {
     const projectionShellPage = reviewWorkspacePage;
     let shellChecklistCalls = 0;
     let shellAnalysisCalls = 0;
+    let shellGuidanceCalls = 0;
     projectionShellPage.on('request', (request) => {
       const path = new URL(request.url()).pathname;
       if (path === '/api/v1/investigations/checklist') shellChecklistCalls += 1;
       if (path === '/api/v1/investigations/sample') shellAnalysisCalls += 1;
+      if (path === '/api/v1/investigations/guidance') shellGuidanceCalls += 1;
     });
     await projectionShellPage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(false));
     await projectionShellPage.locator('#case-list .review-case-card').nth(1).waitFor({state: 'attached'});
     requireSafe(await projectionShellPage.evaluate(async () => {
       const source = await fetch('/assets/app.js', {cache: 'no-store'}).then((response) => response.text());
       return source.includes('element("p", projection.summary, "review-card-summary")') &&
-        source.includes('caseByRef.set(projection.case_ref, {item, index, projection})') &&
+        source.includes('caseByRef.set(projection.case_ref, {item, index, projection,') &&
+        source.includes('timeline: createWorkspaceTimelineProjection(item, projection, index)') &&
         source.includes('limitation_count: item.limitations.length') &&
         !source.includes('limitation_count: item.unverified_items.length');
     }), 'WORKSPACE_PROJECTION_SOURCE_NOT_SERVED');
@@ -921,6 +924,198 @@ async function main() {
       shellChecklistCalls === 0 && shellAnalysisCalls === 0 &&
       await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute,
     'WORKSPACE_SHELL_ROUTE_OR_INVARIANCE_FAILED');
+    const initialTimelineContract = await projectionShellPage.evaluate((ref) => {
+      const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent.trim());
+      const list = document.querySelector('#workspace-timeline-panel-36-6d ol[aria-label="시간순 활동"]');
+      const projection = window.workspaceNavigation.projectionForRef(ref);
+      const timeline = window.workspaceNavigation.timelineForRef?.(ref);
+      return {
+        tabs,
+        list_items: list ? [...list.children].map((item) => item.dataset.sequence) : [],
+        initial_panel_hidden: document.querySelector('#workspace-timeline-panel-36-6d')?.hidden,
+        projection_fields: projection ? Object.keys(projection).length : 0,
+        timeline_frozen: Boolean(timeline && Object.isFrozen(timeline) && Object.isFrozen(timeline.items) &&
+          timeline.items.every(Object.isFrozen)),
+        timeline_case_matches: timeline?.case_ref === ref,
+        kinds: timeline?.items.map((item) => item.kind) || [],
+        rendered_sequences_match: list && timeline ?
+          [...list.children].map((item) => item.dataset.sequence).join(',') ===
+            timeline.items.map((item) => String(item.sequence)).join(',') : false,
+        rendered_titles_match: list && timeline ?
+          [...list.children].map((item) => item.querySelector('strong')?.textContent || '').join('|') ===
+            timeline.items.map((item) => item.title).join('|') : false,
+        safe_keys: timeline?.items.every((item) => Object.keys(item).sort().join(',') ===
+          'datetime,description,end_datetime,end_timestamp_kst,kind,sequence,timestamp_kst,title') || false,
+      };
+    }, firstRef);
+    console.log(`WORKSPACE_TIMELINE_INITIAL ${JSON.stringify(initialTimelineContract)}`);
+    requireSafe(initialTimelineContract.tabs.includes('활동 흐름') &&
+      initialTimelineContract.list_items.length > 0 && initialTimelineContract.timeline_frozen &&
+      initialTimelineContract.initial_panel_hidden && initialTimelineContract.timeline_case_matches &&
+      initialTimelineContract.rendered_sequences_match && initialTimelineContract.rendered_titles_match &&
+      initialTimelineContract.safe_keys && initialTimelineContract.projection_fields === 19,
+    'WORKSPACE_TIMELINE_VIEW_OR_CLOSED_ADAPTER_MISSING');
+    const timelineSafetyContract = await projectionShellPage.evaluate((ref) => {
+      const timeline = window.workspaceNavigation.timelineForRef(ref);
+      const projection = window.workspaceNavigation.projectionForRef(ref);
+      const source = timeline.items.map((item) => item.sequence);
+      const relations = timeline.items.filter((item) => item.kind === 'relation');
+        const noTime = window.workspaceNavigation.timelineNoTimeForTest(ref);
+        const noTimeRender = window.workspaceNavigation.timelineRenderForTest(ref, 1);
+      const canaryRejected = window.workspaceNavigation.timelineCanaryRejectedForTest(ref, 'RAW-FACT-CANARY');
+      const result = {
+        schema: timeline.schema_version,
+        total: timeline.items.length,
+        expected_total: projection.observation_count + projection.relation_count,
+        sequences: source,
+        observation_count: timeline.items.filter((item) => item.kind !== 'relation').length,
+        expected_observations: projection.observation_count,
+        relations: relations.length,
+        expected_relations: projection.relation_count,
+        relation_copy_safe: relations.every((item) => item.description.includes('인과관계') &&
+          !item.title.includes('→') && item.kind === 'relation'),
+        no_time_safe: Boolean(noTime && noTime.timestamp_kst === null && noTime.datetime === null),
+        no_time_rendered: Boolean(noTimeRender && noTimeRender.rendered_text.includes('시간 정보 없음')),
+        canary_rejected: canaryRejected === true
+      };
+      return result;
+    }, firstRef);
+    console.log(`WORKSPACE_TIMELINE_SEMANTICS ${JSON.stringify(timelineSafetyContract)}`);
+    requireSafe(timelineSafetyContract.schema === 'investigation-workspace-timeline-ui/v1' &&
+      timelineSafetyContract.total === timelineSafetyContract.expected_total &&
+      timelineSafetyContract.sequences.every((value, index) => value === index + 1) &&
+      timelineSafetyContract.observation_count === timelineSafetyContract.expected_observations &&
+      timelineSafetyContract.relations === timelineSafetyContract.expected_relations &&
+      timelineSafetyContract.relation_copy_safe && timelineSafetyContract.no_time_safe &&
+      timelineSafetyContract.no_time_rendered && timelineSafetyContract.canary_rejected,
+    'WORKSPACE_TIMELINE_SEMANTICS_OR_PRIVACY_FAILED');
+    requireSafe(await projectionShellPage.evaluate((ref) => {
+      const api = window.workspaceNavigation;
+      return api.rejectTimelineMutationForTest(ref, {index: 0, add_key: 'raw_log'}) &&
+        api.rejectTimelineMutationForTest(ref, {index: 0, sequence: 2}) &&
+        api.rejectTimelineMutationForTest(ref, {index: 0, category: 'UNKNOWN'}) &&
+        api.rejectTimelineMutationForTest(ref, {index: 0, fact: 'RAW-LOG-CANARY'}) &&
+        api.rejectTimelineMutationForTest(ref, {index: 0, utc: 'not-a-time'});
+    }, firstRef), 'WORKSPACE_TIMELINE_INVALID_INPUT_ACCEPTED');
+    const timelineTab = projectionShellPage.getByRole('tab', {name: '활동 흐름'});
+    await timelineTab.click();
+    requireSafe(await timelineTab.getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').isVisible() &&
+      await projectionShellPage.locator('#workspace-overview-panel-36-6d').isHidden() &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d ol > li').count() === initialTimelineContract.list_items.length &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-relation-36-6d').count() === firstProjection.relation_count &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d li:not(.workspace-timeline-relation-36-6d)').count() === firstProjection.observation_count &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').getByText('분석상 연결 · 인과관계 미확정').count() === firstProjection.relation_count &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-relation-36-6d .workspace-timeline-event-card').count() === 0,
+    'WORKSPACE_TIMELINE_TAB_OR_RELATION_RENDER_FAILED');
+    requireSafe(await projectionShellPage.locator('#workspace-timeline-panel-36-6d time').evaluateAll((nodes) =>
+      nodes.every((node) => Boolean(node.getAttribute('datetime')) && node.textContent.includes('KST'))),
+    'WORKSPACE_TIMELINE_TIME_SEMANTICS_FAILED');
+    requireSafe(await projectionShellPage.locator('#workspace-timeline-panel-36-6d').getByText('확인된 사실').count() > 0 &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').getByText('탐지된 활동').count() > 0 &&
+      await projectionShellPage.locator('[role="tab"][aria-controls="workspace-timeline-panel-36-6d"]').getAttribute('id') === 'workspace-timeline-tab-36-6d' &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').getAttribute('aria-labelledby') === 'workspace-timeline-tab-36-6d',
+    'WORKSPACE_TIMELINE_KIND_OR_ARIA_FAILED');
+    await timelineTab.focus();
+    await projectionShellPage.keyboard.press('ArrowLeft');
+    requireSafe(await projectionShellPage.getByRole('tab', {name: '개요'}).getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-overview-panel-36-6d').isVisible(),
+    'WORKSPACE_TIMELINE_KEYBOARD_LEFT_FAILED');
+    await projectionShellPage.keyboard.press('ArrowRight');
+    requireSafe(await timelineTab.getAttribute('aria-selected') === 'true' &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d').isVisible() &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+    'WORKSPACE_TIMELINE_KEYBOARD_RIGHT_OR_AUTOMATIC_REQUEST_FAILED');
+    await projectionShellPage.keyboard.press('Home');
+    requireSafe(await projectionShellPage.getByRole('tab', {name: '개요'}).getAttribute('aria-selected') === 'true',
+      'WORKSPACE_TIMELINE_KEYBOARD_HOME_FAILED');
+    await projectionShellPage.keyboard.press('End');
+    requireSafe(await timelineTab.getAttribute('aria-selected') === 'true', 'WORKSPACE_TIMELINE_KEYBOARD_END_FAILED');
+    await scan(projectionShellPage, 'workspace-timeline');
+    const timelinePanelMetrics = await projectionShellPage.locator('#workspace-timeline-panel-36-6d').evaluate((node) => ({
+      items: node.querySelectorAll('.workspace-timeline-item-36-6d').length,
+      nodes: node.querySelectorAll('*').length,
+      html_bytes: new TextEncoder().encode(new XMLSerializer().serializeToString(node)).byteLength,
+    }));
+    const tabTransitionSamples = [];
+    for (let sample = 0; sample < 110; sample += 1) {
+      const elapsed = await projectionShellPage.evaluate(() => {
+        const tablist = document.querySelector('.workspace-detail-tabs-36-6d');
+        const started = performance.now();
+        tablist.querySelector('#workspace-overview-tab-36-6d').click();
+        tablist.querySelector('#workspace-timeline-tab-36-6d').click();
+        return performance.now() - started;
+      });
+      if (sample >= 10) tabTransitionSamples.push(elapsed);
+    }
+    const timelineBenchmarks = [];
+    for (const count of [1, 32, 256]) {
+      for (let warmup = 0; warmup < 10; warmup += 1) {
+        await projectionShellPage.evaluate(({ref, size}) => window.workspaceNavigation.timelineProjectionBatchForTest(ref, size),
+          {ref: firstRef, size: count});
+        await projectionShellPage.evaluate(({ref, size}) => window.workspaceNavigation.timelineRenderForTest(ref, size),
+          {ref: firstRef, size: count});
+      }
+      const projectionTimes = [];
+      const renderTimes = [];
+      let projectionStats = null;
+      let renderStats = null;
+      for (let sample = 0; sample < 100; sample += 1) {
+        projectionStats = await projectionShellPage.evaluate(({ref, size}) => {
+          const started = performance.now();
+          const result = window.workspaceNavigation.timelineProjectionBatchForTest(ref, size);
+          return {elapsed: performance.now() - started, result};
+        }, {ref: firstRef, size: count});
+        renderStats = await projectionShellPage.evaluate(({ref, size}) => {
+          const started = performance.now();
+          const result = window.workspaceNavigation.timelineRenderForTest(ref, size);
+          return {elapsed: performance.now() - started, result};
+        }, {ref: firstRef, size: count});
+        projectionTimes.push(projectionStats.elapsed);
+        renderTimes.push(renderStats.elapsed);
+      }
+      timelineBenchmarks.push({count, projection: summarizeMs(projectionTimes),
+        render: summarizeMs(renderTimes), input_bytes: projectionStats.result.input_bytes,
+        adapter_output_bytes: projectionStats.result.output_bytes, rendered_dom_nodes: renderStats.result.dom_nodes,
+        rendered_html_bytes: renderStats.result.html_bytes});
+    }
+    console.log(`WORKSPACE_TIMELINE_PANEL_SIZE ${JSON.stringify(timelinePanelMetrics)}`);
+    console.log(`WORKSPACE_TIMELINE_TAB_TRANSITION ${JSON.stringify(summarizeMs(tabTransitionSamples))}`);
+    console.log(`WORKSPACE_TIMELINE_BENCHMARK warmup=10 samples=100 batches=${JSON.stringify(timelineBenchmarks)}`);
+    await projectionShellPage.emulateMedia({reducedMotion: 'reduce'});
+    requireSafe(await projectionShellPage.locator('#workspace-timeline-panel-36-6d').evaluate((panel) => {
+      const style = getComputedStyle(panel.querySelector('.workspace-timeline-item-36-6d'));
+      return style.animationDuration === '0s' && style.transitionDuration === '0s';
+    }), 'WORKSPACE_TIMELINE_REDUCED_MOTION_FAILED');
+    await projectionShellPage.emulateMedia({reducedMotion: 'no-preference'});
+    for (const width of [1440, 1024, 768, 390, 320]) {
+      await projectionShellPage.setViewportSize({width, height: 844});
+      requireSafe(await projectionShellPage.evaluate(() => {
+        const panel = document.querySelector('#workspace-timeline-panel-36-6d');
+        const rows = [...panel.querySelectorAll('.workspace-timeline-item-36-6d')];
+        const rects = rows.map((row) => row.getBoundingClientRect());
+        return document.documentElement.scrollWidth <= innerWidth && panel.scrollWidth <= panel.clientWidth &&
+          rects.every((rect) => rect.left >= 0 && rect.right <= innerWidth) &&
+          rects.every((rect, index) => index === 0 || rect.top >= rects[index - 1].bottom);
+      }),
+      'WORKSPACE_TIMELINE_RESPONSIVE_OVERFLOW');
+      requireSafe(await projectionShellPage.locator('[role="tab"]').evaluateAll((nodes) =>
+        nodes.every((node) => { const rect = node.getBoundingClientRect(); return rect.width >= 44 && rect.height >= 44; }) &&
+        nodes.slice(1).every((node, index) => {
+          const previous = nodes[index].getBoundingClientRect();
+          const current = node.getBoundingClientRect();
+          return current.left - previous.right >= 8 || current.top - previous.bottom >= 8;
+        })),
+      'WORKSPACE_TIMELINE_TAB_TARGET_TOO_SMALL');
+    }
+    await projectionShellPage.setViewportSize({width: 640, height: 900});
+    await projectionShellPage.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    requireSafe(await projectionShellPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth &&
+      document.querySelector('#workspace-timeline-panel-36-6d').scrollWidth <=
+      document.querySelector('#workspace-timeline-panel-36-6d').clientWidth),
+    'WORKSPACE_TIMELINE_200_PERCENT_REFLOW_FAILED');
+    await projectionShellPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await projectionShellPage.setViewportSize({width: 1280, height: 900});
     await projectionShellPage.goBack();
     await projectionShellPage.waitForFunction(() => location.hash === '');
     await projectionShellPage.goForward();
@@ -929,13 +1124,26 @@ async function main() {
       shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_HISTORY_OR_AUTOMATIC_POST_FAILED');
     await projectionShellPage.locator('#review-back-link').click();
     await projectionShellPage.waitForFunction(() => location.hash === '');
+    await projectionShellPage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(true));
+    await projectionShellPage.locator('#review-case-link-0').click();
+    await projectionShellPage.locator('#case-detail-view .case-detail .timeline').waitFor({state: 'visible'});
+    requireSafe(await projectionShellPage.locator('#case-detail-view .investigation-checklist button').count() === 1 &&
+      shellChecklistCalls === 0 && shellAnalysisCalls === 0,
+    'WORKSPACE_TIMELINE_ROLLBACK_RENDERER_FAILED');
+    await projectionShellPage.locator('#review-back-link').click();
+    await projectionShellPage.waitForFunction(() => location.hash === '');
+    await projectionShellPage.evaluate(() => window.workspaceNavigation.setLegacyDetailForTests(false));
     await projectionShellPage.locator('#review-case-link-1').click();
     await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
+    const secondTimeline = await projectionShellPage.evaluate((ref) => window.workspaceNavigation.timelineForRef(ref), secondRef);
     requireSafe(await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === secondRef &&
       await projectionShellPage.locator('.workspace-detail-shell-36-6b .workspace-overview-title').textContent() === secondProjection.display_title &&
       (await projectionShellPage.locator('.workspace-detail-shell-36-6b').textContent()).includes(`${secondProjection.observation_count}건`) &&
       !(await projectionShellPage.locator('.workspace-detail-shell-36-6b').textContent()).includes(firstRef) &&
-      shellChecklistCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-item-36-6d').count() === secondTimeline.items.length &&
+      await projectionShellPage.locator('#workspace-timeline-panel-36-6d .workspace-timeline-title-36-6d').allTextContents().then((titles) =>
+        titles.join('|') === secondTimeline.items.map((item) => item.title).join('|')) &&
+      shellChecklistCalls === 0 && shellGuidanceCalls === 0 && shellAnalysisCalls === 0, 'WORKSPACE_CASE_ISOLATION_FAILED');
     const projectionBenchmarks = [];
     for (const count of [1, 32, 256]) {
       for (let warmup = 0; warmup < 10; warmup += 1) {

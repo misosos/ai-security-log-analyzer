@@ -248,6 +248,7 @@ async function main() {
     (value) => { value.cases[0].timeline[0].start_time.display_utc = "not-a-time"; },
     (value) => { value.cases[0].included_highest_risk = "UNKNOWN"; },
     (value) => { value.cases[0].timeline[0].category = "INVENTED"; },
+    (value) => { value.cases[0].timeline[0].fact = "RAW-LOG-CANARY-192.0.2.77"; },
     (value) => { value.cases[0].timeline[0].evidence[0].label = "raw evidence"; },
     (value) => { value.cases[0].next_steps.push(value.cases[0].next_steps[0]); },
     (value) => { value.cases[0].next_steps[0].text = "IP를 차단하십시오."; },
@@ -272,6 +273,7 @@ async function main() {
     assert.equal(nodes["error-summary"].focused, true);
     assert.equal(nodes["error-message"].textContent, "결과 형식을 확인할 수 없습니다.");
     assert.equal(nodes["error-message"].textContent.includes("raw evidence"), false);
+    assert.equal(nodes["error-message"].textContent.includes("RAW-LOG-CANARY"), false);
     assert.equal(nodes["sample-button"].disabled, false);
   }
 

@@ -188,6 +188,23 @@ a { color: #064f96; text-underline-offset: .2em; }
 .workspace-overview-next-36-6c, .workspace-overview-limit { display: grid; gap: .45rem; max-width: 70ch; }
 .workspace-overview-next-36-6c h5, .workspace-overview-limit h5 { font-size: 1rem; }
 .workspace-overview-next-36-6c p, .workspace-overview-limit p { line-height: 1.6; }
+.workspace-detail-tabs-36-6d { display: flex; flex-wrap: wrap; gap: .5rem; border-bottom: 1px solid #bccbdb; }
+.workspace-detail-tabs-36-6d button { min-width: 44px; min-height: 44px; border: 0; border-bottom: 3px solid transparent; border-radius: .25rem .25rem 0 0; background: transparent; color: #153e73; }
+.workspace-detail-tabs-36-6d button[aria-selected="true"] { border-bottom-color: #164c89; background: #eaf2fb; }
+.workspace-timeline-panel-36-6d { display: grid; gap: 1rem; min-width: 0; }
+.workspace-timeline-panel-36-6d > h4 { margin: 0; font-size: 1.2rem; }
+.workspace-timeline-36-6d { display: grid; gap: 0; min-width: 0; list-style: none; margin: 0; padding: 0 0 0 1.25rem; border-inline-start: 2px solid #9badc3; }
+.workspace-timeline-item-36-6d { position: relative; display: grid; gap: .35rem; min-width: 0; padding: .65rem .75rem 1.1rem; border: 0; overflow-wrap: anywhere; }
+.workspace-timeline-item-36-6d::before { position: absolute; content: ""; width: .65rem; height: .65rem; inset-inline-start: -1.67rem; top: .9rem; border: 2px solid #164c89; border-radius: 50%; background: #fff; }
+.workspace-timeline-detection-36-6d::before { border-radius: 0; transform: rotate(45deg); }
+.workspace-timeline-relation-36-6d { margin-block: .15rem .5rem; border-block: 1px dashed #52657a; }
+.workspace-timeline-relation-36-6d::before { border-radius: 0; border-style: dashed; background: #f7f9fc; }
+.workspace-timeline-kind-36-6d { width: fit-content; max-width: 100%; color: #344d69; font-size: .9rem; font-weight: 750; overflow-wrap: anywhere; }
+.workspace-timeline-line-36-6d { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; min-width: 0; }
+.workspace-timeline-time-36-6d { font-variant-numeric: tabular-nums; font-weight: 750; overflow-wrap: anywhere; }
+.workspace-timeline-title-36-6d { line-height: 1.5; overflow-wrap: anywhere; }
+.workspace-timeline-description-36-6d { margin: 0; max-width: 70ch; color: #344d69; line-height: 1.55; }
+.workspace-timeline-range-label-36-6d { color: #52657a; }
 .review-case-card .review-detail-link { min-height: 2.75rem; padding: .65rem .9rem; margin-top: .1rem; }
 @media (max-width: 48rem) {
   .workspace-dashboard-36-6c #summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -343,6 +360,11 @@ a { color: #064f96; text-underline-offset: .2em; }
   #results .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .review-summary-meta, .review-metrics { grid-template-columns: minmax(0, 1fr); }
   .review-detail-header { grid-template-columns: minmax(0, 1fr); }
+  .workspace-detail-tabs-36-6d { gap: .5rem; }
+  .workspace-detail-tabs-36-6d button { flex: 1 1 auto; }
+  .workspace-timeline-36-6d { padding-left: .9rem; }
+  .workspace-timeline-item-36-6d { padding-inline: .5rem; }
+  .workspace-timeline-item-36-6d::before { inset-inline-start: -1.31rem; }
   .synthetic-badge { justify-self: start; }
   .review-case-card .case-heading-row { display: grid; }
   .evidence-list { grid-template-columns: 1fr; }

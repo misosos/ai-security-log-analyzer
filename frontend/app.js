@@ -19,8 +19,21 @@
     OBSERVED_FACT: "관찰된 사실", DETECTION_OBSERVATION: "탐지 관찰",
     SUPPORTED_RELATION: "지원되는 관계"
   });
+  const TIMELINE_FACT_COPY_36_6D = Object.freeze({
+    OBSERVED_FACT: "기존 상관분석에서 관계가 확인된 인증 관찰입니다.",
+    DETECTION_OBSERVATION: "기존 결정적 탐지 규칙의 조건을 충족한 관찰입니다.",
+    SUPPORTED_RELATION: "기존 상관분석이 계산한 지원 관계이며 인과관계를 의미하지 않습니다."
+  });
   const DETECTION_NAMES = new Set(["Brute Force", "Password Spraying-like"]);
   const RELATION_NAMES = new Set(["Brute Force → Successful Login", "Failed Login → Successful Login"]);
+  const WORKSPACE_TIMELINE_TITLES_36_6D = Object.freeze({
+    "인증 실패 관찰": "인증 실패 기록",
+    "인증 성공 관찰": "인증 성공 기록",
+    "Brute Force": "반복 인증 실패",
+    "Password Spraying-like": "여러 계정 대상 인증 실패",
+    "Brute Force → Successful Login": "반복 인증 실패와 로그인 성공 기록 사이의 분석상 연결",
+    "Failed Login → Successful Login": "인증 실패와 성공 기록 사이의 분석상 연결"
+  });
   const INDEPENDENT_NAMES = new Set([
     "Brute Force", "Password Spraying-like", "Path Traversal", "인증 실패 관찰",
     "SQL Injection-like", "XSS-like", "Sensitive Resource Probing-like", "Web Scanning-like",
@@ -293,6 +306,60 @@
     const navigationApi = {show: showView, showResult, setAvailable, setPending};
     if (loopbackPage) Object.assign(navigationApi, {
       projectionForRef: (caseRef) => caseByRef.get(caseRef)?.projection ?? null,
+      timelineForRef: (caseRef) => caseByRef.get(caseRef)?.timeline ?? null,
+      rejectTimelineMutationForTest: (caseRef, mutation) => {
+        if (!loopbackPage || mutation === null || typeof mutation !== "object" || Array.isArray(mutation)) return false;
+        const entry = caseByRef.get(caseRef);
+        if (!entry || !Number.isSafeInteger(mutation.index) || mutation.index < 0 ||
+            mutation.index >= entry.item.timeline.length) return false;
+        const candidate = {...entry.item, timeline: entry.item.timeline.map((item) => ({...item}))};
+        const target = candidate.timeline[mutation.index];
+        if (mutation.add_key) target[mutation.add_key] = "test";
+        if (mutation.sequence !== undefined) target.sequence = mutation.sequence;
+        if (mutation.category !== undefined) target.category = mutation.category;
+        if (mutation.fact !== undefined) target.fact = mutation.fact;
+        if (mutation.utc !== undefined && target.start_time) target.start_time.display_utc = mutation.utc;
+        try {
+          createWorkspaceTimelineProjection(candidate, entry.projection, entry.index);
+          return false;
+        } catch (error) {
+          return error instanceof Error && error.message === "WORKSPACE_TIMELINE_INVALID";
+        }
+      },
+      timelineNoTimeForTest: (caseRef) => {
+        if (!loopbackPage) return null;
+        const entry = caseByRef.get(caseRef);
+        if (!entry || entry.item.timeline.length === 0) return null;
+        const candidate = {...entry.item, timeline: entry.item.timeline.map((item) => ({...item}))};
+        const last = candidate.timeline.at(-1);
+        last.start_time = null;
+        last.end_time = null;
+        last.timestamp_state = "NO_TIME";
+        last.timestamp_state_label = "시간 정보 없음";
+        try {
+          return createWorkspaceTimelineProjection(candidate, entry.projection, entry.index).items.at(-1);
+        } catch {
+          return null;
+        }
+      },
+      timelineProjectionBatchForTest: (caseRef, count) =>
+        createWorkspaceTimelineBenchmarkForTest(caseRef, count, false),
+      timelineRenderForTest: (caseRef, count) =>
+        createWorkspaceTimelineBenchmarkForTest(caseRef, count, true),
+      timelineCanaryRejectedForTest: (caseRef, marker) => {
+        if (!loopbackPage || typeof marker !== "string" || marker.length > 128) return null;
+        const entry = caseByRef.get(caseRef);
+        if (!entry) return null;
+        const candidate = {...entry.item, timeline: entry.item.timeline.map((item) => ({
+          ...item, fact: marker
+        }))};
+        try {
+          createWorkspaceTimelineProjection(candidate, entry.projection, entry.index);
+          return false;
+        } catch (error) {
+          return error instanceof Error && error.message === "WORKSPACE_TIMELINE_INVALID";
+        }
+      },
       projectionBatchForTest: (count) => {
         if (!loopbackPage || !Number.isSafeInteger(count) || count < 1 || count > 256) return null;
         const seed = caseByRef.values().next().value;
@@ -366,7 +433,7 @@
     }
     const useWorkspaceShell = USE_WORKSPACE_DETAIL_SHELL_36_6B && !legacyWorkspaceDetailForTests;
     caseDetailContent.replaceChildren(useWorkspaceShell ?
-      renderWorkspaceDetailShell(entry.projection) : renderCaseDetail(entry.item, entry.index));
+      renderWorkspaceDetailShell(entry.projection, entry.timeline) : renderCaseDetail(entry.item, entry.index));
     caseDetailView.setAttribute("aria-labelledby", useWorkspaceShell ? "workspace-shell-heading" : "case-detail-heading");
     reviewDetailContext.textContent = currentInvestigationMode === "sample" ?
       "합성 예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
@@ -551,6 +618,7 @@
       if (entry.timestamp_state_label !== (entry.timestamp_state === "TIMESTAMPED" ? "시각 정보 있음" : "시간 정보 없음")) failContract();
       if (entry.detection_display_name !== null) boundedText(entry.detection_display_name);
       if (entry.relation_display_name !== null) boundedText(entry.relation_display_name);
+      if (entry.fact !== TIMELINE_FACT_COPY_36_6D[entry.category]) failContract();
       const startKey = timestamp(entry.start_time);
       const endKey = timestamp(entry.end_time);
       if (entry.timestamp_state === "NO_TIME" ?
@@ -1455,7 +1523,8 @@
       link.id = `review-case-link-${index}`;
       link.dataset.reviewCaseRef = projection.case_ref;
       card.append(link);
-      caseByRef.set(projection.case_ref, {item, index, projection});
+      caseByRef.set(projection.case_ref, {item, index, projection,
+        timeline: createWorkspaceTimelineProjection(item, projection, index)});
       caseList.append(card);
     });
   }
@@ -1537,13 +1606,112 @@
     }
   }
 
+  function createWorkspaceTimelineProjection(item, projection, index) {
+    try {
+      closedRecord(item, WORKSPACE_CASE_INPUT_FIELDS_36_6B);
+      if (item === null || typeof item !== "object" || Array.isArray(item) ||
+          projection === null || typeof projection !== "object" ||
+          projection.schema_version !== "investigation-workspace-ui/v1" ||
+          projection.case_ref !== item.checklist_ref || !Number.isSafeInteger(index) ||
+          index < 0 || index >= MAX_CASES || projection.display_order !== index + 1 ||
+          !Array.isArray(item.timeline) || item.timeline.length > MAX_ITEMS ||
+          item.timeline.some((entry) => entry.subject_alias !== item.subject_alias)) throw new Error();
+      timeline(item.timeline);
+      const projected = item.timeline.map((entry, offset) => {
+        closedRecord(entry, [
+          "sequence", "category", "category_label", "timestamp_state", "timestamp_state_label",
+          "start_time", "end_time", "title", "fact", "subject_alias",
+          "detection_display_name", "relation_display_name", "evidence"
+        ]);
+        if (entry.sequence !== offset + 1 || !TIMELINE_CATEGORIES.has(entry.category)) throw new Error();
+        let title;
+        let kind;
+        let description;
+        if (entry.category === "OBSERVED_FACT") {
+          if (!Object.hasOwn(WORKSPACE_TIMELINE_TITLES_36_6D, entry.title) ||
+              entry.detection_display_name !== null || entry.relation_display_name !== null) throw new Error();
+          kind = "observation";
+          title = WORKSPACE_TIMELINE_TITLES_36_6D[entry.title];
+          description = "로그에 기록된 인증 결과입니다.";
+        } else if (entry.category === "DETECTION_OBSERVATION") {
+          if (!DETECTION_NAMES.has(entry.detection_display_name) || entry.relation_display_name !== null ||
+              entry.title !== `${entry.detection_display_name} 탐지 관찰` ||
+              !Object.hasOwn(WORKSPACE_TIMELINE_TITLES_36_6D, entry.detection_display_name)) throw new Error();
+          kind = "detection";
+          title = `${WORKSPACE_TIMELINE_TITLES_36_6D[entry.detection_display_name]} 탐지 관찰`;
+          description = "기존 결정적 탐지 규칙의 조건을 충족한 관찰입니다.";
+        } else {
+          if (!RELATION_NAMES.has(entry.relation_display_name) || entry.detection_display_name !== null ||
+              entry.title !== entry.relation_display_name ||
+              !Object.hasOwn(WORKSPACE_TIMELINE_TITLES_36_6D, entry.relation_display_name)) throw new Error();
+          kind = "relation";
+          title = WORKSPACE_TIMELINE_TITLES_36_6D[entry.relation_display_name];
+          description = "분석상 연결이며 인과관계나 공격 성공을 확정하지 않습니다.";
+        }
+        const startTime = entry.start_time === null ? null : timestamp(entry.start_time);
+        const endTime = entry.end_time === null ? null : timestamp(entry.end_time);
+        if (entry.timestamp_state === "NO_TIME" ? startTime !== null || endTime !== null :
+            entry.timestamp_state !== "TIMESTAMPED" || startTime === null ||
+            (endTime !== null && endTime < startTime)) throw new Error();
+        return Object.freeze({
+          sequence: entry.sequence,
+          kind,
+          timestamp_kst: entry.start_time === null ? null :
+            entry.start_time.display_kst.replace(/ \(UTC\+09:00\)$/, ""),
+          datetime: entry.start_time?.display_utc ?? null,
+          end_timestamp_kst: entry.end_time === null ? null :
+            entry.end_time.display_kst.replace(/ \(UTC\+09:00\)$/, ""),
+          end_datetime: entry.end_time?.display_utc ?? null,
+          title,
+          description
+        });
+      });
+      if (projected.filter((entry) => entry.kind === "relation").length !== projection.relation_count ||
+          projected.filter((entry) => entry.kind !== "relation").length !== projection.observation_count) throw new Error();
+      return Object.freeze({
+        schema_version: "investigation-workspace-timeline-ui/v1",
+        case_ref: projection.case_ref,
+        items: Object.freeze(projected)
+      });
+    } catch {
+      throw new Error("WORKSPACE_TIMELINE_INVALID");
+    }
+  }
+
+  function createWorkspaceTimelineBenchmarkForTest(caseRef, count, render) {
+    if (!loopbackPage || !/^c_[0-9a-f]{24}$/.test(caseRef) ||
+        !Number.isSafeInteger(count) || count < 1 || count > MAX_ITEMS) return null;
+    const seed = caseByRef.get(caseRef);
+    const source = seed?.item.timeline.find((entry) => entry.category !== "SUPPORTED_RELATION");
+    if (!seed || !source) return null;
+    const entries = Array.from({length: count}, (_, index) => ({
+      ...source, sequence: index + 1, timestamp_state: "NO_TIME",
+      timestamp_state_label: "시간 정보 없음", start_time: null, end_time: null
+    }));
+    const item = {...seed.item, observation_count: count, supporting_relation_count: 0, timeline: entries};
+    const projection = {...seed.projection, observation_count: count, relation_count: 0};
+    try {
+      const timelineProjection = createWorkspaceTimelineProjection(item, projection, seed.index);
+      const outputBytes = new TextEncoder().encode(JSON.stringify(timelineProjection)).byteLength;
+      if (!render) return {item_count: count, input_bytes: new TextEncoder().encode(JSON.stringify(item)).byteLength,
+        output_bytes: outputBytes};
+      const shell = renderWorkspaceDetailShell(projection, timelineProjection);
+      return {item_count: count, input_bytes: new TextEncoder().encode(JSON.stringify(item)).byteLength,
+        output_bytes: outputBytes, dom_nodes: shell.querySelectorAll("*").length,
+        html_bytes: new TextEncoder().encode(new XMLSerializer().serializeToString(shell)).byteLength,
+        rendered_text: shell.textContent};
+    } catch {
+      return null;
+    }
+  }
+
   function workspaceKstText(value) {
     if (value === null || value === undefined) return null;
     if (typeof value !== "string") throw new Error("WORKSPACE_PROJECTION_INVALID");
     return value.replace(/ \(UTC\+09:00\)$/, "");
   }
 
-  function renderWorkspaceDetailShell(projection) {
+  function renderWorkspaceDetailShell(projection, timelineProjection) {
     const shell = document.createElement("div");
     shell.className = "workspace-detail-shell-36-6b";
     shell.dataset.caseRef = projection.case_ref;
@@ -1580,9 +1748,33 @@
     const status = document.createElement("p");
     status.className = "workspace-shell-status";
     status.textContent = "확인할 작업 목록은 이 단계에서 제공하지 않습니다.";
+    const tablist = document.createElement("div");
+    tablist.className = "workspace-detail-tabs-36-6d";
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-label", "검토 건 상세 화면");
+    const overviewTab = document.createElement("button");
+    overviewTab.type = "button";
+    overviewTab.id = "workspace-overview-tab-36-6d";
+    overviewTab.setAttribute("role", "tab");
+    overviewTab.setAttribute("aria-selected", "true");
+    overviewTab.setAttribute("aria-controls", "workspace-overview-panel-36-6d");
+    overviewTab.tabIndex = 0;
+    overviewTab.textContent = "개요";
+    const timelineTab = document.createElement("button");
+    timelineTab.type = "button";
+    timelineTab.id = "workspace-timeline-tab-36-6d";
+    timelineTab.setAttribute("role", "tab");
+    timelineTab.setAttribute("aria-selected", "false");
+    timelineTab.setAttribute("aria-controls", "workspace-timeline-panel-36-6d");
+    timelineTab.tabIndex = -1;
+    timelineTab.textContent = "활동 흐름";
+    tablist.append(overviewTab, timelineTab);
     const overview = document.createElement("section");
     overview.className = "workspace-overview-36-6c";
-    overview.setAttribute("aria-labelledby", "workspace-overview-heading-36-6c");
+    overview.id = "workspace-overview-panel-36-6d";
+    overview.setAttribute("role", "tabpanel");
+    overview.setAttribute("aria-labelledby", overviewTab.id);
+    overview.tabIndex = 0;
     const overviewHeading = element("h4", "개요");
     overviewHeading.id = "workspace-overview-heading-36-6c";
     const metrics = document.createElement("dl");
@@ -1600,7 +1792,77 @@
       element("p", "탐지와 연결 근거는 침해나 공격 성공을 확정하지 않습니다. 분석 한계 수는 확인이 필요한 활동 수나 확인할 작업 수를 뜻하지 않습니다."),
       element("p", "추가 확인 항목의 수는 현재 화면에서 표시하지 않습니다. 세부 활동 흐름과 확인 작업은 이후 단계에서 다룹니다."));
     overview.append(overviewHeading, metrics, next, meaning);
-    shell.append(heading, header, status, overview);
+    const timelinePanel = document.createElement("section");
+    timelinePanel.id = "workspace-timeline-panel-36-6d";
+    timelinePanel.className = "workspace-timeline-panel-36-6d";
+    timelinePanel.setAttribute("role", "tabpanel");
+    timelinePanel.setAttribute("aria-labelledby", timelineTab.id);
+    timelinePanel.tabIndex = 0;
+    timelinePanel.hidden = true;
+    const timelineHeading = element("h4", "활동 흐름");
+    const timelineNotice = element("p", "관찰된 활동을 기존 분석 순서로 표시합니다. 분석상 연결은 원인이나 공격 성공을 확정하지 않습니다.");
+    const timelineList = document.createElement("ol");
+    timelineList.className = "workspace-timeline-36-6d";
+    timelineList.setAttribute("aria-label", "시간순 활동");
+    if (timelineProjection.items.length === 0) {
+      timelinePanel.append(timelineHeading, element("p", "안전하게 표시할 활동 정보가 없습니다."));
+    } else {
+      timelineProjection.items.forEach((entry) => {
+        const row = document.createElement("li");
+        row.className = `workspace-timeline-item-36-6d workspace-timeline-${entry.kind}-36-6d`;
+        row.dataset.sequence = String(entry.sequence);
+        const kindLabel = ({observation: "확인된 사실", detection: "탐지된 활동",
+          relation: "분석상 연결 · 인과관계 미확정"})[entry.kind];
+        row.append(element("span", kindLabel, "workspace-timeline-kind-36-6d"));
+        const line = document.createElement("div");
+        line.className = "workspace-timeline-line-36-6d";
+        if (entry.timestamp_kst === null) {
+          line.append(element("span", "시간 정보 없음", "workspace-timeline-time-36-6d"));
+        } else {
+          const time = element("time", entry.timestamp_kst, "workspace-timeline-time-36-6d");
+          time.setAttribute("datetime", entry.datetime);
+          line.append(time);
+        }
+        if (entry.kind === "relation" && entry.end_timestamp_kst !== null) {
+          line.append(element("span", "부터", "workspace-timeline-range-label-36-6d"));
+          const endTime = element("time", entry.end_timestamp_kst, "workspace-timeline-time-36-6d");
+          endTime.setAttribute("datetime", entry.end_datetime);
+          line.append(endTime);
+        }
+        row.append(line, element("strong", entry.title, "workspace-timeline-title-36-6d"),
+          element("p", entry.description, "workspace-timeline-description-36-6d"));
+        timelineList.append(row);
+      });
+      timelinePanel.append(timelineHeading, timelineNotice, timelineList);
+    }
+    const selectTab = (next, moveFocus) => {
+      const selected = next === "timeline" ? timelineTab : overviewTab;
+      overviewTab.setAttribute("aria-selected", String(selected === overviewTab));
+      timelineTab.setAttribute("aria-selected", String(selected === timelineTab));
+      overviewTab.tabIndex = selected === overviewTab ? 0 : -1;
+      timelineTab.tabIndex = selected === timelineTab ? 0 : -1;
+      overview.hidden = selected !== overviewTab;
+      timelinePanel.hidden = selected !== timelineTab;
+      if (moveFocus) selected.focus();
+    };
+    tablist.addEventListener("click", (event) => {
+      const selected = event.target === timelineTab ? "timeline" : "overview";
+      selectTab(selected, false);
+    });
+    tablist.addEventListener("keydown", (event) => {
+      const tabs = [overviewTab, timelineTab];
+      const current = tabs.indexOf(event.target);
+      if (current < 0) return;
+      let next = current;
+      if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (current + tabs.length - 1) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else return;
+      event.preventDefault();
+      selectTab(next === 1 ? "timeline" : "overview", true);
+    });
+    shell.append(heading, header, tablist, overview, timelinePanel, status);
     return shell;
   }
 
