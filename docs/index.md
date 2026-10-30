@@ -91,3 +91,5 @@
 - [Phase 36.9G-R1 Brute Window Context 실행 소유권 보완](brute_window_run_ownership_remediation_36_9g_r1.md)
 - [Phase 36.9G-R2 Brute Window Context 소유권 독립 종결 검증](brute_window_context_ownership_closure_36_9g_r2.md)
 - [Phase 36.9G-R2-R1 Analysis Owner 단일 결속 보완](analysis_owner_unique_binding_remediation_36_9g_r2_r1.md)
+- [Phase 36.9G-R2-R2 Analysis Owner 독립 Closure — 재포장 우회 HOLD](analysis_owner_independent_closure_36_9g_r2_r2.md)
+- [Phase 36.9G-R2-R2-R1 신뢰된 분석 Provenance 경계 보완](trusted_analysis_provenance_boundary_remediation_36_9g_r2_r2_r1.md)

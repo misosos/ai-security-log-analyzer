@@ -43,11 +43,187 @@ def is_owned_analysis_result(
 class AnalysisRunOwner:
     """비공개 분석 실행 capability; 같은 프로세스의 동일 실행만 묶는다."""
 
-    __slots__ = ("__analysis", "__bound")
+    __slots__ = (
+        "__analysis", "__bound", "__detection_refs", "__correlated_analysis",
+        "__correlation_refs", "__risk_refs",
+    )
 
     def __init__(self) -> None:
         self.__analysis = None
         self.__bound = False
+        self.__detection_refs = None
+        self.__correlated_analysis = None
+        self.__correlation_refs = None
+        self.__risk_refs = None
+
+    @staticmethod
+    def _results_mapping(value: object) -> dict | None:
+        if type(value) not in (dict, _OwnedAnalysisResult):
+            return None
+        if "results" in value and "global_correlation" in value:
+            results = value.get("results")
+            return results if type(results) is dict else None
+        return value
+
+    @staticmethod
+    def _entry_refs(results: dict) -> dict | None:
+        refs = {}
+        for subject, entry in results.items():
+            if type(subject) is not str or type(entry) is not dict:
+                return None
+            features = entry.get("features")
+            detections = entry.get("detections")
+            if type(features) is not dict or type(detections) is not dict:
+                return None
+            refs[subject] = (entry, features, detections)
+        return refs
+
+    @staticmethod
+    def _mapping_values_match(current: dict, expected: dict) -> bool:
+        if current.keys() != expected.keys():
+            return False
+        for key, prior in expected.items():
+            value = current[key]
+            if type(prior) not in (str, int, float, bool, bytes, type(None)):
+                if value is not prior:
+                    return False
+            elif type(value) is not type(prior) or value != prior:
+                return False
+        return True
+
+    def _bind_detection_results(self, results: object) -> None:
+        """실제 Detector 경계가 만든 subject 결과 객체를 실행에 결속한다."""
+        if self.__detection_refs is not None or type(results) is not dict:
+            raise ValueError("invalid_analysis_context") from None
+        refs = self._entry_refs(results)
+        if refs is None:
+            raise ValueError("invalid_analysis_context") from None
+        self.__detection_refs = {
+            subject: (features, dict(features), detections, dict(detections))
+            for subject, (_, features, detections) in refs.items()
+        }
+
+    def _matches_detection_results(self, results: object) -> bool:
+        if self.__detection_refs is None or type(results) is not dict:
+            return False
+        refs = self._entry_refs(results)
+        return refs is not None and refs.keys() == self.__detection_refs.keys() and all(
+            refs[subject][1] is self.__detection_refs[subject][0]
+            and self._mapping_values_match(
+                refs[subject][1], self.__detection_refs[subject][1],
+            )
+            and refs[subject][2] is self.__detection_refs[subject][2]
+            and refs[subject][2].keys() == self.__detection_refs[subject][3].keys()
+            and all(
+                refs[subject][2][slot] is detection
+                for slot, detection in self.__detection_refs[subject][3].items()
+            )
+            for subject in refs
+        )
+
+    def _has_brute_detection(self, subject: str, detection: object) -> bool:
+        if self.__detection_refs is None:
+            return False
+        refs = self.__detection_refs.get(subject)
+        return (
+            refs is not None
+            and refs[3].get("brute_force") is detection
+        )
+
+    def _bind_correlated_analysis(self, analysis: object) -> None:
+        results = self._results_mapping(analysis)
+        if (
+            self.__correlated_analysis is not None
+            or results is None
+            or not self._matches_detection_results(results)
+        ):
+            raise ValueError("invalid_analysis_context") from None
+        refs = self._entry_refs(results)
+        if refs is None or any(type(item[0].get("correlation")) is not dict for item in refs.values()):
+            raise ValueError("invalid_analysis_context") from None
+        self.__correlated_analysis = analysis
+        self.__correlation_refs = {
+            subject: (entry, entry["correlation"], dict(entry["correlation"]))
+            for subject, (entry, _, _) in refs.items()
+        }
+
+    def _bind_risk_analysis(self, analysis: object) -> None:
+        results = self._results_mapping(analysis)
+        if (
+            self.__correlated_analysis is None
+            or self.__risk_refs is not None
+            or results is None
+            or not self._matches_finalized_inputs(results, require_risk=False)
+        ):
+            raise ValueError("invalid_analysis_context") from None
+        refs = self._entry_refs(results)
+        if refs is None or any(
+            type(item[0].get("risk_factors")) is not dict
+            or "risk_level" not in item[0]
+            for item in refs.values()
+        ):
+            raise ValueError("invalid_analysis_context") from None
+        self.__risk_refs = {
+            subject: (
+                entry,
+                entry["risk_factors"],
+                dict(entry["risk_factors"]),
+                entry["risk_level"],
+            )
+            for subject, (entry, _, _) in refs.items()
+        }
+
+    def _matches_finalized_inputs(self, results: object, *, require_risk: bool) -> bool:
+        if (
+            self.__correlated_analysis is None
+            or type(results) not in (dict, _OwnedAnalysisResult)
+            or self.__detection_refs is None
+            or self.__correlation_refs is None
+        ):
+            return False
+        refs = self._entry_refs(results)
+        if refs is None or refs.keys() != self.__correlation_refs.keys():
+            return False
+        for subject, (entry, features, detections) in refs.items():
+            expected_entry, expected_correlation, correlation_items = (
+                self.__correlation_refs[subject]
+            )
+            (
+                expected_features,
+                expected_feature_items,
+                expected_detections,
+                expected_detection_items,
+            ) = self.__detection_refs[subject]
+            if (
+                entry is not expected_entry
+                or features is not expected_features
+                or not self._mapping_values_match(features, expected_feature_items)
+                or detections is not expected_detections
+                or detections.keys() != expected_detection_items.keys()
+                or any(
+                    detections[slot] is not detection
+                    for slot, detection in expected_detection_items.items()
+                )
+                or entry.get("correlation") is not expected_correlation
+                or not self._mapping_values_match(
+                    entry["correlation"], correlation_items,
+                )
+            ):
+                return False
+            if require_risk:
+                risk_ref = (self.__risk_refs or {}).get(subject)
+                if (
+                    risk_ref is None
+                    or risk_ref[0] is not entry
+                    or entry.get("risk_factors") is not risk_ref[1]
+                    or not self._mapping_values_match(
+                        entry["risk_factors"], risk_ref[2],
+                    )
+                    or type(entry.get("risk_level")) is not type(risk_ref[3])
+                    or entry.get("risk_level") != risk_ref[3]
+                ):
+                    return False
+        return True
 
     def _bind_analysis(self, analysis: object) -> None:
         """기존 Analysis를 넘겨 결속하지 못하게 하는 내부 검증점."""
@@ -61,16 +237,44 @@ class AnalysisRunOwner:
         self.__analysis = analysis
         self.__bound = True
 
-    def _create_analysis_result(self) -> dict:
-        """새 빈 private mapping을 만들고 이 실행에 한 번만 귀속한다."""
-        if self.__bound:
+    def _create_analysis_result(self, analysis: object) -> dict:
+        """이 실행의 Correlation/Risk 단계가 완성한 결과만 private mapping으로 봉인한다."""
+        source_analysis = analysis
+        results = self._results_mapping(source_analysis)
+        if (
+            self.__bound
+            or source_analysis is not self.__correlated_analysis
+            or self.__risk_refs is None
+            or results is None
+            or not self._matches_finalized_inputs(results, require_risk=True)
+        ):
             raise ValueError("invalid_analysis_context") from None
-        analysis = _OwnedAnalysisResult(self, _OWNED_ANALYSIS_TOKEN)
-        self._bind_analysis(analysis)
-        return analysis
+        owned_analysis = _OwnedAnalysisResult(self, _OWNED_ANALYSIS_TOKEN)
+        owned_analysis.update(source_analysis)
+        self._bind_analysis(owned_analysis)
+        return owned_analysis
 
     def is_bound_to(self, analysis: object) -> bool:
-        return self.__bound and self.__analysis is analysis
+        results = self._results_mapping(analysis)
+        if not (
+            self.__bound
+            and self.__analysis is analysis
+            and results is not None
+            and self._matches_finalized_inputs(results, require_risk=True)
+        ):
+            return False
+        expected = self.__correlated_analysis
+        if (
+            type(expected) is dict
+            and "results" in expected
+            and "global_correlation" in expected
+        ):
+            return (
+                type(analysis) is _OwnedAnalysisResult
+                and set(analysis) == set(expected)
+                and analysis.get("global_correlation") is expected["global_correlation"]
+            )
+        return True
 
     def __repr__(self) -> str:
         return "AnalysisRunOwner(<redacted>)"

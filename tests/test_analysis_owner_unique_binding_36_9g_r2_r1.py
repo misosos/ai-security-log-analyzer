@@ -26,14 +26,14 @@ def _run():
 
 
 def test_run_owner_creates_exactly_one_private_analysis_mapping():
-    owner = AnalysisRunOwner()
-    analysis = owner._create_analysis_result()
-    analysis.update({"results": {}, "global_correlation": {}})
+    run = _run()
+    owner = run.run_owner
+    analysis = run.analysis
 
     assert is_owned_analysis_result(analysis, owner)
     assert owner.is_bound_to(analysis)
     with pytest.raises(ValueError, match="invalid_analysis_context"):
-        owner._create_analysis_result()
+        owner._create_analysis_result(analysis)
     with pytest.raises(ValueError, match="invalid_analysis_context"):
         owner._bind_analysis({"results": {}, "global_correlation": {}})
 
@@ -45,9 +45,9 @@ def test_distinct_run_cannot_claim_or_repackage_an_existing_analysis():
     with pytest.raises(ValueError, match="invalid_analysis_context"):
         owner_b._bind_analysis(run_a.analysis)
 
-    analysis_b = owner_b._create_analysis_result()
-    analysis_b.update(dict(run_a.analysis))
-    roles_b = AnalysisSourceRoleSnapshot.from_events(analysis_b, ())
+    run_b = _run()
+    analysis_b = run_b.analysis
+    roles_b = run_b.source_roles
 
     with pytest.raises(ValueError, match="invalid_analysis_context"):
         AnalysisWithSourceRoleSnapshot(

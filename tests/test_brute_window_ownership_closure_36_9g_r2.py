@@ -26,12 +26,10 @@ def test_current_run_wrapper_accepts_its_own_context_and_projects_case():
 
 
 def test_one_owner_cannot_bind_two_analysis_objects():
-    owner = AnalysisRunOwner()
-
-    analysis = owner._create_analysis_result()
-    analysis.update({"analysis": "synthetic-a"})
+    run = _run()
+    owner = run.run_owner
     with pytest.raises(ValueError, match="invalid_analysis_context"):
-        owner._bind_analysis({"analysis": "synthetic-b"})
+        owner._create_analysis_result(run.analysis)
 
 
 def test_an_analysis_cannot_be_claimed_by_a_second_distinct_owner():

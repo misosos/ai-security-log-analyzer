@@ -209,10 +209,8 @@ def _analyze_normalized_logs_with_context(logs):
         brute_window_contexts,
         run_owner=run_owner,
     )
-    owned_result = run_owner._create_analysis_result()
-    owned_result.update(result)
-    result = owned_result
-    result = assess_risk(result)
+    result = assess_risk(result, run_owner=run_owner)
+    result = run_owner._create_analysis_result(result)
     return result, brute_window_contexts, run_owner
 
 

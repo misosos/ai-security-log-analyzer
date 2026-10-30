@@ -442,6 +442,7 @@ class LiveAnalysisAccumulator:
             grouped = group_logs_by_ip(history)
             run_owner = AnalysisRunOwner()
             brute_window_contexts = select_brute_window_contexts(history, run_owner)
+            run_owner._bind_detection_results(detection_proposal._detection)
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED") from None
         results = {}
@@ -480,12 +481,19 @@ class LiveAnalysisAccumulator:
             results[subject] = {"features": entry["features"],
                                 "detections": entry["detections"], "correlation": correlations}
         try:
-            assess_risk_with_metadata({"results": results, "global_correlation": {}}, self._metadata)
+            run_owner._bind_correlated_analysis(results)
+        except Exception:
+            raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED") from None
+        try:
+            assess_risk_with_metadata(
+                {"results": results, "global_correlation": {}},
+                self._metadata,
+                run_owner=run_owner,
+            )
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_RISK_FAILED") from None
         try:
-            owned_results = run_owner._create_analysis_result()
-            owned_results.update(results)
+            owned_results = run_owner._create_analysis_result(results)
             results = owned_results
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CASE_FAILED") from None

@@ -219,18 +219,14 @@ def test_invalid_bound_role_value_fails_closed_to_unknown():
 def test_source_role_analysis_wrapper_loads_once_and_preserves_analysis_result(monkeypatch):
     import app.main as main
 
-    from app.detector.brute_force import AnalysisRunOwner
-
-    run_owner = AnalysisRunOwner()
-    analysis = run_owner._create_analysis_result()
-    analysis.update({"results": {}, "global_correlation": {}})
+    analysis = {"results": {}, "global_correlation": {}}
     load_calls = []
     events = [_event("192.0.2.30", "ssh")]
     monkeypatch.setattr(main, "load_normalized_logs", lambda sources: load_calls.append(sources) or events)
     monkeypatch.setattr(
         main,
         "_analyze_normalized_logs_with_context",
-        lambda loaded: (analysis, {}, run_owner),
+        lambda loaded: (analysis, {}, None),
     )
 
     snapshot = main.analyze_with_source_role_snapshot(({"source": "ssh", "path": "synthetic"},))

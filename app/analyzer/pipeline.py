@@ -217,6 +217,7 @@ def detect_attacks_with_context(logs, run_owner: AnalysisRunOwner):
             detect_web_observations(grouped_logs[ip])
         )
 
+    run_owner._bind_detection_results(results)
     return results, brute_window_contexts
 
 
@@ -236,6 +237,10 @@ def correlate_attacks(
     grouped_logs = group_logs_by_ip(logs)
     if brute_window_contexts is None:
         brute_window_contexts = {}
+    trusted_detection_run = (
+        run_owner is not None
+        and run_owner._matches_detection_results(results)
+    )
 
     # 전체 로그를 기준으로 수행하는 Correlation
     multi_ip_results = correlate_multi_ip_authentication(
@@ -285,8 +290,11 @@ def correlate_attacks(
                         brute_window_contexts.get(ip),
                         subject_ip=ip,
                     )
-                    and run_owner is not None
+                    and trusted_detection_run
                     and brute_window_contexts[ip]._run_owner is run_owner
+                    and run_owner._has_brute_detection(
+                        ip, result["detections"]["brute_force"],
+                    )
                     else None
                 ),
                 run_owner=run_owner,
@@ -308,7 +316,7 @@ def correlate_attacks(
         }
 
     # IP별 결과와 전체 로그 Correlation을 분리
-    return {
+    analysis = {
         "results": results,
         "global_correlation": {
             "multi_ip_authentication": multi_ip_results,
@@ -323,14 +331,23 @@ def correlate_attacks(
             ),
         },
     }
+    if trusted_detection_run:
+        run_owner._bind_correlated_analysis(analysis)
+    return analysis
 
 
-def assess_risk(analysis):
+def assess_risk(analysis, run_owner: AnalysisRunOwner | None = None):
 
-    return assess_risk_with_metadata(analysis, load_account_metadata())
+    return assess_risk_with_metadata(
+        analysis, load_account_metadata(), run_owner=run_owner,
+    )
 
 
-def assess_risk_with_metadata(analysis, account_metadata):
+def assess_risk_with_metadata(
+    analysis,
+    account_metadata,
+    run_owner: AnalysisRunOwner | None = None,
+):
     """The existing risk calculation with an already approved metadata snapshot."""
 
     results = analysis["results"]
@@ -363,4 +380,6 @@ def assess_risk_with_metadata(analysis, account_metadata):
 
         result["risk_level"] = risk_level
 
+    if run_owner is not None:
+        run_owner._bind_risk_analysis(analysis)
     return analysis
