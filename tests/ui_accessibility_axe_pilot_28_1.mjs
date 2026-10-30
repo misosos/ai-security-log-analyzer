@@ -9,6 +9,9 @@ import {join, resolve} from 'node:path';
 import {performance} from 'node:perf_hooks';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const UI1_SCREENSHOTS = process.env.UI1_SCREENSHOTS;
+const UI1_BASELINE_CSS = process.env.UI1_BASELINE_CSS ?
+  await readFile(process.env.UI1_BASELINE_CSS, 'utf8') : null;
 const SESSION = 'LIVE-SESSION-000001';
 const eventId = (n) => `LIVE-EVENT-000001-${String(n).padStart(6, '0')}`;
 const CANARY = ['synthetic', 'private', 'account', '28', '1'].join('-');
@@ -56,7 +59,8 @@ function targetGapPx(first, second) {
 
 async function assertWorkspaceReflow(page, label) {
   const viewports = [
-    {width: 1440, height: 900}, {width: 1024, height: 768}, {width: 768, height: 1024},
+    {width: 1920, height: 1080}, {width: 1440, height: 900}, {width: 1280, height: 800},
+    {width: 1024, height: 768}, {width: 768, height: 1024},
     {width: 390, height: 844}, {width: 320, height: 568},
   ];
   const measurements = [];
@@ -501,6 +505,7 @@ async function main() {
   const start = performance.now();
   const home = await mkdtemp(join(tmpdir(), 'ui-a11y-28-1-'));
   await mkdir(join(home, 'config'));
+  if (UI1_SCREENSHOTS) await mkdir(UI1_SCREENSHOTS, {recursive: true});
   let server;
   let browser;
   let context;
@@ -528,6 +533,8 @@ async function main() {
       if (url.origin !== server.origin) {
         externalRequests++;
         await route.abort();
+      } else if (url.pathname === '/assets/style.css' && UI1_BASELINE_CSS !== null) {
+        await route.fulfill({status: 200, contentType: 'text/css', body: UI1_BASELINE_CSS});
       } else if (url.pathname === '/api/v1/live/status') {
         if (stateForPage === 'DISABLED') await route.continue();
         else await route.fulfill({status: 200, contentType: 'application/json',
@@ -627,6 +634,20 @@ async function main() {
         requireSafe(await page.locator('#nav-start').getAttribute('aria-current') === 'page' &&
           await page.locator('#nav-live').isHidden() && await page.locator('#nav-results').isHidden(),
           'WORKSPACE_INITIAL_STATE_FAILED');
+        const theme = await page.evaluate(() => ({
+          background: getComputedStyle(document.documentElement).getPropertyValue('--cyber-bg').trim(),
+          cyan: getComputedStyle(document.documentElement).getPropertyValue('--cyber-cyan').trim(),
+          bodyFont: parseFloat(getComputedStyle(document.body).fontSize),
+          sidebarWidth: Math.round(document.querySelector('.workspace-nav').getBoundingClientRect().width),
+          activeBorder: getComputedStyle(document.querySelector('.workspace-nav button[aria-current="page"]')).borderInlineStartColor,
+        }));
+        if (UI1_BASELINE_CSS === null) {
+          requireSafe(theme.background === '#070b18' && theme.cyan === '#00d9f5' && theme.bodyFont >= 16 &&
+            theme.sidebarWidth >= 240 && theme.activeBorder === 'rgb(0, 217, 245)',
+          'CYBERPUNK_WORKSPACE_THEME_FAILED');
+          console.log(`CYBERPUNK_THEME ${JSON.stringify(theme)}`);
+        }
+        if (UI1_SCREENSHOTS) await page.screenshot({path: join(UI1_SCREENSHOTS, 'start-1440.png'), fullPage: true});
         await page.locator('#nav-local').focus();
         await page.keyboard.press('Enter');
         requireSafe(await page.locator('#local-upload').isVisible() &&
@@ -1172,6 +1193,10 @@ async function main() {
       await reviewWorkspacePage.locator('#results-dashboard.workspace-dashboard-36-6c').isVisible() &&
       await reviewWorkspacePage.locator('#summary-cards .workspace-summary-card-36-6c').count() === 4,
     'WORKSPACE_DASHBOARD_STRUCTURE_MISSING');
+    if (UI1_SCREENSHOTS) {
+      await reviewWorkspacePage.setViewportSize({width: 1440, height: 1000});
+      await reviewWorkspacePage.screenshot({path: join(UI1_SCREENSHOTS, 'dashboard-1440.png'), fullPage: true});
+    }
     const dashboardCounts = await reviewWorkspacePage.locator('#summary-cards .workspace-summary-card-36-6c').allTextContents();
     requireSafe(dashboardCounts.some((value) => value.includes('확인된 활동') && value.includes('5')) &&
       dashboardCounts.some((value) => value.includes('연결된 활동') && value.includes('3')) &&
@@ -1348,6 +1373,10 @@ async function main() {
         (getComputedStyle(heading).outlineStyle !== 'none' || getComputedStyle(heading).boxShadow !== 'none');
     }), 'REVIEW_DETAIL_FOCUS_INDICATOR_MISSING');
     await scan(reviewWorkspacePage, 'review-detail');
+    if (UI1_SCREENSHOTS) {
+      await reviewWorkspacePage.setViewportSize({width: 1440, height: 1000});
+      await reviewWorkspacePage.screenshot({path: join(UI1_SCREENSHOTS, 'case-detail-1440.png'), fullPage: true});
+    }
     for (const width of [320, 640, 1024, 1440]) {
       await reviewWorkspacePage.setViewportSize({width, height: 900});
       requireSafe(await reviewWorkspacePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
