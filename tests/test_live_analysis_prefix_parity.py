@@ -4,6 +4,11 @@ from datetime import timedelta
 
 from app.analyzer.incident_case_adapter import project_investigation_cases_from_analysis
 from app.analyzer.pipeline import assess_risk, correlate_attacks, detect_attacks
+from app.detector.brute_force import select_brute_window_contexts
+from app.investigation_role_snapshot_36_4 import (
+    AnalysisSourceRoleSnapshot,
+    AnalysisWithSourceRoleSnapshot,
+)
 from app.analyzer.risk import load_account_metadata
 from app.live_monitoring.analysis_accumulator import LiveAnalysisAccumulator
 from app.live_monitoring.core import LiveTailRecord
@@ -39,7 +44,12 @@ def _exercise(lines, transform=None):
         oracle = assess_risk(correlate_attacks(prefix, oracle_detection))
         trusted = analysis._state
         assert trusted._results == oracle["results"]
-        assert trusted._projection == project_investigation_cases_from_analysis(oracle)
+        oracle_run = AnalysisWithSourceRoleSnapshot(
+            oracle,
+            AnalysisSourceRoleSnapshot.from_events(oracle, tuple(prefix)),
+            select_brute_window_contexts(prefix),
+        )
+        assert trusted._projection == project_investigation_cases_from_analysis(oracle_run)
         assert trusted._assembly.cases == tuple(trusted._assembly.cases)
         assert analysis.snapshot().revision == sequence
     detector.close()

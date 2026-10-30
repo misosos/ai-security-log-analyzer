@@ -99,20 +99,20 @@ def build_risk_factors(features, account_privilege_risk):
                 "volume": {
                     "level": volume_signal,
                     "rationale": (
-                        f"인증 실패가 {features['failure_count']}회 발생함"
+                        f"IP 전체에서 인증 실패가 {features['failure_count']}회 관찰됨"
                     ),
                 },
                 "temporal": {
                     "level": temporal_signal,
                     "rationale": (
-                        f"인증 실패가 {features['window_seconds']:.1f}초 동안 발생했으며 "
+                        f"IP 전체 실패 관측 범위는 {features['window_seconds']:.1f}초이며 "
                         f"평균 실패 간격은 {features['average_interval']:.1f}초임"
                     ),
                 },
                 "targeting": {
                     "level": targeting_signal,
                     "rationale": (
-                        f"{features['unique_target_count']}개의 계정이 "
+                        f"IP 전체에서 {features['unique_target_count']}개의 계정이 "
                         "인증 실패 대상으로 확인됨"
                     ),
                 },
@@ -234,17 +234,17 @@ def evaluate_likelihood(features):
 
             if evidence.type == "multiple_login_failures":
                 rationale.append(
-                    f"{evidence.value}회의 인증 실패가 발생함"
+                    f"선택된 반복 실패 창에서 인증 실패 {evidence.value}회가 관찰됨"
                 )
 
             elif evidence.type == "single_target_user":
                 rationale.append(
-                    "단일 계정에 인증 실패가 집중됨"
+                    "선택된 반복 실패 창의 알려진 대상 계정은 하나임"
                 )
 
             elif evidence.type == "failures_within_short_window":
                 rationale.append(
-                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                    f"선택된 반복 실패 창의 길이는 {evidence.value:.1f}초임"
                 )
 
         rationale.append(
@@ -252,7 +252,7 @@ def evaluate_likelihood(features):
         )
 
         rationale.append(
-            "Brute Force 탐지 이후 동일 계정의 로그인 성공이 확인됨"
+            "선택된 반복 실패 창 종료 뒤 같은 계정의 로그인 성공이 관찰됨"
         )
 
         return {
@@ -267,17 +267,17 @@ def evaluate_likelihood(features):
 
             if evidence.type == "multiple_login_failures":
                 rationale.append(
-                    f"{evidence.value}회의 인증 실패가 발생함"
+                    f"선택된 반복 실패 창에서 인증 실패 {evidence.value}회가 관찰됨"
                 )
 
             elif evidence.type == "single_target_user":
                 rationale.append(
-                    "단일 계정에 인증 실패가 집중됨"
+                    "선택된 반복 실패 창의 알려진 대상 계정은 하나임"
                 )
 
             elif evidence.type == "failures_within_short_window":
                 rationale.append(
-                    f"실패가 {evidence.value:.1f}초 내에 집중됨"
+                    f"선택된 반복 실패 창의 길이는 {evidence.value:.1f}초임"
                 )
 
         rationale.append(

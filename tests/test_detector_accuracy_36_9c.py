@@ -140,14 +140,14 @@ def test_metrics_exclude_undetermined_and_parser_contributions_separately():
     summary = evaluation.evaluate()
     metrics = {item["detector"]: item for item in summary["metrics"]}
     brute = metrics["brute_force"]
-    assert (brute["tp"], brute["fp"], brute["fn"], brute["tn"]) == (3, 0, 1, 3)
+    assert (brute["tp"], brute["fp"], brute["fn"], brute["tn"]) == (4, 0, 0, 3)
     assert brute["excluded_undetermined"] == 1
     assert brute["excluded_parser"] == 0
     assert summary["parser_contributions"] == []
-    assert any(
+    assert not any(
         finding["scenario_id"] == "bf_burst_with_late_noise"
+        and finding.get("finding") == "DETECTOR_FALSE_NEGATIVE"
         for finding in summary["scenario_results"]
-        if finding.get("finding") == "DETECTOR_FALSE_NEGATIVE"
     )
 
 

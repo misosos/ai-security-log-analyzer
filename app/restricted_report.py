@@ -28,7 +28,11 @@ from app.analyzer.incident_case_adapter import (
 from app.analyzer.pipeline import (
     assess_risk,
     correlate_attacks,
-    detect_attacks,
+    detect_attacks_with_context,
+)
+from app.investigation_role_snapshot_36_4 import (
+    AnalysisSourceRoleSnapshot,
+    AnalysisWithSourceRoleSnapshot,
 )
 from app.parser.registry import get_parser, get_timezone
 from app.parser.time_utils import normalize_to_utc
@@ -259,10 +263,15 @@ def _utc_projection_time(value: object) -> str | None:
 
 def _build_report(role: str, events: list) -> dict:
     started = time.monotonic()
-    analysis = detect_attacks(events)
-    analysis = correlate_attacks(events, analysis)
+    detections, brute_window_contexts = detect_attacks_with_context(events)
+    analysis = correlate_attacks(events, detections, brute_window_contexts)
     analysis = assess_risk(analysis)
-    case_projection = project_investigation_cases_from_analysis(analysis)
+    analysis_run = AnalysisWithSourceRoleSnapshot(
+        analysis,
+        AnalysisSourceRoleSnapshot.from_events(analysis, tuple(events)),
+        brute_window_contexts,
+    )
+    case_projection = project_investigation_cases_from_analysis(analysis_run)
 
     subjects, ip_subject_ids = _collect_subjects(events)
     observation_counts: dict[str, int] = {}

@@ -12,7 +12,6 @@ from app.evaluation.corpus import (
     EvaluationScenario, ExpectedCase, ExpectedDetection, ExpectedParser,
     ExpectedRelation, ExpectedRisk, SCENARIOS,
 )
-from app.main import analyze
 from app.parser.registry import get_parser, get_timezone
 from app.parser.time_utils import normalize_to_utc
 from app.analyzer.web_observation_projection import (
@@ -466,8 +465,13 @@ def evaluate(scenarios: tuple[EvaluationScenario, ...] = SCENARIOS) -> Evaluatio
             outcomes.append(ScenarioResult(item.id, parser_ok, failed))
             continue
         try:
-            analysis = analyze([{"source": item.source, "path": str(path)}])
-            projection = project_investigation_cases_from_analysis(analysis)
+            from app.main import analyze_with_source_role_snapshot
+
+            analysis_run = analyze_with_source_role_snapshot([
+                {"source": item.source, "path": str(path)}
+            ])
+            analysis = analysis_run.analysis
+            projection = project_investigation_cases_from_analysis(analysis_run)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError):
             raise EvaluationError("analysis_failed") from None
         results = analysis["results"]

@@ -161,17 +161,14 @@ def test_actual_case_adapter_rejects_window_evidence_against_full_ip_features():
     assert (features["failure_count"], features["window_seconds"]) == (6, 70)
 
 
-def test_actual_correlation_selects_outside_window_late_failure():
+def test_brute_correlation_without_window_context_fails_closed():
     events = _fixture_events()
     result = correlate_brute_force_to_success(
         events,
         DetectionResult(True, "brute_force", []),
     )
 
-    assert result["is_correlated"] is True
-    assert result["failure_timestamp"] == BASE + timedelta(seconds=70)
-    assert result["success_timestamp"] == BASE + timedelta(seconds=80)
-    assert result["time_delta_seconds"] == 10
+    assert result["is_correlated"] is False
 
 
 def test_shadow_correlation_uses_window_endpoint_not_late_failure():
@@ -222,7 +219,7 @@ def test_shadow_correlation_is_order_independent_and_fails_closed_on_tied_succes
     assert correlate_window_end_to_success(context, tied)["is_correlated"] is False
 
 
-def test_window_end_policy_requires_pattern_completion_before_success():
+def test_window_correlation_requires_validated_context_and_pattern_completion():
     context = _context()
     during_window = [_event(10, "user_login")]
     endpoint_policy = correlate_window_end_to_success(context, during_window)
@@ -231,8 +228,7 @@ def test_window_end_policy_requires_pattern_completion_before_success():
         DetectionResult(True, "brute_force", []),
     )
     assert endpoint_policy["is_correlated"] is False
-    assert member_closest_policy["is_correlated"] is True
-    assert member_closest_policy["failure_timestamp"] == BASE + timedelta(seconds=5)
+    assert member_closest_policy["is_correlated"] is False
 
 
 def test_exact_duplicate_success_is_ambiguous_without_ingestion_identity():
@@ -274,14 +270,14 @@ def test_risk_separates_candidate_window_rationale_from_full_ip_signal_values():
     current = _analysis_with_candidate(events, context)["results"][SUBJECT]
     corrected = _analysis_with_window_correlation(events, context)["results"][SUBJECT]
 
-    assert current["correlation"]["brute_force_to_success"]["failure_timestamp"] == BASE + timedelta(seconds=70)
+    assert current["correlation"]["brute_force_to_success"]["failure_timestamp"] == BASE + timedelta(seconds=20)
     assert corrected["correlation"]["brute_force_to_success"]["failure_timestamp"] == BASE + timedelta(seconds=20)
     assert corrected["correlation"]["brute_force_to_success"]["time_delta_seconds"] == 60
     assert corrected["risk_factors"]["likelihood"]["failure_count"] == 6
     assert corrected["risk_factors"]["likelihood"]["time_window"] == 70
-    assert corrected["risk_factors"]["likelihood"]["signals"]["volume"]["rationale"] == "인증 실패가 6회 발생함"
-    assert "5회의 인증 실패" in " ".join(corrected["risk_factors"]["likelihood"]["rationale"])
-    assert "20.0초" in " ".join(corrected["risk_factors"]["likelihood"]["rationale"])
+    assert corrected["risk_factors"]["likelihood"]["signals"]["volume"]["rationale"] == "IP 전체에서 인증 실패가 6회 관찰됨"
+    assert "선택된 반복 실패 창에서 인증 실패 5회" in " ".join(corrected["risk_factors"]["likelihood"]["rationale"])
+    assert "선택된 반복 실패 창의 길이는 20.0초" in " ".join(corrected["risk_factors"]["likelihood"]["rationale"])
     assert "70.0초" in corrected["risk_factors"]["likelihood"]["signals"]["temporal"]["rationale"]
 
 
@@ -374,10 +370,13 @@ def test_password_spray_late_noise_mixed_ip_missing_user_and_duplicates_are_whol
     assert detect_password_spray(duplicate_features, duplicates).is_detected is True
 
 
-def test_no_candidate_detection_has_no_window_evidence_and_existing_spray_is_unchanged():
+def test_late_noise_candidate_detection_coexists_with_unchanged_spray():
     events = _fixture_events()
     results = detect_attacks(events)
-    assert results[SUBJECT]["detections"]["brute_force"].is_detected is False
+    brute = results[SUBJECT]["detections"]["brute_force"]
+    assert brute.is_detected is True
+    assert next(item.value for item in brute.evidence if item.type == "multiple_login_failures") == 5
+    assert next(item.value for item in brute.evidence if item.type == "failures_within_short_window") == 20
     assert results[SUBJECT]["detections"]["password_spray"].is_detected is False
     assert results[SUBJECT]["features"]["failure_count"] == 6
     assert results[SUBJECT]["features"]["window_seconds"] == 70

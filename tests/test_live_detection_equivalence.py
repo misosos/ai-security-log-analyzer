@@ -55,7 +55,8 @@ def test_application_brute_below_exact_above_and_old_failure_no_eviction():
     assert counts == [0, 0, 0, 0, 1, 1]
     over_window = ("2026-01-02 03:00:00 INFO login_failed user=synthetic ip=192.0.2.1",) + lines[:5]
     _, summaries = run_prefix_parity("application", over_window)
-    assert dict(summaries[-1].detected_type_counts)["brute_force"] == 0
+    # 오래된 추가 실패가 있어도 뒤의 5회/20초 창은 독립적으로 평가한다.
+    assert dict(summaries[-1].detected_type_counts)["brute_force"] == 1
 
 
 def test_application_spray_success_multiple_subjects_and_out_of_order():

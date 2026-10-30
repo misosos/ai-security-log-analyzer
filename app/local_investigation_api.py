@@ -563,7 +563,11 @@ def _worker(connection, sources, analyze: Callable, project: Callable,
             connection.send(("error", "ANALYSIS_FAILED"))
             return
         try:
-            projection = project(analysis)
+            projection = project(
+                analysis_run
+                if type(analysis_run) is AnalysisWithSourceRoleSnapshot
+                else analysis
+            )
         except Exception:
             connection.send(("error", "CASE_PROJECTION_FAILED"))
             return

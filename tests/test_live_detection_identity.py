@@ -14,7 +14,7 @@ def batch(sequence, second, ip="192.0.2.1"):
     return parse_live_records("application", (record,))
 
 
-def test_created_updated_no_longer_matches_and_reactivation():
+def test_selected_window_identity_updates_on_earlier_burst_and_survives_late_noise():
     accumulator = LiveDetectionAccumulator("application", 20, 10000)
     for number in range(1, 6):
         accumulator.commit(accumulator.prepare(batch(number, number)))
@@ -24,34 +24,20 @@ def test_created_updated_no_longer_matches_and_reactivation():
     assert created[0].observation_id == "LIVE-OBS-000001"
     assert created[0].observation_revision == 1
     accumulator.commit(accumulator.prepare(batch(6, 6)))
+    # Later noise does not replace the earliest qualifying window.
+    assert accumulator.latest_change_set().changes == ()
+    accumulator.commit(accumulator.prepare(batch(7, 0)))
     changed = accumulator.latest_change_set().changes
     assert len(changed) == 1
     assert changed[0].change_type == "UPDATED"
     assert changed[0].observation_id == created[0].observation_id
     assert changed[0].observation_revision == 2
-    # A far-future failure widens the full-session min/max window; no eviction.
+    # A far-future failure widens whole-session features but not the selected window.
     line = "2026-01-02 03:10:00 INFO login_failed user=synthetic ip=192.0.2.1"
-    parsed = parse_live_records("application", (LiveTailRecord("application", 7, line, len(line.encode())),))
+    parsed = parse_live_records("application", (LiveTailRecord("application", 8, line, len(line.encode())),))
     accumulator.commit(accumulator.prepare(parsed))
-    inactive = accumulator.latest_change_set().changes
-    assert inactive[0].change_type == "NO_LONGER_MATCHES"
-    assert inactive[0].state == "NO_LONGER_MATCHES_CURRENT_RESULT"
-    assert inactive[0].observation_id == created[0].observation_id
-    assert accumulator.snapshot().active_observation_count == 0
-
-    # Characterize reactivation policy without altering the production detector.
-    candidate = deepcopy(accumulator._detection)
-    candidate["192.0.2.1"]["detections"]["brute_force"] = accumulator._observations[0]._detection
-    observations, next_id, changeset, active_count = module._prepare_observations(
-        accumulator._observations, candidate, accumulator._next_observation_id,
-        accumulator.snapshot().revision + 1,
-        replace(accumulator.latest_change_set().safe_summary,
-                proposal_revision=accumulator.snapshot().revision + 1),
-    )
-    assert next_id == 1 and active_count == 1
-    assert observations[0].observation_id == created[0].observation_id
-    assert changeset.changes[0].change_type == "UPDATED"
-    assert changeset.changes[0].observation_revision == 4
+    assert accumulator.latest_change_set().changes == ()
+    assert accumulator.snapshot().active_observation_count == 1
 
 
 def test_unchanged_canonical_result_has_no_change_and_evidence_order_matters():

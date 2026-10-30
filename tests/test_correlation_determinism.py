@@ -11,6 +11,10 @@ from app.correlation.attack_chain import (
     correlate_brute_force_to_success,
     correlate_password_spray_to_success,
 )
+from app.detector.brute_force import (
+    brute_force_detection_from_context,
+    select_brute_window_contexts,
+)
 from app.models.schemas import AuthenticationContext, DetectionResult, NormalizedEvent
 
 
@@ -32,8 +36,6 @@ def event(kind: str, seconds: float, *, account: str = "synthetic_a",
 
 CORRELATORS = (
     lambda logs: correlate_authentication_transition(logs),
-    lambda logs: correlate_brute_force_to_success(
-        logs, DetectionResult(True, "brute_force", [])),
     lambda logs: correlate_password_spray_to_success(
         logs, DetectionResult(True, "password_spraying_like", [])),
 )
@@ -91,3 +93,51 @@ def test_microsecond_nearest_success_and_equal_delta_ambiguity(correlate):
     another_failure = event("login_failed", 20)
     another_success = event("user_login", 21.000001)
     assert correlate([failure, nearest, another_failure, another_success])["is_correlated"] is False
+
+
+def _brute_relation(logs):
+    contexts = select_brute_window_contexts(logs)
+    context = contexts.get("192.0.2.10")
+    if context is None:
+        return correlate_brute_force_to_success(
+            logs, DetectionResult(False, None, []),
+        )
+    detection = brute_force_detection_from_context(context)
+    return correlate_brute_force_to_success(
+        logs, detection, window_context=context,
+    )
+
+
+def test_brute_window_endpoint_correlation_is_order_independent():
+    failures = [event("login_failed", second) for second in (0, 1, 2, 3, 4)]
+    near = event("user_login", 10)
+    far = event("user_login", 20)
+    expected = None
+    for arranged in permutations((*failures, near, far)):
+        relation = _brute_relation(list(arranged))
+        if expected is None:
+            expected = relation
+        assert relation == expected
+    assert expected["is_correlated"] is True
+    assert expected["failure_timestamp"] == BASE + timedelta(seconds=4)
+    assert expected["success_timestamp"] == BASE + timedelta(seconds=10)
+    assert expected["time_delta_seconds"] == 6
+
+
+def test_brute_window_correlation_fails_closed_on_tied_success_rows():
+    failures = [event("login_failed", second) for second in (0, 1, 2, 3, 4)]
+    success = event("user_login", 10)
+    exact_duplicate = deepcopy(success)
+    assert _brute_relation([*failures, success, exact_duplicate])["is_correlated"] is False
+    distinct = deepcopy(success)
+    distinct.source = "ssh"
+    assert _brute_relation([*failures, success, distinct])["is_correlated"] is False
+
+
+def test_brute_window_correlation_requires_matching_account_and_subject():
+    failures = [event("login_failed", second) for second in (0, 1, 2, 3, 4)]
+    distractors = [
+        event("user_login", 5, account="synthetic_b"),
+        event("user_login", 5, subject="2001:db8::10"),
+    ]
+    assert _brute_relation([*failures, *distractors])["is_correlated"] is False

@@ -7,6 +7,10 @@ from ipaddress import ip_address
 from types import MappingProxyType
 from typing import Mapping
 
+from app.detector.brute_force import (
+    BruteWindowContext,
+    validate_brute_window_context,
+)
 from app.models.schemas import NormalizedEvent
 
 
@@ -94,10 +98,31 @@ class AnalysisSourceRoleSnapshot:
 
 @dataclass(frozen=True, slots=True, repr=False)
 class AnalysisWithSourceRoleSnapshot:
-    """Analysis output plus private immutable metadata captured from its parsed events."""
+    """분석 결과와 요청 범위의 private provenance/context를 묶는다."""
 
     analysis: dict = field(repr=False, compare=False)
     source_roles: AnalysisSourceRoleSnapshot = field(repr=False, compare=False)
+    brute_window_contexts: Mapping[str, BruteWindowContext] = field(
+        default_factory=lambda: MappingProxyType({}),
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.brute_window_contexts, Mapping):
+            raise ValueError("invalid_analysis_context") from None
+        for subject, context in self.brute_window_contexts.items():
+            try:
+                if type(subject) is not str:
+                    raise ValueError("invalid_analysis_context")
+                validate_brute_window_context(context, subject_ip=subject)
+            except (TypeError, ValueError, AttributeError):
+                raise ValueError("invalid_analysis_context") from None
+        object.__setattr__(
+            self,
+            "brute_window_contexts",
+            MappingProxyType(dict(self.brute_window_contexts)),
+        )
 
     def __repr__(self) -> str:
         return "AnalysisWithSourceRoleSnapshot(<redacted>)"

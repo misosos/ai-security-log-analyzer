@@ -1,4 +1,12 @@
 from datetime import datetime
+import math
+
+from app.detector.brute_force import (
+    BruteWindowContext,
+    brute_evidence_matches_context,
+    validate_brute_window_context,
+)
+from app.models.schemas import NormalizedEvent
 
 
 def _closest_authentication_pair(ip_logs, correlation_window_seconds):
@@ -159,33 +167,80 @@ def correlate_brute_force_to_success(
     ip_logs,
     brute_force_detection,
     correlation_window_seconds=60,
+    *,
+    window_context: BruteWindowContext | None = None,
 ):
-    # Brute Force 탐지가 발생하지 않았다면
-    # 이 전이는 확인하지 않음
-    if not brute_force_detection.is_detected:
-        return {
-            "is_correlated": False,
-            "type": None,
-            "user": None,
-            "rationale": [],
-        }
+    # 선택 창과 실제 Evidence가 함께 검증될 때만 Brute 전용 관계를 만든다.
+    if (
+        type(window_context) is not BruteWindowContext
+        or not brute_evidence_matches_context(
+            brute_force_detection,
+            window_context,
+            subject_ip=window_context.subject_ip,
+        )
+    ):
+        return _no_correlation()
+    try:
+        validate_brute_window_context(window_context)
+    except ValueError:
+        return _no_correlation()
+    # Context는 탐지에 사용된 동일한 정규화 이벤트 객체를 보유해야 한다.
+    # 다른 분석 요청의 동등한 값을 가진 context 재사용도 허용하지 않는다.
+    available_event_ids = {
+        id(event) for event in ip_logs if type(event) is NormalizedEvent
+    }
+    if any(
+        id(member) not in available_event_ids
+        for member in window_context.member_events
+    ):
+        return _no_correlation()
+    if (
+        type(correlation_window_seconds) not in (int, float)
+        or correlation_window_seconds < 0
+        or correlation_window_seconds > 60
+        or not math.isfinite(correlation_window_seconds)
+    ):
+        return _no_correlation()
 
-    match = _closest_authentication_pair(ip_logs, correlation_window_seconds)
-    if match is not None:
-        failure, success, delta = match
-        return {
-            "is_correlated": True,
-            "type": "brute_force_to_successful_login",
-            "user": success.user,
-            "failure_timestamp": failure.timestamp,
-            "success_timestamp": success.timestamp,
-            "time_delta_seconds": delta,
-            "rationale": [
-                f"{success.user} 계정에서 Brute Force 탐지 이후 로그인 성공이 확인됨",
-                f"마지막 인증 실패와 로그인 성공 사이의 시간 차이는 {delta:.1f}초임",
-            ],
-        }
+    successes = []
+    for event in ip_logs:
+        if (
+            type(event) is not NormalizedEvent
+            or event.event_type != "user_login"
+            or event.src_ip != window_context.subject_ip
+            or event.user != window_context.target_account
+            or not isinstance(event.timestamp, datetime)
+            or event.timestamp.tzinfo is None
+            or event.timestamp.utcoffset() is None
+        ):
+            continue
+        success_time = event.timestamp.astimezone(window_context.end_utc.tzinfo)
+        delta = (success_time - window_context.end_utc).total_seconds()
+        if 0 < delta <= correlation_window_seconds:
+            successes.append((success_time, event))
+    if not successes:
+        return _no_correlation()
+    earliest = min(timestamp for timestamp, _ in successes)
+    matches = [event for timestamp, event in successes if timestamp == earliest]
+    if len(matches) != 1:
+        return _no_correlation()
+    success = matches[0]
+    delta = (earliest - window_context.end_utc).total_seconds()
+    return {
+        "is_correlated": True,
+        "type": "brute_force_to_successful_login",
+        "user": window_context.target_account,
+        "failure_timestamp": window_context.end_utc,
+        "success_timestamp": earliest,
+        "time_delta_seconds": delta,
+        "rationale": [
+            "선택된 반복 실패 창 종료 뒤 같은 IP와 계정에서 로그인 성공이 관찰됨",
+            f"선택 창 종료와 로그인 성공 관찰 사이의 시간 차이는 {delta:.1f}초임",
+        ],
+    }
 
+
+def _no_correlation():
     return {
         "is_correlated": False,
         "type": None,

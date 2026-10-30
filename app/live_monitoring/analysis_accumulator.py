@@ -12,6 +12,10 @@ from app.analyzer.incident_case import assemble_incident_cases
 from app.analyzer.incident_case_adapter import build_incident_case_subject_inputs
 from app.analyzer.incident_case_projection import build_investigation_case_projection
 from app.analyzer.pipeline import group_logs_by_ip, assess_risk_with_metadata
+from app.detector.brute_force import (
+    brute_evidence_matches_context,
+    select_brute_window_contexts,
+)
 from app.correlation.attack_chain import (
     correlate_authentication_transition,
     correlate_post_authentication_activity,
@@ -435,17 +439,29 @@ class LiveAnalysisAccumulator:
             raise LiveAnalysisError("LIVE_ANALYSIS_HISTORY_LIMIT")
         try:
             grouped = group_logs_by_ip(history)
+            brute_window_contexts = select_brute_window_contexts(history)
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED") from None
         results = {}
+        valid_brute_contexts = {}
         for subject, entry in detection_proposal._detection.items():
             ip_logs = grouped.get(subject, [])
+            brute_context = brute_window_contexts.get(subject)
+            brute_detection = entry["detections"]["brute_force"]
+            if not brute_evidence_matches_context(
+                brute_detection,
+                brute_context,
+                subject_ip=subject,
+            ):
+                brute_context = None
+            else:
+                valid_brute_contexts[subject] = brute_context
             try:
                 correlations = {
                     "authentication": correlate_authentication_transition(ip_logs),
                     "post_authentication": correlate_post_authentication_activity(ip_logs),
                     "brute_force_to_success": correlate_brute_force_to_success(
-                        ip_logs, entry["detections"]["brute_force"]),
+                        ip_logs, brute_detection, window_context=brute_context),
                     "password_spray_to_success": correlate_password_spray_to_success(
                         ip_logs, entry["detections"]["password_spray"]),
                 }
@@ -462,7 +478,10 @@ class LiveAnalysisAccumulator:
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_RISK_FAILED") from None
         try:
-            subjects = build_incident_case_subject_inputs(results)
+            subjects = build_incident_case_subject_inputs(
+                results,
+                brute_window_contexts=valid_brute_contexts,
+            )
             assembly = assemble_incident_cases(subjects)
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CASE_FAILED") from None

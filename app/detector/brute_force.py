@@ -1,4 +1,255 @@
-from app.models.schemas import Evidence, DetectionResult
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from ipaddress import ip_address
+import math
+
+from app.models.schemas import DetectionResult, Evidence, NormalizedEvent
+
+
+BRUTE_FORCE_MIN_FAILURES = 5
+BRUTE_FORCE_WINDOW_SECONDS = 60
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class BruteWindowContext:
+    """Brute 탐지에만 쓰는 비공개 창과 실제 인증 실패 행."""
+
+    subject_ip: str
+    target_account: str = field(repr=False)
+    start_utc: datetime
+    end_utc: datetime
+    failure_count: int
+    member_events: tuple[NormalizedEvent, ...] = field(repr=False)
+
+    def __repr__(self) -> str:
+        return "BruteWindowContext(<redacted>)"
+
+
+def _utc_timestamp(value: object) -> datetime:
+    if (
+        not isinstance(value, datetime)
+        or value.tzinfo is None
+        or value.utcoffset() is None
+    ):
+        raise ValueError("invalid_brute_window_context") from None
+    return value.astimezone(timezone.utc)
+
+
+def validate_brute_window_context(
+    context: BruteWindowContext,
+    *,
+    subject_ip: str | None = None,
+) -> None:
+    """비공개 context의 귀속·시간·멤버십 invariant를 다시 확인한다."""
+    if (
+        type(context) is not BruteWindowContext
+        or type(context.subject_ip) is not str
+        or not context.subject_ip
+        or not _same_ip(context.subject_ip, context.subject_ip)
+        or (
+            subject_ip is not None
+            and not _same_ip(context.subject_ip, subject_ip)
+        )
+    ):
+        raise ValueError("invalid_brute_window_context") from None
+    if (
+        type(context.target_account) is not str
+        or not context.target_account
+        or type(context.failure_count) is not int
+        or context.failure_count < BRUTE_FORCE_MIN_FAILURES
+        or type(context.member_events) is not tuple
+        or len(context.member_events) != context.failure_count
+    ):
+        raise ValueError("invalid_brute_window_context") from None
+    start = _utc_timestamp(context.start_utc)
+    end = _utc_timestamp(context.end_utc)
+    if context.start_utc.tzinfo is not timezone.utc or context.end_utc.tzinfo is not timezone.utc:
+        raise ValueError("invalid_brute_window_context") from None
+    if end < start or (end - start).total_seconds() > BRUTE_FORCE_WINDOW_SECONDS:
+        raise ValueError("invalid_brute_window_context") from None
+    timestamps = []
+    for event in context.member_events:
+        if (
+            type(event) is not NormalizedEvent
+            or event.event_type != "login_failed"
+            or not _same_ip(event.src_ip, context.subject_ip)
+            or event.user != context.target_account
+        ):
+            raise ValueError("invalid_brute_window_context") from None
+        timestamp = _utc_timestamp(event.timestamp)
+        if not start <= timestamp <= end:
+            raise ValueError("invalid_brute_window_context") from None
+        timestamps.append(timestamp)
+    if not timestamps or min(timestamps) != start or max(timestamps) != end:
+        raise ValueError("invalid_brute_window_context") from None
+
+
+def select_brute_window_contexts(logs) -> dict[str, BruteWindowContext]:
+    """Candidate C per-account 창을 O(n log n) 정렬과 선형 탐색으로 고른다.
+
+    사용자 정보가 없는 실패는 어떤 계정의 임계값에도 포함하지 않는다.
+    입력 순서, 원문, ID는 후보 선택에 사용하지 않는다.
+    """
+    grouped: dict[str, dict[str, list[NormalizedEvent]]] = {}
+    invalid_subjects: set[str] = set()
+    for event in logs:
+        if type(event) is not NormalizedEvent or event.event_type != "login_failed":
+            continue
+        if type(event.src_ip) is not str or not event.src_ip:
+            continue
+        # 시간 해석 불가가 있는 주체는 후보를 안전하게 만들지 않는다.
+        try:
+            _utc_timestamp(event.timestamp)
+        except ValueError:
+            invalid_subjects.add(event.src_ip)
+            continue
+        if type(event.user) is not str or not event.user:
+            continue
+        grouped.setdefault(event.src_ip, {}).setdefault(event.user, []).append(event)
+
+    selected: dict[str, BruteWindowContext] = {}
+    for subject_ip, by_account in grouped.items():
+        if subject_ip in invalid_subjects:
+            continue
+        candidates: list[tuple[tuple, BruteWindowContext]] = []
+        for account, account_events in by_account.items():
+            ordered = sorted(
+                account_events,
+                key=lambda event: _utc_timestamp(event.timestamp),
+            )
+            times = [_utc_timestamp(event.timestamp) for event in ordered]
+            left = 0
+            right = 0
+            while right < len(times):
+                end = times[right]
+                group_end = right
+                while group_end + 1 < len(times) and times[group_end + 1] == end:
+                    group_end += 1
+                while (
+                    left <= group_end
+                    and (end - times[left]).total_seconds()
+                    > BRUTE_FORCE_WINDOW_SECONDS
+                ):
+                    left += 1
+                if group_end - left + 1 < BRUTE_FORCE_MIN_FAILURES:
+                    right = group_end + 1
+                    continue
+                members = tuple(ordered[left:group_end + 1])
+                start = times[left]
+                context = BruteWindowContext(
+                    subject_ip=subject_ip,
+                    target_account=account,
+                    start_utc=start,
+                    end_utc=end,
+                    failure_count=len(members),
+                    member_events=members,
+                )
+                validate_brute_window_context(context, subject_ip=subject_ip)
+                key = (end, start, (end - start).total_seconds(), -len(members))
+                candidates.append((key, context))
+                # 이 계정의 가장 빠른 qualifying 종료만 정책상 후보다.
+                break
+        if not candidates:
+            continue
+        best_key = min(key for key, _ in candidates)
+        best = [context for key, context in candidates if key == best_key]
+        if len({context.target_account for context in best}) != 1:
+            continue
+        selected[subject_ip] = best[0]
+    return selected
+
+
+def brute_force_detection_from_context(context: BruteWindowContext) -> DetectionResult:
+    """기존 Evidence schema로 선택된 Brute 창만 설명한다."""
+    validate_brute_window_context(context)
+    seconds = (context.end_utc - context.start_utc).total_seconds()
+    return DetectionResult(
+        True,
+        "brute_force",
+        [
+            Evidence(
+                "multiple_login_failures",
+                context.failure_count,
+                "brute_force_detector",
+                time_range=(context.start_utc, context.end_utc),
+            ),
+            Evidence("single_target_user", 1, "brute_force_detector"),
+            Evidence(
+                "failures_within_short_window",
+                seconds,
+                "brute_force_detector",
+            ),
+        ],
+    )
+
+
+def brute_evidence_matches_context(
+    detection: DetectionResult,
+    context: BruteWindowContext,
+    *,
+    subject_ip: str | None = None,
+) -> bool:
+    """Evidence가 비공개 context와 정확히 맞는 경우만 승인한다."""
+    try:
+        validate_brute_window_context(context, subject_ip=subject_ip)
+        if (
+            type(detection) is not DetectionResult
+            or detection.is_detected is not True
+            or type(detection.detection_type) is not str
+            or detection.detection_type != "brute_force"
+            or type(detection.evidence) is not list
+            or len(detection.evidence) != 3
+        ):
+            return False
+        items = {item.type: item for item in detection.evidence if type(item) is Evidence}
+        if len(items) != 3 or set(items) != {
+            "multiple_login_failures",
+            "single_target_user",
+            "failures_within_short_window",
+        }:
+            return False
+        failed = items["multiple_login_failures"]
+        target = items["single_target_user"]
+        window = items["failures_within_short_window"]
+        seconds = (context.end_utc - context.start_utc).total_seconds()
+        return (
+            type(failed.source) is str
+            and failed.source == "brute_force_detector"
+            and type(failed.value) is int
+            and failed.value == context.failure_count
+            and type(failed.time_range) is tuple
+            and len(failed.time_range) == 2
+            and all(
+                type(value) is datetime and value.tzinfo is timezone.utc
+                for value in failed.time_range
+            )
+            and _utc_timestamp(failed.time_range[0]) == context.start_utc
+            and _utc_timestamp(failed.time_range[1]) == context.end_utc
+            and type(target.source) is str
+            and target.source == "brute_force_detector"
+            and type(target.value) is int
+            and target.value == 1
+            and target.timestamp is None
+            and target.time_range is None
+            and type(window.source) is str
+            and window.source == "brute_force_detector"
+            and type(window.value) in (int, float)
+            and math.isfinite(window.value)
+            and window.value == seconds
+            and window.timestamp is None
+            and window.time_range is None
+        )
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        return False
+
+
+def _same_ip(first: object, second: object) -> bool:
+    if type(first) is not str or type(second) is not str:
+        return False
+    try:
+        return ip_address(first) == ip_address(second)
+    except ValueError:
+        return False
 
 
 def is_login_failure(log):

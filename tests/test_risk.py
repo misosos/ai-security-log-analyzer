@@ -786,7 +786,7 @@ def test_build_risk_factors_volume_signal_includes_rationale():
     volume = result["likelihood"]["signals"]["volume"]
 
     assert volume["level"] == "HIGH"
-    assert volume["rationale"] == "인증 실패가 5회 발생함"
+    assert volume["rationale"] == "IP 전체에서 인증 실패가 5회 관찰됨"
 
 def test_build_risk_factors_preserves_evidence_timestamp():
     from datetime import datetime, timezone

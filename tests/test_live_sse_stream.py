@@ -28,6 +28,12 @@ def _append(path, first, count=1):
                           "user=synthetic ip=192.0.2.1\n").encode())
 
 
+def _append_timestamp(path, clock):
+    with path.open("ab") as stream:
+        stream.write((f"2026-01-02 {clock} INFO login_failed "
+                      "user=synthetic ip=192.0.2.1\n").encode())
+
+
 def test_notification_delivers_new_event_without_client_queue(tmp_path):
     path, session, worker, service = _service(tmp_path)
 
@@ -59,9 +65,9 @@ def test_slow_consumer_gets_gap_after_eviction(tmp_path):
         assert b"event: snapshot" in await anext(stream)
         assert first_id.encode() in await anext(stream)
         assert b"event: analysis_changes" in await anext(stream)
-        _append(path, 5)
+        _append_timestamp(path, "03:03:59")
         worker.step()
-        _append(path, 6)
+        _append_timestamp(path, "03:03:58")
         worker.step()
         await service.notify_change()
         gap = await anext(stream)
@@ -80,7 +86,7 @@ def test_two_cursors_independent_and_heartbeat_has_no_id(tmp_path, monkeypatch):
     path, _, worker, service = _service(tmp_path)
     _append(path, 0, 5)
     first_id = worker.step().publication_event_id
-    _append(path, 5)
+    _append_timestamp(path, "03:03:59")
     second_id = worker.step().publication_event_id
 
     async def immediate_timeout(_self, _generation):

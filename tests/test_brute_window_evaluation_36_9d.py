@@ -252,7 +252,8 @@ def test_original_36_9c_late_noise_fixture_reproduces_whole_span_miss():
     assert features["window_seconds"] == 70
     assert features["within_window"] is False
     assert detect_brute_force(features, events).is_detected is False
-    assert analyze([{"source": "application", "path": str(path)}])["results"]["198.51.100.23"]["detections"]["brute_force"].is_detected is False
+    # 과거 whole-span 계산은 위에서 직접 재현했고, Production은 Candidate C를 적용한다.
+    assert analyze([{"source": "application", "path": str(path)}])["results"]["198.51.100.23"]["detections"]["brute_force"].is_detected is True
 
 
 def test_production_password_spray_detection_is_unchanged_for_spray_scenario():
@@ -265,7 +266,7 @@ def test_production_password_spray_detection_is_unchanged_for_spray_scenario():
     assert result["detections"]["password_spray"].is_detected is True
 
 
-def test_hypothetical_window_end_and_existing_correlation_failure_time_can_diverge():
+def test_historical_whole_span_correlation_requires_private_window_context():
     from pathlib import Path
     from app.correlation.attack_chain import correlate_brute_force_to_success
     from app.evaluation.brute_window_evaluation import load_manifest, _parse_scenario
@@ -278,8 +279,7 @@ def test_hypothetical_window_end_and_existing_correlation_failure_time_can_diver
         events, DetectionResult(is_detected=True, detection_type="brute_force", evidence=[])
     )
     assert candidate.end_time.endswith("00:00:20Z")
-    assert correlation["is_correlated"] is True
-    assert correlation["failure_timestamp"].strftime("%H:%M:%S") == "00:01:10"
+    assert correlation["is_correlated"] is False
 
 
 def test_manifest_rejects_path_traversal(tmp_path):

@@ -448,9 +448,17 @@ def test_correlates_brute_force_to_successful_login():
         evidence=[],
     )
 
+    from app.detector.brute_force import (
+        brute_force_detection_from_context,
+        select_brute_window_contexts,
+    )
+    window_context = select_brute_window_contexts(logs)["10.0.0.50"]
+    brute_force_detection = brute_force_detection_from_context(window_context)
+
     result = correlate_brute_force_to_success(
         logs,
         brute_force_detection,
+        window_context=window_context,
     )
 
     assert result["is_correlated"] is True
@@ -501,32 +509,12 @@ def test_pipeline_correlates_brute_force_to_successful_login():
         ),
     ]
 
-    results = {
-        "10.0.0.50": {
-            "features": {
-                "failure_count": 5,
-                "target_users": ["admin"],
-                "login_succeeded": True,
-                "within_window": True,
-                "window_seconds": 8.0,
-                "average_interval": 2.0,
-                "interval_variability": 0,
-                "unique_target_count": 1,
-            },
-            "detections": {
-                "brute_force": DetectionResult(
-                    is_detected=True,
-                    detection_type="brute_force",
-                    evidence=[],
-                ),
-                "password_spray": DetectionResult(
-                    is_detected=False,
-                    detection_type=None,
-                    evidence=[],
-                ),
-            },
-        }
-    }
+    # Brute window 계약은 timezone-aware timestamp를 요구한다.
+    for event in logs:
+        event.timestamp = event.timestamp.replace(tzinfo=timezone.utc)
+
+    from app.analyzer.pipeline import detect_attacks
+    results = detect_attacks(logs)
 
     result = correlate_attacks(
         logs,

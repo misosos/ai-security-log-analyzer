@@ -21,7 +21,8 @@ def append(path, *lines):
 
 
 def auth(second, kind="login_failed", ip="192.0.2.1"):
-    return f"2026-01-02 03:04:{second:02d} INFO {kind} user=synthetic ip={ip}"
+    clock = second if type(second) is str else f"03:04:{second:02d}"
+    return f"2026-01-02 {clock} INFO {kind} user=synthetic ip={ip}"
 
 
 def test_application_prefix_ack_commit_identity(tmp_path):
@@ -39,7 +40,8 @@ def test_application_prefix_ack_commit_identity(tmp_path):
         first = accumulator.latest_change_set().changes[0]
         assert first.observation_id == "LIVE-OBS-000001"
         assert first.observation_revision == 1
-        append(path, auth(5))
+        # Earlier out-of-order event changes the earliest qualifying window.
+        append(path, auth("03:03:59"))
         changed = worker.step()
         assert changed.updated_count == 1
         second = accumulator.latest_change_set().changes[0]

@@ -13,8 +13,9 @@ from app.live_monitoring import (
 from app.live_monitoring.publication import LivePublicationError
 
 
-def line(second: int, suffix: str = "") -> str:
-    return (f"2026-01-02 03:04:{second:02d} INFO login_failed "
+def line(second: int | str, suffix: str = "") -> str:
+    clock = second if type(second) is str and ":" in second else f"03:04:{second:02d}"
+    return (f"2026-01-02 {clock} INFO login_failed "
             f"user=synthetic ip=192.0.2.1{suffix}")
 
 
@@ -72,8 +73,9 @@ def test_session_entropy_failure_has_fixed_safe_error(monkeypatch):
 
 def publish_changes(accumulator, buffer, count=7):
     events = []
-    for index in range(count):
-        change = committed(accumulator, line(index), start=index + 1)
+    timestamps = [0, 1, 2, 3, 4, "03:03:59", "03:03:58"][:count]
+    for index, timestamp in enumerate(timestamps):
+        change = committed(accumulator, line(timestamp), start=index + 1)
         event = buffer.publish(change)
         if event is not None:
             events.append(event)

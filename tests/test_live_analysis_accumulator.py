@@ -204,12 +204,12 @@ def test_brute_precedence_replaces_generic_case_without_reusing_its_id():
     latest = before
     for sequence in range(3, 7):
         latest = _commit(detection, analysis, (_line(second=sequence),), sequence)
-    assert latest.case_count == 1
-    assert latest.cases[0].case_id == generic_id
-    assert latest.cases[0].state == "NO_LONGER_MATCHES_CURRENT_RESULT"
-    assert latest.cases[1].case_id != generic_id
-    assert latest.cases[1].rule_id == "CASE-BRUTE-SUCCESS-01"
-    assert latest.cases[1].supporting_relation_count == 1
+    active_cases = [case for case in latest.cases if case.state == "CURRENT"]
+    assert len(active_cases) == 1
+    assert active_cases[0].case_id == generic_id
+    assert active_cases[0].rule_id == "CASE-AUTH-TRANSITION-01"
+    # 성공 시각은 선택 Brute 창 종료보다 앞서므로 Brute 관계를 만들지 않는다.
+    assert not any(case.rule_id == "CASE-BRUTE-SUCCESS-01" for case in active_cases)
 
 
 def test_case_ids_do_not_depend_on_review_order():

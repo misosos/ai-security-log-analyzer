@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from ipaddress import IPv4Address, IPv6Address, ip_address
 import math
+from collections.abc import Mapping
 from types import MappingProxyType
 import unicodedata
 
@@ -17,6 +18,12 @@ from app.analyzer.incident_case_projection import (
     build_investigation_case_projection,
 )
 from app.models.schemas import DetectionResult, Evidence
+from app.detector.brute_force import (
+    BruteWindowContext,
+    brute_evidence_matches_context,
+    validate_brute_window_context,
+)
+from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
 from app.analyzer.web_observation_projection import (
     WEB_TYPES, WebObservationProjectionError, project_web_observation,
 )
@@ -239,6 +246,9 @@ def _authentication_detection(
     detection: DetectionResult,
     features: dict,
     target_accounts: tuple[str, ...],
+    *,
+    subject_ip: str,
+    brute_window_context: BruteWindowContext | None = None,
 ) -> DetectionResult:
     if slot == "brute_force":
         target_type = "single_target_user"
@@ -264,6 +274,43 @@ def _authentication_detection(
             _fail("invalid_detection_contract")
     if failed is None or targets is None or window is None:
         _fail("invalid_detection_contract")
+
+    if slot == "brute_force" and brute_window_context is not None:
+        if not brute_evidence_matches_context(
+            detection,
+            brute_window_context,
+            subject_ip=subject_ip,
+        ):
+            _fail("invalid_detection_contract")
+        try:
+            validate_brute_window_context(
+                brute_window_context,
+                subject_ip=subject_ip,
+            )
+        except ValueError:
+            _fail("invalid_detection_contract")
+        return DetectionResult(
+            is_detected=True,
+            detection_type="brute_force",
+            evidence=[
+                Evidence(
+                    type="multiple_login_failures",
+                    value=brute_window_context.failure_count,
+                    source=source,
+                    time_range=(
+                        brute_window_context.start_utc,
+                        brute_window_context.end_utc,
+                    ),
+                ),
+                Evidence(type=target_type, value=1, source=source),
+                Evidence(
+                    type="failures_within_short_window",
+                    value=(brute_window_context.end_utc
+                           - brute_window_context.start_utc).total_seconds(),
+                    source=source,
+                ),
+            ],
+        )
 
     failed_count = _non_negative_int(
         failed.value,
@@ -403,6 +450,9 @@ def _detection_input(
     raw_detection,
     features: dict,
     target_accounts: tuple[str, ...],
+    *,
+    subject_ip: str,
+    brute_window_context: BruteWindowContext | None = None,
 ) -> IncidentCaseDetectionInput:
     if type(raw_detection) is not DetectionResult:
         _fail("invalid_detection_contract")
@@ -428,6 +478,10 @@ def _detection_input(
                 raw_detection,
                 features,
                 target_accounts,
+                subject_ip=subject_ip,
+                brute_window_context=(
+                    brute_window_context if slot == "brute_force" else None
+                ),
             )
         elif slot == "path_traversal":
             detection = _path_detection(raw_detection)
@@ -450,13 +504,27 @@ def _detection_input(
             detection = DetectionResult(True, slot, evidence)
         else:
             _fail("invalid_detection_contract")
-    return IncidentCaseDetectionInput(slot=slot, detection=detection)
+    scoped_accounts = (
+        (brute_window_context.target_account,)
+        if slot == "brute_force"
+        and raw_detection.is_detected
+        and brute_window_context is not None
+        else ()
+    )
+    return IncidentCaseDetectionInput(
+        slot=slot,
+        detection=detection,
+        target_accounts=scoped_accounts,
+    )
 
 
 def _detections(
     value,
     features: dict,
     target_accounts: tuple[str, ...],
+    *,
+    subject_ip: str,
+    brute_window_context: BruteWindowContext | None = None,
 ) -> tuple[IncidentCaseDetectionInput, ...]:
     detections = _exact_dict(
         value,
@@ -469,6 +537,8 @@ def _detections(
             detections[slot],
             features,
             target_accounts,
+            subject_ip=subject_ip,
+            brute_window_context=brute_window_context,
         )
         for slot in _DETECTION_TYPES
     )
@@ -604,7 +674,7 @@ def _risk(result: dict) -> tuple[str, str]:
     return risk_level, confidence_level
 
 
-def _subject_input(subject_ip, value) -> tuple[
+def _subject_input(subject_ip, value, brute_window_context=None) -> tuple[
     tuple[int, bytes],
     IncidentCaseSubjectInput,
 ]:
@@ -615,15 +685,32 @@ def _subject_input(subject_ip, value) -> tuple[
         "unsupported_result_shape",
     )
     features, target_accounts = _features(result["features"])
+    if brute_window_context is not None:
+        try:
+            validate_brute_window_context(
+                brute_window_context,
+                subject_ip=canonical_ip,
+            )
+        except (TypeError, ValueError, AttributeError):
+            _fail("invalid_detection_contract")
+        if brute_window_context.target_account not in target_accounts:
+            _fail("invalid_detection_contract")
     risk_level, confidence = _risk(result)
+    detections = _detections(
+        result["detections"],
+        features,
+        target_accounts,
+        subject_ip=canonical_ip,
+        brute_window_context=brute_window_context,
+    )
+    if brute_window_context is not None and not next(
+        item for item in detections if item.slot == "brute_force"
+    ).detection.is_detected:
+        _fail("invalid_detection_contract")
     return ip_sort_key, IncidentCaseSubjectInput(
         subject_ip=canonical_ip,
         target_accounts=target_accounts,
-        detections=_detections(
-            result["detections"],
-            features,
-            target_accounts,
-        ),
+        detections=detections,
         correlations=_correlations(result["correlation"]),
         risk_level=risk_level,
         confidence=confidence,
@@ -634,6 +721,12 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
     IncidentCaseSubjectInput,
     ...,
 ]:
+    brute_window_contexts = {}
+    if type(analysis_result) is AnalysisWithSourceRoleSnapshot:
+        brute_window_contexts = analysis_result.brute_window_contexts
+        analysis_result = analysis_result.analysis
+        if not isinstance(brute_window_contexts, Mapping):
+            _fail("invalid_detection_contract")
     if type(analysis_result) is not dict:
         _fail("invalid_input_type")
     analysis = _exact_dict(
@@ -644,20 +737,36 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
     results = analysis["results"]
     if type(results) is not dict or type(analysis["global_correlation"]) is not dict:
         _fail("unsupported_result_shape")
-    return build_incident_case_subject_inputs(results)
+    return build_incident_case_subject_inputs(
+        results,
+        brute_window_contexts=brute_window_contexts,
+    )
 
 
-def build_incident_case_subject_inputs(results: dict) -> tuple[
-    IncidentCaseSubjectInput,
-    ...,
-]:
+def build_incident_case_subject_inputs(
+    results: dict,
+    *,
+    brute_window_contexts: Mapping[str, BruteWindowContext] | None = None,
+) -> tuple[IncidentCaseSubjectInput, ...]:
     """Validate trusted per-subject results into the typed assembler contract."""
     if type(results) is not dict:
         _fail("unsupported_result_shape")
+    if brute_window_contexts is not None and not isinstance(brute_window_contexts, Mapping):
+        _fail("invalid_detection_contract")
+    contexts = brute_window_contexts or {}
+    if any(type(key) is not str for key in contexts):
+        _fail("invalid_detection_contract")
+    if not set(contexts).issubset(results):
+        _fail("invalid_detection_contract")
     prepared = []
     canonical_subjects = set()
     for subject_ip, result in results.items():
-        ip_sort_key, subject = _subject_input(subject_ip, result)
+        brute_window_context = contexts.get(subject_ip)
+        ip_sort_key, subject = _subject_input(
+            subject_ip,
+            result,
+            brute_window_context,
+        )
         if subject.subject_ip in canonical_subjects:
             _fail("ambiguous_membership")
         canonical_subjects.add(subject.subject_ip)

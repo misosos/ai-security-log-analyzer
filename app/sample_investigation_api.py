@@ -491,7 +491,11 @@ def _execute(
             role_snapshot = analysis_run.source_roles
         else:
             analysis = analysis_run
-        projection = project(analysis)
+        projection = project(
+            analysis_run
+            if type(analysis_run) is AnalysisWithSourceRoleSnapshot
+            else analysis
+        )
         try:
             report_projection = build_report_projection(analysis)
             report_export = _report_export(render_report(report_projection))

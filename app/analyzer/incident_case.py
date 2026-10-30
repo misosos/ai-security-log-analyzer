@@ -119,6 +119,7 @@ class IncidentCaseDetectionInput:
         "web_scanning_like",
     ]
     detection: DetectionResult = field(repr=False)
+    target_accounts: tuple[str, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
@@ -559,10 +560,15 @@ def _detection_candidates(
             detection.detection_type == _DETECTION_TYPES[item.slot]
             and item.slot in {"brute_force", "password_spray"}
         ):
+            detection_accounts = (
+                item.target_accounts
+                if item.slot == "brute_force" and item.target_accounts
+                else target_accounts
+            )
             candidate = _authentication_detection_candidate(
                 subject_ip,
                 item,
-                target_accounts,
+                detection_accounts,
                 risk,
                 confidence,
             )

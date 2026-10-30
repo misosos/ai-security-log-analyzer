@@ -223,7 +223,11 @@ def test_source_role_analysis_wrapper_loads_once_and_preserves_analysis_result(m
     load_calls = []
     events = [_event("192.0.2.30", "ssh")]
     monkeypatch.setattr(main, "load_normalized_logs", lambda sources: load_calls.append(sources) or events)
-    monkeypatch.setattr(main, "_analyze_normalized_logs", lambda loaded: analysis)
+    monkeypatch.setattr(
+        main,
+        "_analyze_normalized_logs_with_context",
+        lambda loaded: (analysis, {}),
+    )
 
     snapshot = main.analyze_with_source_role_snapshot(({"source": "ssh", "path": "synthetic"},))
 

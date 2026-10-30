@@ -3,7 +3,9 @@ from app.loader.linux_audit_loader import load_linux_audit_events
 from app.parser.registry import get_parser, get_timezone
 from app.detector.brute_force import (
     summarize_ip_failures,
-    detect_brute_force,
+    select_brute_window_contexts,
+    brute_force_detection_from_context,
+    brute_evidence_matches_context,
 )
 from app.detector.password_spray import detect_password_spray
 from app.detector.web_attack import detect_path_traversal, detect_web_observations
@@ -133,11 +135,12 @@ def create_empty_result():
     }
 
 
-def detect_attacks(logs):
+def detect_attacks_with_context(logs):
 
     grouped_logs = group_logs_by_ip(logs)
 
     feature_results = summarize_ip_failures(logs)
+    brute_window_contexts = select_brute_window_contexts(logs)
 
     results = {}
 
@@ -160,9 +163,11 @@ def detect_attacks(logs):
 
         if failures:
 
-            brute_force_result = detect_brute_force(
-                result["features"],
-                failures,
+            context = brute_window_contexts.get(ip)
+            brute_force_result = (
+                brute_force_detection_from_context(context)
+                if context is not None
+                else create_empty_detection()
             )
 
             result["detections"]["brute_force"] = (
@@ -211,12 +216,20 @@ def detect_attacks(logs):
             detect_web_observations(grouped_logs[ip])
         )
 
+    return results, brute_window_contexts
+
+
+def detect_attacks(logs):
+    """Return the existing per-IP result shape, without private metadata."""
+    results, _ = detect_attacks_with_context(logs)
     return results
 
 
-def correlate_attacks(logs, results):
+def correlate_attacks(logs, results, brute_window_contexts=None):
 
     grouped_logs = group_logs_by_ip(logs)
+    if brute_window_contexts is None:
+        brute_window_contexts = select_brute_window_contexts(logs)
 
     # 전체 로그를 기준으로 수행하는 Correlation
     multi_ip_results = correlate_multi_ip_authentication(
@@ -259,6 +272,15 @@ def correlate_attacks(logs, results):
             correlate_brute_force_to_success(
                 ip_logs,
                 result["detections"]["brute_force"],
+                window_context=(
+                    brute_window_contexts.get(ip)
+                    if brute_evidence_matches_context(
+                        result["detections"]["brute_force"],
+                        brute_window_contexts.get(ip),
+                        subject_ip=ip,
+                    )
+                    else None
+                ),
             )
         )
 
