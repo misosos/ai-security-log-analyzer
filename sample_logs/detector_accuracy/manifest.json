@@ -1,0 +1,1273 @@
+{
+  "schema_version": 1,
+  "data_scope": "synthetic-only",
+  "scenarios": [
+    {
+      "id": "bf_exact_boundary",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.20",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.20",
+        "198.51.100.20",
+        "198.51.100.20",
+        "198.51.100.20",
+        "198.51.100.20"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "동일 관측 계정에 5회 실패가 있고 event 범위가 정확히 60초다.",
+      "context_basis": "독립적으로 설정한 합성 공격 시나리오이며 로그만으로 실제 공격을 주장하지 않는다.",
+      "fixture": "bf_exact_boundary.log"
+    },
+    {
+      "id": "bf_below_threshold",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.21",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.21",
+        "198.51.100.21",
+        "198.51.100.21",
+        "198.51.100.21"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "동일 계정 실패가 4회로, 지정한 5회 패턴보다 적다.",
+      "context_basis": "합성 QA가 의도적으로 4회 실패를 생성한 테스트 시나리오다.",
+      "fixture": "bf_below_threshold.log"
+    },
+    {
+      "id": "bf_benign_retries",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.22",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.22",
+        "198.51.100.22",
+        "198.51.100.22",
+        "198.51.100.22",
+        "198.51.100.22"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "단일 계정 5회 실패가 20초에 관측된다.",
+      "context_basis": "합성 QA 계정의 알려진 반복 입력 실수 시나리오로 맥락을 별도 지정했다.",
+      "fixture": "bf_benign_retries.log"
+    },
+    {
+      "id": "bf_burst_with_late_noise",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.23",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.23",
+        "198.51.100.23",
+        "198.51.100.23",
+        "198.51.100.23",
+        "198.51.100.23",
+        "198.51.100.23"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "첫 20초에 동일 계정 실패 5회가 있어 subwindow 패턴이 존재한다.",
+      "context_basis": "합성 시나리오의 late noise는 평가자가 명시한 별도 이벤트이며 탐지 출력에서 라벨을 만들지 않았다.",
+      "fixture": "bf_burst_with_late_noise.log"
+    },
+    {
+      "id": "bf_no_five_within_window",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.24",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.24",
+        "198.51.100.24",
+        "198.51.100.24",
+        "198.51.100.24",
+        "198.51.100.24"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "전체 구간은 60초를 넘고 어느 60초 안에도 다섯 실패가 없다.",
+      "context_basis": "승인 여부와 운영 맥락을 로그로 확인할 수 없도록 의도했다.",
+      "fixture": "bf_no_five_within_window.log"
+    },
+    {
+      "id": "bf_account_missing",
+      "detector": "brute_force",
+      "source": "application",
+      "subject": "198.51.100.25",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.25",
+        "198.51.100.25",
+        "198.51.100.25",
+        "198.51.100.25",
+        "198.51.100.25"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome"
+      ],
+      "behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "계정 필드가 없어 단일 대상 계정 패턴을 정할 수 없다.",
+      "context_basis": "합성 로그만으로 계정 귀속 맥락을 검증하지 않았다.",
+      "fixture": "bf_account_missing.log"
+    },
+    {
+      "id": "bf_ssh_exact",
+      "detector": "brute_force",
+      "source": "ssh",
+      "subject": "198.51.100.26",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.26",
+        "198.51.100.26",
+        "198.51.100.26",
+        "198.51.100.26",
+        "198.51.100.26"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "지원되는 ISO-style sshd 실패 5회가 40초 안에 있다.",
+      "context_basis": "독립적으로 지정한 합성 SSH 시나리오다.",
+      "fixture": "bf_ssh_exact.log"
+    },
+    {
+      "id": "spray_exact_boundary",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.27",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.27",
+        "198.51.100.27",
+        "198.51.100.27",
+        "198.51.100.27"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "4회 실패, 3개 계정, 60초 전체 구간을 독립 라벨 기준으로 지정했다.",
+      "context_basis": "독립 합성 공격 시나리오; 계정 간 credential 재사용은 주장하지 않는다.",
+      "fixture": "spray_exact_boundary.log"
+    },
+    {
+      "id": "spray_below_failures",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.28",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.28",
+        "198.51.100.28",
+        "198.51.100.28"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "세 계정에 실패가 있지만 총 실패가 3회다.",
+      "context_basis": "합성 QA가 정한 알려진 정상 접근 실험이다.",
+      "fixture": "spray_below_failures.log"
+    },
+    {
+      "id": "spray_two_accounts",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.29",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.29",
+        "198.51.100.29",
+        "198.51.100.29",
+        "198.51.100.29"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "실패 4회지만 고유 계정은 2개뿐이다.",
+      "context_basis": "공유 IP와 승인 여부를 정할 근거를 주지 않았다.",
+      "fixture": "spray_two_accounts.log"
+    },
+    {
+      "id": "spray_benign_batch",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.30",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.30",
+        "198.51.100.30",
+        "198.51.100.30",
+        "198.51.100.30"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "4회 실패가 세 계정에 걸쳐 30초 안에 관측된다.",
+      "context_basis": "합성 계정 접근성 점검으로 사전 지정된 시나리오다.",
+      "fixture": "spray_benign_batch.log"
+    },
+    {
+      "id": "spray_over_window",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.31",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.31",
+        "198.51.100.31",
+        "198.51.100.31",
+        "198.51.100.31"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "전체 실패 범위가 61초로 지정한 60초 조건을 초과한다.",
+      "context_basis": "승인 여부는 평가 자료에서 확인하지 않았다.",
+      "fixture": "spray_over_window.log"
+    },
+    {
+      "id": "spray_user_missing",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.32",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.32",
+        "198.51.100.32",
+        "198.51.100.32",
+        "198.51.100.32"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome"
+      ],
+      "behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "계정 필드가 없어 distinct account 수를 판단할 수 없다.",
+      "context_basis": "합성 입력의 운영 승인은 알 수 없도록 했다.",
+      "fixture": "spray_user_missing.log"
+    },
+    {
+      "id": "spray_split_subjects",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "subject": "198.51.100.33",
+      "expected_event_types": [
+        "login_failed",
+        "login_failed",
+        "login_failed",
+        "login_failed"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.33",
+        "198.51.100.33",
+        "198.51.100.71",
+        "198.51.100.71"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "한 subject에는 두 계정만 있고 나머지 두 실패는 다른 관측 IP다.",
+      "context_basis": "IP 귀속만으로 동일 행위자나 승인 상태를 판단할 수 없다.",
+      "fixture": "spray_split_subjects.log"
+    },
+    {
+      "id": "traversal_encoded_path",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.34",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.34"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "경로가 반복 인코딩된 상위 디렉터리 구성요소를 포함한다.",
+      "context_basis": "합성 request target을 평가자가 사전에 공격 의심 패턴으로 지정했다.",
+      "fixture": "traversal_encoded_path.log"
+    },
+    {
+      "id": "traversal_query",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.35",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.35"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "query 값에 percent-decoding 후 traversal 구성요소가 포함된다.",
+      "context_basis": "HTTP 200은 성공 근거로 사용하지 않는 합성 시나리오다.",
+      "fixture": "traversal_query.log"
+    },
+    {
+      "id": "traversal_backslash",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.36",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.36"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "query 값의 decoding 결과에 Windows traversal 구분자가 있다.",
+      "context_basis": "status와 무관하게 입력 패턴만 라벨링했다.",
+      "fixture": "traversal_backslash.log"
+    },
+    {
+      "id": "traversal_normal_dots",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.37",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.37"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "두 점은 있으나 `../` 또는 `..\\` 구성요소가 없다.",
+      "context_basis": "합성 문서 서비스의 알려진 정상 파일명 시나리오다.",
+      "fixture": "traversal_normal_dots.log"
+    },
+    {
+      "id": "traversal_docs_search",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.38",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.38"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "query에는 traversal 문자열 패턴이 관측되지만 경로 접근 성공은 증명되지 않는다.",
+      "context_basis": "합성 문서 검색에서 패턴 문자열을 찾는다고 별도 지정했다.",
+      "fixture": "traversal_docs_search.log"
+    },
+    {
+      "id": "traversal_http_error",
+      "detector": "path_traversal",
+      "source": "access",
+      "subject": "198.51.100.39",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.39"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "요청 경로에 traversal 구성요소가 있으며 응답 status는 패턴 라벨과 무관하다.",
+      "context_basis": "서버 처리 결과와 요청 승인 맥락은 미확정이다.",
+      "fixture": "traversal_http_error.log"
+    },
+    {
+      "id": "sqli_boolean",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.40",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.40"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "query decoding 후 quote + OR + 숫자 비교 형태가 관측된다.",
+      "context_basis": "독립 합성 요청 패턴 라벨이며 DB 실행을 주장하지 않는다.",
+      "fixture": "sqli_boolean.log"
+    },
+    {
+      "id": "sqli_union",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.41",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.41"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "decoded query가 UNION SELECT 숫자 인수를 포함한다.",
+      "context_basis": "응답 status는 SQL 실행 여부의 근거로 쓰지 않았다.",
+      "fixture": "sqli_union.log"
+    },
+    {
+      "id": "sqli_comment",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.42",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.42"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "decoded query에 select 뒤 SQL comment 표기가 있다.",
+      "context_basis": "합성 요청 패턴을 사전에 정한 라벨이다.",
+      "fixture": "sqli_comment.log"
+    },
+    {
+      "id": "sqli_words_only",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.43",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.43"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "query에 union/select 단어만 있고 현재 규칙의 인수 형태를 충족하지 않는다.",
+      "context_basis": "합성 제품 문서 검색의 정상 query로 지정했다.",
+      "fixture": "sqli_words_only.log"
+    },
+    {
+      "id": "sqli_documented_example",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.44",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.44"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "query는 규칙 패턴을 충족한다.",
+      "context_basis": "합성 문서 검색에서 예제 문자열을 검색하는 알려진 정상 맥락이다.",
+      "fixture": "sqli_documented_example.log"
+    },
+    {
+      "id": "sqli_unquoted_boolean",
+      "detector": "sql_injection_like",
+      "source": "access",
+      "subject": "198.51.100.45",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.45"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "quote 조건이 없어 지정한 boolean-expression 패턴이 성립하지 않는다.",
+      "context_basis": "요청 승인 여부는 알 수 없도록 두었다.",
+      "fixture": "sqli_unquoted_boolean.log"
+    },
+    {
+      "id": "xss_script",
+      "detector": "xss_like",
+      "source": "access",
+      "subject": "198.51.100.46",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.46"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "decoded query에 script element 시작 문자열이 있다.",
+      "context_basis": "합성 문자열 패턴만 지정했으며 browser execution은 평가하지 않는다.",
+      "fixture": "xss_script.log"
+    },
+    {
+      "id": "xss_handler",
+      "detector": "xss_like",
+      "source": "access",
+      "subject": "198.51.100.47",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.47"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "decoded query에 img와 onerror handler assignment가 있다.",
+      "context_basis": "status는 실행이나 차단 증거로 해석하지 않는다.",
+      "fixture": "xss_handler.log"
+    },
+    {
+      "id": "xss_scheme",
+      "detector": "xss_like",
+      "source": "access",
+      "subject": "198.51.100.48",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.48"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "decoded query에 javascript scheme 형태가 있다.",
+      "context_basis": "실행 여부는 수집 로그에서 관측되지 않는다.",
+      "fixture": "xss_scheme.log"
+    },
+    {
+      "id": "xss_escaped_example",
+      "detector": "xss_like",
+      "source": "access",
+      "subject": "198.51.100.49",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.49"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "decoded query는 HTML entity 문자열이며 현재 parser 규칙의 script pattern과 다르다.",
+      "context_basis": "합성 문서 페이지의 escaping 예제 검색으로 지정했다.",
+      "fixture": "xss_escaped_example.log"
+    },
+    {
+      "id": "xss_document_search",
+      "detector": "xss_like",
+      "source": "access",
+      "subject": "198.51.100.50",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.50"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code",
+        "http.query"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "decoded query가 규칙의 script element prefix를 포함한다.",
+      "context_basis": "합성 보안 문서 검색이 해당 문자열을 조회하는 알려진 정상 맥락이다.",
+      "fixture": "xss_document_search.log"
+    },
+    {
+      "id": "sensitive_env",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.51",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.51"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "path가 `.env` 경로 구성요소를 포함한다.",
+      "context_basis": "요청 시도 패턴이며 파일 내용 노출은 주장하지 않는다.",
+      "fixture": "sensitive_env.log"
+    },
+    {
+      "id": "sensitive_git_config",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.52",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.52"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "path가 `.git/config` metadata 경로를 포함한다.",
+      "context_basis": "응답은 내용 유출 사실을 입증하지 않는다.",
+      "fixture": "sensitive_git_config.log"
+    },
+    {
+      "id": "sensitive_backup",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.53",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.53"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "path에 지원된 backup suffix `.bak`가 있다.",
+      "context_basis": "합성 요청 경로만 라벨링했다.",
+      "fixture": "sensitive_backup.log"
+    },
+    {
+      "id": "sensitive_env_example",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.54",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.54"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "`.env` 뒤에 허용된 경계(`/` 또는 끝)가 없어 pattern과 일치하지 않는다.",
+      "context_basis": "합성 공개 문서 경로라고 지정했다.",
+      "fixture": "sensitive_env_example.log"
+    },
+    {
+      "id": "sensitive_inventory",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.55",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.55"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "path가 `.git/HEAD` pattern에 일치한다.",
+      "context_basis": "합성 내부 inventory 점검의 알려진 정상 맥락이다; status는 유출 근거가 아니다.",
+      "fixture": "sensitive_inventory.log"
+    },
+    {
+      "id": "sensitive_static",
+      "detector": "sensitive_resource_probing_like",
+      "source": "access",
+      "subject": "198.51.100.56",
+      "expected_event_types": [
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.56"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "민감 리소스 pattern 경로가 관측되지 않는다.",
+      "context_basis": "합성 입력 외 운영 승인은 확인할 수 없다.",
+      "fixture": "sensitive_static.log"
+    },
+    {
+      "id": "scan_exact_boundary",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.57",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.57",
+        "198.51.100.57",
+        "198.51.100.57",
+        "198.51.100.57",
+        "198.51.100.57",
+        "198.51.100.57"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "60초 안에 6요청, 6개 target, 4xx 3개가 있다.",
+      "context_basis": "별도 작성된 합성 scan 시나리오이며 악의성 일반화는 하지 않는다.",
+      "fixture": "scan_exact_boundary.log"
+    },
+    {
+      "id": "scan_five_requests",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.58",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.58",
+        "198.51.100.58",
+        "198.51.100.58",
+        "198.51.100.58",
+        "198.51.100.58"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "요청 수와 distinct target이 모두 다섯이다.",
+      "context_basis": "합성 서비스 점검이 일부 endpoint만 확인하는 정상 시나리오다.",
+      "fixture": "scan_five_requests.log"
+    },
+    {
+      "id": "scan_two_client_errors",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.59",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.59",
+        "198.51.100.59",
+        "198.51.100.59",
+        "198.51.100.59",
+        "198.51.100.59",
+        "198.51.100.59"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "6 target은 있으나 4xx가 두 건뿐이다.",
+      "context_basis": "합성 기능 확인 시나리오로 승인 맥락을 독립 지정했다.",
+      "fixture": "scan_two_client_errors.log"
+    },
+    {
+      "id": "scan_over_window",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.60",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.60",
+        "198.51.100.60",
+        "198.51.100.60",
+        "198.51.100.60",
+        "198.51.100.60",
+        "198.51.100.60"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "여섯 요청 전체 폭은 61초라 60초 창에 모두 들어가지 않는다.",
+      "context_basis": "자동화 승인 여부는 로그만으로 확인할 수 없다.",
+      "fixture": "scan_over_window.log"
+    },
+    {
+      "id": "scan_repeated_target",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.61",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.61",
+        "198.51.100.61",
+        "198.51.100.61",
+        "198.51.100.61",
+        "198.51.100.61",
+        "198.51.100.61"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "요청 수와 error 수는 충족하지만 distinct target은 하나다.",
+      "context_basis": "운영 목적을 알려주는 별도 자료가 없다.",
+      "fixture": "scan_repeated_target.log"
+    },
+    {
+      "id": "scan_benign_scanner",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.62",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.62",
+        "198.51.100.62",
+        "198.51.100.62",
+        "198.51.100.62",
+        "198.51.100.62",
+        "198.51.100.62"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "현재 규칙의 6/6/3/60 관측 패턴을 충족한다.",
+      "context_basis": "합성 승인된 QA scanner라는 운영 맥락을 로그와 별도로 지정했다.",
+      "fixture": "scan_benign_scanner.log"
+    },
+    {
+      "id": "scan_ambiguous_crawler",
+      "detector": "web_scanning_like",
+      "source": "access",
+      "subject": "198.51.100.63",
+      "expected_event_types": [
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.63",
+        "198.51.100.63",
+        "198.51.100.63",
+        "198.51.100.63",
+        "198.51.100.63",
+        "198.51.100.63"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "http.method",
+        "http.path",
+        "http.status_code"
+      ],
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "6 target과 3개의 4xx가 40초에 관측된다.",
+      "context_basis": "crawler인지 scanner인지 승인 맥락이 미확정이다.",
+      "fixture": "scan_ambiguous_crawler.log"
+    },
+    {
+      "id": "bf_failure_then_success",
+      "detector": "brute_force",
+      "source": "application",
+      "fixture": "bf_failure_then_success.log",
+      "subject": "198.51.100.64",
+      "expected_event_types": [
+        "login_failed",
+        "user_login"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.64",
+        "198.51.100.64"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "실패 이벤트는 1회로 5회 threshold에 미달한다.",
+      "context_basis": "성공 또는 단일 실패를 포함하는 정상 synthetic QA 흐름으로 독립 지정했다."
+    },
+    {
+      "id": "spray_success_only",
+      "detector": "password_spraying_like",
+      "source": "application",
+      "fixture": "spray_success_only.log",
+      "subject": "198.51.100.65",
+      "expected_event_types": [
+        "user_login"
+      ],
+      "expected_event_subjects": [
+        "198.51.100.65"
+      ],
+      "required_fields": [
+        "timestamp",
+        "src_ip",
+        "authentication.outcome",
+        "user"
+      ],
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "실패 이벤트가 없으므로 실패 4회 패턴이 없다.",
+      "context_basis": "성공 또는 단일 실패를 포함하는 정상 synthetic QA 흐름으로 독립 지정했다."
+    }
+  ]
+}

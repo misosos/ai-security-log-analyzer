@@ -1,0 +1,5 @@
+2026-10-30 09:00:00 INFO login_failed ip=198.51.100.25 service=synthetic-auth
+2026-10-30 09:00:05 INFO login_failed ip=198.51.100.25 service=synthetic-auth
+2026-10-30 09:00:10 INFO login_failed ip=198.51.100.25 service=synthetic-auth
+2026-10-30 09:00:15 INFO login_failed ip=198.51.100.25 service=synthetic-auth
+2026-10-30 09:00:20 INFO login_failed ip=198.51.100.25 service=synthetic-auth
