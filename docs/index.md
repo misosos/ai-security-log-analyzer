@@ -35,6 +35,7 @@
 - [Phase 36.9B-R1 Parser false acceptance 복구](parser_false_acceptance_remediation_36_9b_r1.md) — 최초 RED 보존, source IP·SSH process·HTTP status 경계 수정 및 회귀 검증
 - [Phase 36.9B-R2 합성 로그 형식 호환성 종결 및 회귀 수용](log_format_compatibility_closure_36_9b_r2.md) — 21개 compatibility fixture와 R1의 세 오해석 수정 독립 재검증; 로컬 합성 범위에 한정
 - [Phase 36.9C 탐지 정확도·오탐·미탐 합성 평가](detector_accuracy_evaluation_36_9c.md) — 독립 pattern/context 라벨의 46개 시나리오 결과; Brute Force missed subwindow 1건, 실환경 정확도는 미검증
+- [Phase 36.9D Brute Force 시간창 의미 평가](brute_force_window_semantics_evaluation_36_9d.md) — whole-span과 세 sliding 계정 범위 후보를 24개 합성 시나리오에서 비교; production detector 불변
 - [Phase 36.9A 프로젝트 성숙도·실무 준비도 평가](project_maturity_readiness_assessment_36_9a.md) — 현재 합성 검증 범위, 운영 미검증 경계, 다음 개발 우선순위 (docs/index.md)
 - [합성 탐지 평가](detection_evaluation.md) · [웹 공격 관찰](web_attack_observation_design.md) · [incident case/Timeline](incident_case_timeline_design.md)
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)

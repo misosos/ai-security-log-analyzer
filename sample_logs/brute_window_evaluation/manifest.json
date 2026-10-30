@@ -1,0 +1,641 @@
+{
+  "schema_version": 1,
+  "data_scope": "synthetic-only",
+  "scenarios": [
+    {
+      "id": "bf_account_changes_late",
+      "source": "application",
+      "fixture": "bf_account_changes_late.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "첫 계정 A의 다섯 실패는 20초에 끝나고 계정 B 실패는 70초에 별도 배치함.",
+      "context_basis": "동일 IP를 공유하는 사용자 또는 시간 분리된 행위인지 구분할 추가 맥락이 없음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [
+        "단일 계정 burst 후 다른 계정 실패가 늦게 나타남"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_below_threshold_4",
+      "source": "application",
+      "fixture": "bf_below_threshold_4.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 4,
+      "expected_failure_count": 4,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "고정 시나리오의 실패 이벤트가 네 건으로 최소 횟수 미만임.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_benign_auth_test",
+      "source": "application",
+      "fixture": "bf_benign_auth_test.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "다섯 실패를 60초 이내 동일 IP·계정에 배치한 사전 기술 패턴 라벨.",
+      "context_basis": "합성 운영 맥락에서 승인된 인증 흐름 점검 또는 사용자 재시도로 명시함.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_benign_retry_boundary",
+      "source": "application",
+      "fixture": "bf_benign_retry_boundary.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "KNOWN_BENIGN",
+      "label_basis": "다섯 실패를 60초 이내 동일 IP·계정에 배치한 사전 기술 패턴 라벨.",
+      "context_basis": "합성 운영 맥락에서 승인된 인증 흐름 점검 또는 사용자 재시도로 명시함.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          60
+        ]
+      }
+    },
+    {
+      "id": "bf_duplicate_rows",
+      "source": "application",
+      "fixture": "bf_duplicate_rows.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "시나리오 설계에서 해당 IP·계정의 시간순 실패 횟수를 사전에 지정함.",
+      "context_basis": "합성 fixture의 반복 행이 수집 중복인지 반복 인증 실패인지 판별할 identity가 없도록 설계함.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [
+        "동일 문자열의 재수집인지 별도 시도인지 식별할 event ID가 없음"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_equal_timestamp",
+      "source": "application",
+      "fixture": "bf_equal_timestamp.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "시나리오 설계에서 해당 IP·계정의 시간순 실패 횟수를 사전에 지정함.",
+      "context_basis": "다섯 행이 같은 timestamp를 가지므로 별도 시도인지 재수집 중복인지 로그만으로 판정하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [
+        "동일 초의 별도 시도와 중복 수집을 구별할 식별자가 없음"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "bf_late_noise_120s",
+      "source": "application",
+      "fixture": "bf_late_noise_120s.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "첫 다섯 실패 burst와 120초의 후속 실패를 별도 시각 구간으로 작성함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_late_noise_61_after_60",
+      "source": "application",
+      "fixture": "bf_late_noise_61_after_60.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "첫 다섯 실패는 정확히 60초 창에 있고 다음 이벤트는 61초에 있음.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          60
+        ]
+      }
+    },
+    {
+      "id": "bf_late_noise_70s",
+      "source": "application",
+      "fixture": "bf_late_noise_70s.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "첫 다섯 실패는 20초 안에 있고 마지막 추가 실패가 70초에 있어 전체 span만 70초로 늘어남.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_late_noise_then_success",
+      "source": "application",
+      "fixture": "bf_late_noise_then_success.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 7,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "첫 다섯 동일 계정 실패가 20초 안에 존재하고 70초 후 실패·80초 후 성공을 별도로 배치함.",
+      "context_basis": "후속 성공을 초기 burst와 연관된 행위로 입증할 별도 event identity나 인증 세션 맥락이 없으므로 모호함.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [
+        "선택된 최초 burst의 끝 시각과 상관 함수가 고르는 가장 가까운 실패 시각이 다름"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_missing_account",
+      "source": "application",
+      "fixture": "bf_missing_account.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "계정이 없는 이벤트를 A/B 후보가 알려진 고유 계정 수와 별도로 처리하는 경계 사례로 미리 지정함.",
+      "context_basis": "누락된 계정의 실제 값과 사건 맥락을 확인할 방법이 없음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": false
+      },
+      "ambiguity": [
+        "한 이벤트에서 대상 계정 필드가 누락됨"
+      ],
+      "expected_exclusion": true,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_missing_event",
+      "source": "application",
+      "fixture": "bf_missing_event.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 4,
+      "expected_failure_count": 4,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "의도한 다섯 번의 시도 중 로그에 보이는 이벤트는 네 건뿐임.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_mixed_accounts_same_window",
+      "source": "application",
+      "fixture": "bf_mixed_accounts_same_window.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 6,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "시나리오 설계에서 해당 IP·계정의 시간순 실패 횟수를 사전에 지정함.",
+      "context_basis": "공유 NAT나 복수 사용자 활동과 단일 주체 활동을 식별할 텔레메트리가 없음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": true
+      },
+      "ambiguity": [
+        "같은 IP에서 두 계정이 동일 시간대에 실패함"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "policy": "per_account",
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_mixed_ips",
+      "source": "application",
+      "fixture": "bf_mixed_ips.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "실패 다섯 건을 두 IP에 3건과 2건으로 나눠 각 IP 단위 임계값에 미달하게 작성함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_outside_61s",
+      "source": "application",
+      "fixture": "bf_outside_61s.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "동일 IP·계정의 다섯 실패가 60초보다 긴 61초 범위임.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_positive_20s",
+      "source": "application",
+      "fixture": "bf_positive_20s.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "시나리오 설계에서 해당 IP·계정의 시간순 실패 횟수를 사전에 지정함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_positive_60s",
+      "source": "application",
+      "fixture": "bf_positive_60s.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "다섯 실패가 시작 시각과 정확히 60초 차이인 경계를 포함함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          60
+        ]
+      }
+    },
+    {
+      "id": "bf_reversed_input",
+      "source": "application",
+      "fixture": "bf_reversed_input.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "파일 입력 순서는 역순이지만 로그 timestamp는 동일한 20초 burst를 나타냄.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_shared_nat_mixed",
+      "source": "application",
+      "fixture": "bf_shared_nat_mixed.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 7,
+      "expected_failure_count": 7,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "시나리오 설계에서 해당 IP·계정의 시간순 실패 횟수를 사전에 지정함.",
+      "context_basis": "공유 NAT 환경의 여러 사용자를 동일 IP만으로 분리할 수 없음을 가정한 합성 사례.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [
+        "같은 공유 IP에서 여러 합성 계정이 실패함"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_spray_boundary",
+      "source": "application",
+      "fixture": "bf_spray_boundary.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 4,
+      "expected_failure_count": 4,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "서로 다른 세 계정 실패가 네 건 있으나 Brute Force 단일 계정 기준을 충족하지 않음.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_ssh_positive",
+      "source": "ssh",
+      "fixture": "bf_ssh_positive.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 5,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "승인된 ISO-style sshd 합성 로그에서 같은 IP·계정의 다섯 password failure를 작성함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_success_after_burst",
+      "source": "application",
+      "fixture": "bf_success_after_burst.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 6,
+      "expected_failure_count": 5,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "다섯 실패 이후 같은 계정/IP의 합성 로그인 성공을 30초에 추가함.",
+      "context_basis": "성공 이벤트가 후속됐다는 합성 사실만 명시하며 계정 탈취 여부는 라벨에 포함하지 않음.",
+      "current_policy_expectation": true,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    },
+    {
+      "id": "bf_two_account_tied_windows",
+      "source": "application",
+      "fixture": "bf_two_account_tied_windows.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 10,
+      "expected_failure_count": 10,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "AMBIGUOUS",
+      "label_basis": "동일 IP에서 각기 다른 두 계정에 대해 계정별 5회·20초 실패 구간을 각각 배치함.",
+      "context_basis": "동일 시점 두 계정의 시도가 단일 사용자 행위인지 별도 사용자/공유 IP인지 로그만으로 확인할 수 없어 모호함.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": false,
+        "window_single_account": false,
+        "per_account": false
+      },
+      "ambiguity": [
+        "동일 우선순위 후보가 서로 다른 두 계정에 존재해 단일 Evidence를 고를 근거가 없음"
+      ],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": null
+    },
+    {
+      "id": "bf_two_bursts",
+      "source": "application",
+      "fixture": "bf_two_bursts.log",
+      "subject": "198.51.100.21",
+      "expected_event_count": 10,
+      "expected_failure_count": 10,
+      "timestamp_contract": "parser_aware_localized_then_candidate_utc",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "SIMULATED_ATTACK",
+      "label_basis": "서로 다른 두 개의 다섯 실패 burst를 80초 간격으로 작성함.",
+      "context_basis": "합성 시나리오 설명에서 명시한 운영 맥락이며 로그 출력으로 역산하지 않음.",
+      "current_policy_expectation": false,
+      "candidate_policy_expectation": {
+        "global_single_account": true,
+        "window_single_account": true,
+        "per_account": true
+      },
+      "ambiguity": [],
+      "expected_exclusion": false,
+      "evidence_selection_expectation": {
+        "window_offsets_seconds": [
+          0,
+          20
+        ]
+      }
+    }
+  ]
+}
