@@ -9,7 +9,7 @@ from app.models.schemas import (
 
 
 AUTHENTICATION_MESSAGE = re.compile(
-    r"(?P<outcome>Failed|Accepted) "
+    r"^(?P<outcome>Failed|Accepted) "
     r"(?P<method>password|publickey) for "
     r"(?:(?P<invalid_user>invalid user) )?"
     r"(?P<user>\S+) from (?P<src_ip>\S+)"
@@ -19,14 +19,31 @@ AUTHENTICATION_MESSAGE = re.compile(
     r"|$"
     r")"
 )
+SSH_PROCESS_MESSAGE = re.compile(
+    r"(?:"
+    r"sshd:?\s+(?P<plain_message>.+)"
+    r"|(?:\S+\s+)?sshd\[(?P<pid>\d+)\]:\s+(?P<pid_message>.+)"
+    r")$"
+)
 
 
 def parse_ssh_auth_log(log, timezone=None):
     parts = log.split()
+    if len(parts) < 3:
+        raise ValueError("Unsupported SSH log record.") from None
 
     timestamp = datetime.strptime(
         parts[0] + " " + parts[1],
         "%Y-%m-%d %H:%M:%S",
+    )
+
+    remainder = log.split(None, 2)[2].rstrip("\r\n")
+    process_message = SSH_PROCESS_MESSAGE.fullmatch(remainder)
+    if process_message is None:
+        raise ValueError("Unsupported SSH process marker.") from None
+    message_text = (
+        process_message.group("plain_message")
+        or process_message.group("pid_message")
     )
 
     if timestamp.tzinfo is None and timezone:
@@ -39,7 +56,7 @@ def parse_ssh_auth_log(log, timezone=None):
     src_ip = None
     authentication = None
 
-    message = AUTHENTICATION_MESSAGE.search(log)
+    message = AUTHENTICATION_MESSAGE.match(message_text)
 
     if message is not None:
         outcome = (

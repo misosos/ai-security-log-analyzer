@@ -835,10 +835,16 @@ def run_pair_setup(*, output: str | Path | None = None,
         emit("설정 생성을 취소했습니다.")
         return SetupResult("CANCELLED")
     application = _safe_path(ask("애플리케이션 로그인 로그의 절대 경로: "))
+    application_stat = application.stat()
     app_summary, app_identity = _preview_source(application, "application")
     emit(f"애플리케이션 로그인 로그 형식 검사: {app_summary.parsed_count}건 인식, "
          f"{app_summary.rejected_count}건 형식 미확인.")
     ssh = _safe_path(ask("SSH 인증 로그의 절대 경로: "))
+    ssh_stat = ssh.stat()
+    if (application_stat.st_dev, application_stat.st_ino) == (
+        ssh_stat.st_dev, ssh_stat.st_ino,
+    ):
+        raise MonitorSetupError("SETUP_INVALID_INPUT")
     ssh_summary, ssh_identity = _preview_source(ssh, "ssh")
     emit(f"SSH 인증 로그 형식 검사: {ssh_summary.parsed_count}건 인식, "
          f"{ssh_summary.rejected_count}건 형식 미확인.")

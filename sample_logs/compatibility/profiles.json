@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "data_scope": "synthetic-only",
+  "profiles": [
+    {"id":"APP-AUTH-01","source":"application","fixture":"application/app_auth.log","expected":"SUPPORTED_VERIFIED","timezone":"Asia/Seoul"},
+    {"id":"APP-AUTH-SUCCESS","source":"application","fixture":"application/app_auth_success.log","expected":"SUPPORTED_VERIFIED","timezone":"Asia/Seoul"},
+    {"id":"SSH-NORM-01","source":"ssh","fixture":"ssh/ssh_norm_failed.log","expected":"SUPPORTED_VERIFIED","timezone":"Asia/Seoul"},
+    {"id":"SSH-NORM-NO-PORT","source":"ssh","fixture":"ssh/ssh_norm_no_port.log","expected":"PARSED_PARTIAL","timezone":"Asia/Seoul"},
+    {"id":"SSH-NON-SSHD-PHRASE","source":"ssh","fixture":"ssh/ssh_other_program_auth_phrase.log","expected":"FALSE_ACCEPT","expected_after_r1":"REJECTED","timezone":"Asia/Seoul"},
+    {"id":"SSH-NORM-INVALID-USER-PUBKEY","source":"ssh","fixture":"ssh/ssh_norm_invalid_user_publickey.log","expected":"SUPPORTED_VERIFIED","timezone":"Asia/Seoul"},
+    {"id":"SSH-SYSLOG-3164","source":"ssh","fixture":"ssh/ssh_syslog_3164.log","expected":"REJECTED","timezone":"TIME_SEMANTICS_UNRESOLVED"},
+    {"id":"SSH-SYSLOG-5424","source":"ssh","fixture":"ssh/ssh_syslog_5424.log","expected":"REJECTED","timezone":"EXPLICIT_OFFSET_BUT_ENVELOPE_UNSUPPORTED"},
+    {"id":"ACCESS-APACHE-CLF-IP-SUBSET","source":"access","fixture":"access/apache_clf_ipv4.log","expected":"PARSED_PARTIAL","timezone":"explicit +0900"},
+    {"id":"ACCESS-APACHE-COMBINED","source":"access","fixture":"access/apache_combined.log","expected":"PARSED_PARTIAL","timezone":"explicit +0000"},
+    {"id":"ACCESS-NGINX-COMBINED","source":"access","fixture":"access/nginx_combined.log","expected":"PARSED_PARTIAL","timezone":"explicit +0000"},
+    {"id":"ACCESS-IPV6-SIZE-DASH","source":"access","fixture":"access/access_ipv6_size_dash.log","expected":"PARSED_PARTIAL","timezone":"explicit +0000"},
+    {"id":"ACCESS-INVALID-STATUS","source":"access","fixture":"access/access_invalid_status_999.log","expected":"FALSE_ACCEPT","expected_after_r1":"REJECTED","timezone":"explicit +0000"},
+    {"id":"ACCESS-CLF-HOSTNAME","source":"access","fixture":"access/access_hostname_clf.log","expected":"FALSE_ACCEPT","expected_after_r1":"REJECTED","timezone":"explicit +0000"},
+    {"id":"ACCESS-INVALID-DATE","source":"access","fixture":"access/access_bad_date.log","expected":"REJECTED","timezone":"invalid calendar date"},
+    {"id":"ACCESS-INVALID-OFFSET","source":"access","fixture":"access/access_bad_offset.log","expected":"REJECTED","timezone":"invalid numeric offset"},
+    {"id":"ACCESS-MISSING-REQUEST-PARTS","source":"access","fixture":"access/access_missing_request_component.log","expected":"IGNORED","timezone":"explicit +0000"},
+    {"id":"ACCESS-CUSTOM-JSON","source":"access","fixture":"access/access_json_custom.log","expected":"IGNORED","timezone":"custom format unspecified"},
+    {"id":"ACCESS-APACHE-ERROR","source":"access","fixture":"access/apache_error.log","expected":"REJECTED","timezone":"not an access timestamp"},
+    {"id":"ACCESS-NGINX-ERROR","source":"access","fixture":"access/nginx_error.log","expected":"REJECTED","timezone":"not an access timestamp"},
+    {"id":"SSH-MULTILINE","source":"ssh","fixture":"ssh/ssh_multiline.log","expected":"PARSED_PARTIAL","timezone":"continuation has no timestamp"}
+  ]
+}

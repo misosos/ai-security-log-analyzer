@@ -1,0 +1,1 @@
+192.0.2.22 - - [30/Oct/2026:09:00:00 +0000] "GET /search?q=blue HTTP/1.1" 200 48 "https://referrer.example/" "SyntheticAgent/1.0"

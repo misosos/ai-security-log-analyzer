@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+import ipaddress
 from urllib.parse import urlsplit
 
 from app.models.schemas import HttpContext, NormalizedEvent
@@ -13,6 +14,9 @@ def parse_access_log(line, timezone=None):
         return None
 
     ip = ip_match.group(1)
+    if ip.startswith("{"):
+        # JSON/custom access profiles are unsupported; keep them non-events.
+        return None
 
     # 2. timestamp
     timestamp_match = re.search(
@@ -56,21 +60,32 @@ def parse_access_log(line, timezone=None):
     query = url.query or None
 
     # 6. status / response size
-    status_match = re.search(
-        r'"[^"]*"\s+(\d+)\s+(\d+|-)',
-        line
+    status_match = re.match(
+        r"\s+([0-9]{3})\s+([0-9]+|-)(?:\s|$)",
+        line[request_match.end():],
     )
 
     if not status_match:
-        return None
+        raise ValueError("Invalid access status or response size.") from None
 
     status = int(status_match.group(1))
+    if not 100 <= status <= 599:
+        raise ValueError("HTTP status is outside the supported numeric range.") from None
 
     response_size = (
         int(status_match.group(2))
         if status_match.group(2) != "-"
         else None
     )
+
+    # Only validate the address after the rest of an access record is
+    # structurally recognized. Unrelated input remains an ignored record.
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        raise ValueError("Invalid access source address.") from None
+    if isinstance(address, ipaddress.IPv6Address) and address.scope_id is not None:
+        raise ValueError("Scoped IPv6 access source addresses are unsupported.") from None
 
     # 7. NormalizedEvent 생성
     return NormalizedEvent(

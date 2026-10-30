@@ -34,7 +34,8 @@ from app.models.local_text_investigation import (
     LocalTextInvestigationResponse,
 )
 from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
-from app.parser.ssh_auth import AUTHENTICATION_MESSAGE
+from app.parser.access_log import parse_access_log
+from app.parser.ssh_auth import parse_ssh_auth_log
 from app.local_request_security import classify_local_request
 from app.sample_investigation_api import (
     _EMPTY_WARNINGS, _case, _independent, _report_export,
@@ -62,9 +63,6 @@ _ARCHIVE_PREFIX_BYTES = 262
 _ARCHIVE_SIGNATURES = (
     b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08", b"\x1f\x8b", b"BZh",
     b"\xfd7zXZ\x00", b"7z\xbc\xaf\x27\x1c", b"Rar!\x1a\x07", b"\x28\xb5\x2f\xfd",
-)
-_ACCESS_LINE = re.compile(
-    r'^\S+\s+\S+\s+\S+\s+\[([^\]]+)\]\s+"([^"]+)"\s+\d{3}\s+(?:\d+|-)(?:\s|$)'
 )
 _LOCAL_NOTICES = (
     "로컬 실제 로그 분석 결과",
@@ -229,17 +227,10 @@ def _compatible(source: str, line: str) -> bool:
             datetime.strptime(" ".join(parts[:2]), "%Y-%m-%d %H:%M:%S")
             return True
         if source == "ssh":
-            parts = line.split()
-            if len(parts) < 3:
-                return False
-            datetime.strptime(" ".join(parts[:2]), "%Y-%m-%d %H:%M:%S")
-            return AUTHENTICATION_MESSAGE.search(line) is not None
-        match = _ACCESS_LINE.match(line)
-        if match is None or len(match.group(2).split()) != 3:
-            return False
-        datetime.strptime(match.group(1), "%d/%b/%Y:%H:%M:%S %z")
-        return True
-    except (ValueError, IndexError):
+            event = parse_ssh_auth_log(line, "Asia/Seoul")
+            return event is not None and event.authentication is not None
+        return parse_access_log(line) is not None
+    except (ValueError, IndexError, TypeError, OverflowError):
         return False
 
 
