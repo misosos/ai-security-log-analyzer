@@ -31,6 +31,7 @@
 
 ## 탐지·평가·개인정보
 
+- [Phase 36.9A 프로젝트 성숙도·실무 준비도 평가](project_maturity_readiness_assessment_36_9a.md) — 현재 합성 검증 범위, 운영 미검증 경계, 다음 개발 우선순위 (docs/index.md)
 - [합성 탐지 평가](detection_evaluation.md) · [웹 공격 관찰](web_attack_observation_design.md) · [incident case/Timeline](incident_case_timeline_design.md)
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)
 - [Hypothesis 설계](hypothesis_property_testing_gate_23_0.md) · [property pilot](hypothesis_property_testing_pilot_23_1.md) · [Schemathesis 설계](schemathesis_api_fuzzing_gate_23_4.md) · [API pilot](schemathesis_api_pilot_23_5.md)
