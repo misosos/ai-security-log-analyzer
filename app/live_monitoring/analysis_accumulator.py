@@ -484,7 +484,9 @@ class LiveAnalysisAccumulator:
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_RISK_FAILED") from None
         try:
-            run_owner._bind_analysis(results)
+            owned_results = run_owner._create_analysis_result()
+            owned_results.update(results)
+            results = owned_results
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CASE_FAILED") from None
         try:

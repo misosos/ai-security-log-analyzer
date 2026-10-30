@@ -10,6 +10,7 @@ from app.detector.shared_memory_execution import (
     SharedMemoryExecutionReviewSummary,
 )
 from app.models.schemas import DetectionResult, Evidence
+from app.detector.brute_force import is_owned_analysis_result
 from app.analyzer.web_observation_projection import (
     WEB_TYPES, WEB_DISPLAY, WEB_LIMITATION, WEB_NEXT_STEP,
     WebObservationEvidence, WebObservationProjectionError,
@@ -850,7 +851,7 @@ def build_investigation_report_projection(
     process_detection_summary=None,
     session_process_review_summary=None,
 ):
-    if type(analysis) is not dict or set(analysis) != {
+    if (type(analysis) is not dict and not is_owned_analysis_result(analysis)) or set(analysis) != {
         "results",
         "global_correlation",
     }:

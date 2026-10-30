@@ -9,6 +9,36 @@ from app.models.schemas import DetectionResult, Evidence, NormalizedEvent
 BRUTE_FORCE_MIN_FAILURES = 5
 BRUTE_FORCE_WINDOW_SECONDS = 60
 
+_OWNED_ANALYSIS_TOKEN = object()
+
+
+class _OwnedAnalysisResult(dict):
+    """내부 분석 mapping에만 Owner를 역방향 결속하는 private dict."""
+
+    __slots__ = ("__run_owner",)
+
+    def __init__(self, run_owner: "AnalysisRunOwner", token: object):
+        if token is not _OWNED_ANALYSIS_TOKEN:
+            raise ValueError("invalid_analysis_context") from None
+        super().__init__()
+        self.__run_owner = run_owner
+
+    def is_owned_by(self, run_owner: "AnalysisRunOwner") -> bool:
+        return self.__run_owner is run_owner
+
+
+def is_owned_analysis_result(
+    analysis: object,
+    run_owner: "AnalysisRunOwner | None" = None,
+) -> bool:
+    return (
+        type(analysis) is _OwnedAnalysisResult
+        and (
+            run_owner is None
+            or (type(run_owner) is AnalysisRunOwner and analysis.is_owned_by(run_owner))
+        )
+    )
+
 
 class AnalysisRunOwner:
     """비공개 분석 실행 capability; 같은 프로세스의 동일 실행만 묶는다."""
@@ -20,10 +50,24 @@ class AnalysisRunOwner:
         self.__bound = False
 
     def _bind_analysis(self, analysis: object) -> None:
+        """기존 Analysis를 넘겨 결속하지 못하게 하는 내부 검증점."""
         if self.__bound:
+            raise ValueError("invalid_analysis_context") from None
+        if (
+            type(analysis) is not _OwnedAnalysisResult
+            or not analysis.is_owned_by(self)
+        ):
             raise ValueError("invalid_analysis_context") from None
         self.__analysis = analysis
         self.__bound = True
+
+    def _create_analysis_result(self) -> dict:
+        """새 빈 private mapping을 만들고 이 실행에 한 번만 귀속한다."""
+        if self.__bound:
+            raise ValueError("invalid_analysis_context") from None
+        analysis = _OwnedAnalysisResult(self, _OWNED_ANALYSIS_TOKEN)
+        self._bind_analysis(analysis)
+        return analysis
 
     def is_bound_to(self, analysis: object) -> bool:
         return self.__bound and self.__analysis is analysis

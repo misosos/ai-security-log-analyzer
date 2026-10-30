@@ -89,3 +89,5 @@
 - [live 분석 검증](live_analysis_16_2_verification.md) · [통합 감사](live_analysis_16_4_audit.md) · [복구 검증](live_monitoring_release_gate_18.md)
 - [Phase 36.9G Brute Window 사후 회귀 및 계약 종결](brute_window_post_remediation_closure_36_9g.md)
 - [Phase 36.9G-R1 Brute Window Context 실행 소유권 보완](brute_window_run_ownership_remediation_36_9g_r1.md)
+- [Phase 36.9G-R2 Brute Window Context 소유권 독립 종결 검증](brute_window_context_ownership_closure_36_9g_r2.md)
+- [Phase 36.9G-R2-R1 Analysis Owner 단일 결속 보완](analysis_owner_unique_binding_remediation_36_9g_r2_r1.md)

@@ -11,6 +11,7 @@ from app.detector.brute_force import (
     AnalysisRunOwner,
     BruteWindowContext,
     brute_window_context_owner,
+    is_owned_analysis_result,
     validate_brute_window_context,
 )
 from app.models.schemas import NormalizedEvent
@@ -52,7 +53,7 @@ class AnalysisSourceRoleSnapshot:
     def from_events(cls, analysis: object, events: object) -> "AnalysisSourceRoleSnapshot":
         roles: dict[str, set[str]] = {}
         try:
-            if type(analysis) is not dict or type(events) not in (tuple, list):
+            if not isinstance(analysis, dict) or type(events) not in (tuple, list):
                 return cls(analysis, MappingProxyType({}))
             for event in events:
                 if type(event) is not NormalizedEvent:
@@ -80,7 +81,7 @@ class AnalysisSourceRoleSnapshot:
         for case in cases:
             role = "unknown"
             try:
-                if analysis is self._analysis and type(analysis) is dict:
+                if analysis is self._analysis and isinstance(analysis, dict):
                     subject_ip = case.row.subject_ip
                     if type(subject_ip) is str:
                         subject = ip_address(subject_ip).compressed
@@ -134,6 +135,10 @@ class AnalysisWithSourceRoleSnapshot:
         if run_owner is not None and (
             type(run_owner) is not AnalysisRunOwner
             or not run_owner.is_bound_to(self.analysis)
+        ):
+            raise ValueError("invalid_analysis_context") from None
+        if self.brute_window_contexts and not is_owned_analysis_result(
+            self.analysis, run_owner,
         ):
             raise ValueError("invalid_analysis_context") from None
         for subject, context in self.brute_window_contexts.items():

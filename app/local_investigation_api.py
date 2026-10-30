@@ -23,6 +23,7 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 from app.analyzer.incident_case_projection import InvestigationCaseProjection
+from app.detector.brute_force import is_owned_analysis_result
 from app.models.investigation_sample_api import (
     AnalysisSummary, CaseSummary, LocalCapabilities, LocalContext,
     LocalInvestigationErrorResponse, LocalInvestigationResponse, ReportExport,
@@ -479,7 +480,7 @@ def _local_response(
     report_export: ReportExport,
 ) -> LocalInvestigationResponse:
     if (
-        type(analysis) is not dict
+        (type(analysis) is not dict and not is_owned_analysis_result(analysis))
         or type(projection) is not InvestigationCaseProjection
         or type(report_export) is not ReportExport
     ):

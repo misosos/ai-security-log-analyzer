@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from app.analyzer.incident_case_adapter import IncidentCaseAdapterError
 from app.analyzer.incident_case_projection import InvestigationCaseProjection
+from app.detector.brute_force import is_owned_analysis_result
 from app.analyzer.html_report import _CONTENT_SECURITY_POLICY, _STATIC_CSS
 from app.models.investigation_sample_api import (
     AnalysisSummary,
@@ -400,7 +401,7 @@ def build_sample_response(
     checklist_refs: tuple[str, ...] | None = None,
 ) -> InvestigationResponse:
     if (
-        type(analysis) is not dict
+        (type(analysis) is not dict and not is_owned_analysis_result(analysis))
         or type(projection) is not InvestigationCaseProjection
         or type(report_export) is not ReportExport
     ):

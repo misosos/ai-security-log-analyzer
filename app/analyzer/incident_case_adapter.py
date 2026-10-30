@@ -23,6 +23,7 @@ from app.detector.brute_force import (
     BruteWindowContext,
     brute_window_context_owner,
     brute_evidence_matches_context,
+    is_owned_analysis_result,
     validate_brute_window_context,
 )
 from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
@@ -731,10 +732,10 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
         analysis_result = analysis_result.analysis
         if not isinstance(brute_window_contexts, Mapping):
             _fail("invalid_detection_contract")
-    if type(analysis_result) is not dict:
+    if type(analysis_result) is not dict and not is_owned_analysis_result(analysis_result):
         _fail("invalid_input_type")
     analysis = _exact_dict(
-        analysis_result,
+        dict(analysis_result) if is_owned_analysis_result(analysis_result) else analysis_result,
         _ANALYSIS_KEYS,
         "unsupported_result_shape",
     )
@@ -762,7 +763,7 @@ def build_incident_case_subject_inputs(
     bound_analysis: object | None = None,
 ) -> tuple[IncidentCaseSubjectInput, ...]:
     """Validate trusted per-subject results into the typed assembler contract."""
-    if type(results) is not dict:
+    if type(results) is not dict and not is_owned_analysis_result(results, run_owner):
         _fail("unsupported_result_shape")
     if brute_window_contexts is not None and not isinstance(brute_window_contexts, Mapping):
         _fail("invalid_detection_contract")
@@ -771,10 +772,11 @@ def build_incident_case_subject_inputs(
         type(run_owner) is not AnalysisRunOwner
         or bound_analysis is None
         or not run_owner.is_bound_to(bound_analysis)
+        or not is_owned_analysis_result(bound_analysis, run_owner)
         or not (
             bound_analysis is results
             or (
-                type(bound_analysis) is dict
+                isinstance(bound_analysis, dict)
                 and bound_analysis.get("results") is results
             )
         )

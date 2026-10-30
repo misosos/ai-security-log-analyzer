@@ -196,7 +196,8 @@ def _linux_audit_read_error_index(error, paths):
 
 def _analyze_normalized_logs(logs):
     result, _, _ = _analyze_normalized_logs_with_context(logs)
-    return result
+    # 공개 분석 반환값은 기존의 일반 dict 계약을 유지한다.
+    return dict(result)
 
 
 def _analyze_normalized_logs_with_context(logs):
@@ -208,8 +209,10 @@ def _analyze_normalized_logs_with_context(logs):
         brute_window_contexts,
         run_owner=run_owner,
     )
+    owned_result = run_owner._create_analysis_result()
+    owned_result.update(result)
+    result = owned_result
     result = assess_risk(result)
-    run_owner._bind_analysis(result)
     return result, brute_window_contexts, run_owner
 
 

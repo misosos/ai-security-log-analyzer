@@ -272,8 +272,10 @@ def _build_report(role: str, events: list) -> dict:
         brute_window_contexts,
         run_owner=run_owner,
     )
+    owned_analysis = run_owner._create_analysis_result()
+    owned_analysis.update(analysis)
+    analysis = owned_analysis
     analysis = assess_risk(analysis)
-    run_owner._bind_analysis(analysis)
     analysis_run = AnalysisWithSourceRoleSnapshot(
         analysis,
         AnalysisSourceRoleSnapshot.from_events(analysis, tuple(events)),
