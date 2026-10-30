@@ -106,9 +106,9 @@ def test_brute_force_to_success_scenario():
 
     logs = load_normalized_logs(log_sources)
 
-    result = detect_attacks(logs)
-    result = correlate_attacks(logs, result)
-    result = assess_risk(result)
+    from app.main import _analyze_normalized_logs_with_context
+
+    result, _, _ = _analyze_normalized_logs_with_context(logs)
 
     analysis = result["results"]["10.0.0.5"]
 

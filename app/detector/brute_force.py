@@ -10,7 +10,29 @@ BRUTE_FORCE_MIN_FAILURES = 5
 BRUTE_FORCE_WINDOW_SECONDS = 60
 
 
-@dataclass(frozen=True, slots=True, repr=False)
+class AnalysisRunOwner:
+    """비공개 분석 실행 capability; 같은 프로세스의 동일 실행만 묶는다."""
+
+    __slots__ = ("__analysis", "__bound")
+
+    def __init__(self) -> None:
+        self.__analysis = None
+        self.__bound = False
+
+    def _bind_analysis(self, analysis: object) -> None:
+        if self.__bound:
+            raise ValueError("invalid_analysis_context") from None
+        self.__analysis = analysis
+        self.__bound = True
+
+    def is_bound_to(self, analysis: object) -> bool:
+        return self.__bound and self.__analysis is analysis
+
+    def __repr__(self) -> str:
+        return "AnalysisRunOwner(<redacted>)"
+
+
+@dataclass(frozen=True, slots=True, repr=False, eq=False)
 class BruteWindowContext:
     """Brute 탐지에만 쓰는 비공개 창과 실제 인증 실패 행."""
 
@@ -20,9 +42,31 @@ class BruteWindowContext:
     end_utc: datetime
     failure_count: int
     member_events: tuple[NormalizedEvent, ...] = field(repr=False)
+    _run_owner: AnalysisRunOwner | None = field(
+        default=None, init=False, repr=False, compare=False,
+    )
 
     def __repr__(self) -> str:
         return "BruteWindowContext(<redacted>)"
+
+
+def _new_brute_window_context(
+    *, subject_ip: str, target_account: str, start_utc: datetime,
+    end_utc: datetime, failure_count: int,
+    member_events: tuple[NormalizedEvent, ...], run_owner: AnalysisRunOwner,
+) -> BruteWindowContext:
+    if type(run_owner) is not AnalysisRunOwner:
+        raise ValueError("invalid_brute_window_context") from None
+    context = BruteWindowContext(
+        subject_ip=subject_ip,
+        target_account=target_account,
+        start_utc=start_utc,
+        end_utc=end_utc,
+        failure_count=failure_count,
+        member_events=member_events,
+    )
+    object.__setattr__(context, "_run_owner", run_owner)
+    return context
 
 
 def _utc_timestamp(value: object) -> datetime:
@@ -43,6 +87,7 @@ def validate_brute_window_context(
     """비공개 context의 귀속·시간·멤버십 invariant를 다시 확인한다."""
     if (
         type(context) is not BruteWindowContext
+        or type(context._run_owner) is not AnalysisRunOwner
         or type(context.subject_ip) is not str
         or not context.subject_ip
         or not _same_ip(context.subject_ip, context.subject_ip)
@@ -84,12 +129,19 @@ def validate_brute_window_context(
         raise ValueError("invalid_brute_window_context") from None
 
 
-def select_brute_window_contexts(logs) -> dict[str, BruteWindowContext]:
+def select_brute_window_contexts(
+    logs,
+    run_owner: AnalysisRunOwner | None = None,
+) -> dict[str, BruteWindowContext]:
     """Candidate C per-account 창을 O(n log n) 정렬과 선형 탐색으로 고른다.
 
     사용자 정보가 없는 실패는 어떤 계정의 임계값에도 포함하지 않는다.
     입력 순서, 원문, ID는 후보 선택에 사용하지 않는다.
     """
+    if run_owner is None:
+        run_owner = AnalysisRunOwner()
+    if type(run_owner) is not AnalysisRunOwner:
+        raise ValueError("invalid_analysis_context") from None
     grouped: dict[str, dict[str, list[NormalizedEvent]]] = {}
     invalid_subjects: set[str] = set()
     for event in logs:
@@ -136,13 +188,14 @@ def select_brute_window_contexts(logs) -> dict[str, BruteWindowContext]:
                     continue
                 members = tuple(ordered[left:group_end + 1])
                 start = times[left]
-                context = BruteWindowContext(
+                context = _new_brute_window_context(
                     subject_ip=subject_ip,
                     target_account=account,
                     start_utc=start,
                     end_utc=end,
                     failure_count=len(members),
                     member_events=members,
+                    run_owner=run_owner,
                 )
                 validate_brute_window_context(context, subject_ip=subject_ip)
                 key = (end, start, (end - start).total_seconds(), -len(members))
@@ -157,6 +210,15 @@ def select_brute_window_contexts(logs) -> dict[str, BruteWindowContext]:
             continue
         selected[subject_ip] = best[0]
     return selected
+
+
+def brute_window_context_owner(
+    context: BruteWindowContext | None,
+) -> AnalysisRunOwner | None:
+    if type(context) is not BruteWindowContext:
+        return None
+    owner = context._run_owner
+    return owner if type(owner) is AnalysisRunOwner else None
 
 
 def brute_force_detection_from_context(context: BruteWindowContext) -> DetectionResult:

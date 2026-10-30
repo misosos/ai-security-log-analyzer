@@ -2,6 +2,7 @@ from datetime import datetime
 import math
 
 from app.detector.brute_force import (
+    AnalysisRunOwner,
     BruteWindowContext,
     brute_evidence_matches_context,
     validate_brute_window_context,
@@ -169,10 +170,13 @@ def correlate_brute_force_to_success(
     correlation_window_seconds=60,
     *,
     window_context: BruteWindowContext | None = None,
+    run_owner: AnalysisRunOwner | None = None,
 ):
     # 선택 창과 실제 Evidence가 함께 검증될 때만 Brute 전용 관계를 만든다.
     if (
         type(window_context) is not BruteWindowContext
+        or type(run_owner) is not AnalysisRunOwner
+        or window_context._run_owner is not run_owner
         or not brute_evidence_matches_context(
             brute_force_detection,
             window_context,

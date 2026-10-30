@@ -60,8 +60,10 @@ def test_application_prefix_matches_batch_and_preserves_sse_shape(tmp_path):
             assert worker.snapshot().last_committed_revision == index
             assert worker.publication_buffer.snapshot().latest_committed_detection_revision == index
             assert detection._detection == detect_attacks(list(detection._history))
-            oracle = assess_risk_with_metadata(
-                correlate_attacks(list(detection._history), detection._detection), {})
+            from app.main import _analyze_normalized_logs_with_context
+
+            oracle, _, _ = _analyze_normalized_logs_with_context(
+                list(detection._history))
             assert analysis._state._results == oracle["results"]
             assert not session.snapshot().active_lease
             assert not analysis.snapshot().active_proposal

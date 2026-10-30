@@ -2,6 +2,7 @@ from app.loader.file_loader import load_log_lines
 from app.loader.linux_audit_loader import load_linux_audit_events
 from app.parser.registry import get_parser, get_timezone
 from app.detector.brute_force import (
+    AnalysisRunOwner,
     summarize_ip_failures,
     select_brute_window_contexts,
     brute_force_detection_from_context,
@@ -135,12 +136,12 @@ def create_empty_result():
     }
 
 
-def detect_attacks_with_context(logs):
+def detect_attacks_with_context(logs, run_owner: AnalysisRunOwner):
 
     grouped_logs = group_logs_by_ip(logs)
 
     feature_results = summarize_ip_failures(logs)
-    brute_window_contexts = select_brute_window_contexts(logs)
+    brute_window_contexts = select_brute_window_contexts(logs, run_owner)
 
     results = {}
 
@@ -221,15 +222,20 @@ def detect_attacks_with_context(logs):
 
 def detect_attacks(logs):
     """Return the existing per-IP result shape, without private metadata."""
-    results, _ = detect_attacks_with_context(logs)
+    results, _ = detect_attacks_with_context(logs, AnalysisRunOwner())
     return results
 
 
-def correlate_attacks(logs, results, brute_window_contexts=None):
+def correlate_attacks(
+    logs,
+    results,
+    brute_window_contexts=None,
+    run_owner: AnalysisRunOwner | None = None,
+):
 
     grouped_logs = group_logs_by_ip(logs)
     if brute_window_contexts is None:
-        brute_window_contexts = select_brute_window_contexts(logs)
+        brute_window_contexts = {}
 
     # 전체 로그를 기준으로 수행하는 Correlation
     multi_ip_results = correlate_multi_ip_authentication(
@@ -279,8 +285,11 @@ def correlate_attacks(logs, results, brute_window_contexts=None):
                         brute_window_contexts.get(ip),
                         subject_ip=ip,
                     )
+                    and run_owner is not None
+                    and brute_window_contexts[ip]._run_owner is run_owner
                     else None
                 ),
+                run_owner=run_owner,
             )
         )
 

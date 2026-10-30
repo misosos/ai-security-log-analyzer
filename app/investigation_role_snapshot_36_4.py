@@ -8,7 +8,9 @@ from types import MappingProxyType
 from typing import Mapping
 
 from app.detector.brute_force import (
+    AnalysisRunOwner,
     BruteWindowContext,
+    brute_window_context_owner,
     validate_brute_window_context,
 )
 from app.models.schemas import NormalizedEvent
@@ -92,6 +94,9 @@ class AnalysisSourceRoleSnapshot:
             bound.append(BoundCaseSourceRole(role, case, analysis, projection))
         return tuple(bound)
 
+    def is_bound_to(self, analysis: object) -> bool:
+        return analysis is self._analysis
+
     def __repr__(self) -> str:
         return "AnalysisSourceRoleSnapshot(<redacted>)"
 
@@ -107,13 +112,35 @@ class AnalysisWithSourceRoleSnapshot:
         repr=False,
         compare=False,
     )
+    run_owner: AnalysisRunOwner | None = field(
+        default=None, repr=False, compare=False,
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.brute_window_contexts, Mapping):
             raise ValueError("invalid_analysis_context") from None
+        if type(self.source_roles) is not AnalysisSourceRoleSnapshot or not self.source_roles.is_bound_to(self.analysis):
+            raise ValueError("invalid_analysis_context") from None
+        owners = []
+        for context in self.brute_window_contexts.values():
+            owner = brute_window_context_owner(context)
+            if owner is not None and all(owner is not existing for existing in owners):
+                owners.append(owner)
+        if len(owners) > 1:
+            raise ValueError("invalid_analysis_context") from None
+        run_owner = self.run_owner
+        if run_owner is None and owners:
+            run_owner = owners[0]
+        if run_owner is not None and (
+            type(run_owner) is not AnalysisRunOwner
+            or not run_owner.is_bound_to(self.analysis)
+        ):
+            raise ValueError("invalid_analysis_context") from None
         for subject, context in self.brute_window_contexts.items():
             try:
                 if type(subject) is not str:
+                    raise ValueError("invalid_analysis_context")
+                if brute_window_context_owner(context) is not run_owner:
                     raise ValueError("invalid_analysis_context")
                 validate_brute_window_context(context, subject_ip=subject)
             except (TypeError, ValueError, AttributeError):
@@ -123,6 +150,7 @@ class AnalysisWithSourceRoleSnapshot:
             "brute_window_contexts",
             MappingProxyType(dict(self.brute_window_contexts)),
         )
+        object.__setattr__(self, "run_owner", run_owner)
 
     def __repr__(self) -> str:
         return "AnalysisWithSourceRoleSnapshot(<redacted>)"

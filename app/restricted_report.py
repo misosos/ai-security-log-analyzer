@@ -30,6 +30,7 @@ from app.analyzer.pipeline import (
     correlate_attacks,
     detect_attacks_with_context,
 )
+from app.detector.brute_force import AnalysisRunOwner
 from app.investigation_role_snapshot_36_4 import (
     AnalysisSourceRoleSnapshot,
     AnalysisWithSourceRoleSnapshot,
@@ -263,13 +264,21 @@ def _utc_projection_time(value: object) -> str | None:
 
 def _build_report(role: str, events: list) -> dict:
     started = time.monotonic()
-    detections, brute_window_contexts = detect_attacks_with_context(events)
-    analysis = correlate_attacks(events, detections, brute_window_contexts)
+    run_owner = AnalysisRunOwner()
+    detections, brute_window_contexts = detect_attacks_with_context(events, run_owner)
+    analysis = correlate_attacks(
+        events,
+        detections,
+        brute_window_contexts,
+        run_owner=run_owner,
+    )
     analysis = assess_risk(analysis)
+    run_owner._bind_analysis(analysis)
     analysis_run = AnalysisWithSourceRoleSnapshot(
         analysis,
         AnalysisSourceRoleSnapshot.from_events(analysis, tuple(events)),
         brute_window_contexts,
+        run_owner,
     )
     case_projection = project_investigation_cases_from_analysis(analysis_run)
 

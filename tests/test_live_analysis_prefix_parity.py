@@ -41,13 +41,16 @@ def _exercise(lines, transform=None):
         prefix.extend(item.event for item in parsed.outcomes if item.status == "PARSED")
         oracle_detection = detect_attacks(prefix)
         assert detector._detection == oracle_detection
-        oracle = assess_risk(correlate_attacks(prefix, oracle_detection))
+        from app.main import _analyze_normalized_logs_with_context
+
+        oracle, contexts, run_owner = _analyze_normalized_logs_with_context(prefix)
         trusted = analysis._state
         assert trusted._results == oracle["results"]
         oracle_run = AnalysisWithSourceRoleSnapshot(
             oracle,
             AnalysisSourceRoleSnapshot.from_events(oracle, tuple(prefix)),
-            select_brute_window_contexts(prefix),
+            contexts,
+            run_owner,
         )
         assert trusted._projection == project_investigation_cases_from_analysis(oracle_run)
         assert trusted._assembly.cases == tuple(trusted._assembly.cases)

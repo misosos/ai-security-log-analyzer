@@ -449,6 +449,7 @@ def test_correlates_brute_force_to_successful_login():
     )
 
     from app.detector.brute_force import (
+        brute_window_context_owner,
         brute_force_detection_from_context,
         select_brute_window_contexts,
     )
@@ -459,6 +460,7 @@ def test_correlates_brute_force_to_successful_login():
         logs,
         brute_force_detection,
         window_context=window_context,
+        run_owner=brute_window_context_owner(window_context),
     )
 
     assert result["is_correlated"] is True
@@ -513,12 +515,16 @@ def test_pipeline_correlates_brute_force_to_successful_login():
     for event in logs:
         event.timestamp = event.timestamp.replace(tzinfo=timezone.utc)
 
-    from app.analyzer.pipeline import detect_attacks
-    results = detect_attacks(logs)
+    from app.analyzer.pipeline import detect_attacks_with_context
+    from app.detector.brute_force import AnalysisRunOwner
+    run_owner = AnalysisRunOwner()
+    results, contexts = detect_attacks_with_context(logs, run_owner)
 
     result = correlate_attacks(
         logs,
         results,
+        contexts,
+        run_owner=run_owner,
     )
 
     correlation = result["results"]["10.0.0.50"]["correlation"]

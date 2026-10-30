@@ -136,6 +136,7 @@ def test_context_is_bound_to_actual_event_membership_and_evidence():
         second_events,
         detection,
         window_context=context,
+        run_owner=first.run_owner,
     )["is_correlated"] is False
     changed = DetectionResult(
         True,

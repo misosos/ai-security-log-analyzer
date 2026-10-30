@@ -36,13 +36,21 @@ def _prefixes(lines: tuple[str, ...], *, timestamp_change=None):
             timestamp_change(sequence, parsed)
         proposal = detector.prepare(parsed)
         events.extend(item.event for item in parsed.outcomes if item.status == "PARSED")
+        from app.main import _analyze_normalized_logs_with_context
+        from app.investigation_role_snapshot_36_4 import (
+            AnalysisSourceRoleSnapshot, AnalysisWithSourceRoleSnapshot,
+        )
+
+        analysis, contexts, owner = _analyze_normalized_logs_with_context(events)
         expected_detection = detect_attacks(events)
         assert proposal._detection == expected_detection
         detector.commit(proposal)
         assert detector._detection == expected_detection
-        analysis = assess_risk(correlate_attacks(events, expected_detection))
-        # This projection is a trusted batch oracle, not a public live DTO.
-        projection = project_investigation_cases_from_analysis(analysis)
+        run = AnalysisWithSourceRoleSnapshot(
+            analysis, AnalysisSourceRoleSnapshot.from_events(analysis, tuple(events)),
+            contexts, owner,
+        )
+        projection = project_investigation_cases_from_analysis(run)
         outcomes.append(parsed.outcomes[0].status)
         analyses.append((analysis, projection))
     return detector, tuple(outcomes), tuple(analyses)

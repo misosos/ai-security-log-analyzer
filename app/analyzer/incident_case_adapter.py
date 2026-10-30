@@ -19,7 +19,9 @@ from app.analyzer.incident_case_projection import (
 )
 from app.models.schemas import DetectionResult, Evidence
 from app.detector.brute_force import (
+    AnalysisRunOwner,
     BruteWindowContext,
+    brute_window_context_owner,
     brute_evidence_matches_context,
     validate_brute_window_context,
 )
@@ -722,8 +724,10 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
     ...,
 ]:
     brute_window_contexts = {}
+    run_owner = None
     if type(analysis_result) is AnalysisWithSourceRoleSnapshot:
         brute_window_contexts = analysis_result.brute_window_contexts
+        run_owner = analysis_result.run_owner
         analysis_result = analysis_result.analysis
         if not isinstance(brute_window_contexts, Mapping):
             _fail("invalid_detection_contract")
@@ -737,9 +741,16 @@ def _build_subject_inputs(analysis_result: dict) -> tuple[
     results = analysis["results"]
     if type(results) is not dict or type(analysis["global_correlation"]) is not dict:
         _fail("unsupported_result_shape")
+    if run_owner is not None and (
+        type(run_owner) is not AnalysisRunOwner
+        or not run_owner.is_bound_to(analysis_result)
+    ):
+        _fail("invalid_detection_contract")
     return build_incident_case_subject_inputs(
         results,
         brute_window_contexts=brute_window_contexts,
+        run_owner=run_owner,
+        bound_analysis=analysis_result,
     )
 
 
@@ -747,6 +758,8 @@ def build_incident_case_subject_inputs(
     results: dict,
     *,
     brute_window_contexts: Mapping[str, BruteWindowContext] | None = None,
+    run_owner: AnalysisRunOwner | None = None,
+    bound_analysis: object | None = None,
 ) -> tuple[IncidentCaseSubjectInput, ...]:
     """Validate trusted per-subject results into the typed assembler contract."""
     if type(results) is not dict:
@@ -754,7 +767,25 @@ def build_incident_case_subject_inputs(
     if brute_window_contexts is not None and not isinstance(brute_window_contexts, Mapping):
         _fail("invalid_detection_contract")
     contexts = brute_window_contexts or {}
+    if contexts and (
+        type(run_owner) is not AnalysisRunOwner
+        or bound_analysis is None
+        or not run_owner.is_bound_to(bound_analysis)
+        or not (
+            bound_analysis is results
+            or (
+                type(bound_analysis) is dict
+                and bound_analysis.get("results") is results
+            )
+        )
+    ):
+        _fail("invalid_detection_contract")
     if any(type(key) is not str for key in contexts):
+        _fail("invalid_detection_contract")
+    if any(
+        brute_window_context_owner(context) is not run_owner
+        for context in contexts.values()
+    ):
         _fail("invalid_detection_contract")
     if not set(contexts).issubset(results):
         _fail("invalid_detection_contract")

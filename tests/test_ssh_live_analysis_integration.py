@@ -51,7 +51,9 @@ def test_ssh_accumulator_matches_every_trusted_batch_prefix():
         detection.commit(proposal)
         analysis.commit(candidate)
         events.append(parsed.outcomes[0].event)
-        expected = assess_risk(correlate_attacks(events, detect_attacks(events)))
+        from app.main import _analyze_normalized_logs_with_context
+
+        expected, _, _ = _analyze_normalized_logs_with_context(events)
         assert analysis._state._results == expected["results"]
         assert analysis._state._projection == project_investigation_cases_from_analysis(expected)
         assert analysis.snapshot().revision == detection.snapshot().revision == revision

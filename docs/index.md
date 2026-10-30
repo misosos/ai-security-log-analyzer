@@ -87,3 +87,5 @@
 - [공급망 gate](software_supply_chain_gate_24_0.md) · [OSV pilot](software_supply_chain_pilot_24_1.md) · [dependency evidence bundle](dependency_evidence_bundle_24_2.md)
 - [REA 개발 pilot](rea_development_pilot_22_0.md) · [CLI pilot](rea_cli_pilot_22_1.md) · [정적 경로 감사](rea_static_path_audit_22_1a.md)
 - [live 분석 검증](live_analysis_16_2_verification.md) · [통합 감사](live_analysis_16_4_audit.md) · [복구 검증](live_monitoring_release_gate_18.md)
+- [Phase 36.9G Brute Window 사후 회귀 및 계약 종결](brute_window_post_remediation_closure_36_9g.md)
+- [Phase 36.9G-R1 Brute Window Context 실행 소유권 보완](brute_window_run_ownership_remediation_36_9g_r1.md)

@@ -11,6 +11,7 @@ from app.analyzer.pipeline import (
     correlate_attacks,
     assess_risk,
 )
+from app.detector.brute_force import AnalysisRunOwner
 
 from app.analyzer.process_execution import (
     aggregate_process_execution_observations,
@@ -194,15 +195,22 @@ def _linux_audit_read_error_index(error, paths):
 
 
 def _analyze_normalized_logs(logs):
-    result, _ = _analyze_normalized_logs_with_context(logs)
+    result, _, _ = _analyze_normalized_logs_with_context(logs)
     return result
 
 
 def _analyze_normalized_logs_with_context(logs):
-    detections, brute_window_contexts = detect_attacks_with_context(logs)
-    result = correlate_attacks(logs, detections, brute_window_contexts)
+    run_owner = AnalysisRunOwner()
+    detections, brute_window_contexts = detect_attacks_with_context(logs, run_owner)
+    result = correlate_attacks(
+        logs,
+        detections,
+        brute_window_contexts,
+        run_owner=run_owner,
+    )
     result = assess_risk(result)
-    return result, brute_window_contexts
+    run_owner._bind_analysis(result)
+    return result, brute_window_contexts, run_owner
 
 
 def analyze(log_sources=None):
@@ -220,9 +228,14 @@ def analyze_with_source_role_snapshot(log_sources=None):
     if log_sources is None:
         log_sources = LOG_SOURCES
     logs = load_normalized_logs(log_sources)
-    result, brute_window_contexts = _analyze_normalized_logs_with_context(logs)
+    result, brute_window_contexts, run_owner = _analyze_normalized_logs_with_context(logs)
     roles = AnalysisSourceRoleSnapshot.from_events(result, tuple(logs))
-    return AnalysisWithSourceRoleSnapshot(result, roles, brute_window_contexts)
+    return AnalysisWithSourceRoleSnapshot(
+        result,
+        roles,
+        brute_window_contexts,
+        run_owner,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:

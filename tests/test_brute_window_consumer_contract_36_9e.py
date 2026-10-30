@@ -270,7 +270,9 @@ def test_risk_separates_candidate_window_rationale_from_full_ip_signal_values():
     current = _analysis_with_candidate(events, context)["results"][SUBJECT]
     corrected = _analysis_with_window_correlation(events, context)["results"][SUBJECT]
 
-    assert current["correlation"]["brute_force_to_success"]["failure_timestamp"] == BASE + timedelta(seconds=20)
+    # 평가 전용 context는 Production 실행 owner에 속하지 않으므로
+    # Production correlation에 사용되지 않는다.
+    assert current["correlation"]["brute_force_to_success"]["is_correlated"] is False
     assert corrected["correlation"]["brute_force_to_success"]["failure_timestamp"] == BASE + timedelta(seconds=20)
     assert corrected["correlation"]["brute_force_to_success"]["time_delta_seconds"] == 60
     assert corrected["risk_factors"]["likelihood"]["failure_count"] == 6

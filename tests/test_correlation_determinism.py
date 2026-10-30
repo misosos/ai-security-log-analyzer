@@ -12,6 +12,7 @@ from app.correlation.attack_chain import (
     correlate_password_spray_to_success,
 )
 from app.detector.brute_force import (
+    brute_window_context_owner,
     brute_force_detection_from_context,
     select_brute_window_contexts,
 )
@@ -105,6 +106,7 @@ def _brute_relation(logs):
     detection = brute_force_detection_from_context(context)
     return correlate_brute_force_to_success(
         logs, detection, window_context=context,
+        run_owner=brute_window_context_owner(context),
     )
 
 

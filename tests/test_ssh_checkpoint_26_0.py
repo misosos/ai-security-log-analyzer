@@ -55,9 +55,17 @@ def _batch_expected(lines: tuple[str, ...]):
                     for index, line in enumerate(lines, 1))
     parsed = parse_live_records("ssh", records)
     events = tuple(outcome.event for outcome in parsed.outcomes if outcome.event is not None)
-    analysis = assess_risk_with_metadata(correlate_attacks(events, detect_attacks(events)),
-                                         load_account_metadata())
-    return analysis["results"], project_investigation_cases_from_analysis(analysis)
+    from app.main import _analyze_normalized_logs_with_context
+    from app.investigation_role_snapshot_36_4 import (
+        AnalysisSourceRoleSnapshot, AnalysisWithSourceRoleSnapshot,
+    )
+
+    analysis, contexts, owner = _analyze_normalized_logs_with_context(events)
+    run = AnalysisWithSourceRoleSnapshot(
+        analysis, AnalysisSourceRoleSnapshot.from_events(analysis, events),
+        contexts, owner,
+    )
+    return analysis["results"], project_investigation_cases_from_analysis(run)
 
 
 def _close(service) -> None:

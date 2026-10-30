@@ -13,6 +13,7 @@ from app.analyzer.incident_case_adapter import build_incident_case_subject_input
 from app.analyzer.incident_case_projection import build_investigation_case_projection
 from app.analyzer.pipeline import group_logs_by_ip, assess_risk_with_metadata
 from app.detector.brute_force import (
+    AnalysisRunOwner,
     brute_evidence_matches_context,
     select_brute_window_contexts,
 )
@@ -439,7 +440,8 @@ class LiveAnalysisAccumulator:
             raise LiveAnalysisError("LIVE_ANALYSIS_HISTORY_LIMIT")
         try:
             grouped = group_logs_by_ip(history)
-            brute_window_contexts = select_brute_window_contexts(history)
+            run_owner = AnalysisRunOwner()
+            brute_window_contexts = select_brute_window_contexts(history, run_owner)
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_CORRELATION_FAILED") from None
         results = {}
@@ -461,7 +463,11 @@ class LiveAnalysisAccumulator:
                     "authentication": correlate_authentication_transition(ip_logs),
                     "post_authentication": correlate_post_authentication_activity(ip_logs),
                     "brute_force_to_success": correlate_brute_force_to_success(
-                        ip_logs, brute_detection, window_context=brute_context),
+                        ip_logs,
+                        brute_detection,
+                        window_context=brute_context,
+                        run_owner=run_owner,
+                    ),
                     "password_spray_to_success": correlate_password_spray_to_success(
                         ip_logs, entry["detections"]["password_spray"]),
                 }
@@ -478,9 +484,15 @@ class LiveAnalysisAccumulator:
         except Exception:
             raise LiveAnalysisError("LIVE_ANALYSIS_RISK_FAILED") from None
         try:
+            run_owner._bind_analysis(results)
+        except Exception:
+            raise LiveAnalysisError("LIVE_ANALYSIS_CASE_FAILED") from None
+        try:
             subjects = build_incident_case_subject_inputs(
                 results,
                 brute_window_contexts=valid_brute_contexts,
+                run_owner=run_owner,
+                bound_analysis=results,
             )
             assembly = assemble_incident_cases(subjects)
         except Exception:
