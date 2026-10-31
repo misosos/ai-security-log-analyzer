@@ -64,6 +64,21 @@ def test_compatibility_manifest_replays_each_synthetic_fixture():
 def test_profile_disposition_matches_observed_parser_behavior(profile):
     observations = _parse_profile(profile)
     statuses = {status for status, _event in observations}
+    if profile["id"] == "SSH-SYSLOG-5424":
+        # Preserve the Phase 36.9B baseline label while asserting the explicitly
+        # implemented Phase 36.11B RFC5424 profile as a later compatibility.
+        assert profile["expected"] == "REJECTED"
+        assert statuses == {"PARSED"}
+        events = [event for _status, event in observations]
+        assert all(event is not None and event.authentication is not None for event in events)
+        assert len(events) == 1
+        event = events[0]
+        assert event.timestamp.isoformat() == "2026-10-30T09:00:00+00:00"
+        assert event.event_type == "login_failed"
+        assert event.user == "analyst"
+        assert event.src_ip == "192.0.2.12"
+        assert event.authentication.source_port == 51000
+        return
     # Keep the initial Phase 36.9B observation immutable while checking the
     # remediation result separately when the profile had a false acceptance.
     expected = profile.get("expected_after_r1", profile["expected"])
@@ -359,7 +374,7 @@ def test_text_input_gate_rejects_false_accept_candidates():
 
 def test_unsupported_syslog_and_json_formats_do_not_create_auth_or_http_events():
     for profile in _profiles():
-        if profile["id"] in {"SSH-SYSLOG-3164", "SSH-SYSLOG-5424", "ACCESS-CUSTOM-JSON"}:
+        if profile["id"] in {"SSH-SYSLOG-3164", "ACCESS-CUSTOM-JSON"}:
             observations = _parse_profile(profile)
             assert all(event is None for _status, event in observations)
 

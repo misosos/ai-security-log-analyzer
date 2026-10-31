@@ -11,6 +11,7 @@
 ## 로그 형식 호환성
 
 - [Phase 36.11A Apache/Nginx Combined Access Log 호환성](access_combined_realistic_compatibility_36_11a.md) — 제한된 Common/Combined 문법, strict parsing 및 파일·텍스트 입력 검증
+- [Phase 36.11B OpenSSH Syslog 호환성과 Timestamp Provenance](openssh_syslog_timestamp_provenance_36_11b.md) — 제한된 RFC 5424 `sshd` profile, UTC timestamp 검증 및 RFC 3164 자동 추정 거부
 
 ## Live monitoring·checkpoint
 
