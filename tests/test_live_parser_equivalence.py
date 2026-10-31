@@ -102,13 +102,17 @@ def test_ssh_unsupported_message_is_parser_event_not_none(tmp_path):
     ("application", "2026-01-02 03:04:05 INFO login_failed", "PARSED"),
     ("ssh", "2026-01-02 03:04:05 sshd: Failed password for synthetic from not-an-ip", "PARSED"),
     ("ssh", "2026-01-02 03:04:05 sshd: Accepted password for synthetic from 192.0.2.1 port 22 ssh2", "PARSED"),
-    ("access", '192.0.2.1 - - [02/Jan/2026:03:04:05 +0900] "GET /safe" 200 1', "IGNORED"),
-    ("access", '192.0.2.1 - - "GET /safe HTTP/1.1" 200 1', "IGNORED"),
+    ("access", '192.0.2.1 - - [02/Jan/2026:03:04:05 +0900] "GET /safe" 200 1', "REJECTED"),
+    ("access", '192.0.2.1 - - "GET /safe HTTP/1.1" 200 1', "REJECTED"),
 ))
 def test_existing_parser_boundary_behavior_matches_batch(tmp_path, source, line, status):
     path = tmp_path / "input.txt"
     path.write_text(line + "\n", encoding="utf-8")
-    batch = load_normalized_logs(({"source": source, "path": path},))
     live = parse_live_records(source, (_record(source, 1, line),))
     assert live.outcomes[0].status == status
-    assert tuple(item.event for item in live.outcomes if item.status == "PARSED") == tuple(batch)
+    if status == "REJECTED":
+        with pytest.raises(ValueError):
+            load_normalized_logs(({"source": source, "path": path},))
+    else:
+        batch = load_normalized_logs(({"source": source, "path": path},))
+        assert tuple(item.event for item in live.outcomes if item.status == "PARSED") == tuple(batch)

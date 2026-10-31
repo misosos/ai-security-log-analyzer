@@ -21,8 +21,8 @@ def test_account_ip_path_query_raw_and_exception_are_absent_from_safe_surfaces(c
     source_path = "private-source-maple-254"
     filename = "upload-cedar-819.log"
     line = (f'{ip} - - [02/Jan/2026:03:04:05 +0900] '
-            f'"GET {path}?{query} HTTP/1.1" 200 1 '
-            f'{user_agent} {credential} {account} {source_path} {filename}')
+            f'"GET {path}?{query} HTTP/1.1" 200 1 "-" '
+            f'"{user_agent} {credential} {account} {source_path} {filename}"')
     record = LiveTailRecord("access", 1, line, len(line.encode()))
     batch = parse_live_records("access", (record,))
     accumulator = LiveDetectionAccumulator("access", 2, 4096)

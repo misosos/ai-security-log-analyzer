@@ -125,20 +125,20 @@ def test_ssh_publickey_invalid_user_and_optional_port_behavior_are_observed():
 
 
 @pytest.mark.parametrize(
-    ("profile_id", "source_ip", "path", "query", "status", "size", "timestamp"),
+    ("profile_id", "source_ip", "path", "query", "status", "size", "timestamp", "user_agent"),
     [
         ("ACCESS-APACHE-CLF-IP-SUBSET", "192.0.2.20", "/items", "q=one%2Ftwo", 200, 10,
-         datetime(2026, 10, 30, 0, 0, tzinfo=timezone.utc)),
+         datetime(2026, 10, 30, 0, 0, tzinfo=timezone.utc), None),
         ("ACCESS-APACHE-COMBINED", "192.0.2.21", "/health", None, 204, 0,
-         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)),
+         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc), "SyntheticAgent/1.0"),
         ("ACCESS-NGINX-COMBINED", "192.0.2.22", "/search", "q=blue", 200, 48,
-         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)),
+         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc), "SyntheticAgent/1.0"),
         ("ACCESS-IPV6-SIZE-DASH", "2001:db8::23", "/empty", None, 304, None,
-         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)),
+         datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc), None),
     ],
 )
 def test_access_core_fields_and_explicit_offset(profile_id, source_ip, path, query,
-                                               status, size, timestamp):
+                                               status, size, timestamp, user_agent):
     event = _parse_profile(next(p for p in _profiles() if p["id"] == profile_id))[0][1]
     assert event.event_type == "http_request"
     assert event.src_ip == source_ip
@@ -148,8 +148,7 @@ def test_access_core_fields_and_explicit_offset(profile_id, source_ip, path, que
     assert event.http.status_code == status
     assert event.http.response_size == size
     assert event.timestamp == timestamp
-    # Combined-format referer and User-Agent aren't represented by HttpContext.
-    assert event.user_agent is None
+    assert event.user_agent == user_agent
 
 
 def test_access_timestamp_day_month_year_rollover_is_normalized_by_offset():

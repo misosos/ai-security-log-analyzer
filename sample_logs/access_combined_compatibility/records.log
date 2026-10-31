@@ -1,0 +1,36 @@
+192.0.2.10 - - [30/Oct/2026:09:00:00 +0000] "GET /common HTTP/1.1" 200 10
+2001:db8::10 ident user [30/Oct/2026:09:00:00 +0000] "POST /login HTTP/1.0" 403 -
+192.0.2.11 - guest [30/Oct/2026:09:00:00 +0000] "GET /health HTTP/1.1" 204 0 "-" "SyntheticBrowser/1.0"
+2001:db8::11 - - [30/Oct/2026:09:00:00 +0000] "GET /v6 HTTP/1.1" 301 20 "https://referrer.example/a" "SyntheticBrowser/2.0"
+192.0.2.12 - - [30/Oct/2026:09:00:00 +0000] "GET /search?q=blue HTTP/1.1" 200 48 "https://referrer.example/" "SyntheticBrowser/3.0"
+192.0.2.13 - - [30/Oct/2026:09:00:00 +0000] "GET /ref HTTP/1.1" 200 1 "-" "Agent/1"
+192.0.2.14 - - [30/Oct/2026:09:00:00 +0000] "GET /ua HTTP/1.1" 200 1 "-" "-"
+192.0.2.20 - - [30/Oct/2026:09:00:00 +0000] "GET /status HTTP/1.1" 200 11
+192.0.2.21 - - [30/Oct/2026:09:00:00 +0000] "GET /status HTTP/1.1" 301 11
+192.0.2.23 - - [30/Oct/2026:09:00:00 +0000] "GET /status HTTP/1.1" 403 11
+192.0.2.24 - - [30/Oct/2026:09:00:00 +0000] "GET /status HTTP/1.1" 404 11
+192.0.2.20 - - [30/Oct/2026:09:00:00 +0000] "GET /status HTTP/1.1" 500 11
+192.0.2.30 - - [30/Oct/2026:09:00:00 +0000] "GET /empty HTTP/1.1" 304 -
+192.0.2.31 - - [30/Oct/2026:09:00:00 +0000] "GET /item?id=7&view=full HTTP/1.1" 200 2
+192.0.2.32 - - [30/Oct/2026:09:00:00 +0000] "GET /download?file=../../etc/passwd HTTP/1.1" 200 2048 "-" "SyntheticBrowser/1"
+192.0.2.33 - - [30/Oct/2026:09:00:00 +0000] "GET /index.html HTTP/1.1" 200 4096 "-" "SyntheticBrowser/4.0"
+192.0.2.34 - - [30/Oct/2026:09:00:00 +0000] "GET /x HTTP/1.1" 200 1 "-" "SyntheticBrowser/2.0 \"quoted\" \\ path"
+192.0.2.35 - - [30/Oct/2026:09:00:00 +0000] "GET /x HTTP/1.1" 200 1 "-" "Agent\x2F\x22quoted\x22\x5Cpath"
+192.0.2.36 - - [30/Oct/2026:09:00:00 +0000] "GET /x HTTP/1.1" 200 1 "-" "Agent\\path"
+synthetic.example - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+999.2.3.4 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+2001:db8:::1 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+192.0.2.40 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 999 1
+192.0.2.41 - - [31/Feb/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+192.0.2.42 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP" 200 1
+192.0.2.43 - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+192.0.2.44 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1 200 1
+192.0.2.45 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1 "-"
+192.0.2.46 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1 "-" "Agent" extra
+{"remote_addr":"192.0.2.47","request":"GET / HTTP/1.1","status":200}
+prefix 192.0.2.48 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1
+192.0.2.49 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1 "-" "Agent\q"
+192.0.2.50 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1 "-" "Agent\xA"
+192.0.2.51 - - [30/Oct/2026:09:00:00 +0000] "GET / HTTP/1.1" 200 1 "-" "Agent\x0AInjected"
+192.0.2.52 - - [30/Oct/2026:09:00:00 +0000] "GET /x HTTP/1.1" 200 1 "-" "Agent\x2F\xC3\xA9"
+192.0.2.53 - - [30/Oct/2026:09:00:00 +0000] "GET /index.html HTTP/1.1" 200 10 "https://referrer.example/PRIVACY-REFERER-CANARY?token=synthetic" "UNION SELECT <script> PRIVACY-UA-CANARY"

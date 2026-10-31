@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "fixture": "records.log",
+  "scenarios": [
+    {
+      "id": "apache_common_ipv4",
+      "line": 0,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.10",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/common",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 10,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "apache_common_ipv6",
+      "line": 1,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "2001:db8::10",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "POST",
+          "path": "/login",
+          "query": null,
+          "protocol": "HTTP/1.0",
+          "status": 403,
+          "size": null,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "apache_combined_ipv4",
+      "line": 2,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.11",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/health",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 204,
+          "size": 0,
+          "user_agent": "SyntheticBrowser/1.0"
+        }
+      }
+    },
+    {
+      "id": "apache_combined_ipv6",
+      "line": 3,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "2001:db8::11",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/v6",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 301,
+          "size": 20,
+          "user_agent": "SyntheticBrowser/2.0"
+        }
+      }
+    },
+    {
+      "id": "nginx_default_combined",
+      "line": 4,
+      "profile": "nginx-default-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.12",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/search",
+          "query": "q=blue",
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 48,
+          "user_agent": "SyntheticBrowser/3.0"
+        }
+      }
+    },
+    {
+      "id": "combined_missing_referer",
+      "line": 5,
+      "profile": "combined-dash",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.13",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/ref",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": "Agent/1"
+        }
+      }
+    },
+    {
+      "id": "combined_missing_user_agent",
+      "line": 6,
+      "profile": "combined-dash",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.14",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/ua",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "status_200",
+      "line": 7,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.20",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/status",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 11,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "status_301",
+      "line": 8,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.21",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/status",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 301,
+          "size": 11,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "status_403",
+      "line": 9,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.23",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/status",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 403,
+          "size": 11,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "status_404",
+      "line": 10,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.24",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/status",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 404,
+          "size": 11,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "status_500",
+      "line": 11,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.20",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/status",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 500,
+          "size": 11,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "response_size_dash",
+      "line": 12,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.30",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/empty",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 304,
+          "size": null,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "query_preserved",
+      "line": 13,
+      "profile": "apache-common",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.31",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/item",
+          "query": "id=7&view=full",
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 2,
+          "user_agent": null
+        }
+      }
+    },
+    {
+      "id": "path_traversal_observed",
+      "line": 14,
+      "profile": "nginx-default-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.32",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/download",
+          "query": "file=../../etc/passwd",
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 2048,
+          "user_agent": "SyntheticBrowser/1"
+        }
+      }
+    },
+    {
+      "id": "normal_browser",
+      "line": 15,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.33",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/index.html",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 4096,
+          "user_agent": "SyntheticBrowser/4.0"
+        }
+      }
+    },
+    {
+      "id": "apache_escaped_quote",
+      "line": 16,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.34",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/x",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": "SyntheticBrowser/2.0 \"quoted\" \\ path"
+        }
+      }
+    },
+    {
+      "id": "nginx_default_hex_escape",
+      "line": 17,
+      "profile": "nginx-default-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.35",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/x",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": "Agent/\"quoted\"\\path"
+        }
+      }
+    },
+    {
+      "id": "apache_escaped_backslash",
+      "line": 18,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.36",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/x",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": "Agent\\path"
+        }
+      }
+    },
+    {
+      "id": "hostname",
+      "line": 19,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "invalid_ipv4",
+      "line": 20,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "invalid_ipv6",
+      "line": 21,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "status_999",
+      "line": 22,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "invalid_date",
+      "line": 23,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "malformed_request",
+      "line": 24,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "missing_required_fields",
+      "line": 25,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "broken_request_quote",
+      "line": 26,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "combined_missing_trailing_field",
+      "line": 27,
+      "profile": "apache-combined",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "trailing_garbage",
+      "line": 28,
+      "profile": "apache-combined",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "custom_json",
+      "line": 29,
+      "profile": "unsupported-json",
+      "expected": "IGNORED",
+      "expected_fields": null
+    },
+    {
+      "id": "fake_prefix_request",
+      "line": 30,
+      "profile": "apache-common",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "unsupported_escape",
+      "line": 31,
+      "profile": "apache-combined",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "incomplete_hex_escape",
+      "line": 32,
+      "profile": "nginx-default-combined",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "escaped_control_character",
+      "line": 33,
+      "profile": "nginx-default-combined",
+      "expected": "REJECTED",
+      "expected_fields": null
+    },
+    {
+      "id": "nginx_hex_utf8",
+      "line": 34,
+      "profile": "nginx-default-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.52",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/x",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 1,
+          "user_agent": "Agent/é"
+        }
+      }
+    },
+    {
+      "id": "ua_not_detection_input",
+      "line": 35,
+      "profile": "apache-combined",
+      "expected": "SUPPORTED",
+      "expected_fields": {
+        "src_ip": "192.0.2.53",
+        "timestamp": "2026-10-30T09:00:00+00:00",
+        "http": {
+          "method": "GET",
+          "path": "/index.html",
+          "query": null,
+          "protocol": "HTTP/1.1",
+          "status": 200,
+          "size": 10,
+          "user_agent": "UNION SELECT <script> PRIVACY-UA-CANARY"
+        }
+      }
+    }
+  ]
+}

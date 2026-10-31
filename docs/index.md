@@ -8,6 +8,10 @@
 - [v0.4.0 릴리스 노트](releases/v0.4.0.md) · [v0.3.0](releases/v0.3.0.md) · [v0.2.0](releases/v0.2.0.md) · [v0.1.0](releases/v0.1.0.md)
 - [릴리스 체크리스트](release_checklist.md) · [release readiness](release_readiness.md)
 
+## 로그 형식 호환성
+
+- [Phase 36.11A Apache/Nginx Combined Access Log 호환성](access_combined_realistic_compatibility_36_11a.md) — 제한된 Common/Combined 문법, strict parsing 및 파일·텍스트 입력 검증
+
 ## Live monitoring·checkpoint
 
 - [단일 파일 live 설계](live_log_monitoring_design.md) · [로컬 설정 마법사](monitor_setup_20.md) · [application·SSH 설정 통합 설계](monitor_setup_ssh_design_30_0.md) · [SSH 설정 구현](monitor_setup_ssh_30_1.md) · [관리·복구 통합 감사](monitor_setup_unified_audit_30_2.md) · [Ubuntu·사용자 수용 기록](monitor_setup_acceptance_30_3.md) · [checkpoint 계약](live_checkpoint_21.md)
