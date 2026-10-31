@@ -86,6 +86,15 @@ try {
   ensure(await page.locator('#nav-start').getAttribute('aria-current') === 'page', 'UI3_START_NAV_FAILED');
   ensure(await page.locator('.brand-name').innerText() === 'Security Log' &&
     await page.locator('#nav-group-investigate').evaluate((node) => node.open), 'UI4_BRAND_OR_ACTIVE_GROUP_FAILED');
+  const sidebarToggle = page.locator('#workspace-sidebar-toggle');
+  await sidebarToggle.click();
+  ensure(await page.locator('#workspace-nav').evaluate((node) => node.classList.contains('sidebar-collapsed')) &&
+    await page.locator('.app-shell').evaluate((node) => Math.round(getComputedStyle(node).gridTemplateColumns.split(' ')[0].replace('px', ''))) === 88 &&
+    await page.locator('#nav-start').getAttribute('title') === '시작' &&
+    await page.locator('#nav-start > span').innerText() === '시작', 'UI4_SIDEBAR_COLLAPSE_FAILED');
+  await page.keyboard.press('Enter');
+  ensure(!await page.locator('#workspace-nav').evaluate((node) => node.classList.contains('sidebar-collapsed')) &&
+    await page.locator('#nav-start').getAttribute('aria-current') === 'page', 'UI4_SIDEBAR_EXPAND_FAILED');
   const toolsGroupToggle = page.locator('#nav-group-tools > summary');
   await toolsGroupToggle.focus();
   await page.keyboard.press('Space');

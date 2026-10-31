@@ -272,6 +272,9 @@
       [key, document.getElementById(`nav-${key}`)]));
     const navDetails = document.getElementById("workspace-nav-details");
     const navToggle = document.getElementById("workspace-nav-toggle");
+    const sidebarToggle = document.getElementById("workspace-sidebar-toggle");
+    const navGroupElements = [...workspaceNav.querySelectorAll(".nav-group")];
+    let expandedGroupStates = null;
     const navGroups = {
       start: "nav-group-investigate", local: "nav-group-investigate",
       results: "nav-group-results", audit: "nav-group-tools", live: "nav-group-tools"
@@ -294,6 +297,32 @@
     const available = {start: true, local: loopbackPage, audit: loopbackPage, live: false, results: false};
     let current = "start";
     let resultKind = "batch";
+    function setSidebarCollapsed(collapsed) {
+      workspaceNav.classList.toggle("sidebar-collapsed", collapsed);
+      workspaceNav.closest(".app-shell").classList.toggle("sidebar-collapsed", collapsed);
+      sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+      const label = collapsed ? "사이드바 펼치기" : "사이드바 접기";
+      sidebarToggle.setAttribute("aria-label", label);
+      sidebarToggle.title = label;
+      sidebarToggle.querySelector("span").textContent = label;
+      if (collapsed) {
+        expandedGroupStates = navGroupElements.map((group) => group.open);
+        navGroupElements.forEach((group) => { group.open = true; });
+      } else if (expandedGroupStates) {
+        navGroupElements.forEach((group, index) => { group.open = expandedGroupStates[index]; });
+        expandedGroupStates = null;
+      }
+    }
+    sidebarToggle.addEventListener("click", () => {
+      setSidebarCollapsed(!workspaceNav.classList.contains("sidebar-collapsed"));
+    });
+    if (compact) {
+      const resetSidebarAtMobileWidth = (event) => {
+        if (event.matches && workspaceNav.classList.contains("sidebar-collapsed")) setSidebarCollapsed(false);
+      };
+      if (compact.addEventListener) compact.addEventListener("change", resetSidebarAtMobileWidth);
+      else compact.addListener(resetSidebarAtMobileWidth);
+    }
     const resultPanels = {batch: results, audit: auditResults, live: liveResults};
     const headings = {
       start: document.getElementById("page-title"), local: document.getElementById("local-heading"),
@@ -307,8 +336,11 @@
       for (const key of Object.keys(panels)) {
         const panel = panels[key];
         panel.hidden = key !== view;
-        if (key === view) buttons[key].setAttribute("aria-current", "page");
-        else buttons[key].removeAttribute("aria-current");
+        if (key === view) {
+          buttons[key].setAttribute("aria-current", "page");
+        } else {
+          buttons[key].removeAttribute("aria-current");
+        }
       }
       if (view === "results") {
         for (const key of Object.keys(resultPanels)) resultPanels[key].hidden = key !== resultKind;

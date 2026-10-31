@@ -536,6 +536,12 @@ async function scan(page, state) {
       `STRUCTURE_${key.toUpperCase()}_FAILED`);
   }
   let results;
+  if (state === 'base') {
+    await page.locator('#workspace-sidebar-toggle').click();
+    const collapsedResults = await new AxeBuilder({page}).analyze();
+    requireSafe(collapsedResults.violations.length === 0, 'COLLAPSED_SIDEBAR_AXE_VIOLATIONS');
+    await page.locator('#workspace-sidebar-toggle').click();
+  }
   try { results = await new AxeBuilder({page}).analyze(); }
   catch { throw new Error('AXE_ANALYSIS_FAILED'); }
   const summary = results.violations

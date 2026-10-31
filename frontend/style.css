@@ -997,6 +997,56 @@ body { background: var(--cyber-bg); }
   .start-actions, .analysis-flow ol { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Phase 36.10A-UI4 follow-up: collapse the desktop sidebar to an icon rail. */
+.workspace-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 1rem;
+  padding: .55rem .7rem;
+  border: 1px solid var(--cyber-border-quiet);
+  border-radius: .6rem;
+  color: var(--cyber-muted);
+  background: var(--cyber-panel);
+  font-size: .94rem;
+  font-weight: 680;
+}
+.workspace-sidebar-toggle:hover { color: var(--cyber-text); border-color: #28627a; }
+.workspace-sidebar-toggle .icon { width: 1.2rem; height: 1.2rem; flex: none; }
+.workspace-sidebar-toggle:focus-visible { outline: 2px solid var(--cyber-cyan); outline-offset: 2px; }
+.app-shell.sidebar-collapsed { grid-template-columns: 88px minmax(0, 1fr); }
+.workspace-nav.sidebar-collapsed { align-items: center; padding: 1rem .55rem; }
+.workspace-nav.sidebar-collapsed .brand-lockup { justify-content: center; min-height: 54px; margin: 0 0 .75rem; }
+.workspace-nav.sidebar-collapsed .brand-copy,
+.workspace-nav.sidebar-collapsed .workspace-nav-title,
+.workspace-nav.sidebar-collapsed .sidebar-note,
+.workspace-nav.sidebar-collapsed .nav-group > summary { display: none; }
+.workspace-nav.sidebar-collapsed .workspace-sidebar-toggle { width: 48px; min-height: 48px; margin: 0 0 .7rem; padding: .55rem; }
+.workspace-nav.sidebar-collapsed .workspace-sidebar-toggle span { display: none; }
+.workspace-nav.sidebar-collapsed .nav-group button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.workspace-nav.sidebar-collapsed .workspace-nav-list,
+.workspace-nav.sidebar-collapsed .nav-group,
+.workspace-nav.sidebar-collapsed .nav-group-items { width: 100%; }
+.workspace-nav.sidebar-collapsed .workspace-nav-list { gap: .35rem; }
+.workspace-nav.sidebar-collapsed .nav-group { border-top: 1px solid var(--cyber-border-quiet); }
+.workspace-nav.sidebar-collapsed .nav-group-items { gap: .35rem; padding: .35rem 0; }
+.workspace-nav.sidebar-collapsed .nav-group button { justify-content: center; min-height: 48px; padding: .5rem; font-size: 0; }
+.workspace-nav.sidebar-collapsed .nav-group button .icon { width: 1.45rem; height: 1.45rem; }
+.workspace-nav.sidebar-collapsed .nav-group button[aria-current="page"]::after { display: none; }
+
 /* UI4 shell widths follow the existing tablet breakpoints after legacy overrides. */
 @media (min-width: 75rem) {
   .app-shell { grid-template-columns: 320px minmax(0, 1fr); }
@@ -1006,4 +1056,8 @@ body { background: var(--cyber-bg); }
 }
 @media (max-width: 56.25rem) and (min-width: 48rem) {
   .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
+}
+@media (max-width: 47.9375rem) {
+  .workspace-sidebar-toggle { display: none; }
+  .app-shell.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
 }

@@ -67,6 +67,15 @@ def test_sidebar_groups_keep_existing_navigation_targets_and_brand_identity():
     assert '.workspace-nav .nav-group > summary:focus-visible' in CSS
 
 
+def test_sidebar_has_accessible_full_collapse_control():
+    assert 'id="workspace-sidebar-toggle"' in HTML
+    assert 'aria-expanded="true"' in HTML and 'aria-controls="workspace-nav-list"' in HTML
+    assert '.app-shell.sidebar-collapsed { grid-template-columns: 88px' in CSS
+    assert '.workspace-nav.sidebar-collapsed .nav-group button > span {' in CSS
+    assert 'clip: rect(0, 0, 0, 0)' in CSS
+    assert 'setSidebarCollapsed(!workspaceNav.classList.contains("sidebar-collapsed"))' in APP
+
+
 def test_full_width_application_shell_and_start_choices():
     assert 'class="app-shell"' in HTML
     assert 'class="app-area"' in HTML

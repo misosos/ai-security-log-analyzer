@@ -21,6 +21,7 @@
 - 모바일의 기존 전체 메뉴 접기/펼치기와 Escape 동작을 유지하고, 내부 그룹을 세로형 접이식 메뉴로 보여준다.
 - 사이드바는 데스크톱 280px에서 320px로 넓혔다. 중간 폭은 901–1199px에서 248px→276px, 768–900px에서 220px→248px로 조정했다. 768px 미만에서는 기존처럼 전체 폭 상단 탐색으로 전환한다.
 - 메뉴 행 높이를 최소 52px(모바일 48px), 메뉴 글자를 17–18px대로 맞추고 그룹 사이 구분과 클릭 간격을 늘렸다. 시작 화면의 카드 padding과 흐름 간격도 소폭 늘렸다.
+- 후속 보완으로 데스크톱/태블릿의 전체 사이드바를 88px 아이콘 레일로 접는 토글을 추가했다. 접힌 동안 메뉴 이름은 화면에서 감추되 접근성 트리에 남기고, 툴팁도 제공한다. 접기 전 그룹 열림 상태를 보존해 펼칠 때 복원한다. 모바일 구간에서는 토글을 감추고 기존 전체 메뉴 disclosure를 유지한다.
 
 ## 계약과 범위
 
@@ -35,6 +36,8 @@ Hash route, 현재 페이지의 `aria-current`, case isolation, Checklist/Guidan
 - `node tests/ui_navigation_closure_36_10a_ui3.mjs`: 통과; case route/isolation, checklist/guidance opt-in, CSP, 외부 요청 0건 유지
 - `python3 -m compileall -q app tests`, `git diff --check`: 통과
 - UI3 E2E에 disclosure 그룹의 키보드 Space 열기/닫기와 현재 그룹 표시를 확인하는 단계를 더했다.
+- 사이드바 전체 토글의 접기 폭, 키보드 재열기, 현재 화면 유지도 Navigation E2E에서 확인한다.
+- 전체 사이드바 접기 기능 추가 후 회귀: `uv run pytest -q` 3463 passed, 2 warnings; `npm run test:a11y --silent` axe 통과, 25개 상태·외부 요청 0건; `node tests/ui_navigation_closure_36_10a_ui3.mjs` 통과; `uv lock --check`, `python3 -m compileall -q app tests`, `git diff --check` 통과.
 - Safari 사용자 수용은 자동 Chromium 검증으로 대체하지 않는다. `SAFARI_USER_ACCEPTANCE_PENDING` 상태다.
 
 ## 한계
