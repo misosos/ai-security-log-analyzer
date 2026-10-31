@@ -1,0 +1,603 @@
+{
+  "data_scope": "synthetic-only",
+  "scenarios": [
+    {
+      "ambiguity": "MISSING_ACCOUNT",
+      "behavioral_pattern": "PATTERN_UNDETERMINED",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 4,
+      "fixtures": [
+        {
+          "line_count": 4,
+          "path": "all_member_usernames_missing_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "all_member_usernames_missing",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "PARTIAL",
+      "relationship_interpretation": "ACCOUNT_ATTRIBUTION_UNAVAILABLE",
+      "success_account_relation": "MISSING",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "brute_overlap_mixed_source",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 8,
+      "fixtures": [
+        {
+          "line_count": 8,
+          "path": "brute_and_spray_overlap_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "brute_overlap_auth_transition",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "BRUTE_AND_SPRAY_OVERLAP",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "POST_COMPLETION"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "cross_ip_success_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "cross_ip_success",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "CROSS_IP_NO_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "MEMBER_SELECTION",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "duplicate_looking_window_member_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "duplicate_looking_window_member",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "MEMBERSHIP_AMBIGUOUS",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "POST_COMPLETION"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "end_anchor_pass_member_failure_limit_fails_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "end_anchor_pass_member_failure_limit_fails",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "END_ANCHOR_PASS_MEMBER_DELTA_FAIL",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "END_PLUS_60S"
+    },
+    {
+      "ambiguity": "PAIR_TIE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "equal_delta_same_account_pairs_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "equal_delta_same_account_pairs",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "AMBIGUOUS_EQUAL_DELTA_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "MULTIPLE_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "late_noise",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "late_noise_member_pair_still_within_limits_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "late_noise_member_pair_still_within_limits",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "MEMBER_PAIR_DESPITE_LATE_NOISE",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "POST_COMPLETION_BEFORE_LATE_NOISE"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "late_noise",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "late_noise_other_account_success_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "late_noise_other_account_success",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "LATE_NONMEMBER_PAIR",
+      "success_account_relation": "NON_MEMBER",
+      "success_timing": "LATE_NOISE"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "late_noise",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "late_noise_window_outside_pair_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "late_noise_window_outside_pair",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "CURRENT_PAIR_OUTSIDE_SELECTED_WINDOW",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "LATE_NOISE"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "member_and_success_different_account_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "member_and_success_different_account",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "NO_MEMBER_PAIR",
+      "success_account_relation": "NON_MEMBER",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "member_failure_passes_before_window_end_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "member_failure_passes_before_window_end",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "WINDOW_MEMBER_PRE_COMPLETION_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "PRE_COMPLETION"
+    },
+    {
+      "ambiguity": "MISSING_ACCOUNT",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "missing_member_account_known_pair_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "missing_member_account_known_pair",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "PARTIAL",
+      "relationship_interpretation": "KNOWN_PAIR_WITH_INCOMPLETE_WINDOW",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "CROSS_SOURCE_IDENTITY",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "brute_overlap_mixed_source",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 2,
+          "path": "mixed_source_same_username_application.log",
+          "source": "application"
+        },
+        {
+          "line_count": 3,
+          "path": "mixed_source_same_username_ssh.log",
+          "source": "ssh"
+        }
+      ],
+      "id": "mixed_source_same_username",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "CROSS_SOURCE_IDENTITY_UNVERIFIED",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "POST_COMPLETION"
+    },
+    {
+      "ambiguity": "PAIR_TIE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "multiple_success_accounts_tie_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "multiple_success_accounts_tie",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "AMBIGUOUS_EQUAL_DELTA_PAIR",
+      "success_account_relation": "MULTIPLE_MEMBER_KNOWN",
+      "success_timing": "MULTIPLE_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "multiple_success_closest_differs_from_earliest_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "multiple_success_closest_differs_from_earliest",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "CLOSEST_PAIR_NOT_EARLIEST_SUCCESS",
+      "success_account_relation": "MULTIPLE_MEMBER_KNOWN",
+      "success_timing": "MULTIPLE_SUCCESS"
+    },
+    {
+      "ambiguity": "MISSING_ACCOUNT",
+      "behavioral_pattern": "PATTERN_UNDETERMINED",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "only_two_known_targets_missing_other_users_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "only_two_known_targets_missing_other_users",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "CONTEXT_UNKNOWN",
+      "parser_status": "PARTIAL",
+      "relationship_interpretation": "PATTERN_ACCOUNT_SCOPE_UNDETERMINED",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "same_account_success_after_completion_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "same_account_success_after_completion",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "WINDOW_MEMBER_POST_COMPLETION_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "POST_COMPLETION"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "same_account_success_before_completion_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "same_account_success_before_completion",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "WINDOW_MEMBER_PRE_COMPLETION_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "PRE_COMPLETION"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "tie_duplicate_missing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "same_timestamp_failure_success_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "same_timestamp_failure_success",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "NO_STRICT_FAILURE_BEFORE_SUCCESS",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "SAME_TIMESTAMP"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_60_seconds_plus_one_microsecond_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_60_seconds_plus_one_microsecond",
+      "label_basis": "Parser yields second precision; the evaluator then applies a declared synthetic +1 microsecond adjustment to the parsed success timestamp to exercise normalized-time arithmetic, not parser capability.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "OUTSIDE_C2_END_WINDOW",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "END_PLUS_60S_PLUS_1US",
+      "timestamp_adjustment": {
+        "event_index": 4,
+        "microseconds": 1
+      }
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_at_window_end_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_at_window_end",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "WINDOW_MEMBER_AT_END_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "AT_WINDOW_END"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_before_all_failures_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_before_all_failures",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "NO_FAILURE_BEFORE_SUCCESS",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "BEFORE_ALL_FAILURES"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_for_member_account_a_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_for_member_account_a",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "ACCOUNT_SCOPED_MEMBER_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_for_member_account_b_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_for_member_account_b",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "ACCOUNT_SCOPED_MEMBER_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "success_for_nonmember_account_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "success_for_nonmember_account",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "NO_MEMBER_PAIR",
+      "success_account_relation": "NON_MEMBER",
+      "success_timing": "NO_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "multi_account_attribution",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 6,
+      "fixtures": [
+        {
+          "line_count": 6,
+          "path": "successes_for_two_member_accounts_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "successes_for_two_member_accounts",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "MULTIPLE_MEMBER_PAIRS",
+      "success_account_relation": "MULTIPLE_MEMBER_KNOWN",
+      "success_timing": "MULTIPLE_SUCCESS"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "window_end_and_member_delta_exactly_sixty_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "window_end_and_member_delta_exactly_sixty",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "WINDOW_MEMBER_POST_COMPLETION_PAIR",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "END_PLUS_60S"
+    },
+    {
+      "ambiguity": "NONE",
+      "behavioral_pattern": "PATTERN_PRESENT",
+      "category": "success_timing",
+      "context_basis": "Synthetic context is not runtime telemetry.",
+      "event_count_expected": 5,
+      "fixtures": [
+        {
+          "line_count": 5,
+          "path": "window_end_plus_sixty_one_second_application.log",
+          "source": "application"
+        }
+      ],
+      "id": "window_end_plus_sixty_one_second",
+      "label_basis": "Independent observed-event facts: event type, UTC ordering, member account availability, and source/IP equality; labels were assigned before policy output.",
+      "operational_context": "SIMULATED_ATTACK",
+      "parser_status": "VERIFIED",
+      "relationship_interpretation": "OUTSIDE_C2_END_WINDOW",
+      "success_account_relation": "MEMBER_KNOWN",
+      "success_timing": "END_PLUS_61S"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,5 @@
+2026-10-31 09:00:00 INFO login_failed user=spray_b ip=192.0.2.77 application=synthetic-auth
+2026-10-31 09:00:05 INFO login_failed user=spray_c ip=192.0.2.77 application=synthetic-auth
+2026-10-31 09:00:10 INFO login_failed user=spray_d ip=192.0.2.77 application=synthetic-auth
+2026-10-31 09:00:15 INFO login_failed user=spray_a ip=192.0.2.77 application=synthetic-auth
+2026-10-31 09:01:15 INFO user_login user=spray_a ip=192.0.2.77 application=synthetic-auth
