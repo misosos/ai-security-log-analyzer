@@ -87,20 +87,70 @@ try {
   ensure(await page.locator('.brand-name').innerText() === 'Security Log' &&
     await page.locator('#nav-group-investigate').evaluate((node) => node.open), 'UI4_BRAND_OR_ACTIVE_GROUP_FAILED');
   const sidebarToggle = page.locator('#workspace-sidebar-toggle');
+  ensure(await sidebarToggle.evaluate((node) => node.closest('.brand-lockup') !== null) &&
+    !await page.locator('.workspace-nav > #workspace-sidebar-toggle').count() &&
+    await sidebarToggle.getAttribute('aria-label') === '사이드바 접기' &&
+    await sidebarToggle.evaluate((node) => getComputedStyle(node.querySelector('.panel-close-icon')).display !== 'none'),
+    'UI4A_HEADER_TOGGLE_PLACEMENT_FAILED');
+  const expandedHeaderGeometry = await page.locator('.brand-lockup').evaluate((node) => {
+    const mark = node.querySelector('.brand-mark').getBoundingClientRect();
+    const copy = node.querySelector('.brand-copy').getBoundingClientRect();
+    const toggle = node.querySelector('#workspace-sidebar-toggle').getBoundingClientRect();
+    return {markRight: mark.right, copyRight: copy.right, toggleLeft: toggle.left,
+      overlap: mark.right > toggle.left || copy.right > toggle.left};
+  });
+  ensure(!expandedHeaderGeometry.overlap && expandedHeaderGeometry.toggleLeft >= expandedHeaderGeometry.copyRight,
+    'UI4A_HEADER_ITEMS_OVERLAP');
+  for (const width of [1920, 1440, 1280, 1024, 768, 390, 320]) {
+    await page.setViewportSize({width, height: 900});
+    const headerGeometry = await page.locator('.brand-lockup').evaluate((node) => {
+      const nav = node.closest('.workspace-nav').getBoundingClientRect();
+      const mark = node.querySelector('.brand-mark').getBoundingClientRect();
+      const copy = node.querySelector('.brand-copy').getBoundingClientRect();
+      const toggle = node.querySelector('#workspace-sidebar-toggle').getBoundingClientRect();
+      const horizontalOverlap = mark.right > toggle.left && mark.left < toggle.right ||
+        copy.right > toggle.left && copy.left < toggle.right;
+      return {horizontalOverlap, width: toggle.width, height: toggle.height,
+        withinSidebar: toggle.left >= nav.left && toggle.right <= nav.right};
+    });
+    ensure(!headerGeometry.horizontalOverlap && headerGeometry.width >= 44 && headerGeometry.height >= 44 &&
+      headerGeometry.withinSidebar, `UI4A_HEADER_REFLOW_FAILED_${width}`);
+    ensure(await page.evaluate(() => document.documentElement.scrollWidth === window.innerWidth),
+      `UI4A_HEADER_OVERFLOW_${width}`);
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+  ensure(await page.evaluate(() => document.documentElement.scrollWidth === window.innerWidth), 'UI4A_HEADER_200_PERCENT_OVERFLOW');
+  await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+  await page.setViewportSize({width: 1440, height: 900});
   await sidebarToggle.click();
   ensure(await page.locator('#workspace-nav').evaluate((node) => node.classList.contains('sidebar-collapsed')) &&
     await page.locator('.app-shell').evaluate((node) => Math.round(getComputedStyle(node).gridTemplateColumns.split(' ')[0].replace('px', ''))) === 88 &&
+    await sidebarToggle.getAttribute('aria-label') === '사이드바 펼치기' &&
+    await sidebarToggle.evaluate((node) => getComputedStyle(node.querySelector('.panel-open-icon')).display !== 'none') &&
     await page.locator('#nav-start').getAttribute('title') === '시작' &&
     await page.locator('#nav-start > span').innerText() === '시작', 'UI4_SIDEBAR_COLLAPSE_FAILED');
   await page.keyboard.press('Enter');
   ensure(!await page.locator('#workspace-nav').evaluate((node) => node.classList.contains('sidebar-collapsed')) &&
-    await page.locator('#nav-start').getAttribute('aria-current') === 'page', 'UI4_SIDEBAR_EXPAND_FAILED');
+    await page.locator('#nav-start').getAttribute('aria-current') === 'page' &&
+    !await page.locator('#nav-group-tools').evaluate((node) => node.open), 'UI4_SIDEBAR_EXPAND_FAILED');
   const toolsGroupToggle = page.locator('#nav-group-tools > summary');
   await toolsGroupToggle.focus();
   await page.keyboard.press('Space');
   ensure(await page.locator('#nav-group-tools').evaluate((node) => node.open), 'UI4_GROUP_KEYBOARD_OPEN_FAILED');
   await page.keyboard.press('Space');
   ensure(!await page.locator('#nav-group-tools').evaluate((node) => node.open), 'UI4_GROUP_KEYBOARD_CLOSE_FAILED');
+  await page.setViewportSize({width: 390, height: 844});
+  await page.waitForFunction(() => window.matchMedia('(max-width: 47.9375rem)').matches &&
+    !document.querySelector('#workspace-nav-details').open);
+  ensure(await sidebarToggle.isVisible() && await sidebarToggle.getAttribute('aria-label') === '사이드바 펼치기' &&
+    await sidebarToggle.getAttribute('aria-controls') === 'workspace-nav-details', 'UI4A_MOBILE_TOGGLE_STATE_FAILED');
+  await sidebarToggle.click();
+  ensure(await sidebarToggle.getAttribute('aria-label') === '사이드바 접기' &&
+    await page.locator('#workspace-nav-details').evaluate((node) => node.open), 'UI4A_MOBILE_NAV_OPEN_FAILED');
+  await sidebarToggle.click();
+  ensure(await sidebarToggle.getAttribute('aria-label') === '사이드바 펼치기' &&
+    !await page.locator('#workspace-nav-details').evaluate((node) => node.open), 'UI4A_MOBILE_NAV_CLOSE_FAILED');
+  await page.setViewportSize({width: 1440, height: 900});
   await page.locator('#sample-button').click();
   await page.locator('#results-heading').waitFor({state: 'visible'});
   ensure(!await page.locator('#nav-group-results').evaluate((node) => node.hidden) &&

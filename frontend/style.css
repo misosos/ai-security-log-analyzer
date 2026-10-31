@@ -790,6 +790,7 @@ h1, h2, h3, p { overflow-wrap: break-word; }
 .brand-lockup {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: .85rem;
   min-height: 66px;
   margin: 0 0 1.35rem;
@@ -808,7 +809,7 @@ h1, h2, h3, p { overflow-wrap: break-word; }
   background: #10273a;
 }
 .brand-mark .icon { width: 1.65rem; height: 1.65rem; }
-.brand-copy { display: grid; min-width: 0; gap: .08rem; }
+.brand-copy { display: grid; flex: 1; min-width: 0; gap: .08rem; }
 .brand-name { font-size: 1.3rem; font-weight: 780; line-height: 1.2; letter-spacing: .01em; }
 .brand-caption { color: var(--cyber-muted); font-size: .76rem; line-height: 1.35; letter-spacing: .09em; }
 .workspace-nav-title { margin-bottom: 1rem; font-size: 1.04rem; }
@@ -862,7 +863,9 @@ h1, h2, h3, p { overflow-wrap: break-word; }
 @media (max-width: 56.25rem) and (min-width: 48rem) {
   .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
   .workspace-nav { padding-inline: 1rem; }
-  .brand-name { font-size: 1.18rem; }
+  .brand-lockup { gap: .45rem; }
+  .brand-mark { width: 42px; height: 42px; }
+  .brand-name { font-size: 1.05rem; }
   .workspace-nav .nav-group button { font-size: 1.05rem; }
 }
 @media (max-width: 47.9375rem) {
@@ -999,33 +1002,46 @@ body { background: var(--cyber-bg); }
 
 /* Phase 36.10A-UI4 follow-up: collapse the desktop sidebar to an icon rail. */
 .workspace-sidebar-toggle {
-  display: flex;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  margin: 0 0 0 auto;
+  padding: .5rem;
+  border: 0;
+  border-radius: .55rem;
+  color: var(--cyber-muted);
+  background: transparent;
+  font-size: 0;
+}
+.workspace-nav .workspace-sidebar-toggle {
+  display: grid;
+  flex: none;
   align-items: center;
   justify-content: center;
-  gap: .55rem;
-  width: 100%;
+  width: 44px;
+  min-width: 44px;
   min-height: 44px;
-  margin: 0 0 1rem;
-  padding: .55rem .7rem;
-  border: 1px solid var(--cyber-border-quiet);
-  border-radius: .6rem;
-  color: var(--cyber-muted);
-  background: var(--cyber-panel);
-  font-size: .94rem;
-  font-weight: 680;
+  padding: .5rem;
+  border: 0;
+  border-inline-start: 0;
+  text-align: center;
 }
-.workspace-sidebar-toggle:hover { color: var(--cyber-text); border-color: #28627a; }
+.workspace-sidebar-toggle:hover { color: var(--cyber-cyan); background: rgb(0 217 245 / 8%); }
 .workspace-sidebar-toggle .icon { width: 1.2rem; height: 1.2rem; flex: none; }
+.workspace-sidebar-toggle .panel-open-icon { display: none; }
+.workspace-sidebar-toggle.sidebar-toggle-collapsed .panel-close-icon { display: none; }
+.workspace-sidebar-toggle.sidebar-toggle-collapsed .panel-open-icon { display: block; }
 .workspace-sidebar-toggle:focus-visible { outline: 2px solid var(--cyber-cyan); outline-offset: 2px; }
 .app-shell.sidebar-collapsed { grid-template-columns: 88px minmax(0, 1fr); }
 .workspace-nav.sidebar-collapsed { align-items: center; padding: 1rem .55rem; }
-.workspace-nav.sidebar-collapsed .brand-lockup { justify-content: center; min-height: 54px; margin: 0 0 .75rem; }
+.workspace-nav.sidebar-collapsed .brand-lockup { justify-content: center; flex-wrap: wrap; width: 100%; min-height: 54px; margin: 0 0 .75rem; gap: .45rem; }
 .workspace-nav.sidebar-collapsed .brand-copy,
 .workspace-nav.sidebar-collapsed .workspace-nav-title,
 .workspace-nav.sidebar-collapsed .sidebar-note,
 .workspace-nav.sidebar-collapsed .nav-group > summary { display: none; }
-.workspace-nav.sidebar-collapsed .workspace-sidebar-toggle { width: 48px; min-height: 48px; margin: 0 0 .7rem; padding: .55rem; }
-.workspace-nav.sidebar-collapsed .workspace-sidebar-toggle span { display: none; }
+.workspace-nav.sidebar-collapsed .workspace-sidebar-toggle { width: 44px; min-height: 44px; margin: 0; }
 .workspace-nav.sidebar-collapsed .nav-group button > span {
   position: absolute;
   width: 1px;
@@ -1058,6 +1074,8 @@ body { background: var(--cyber-bg); }
   .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
 }
 @media (max-width: 47.9375rem) {
-  .workspace-sidebar-toggle { display: none; }
   .app-shell.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .brand-lockup { min-height: 54px; margin-bottom: .55rem; gap: .55rem; }
+  .brand-lockup .brand-copy { flex: 1; }
+  .workspace-sidebar-toggle { margin-left: auto; }
 }

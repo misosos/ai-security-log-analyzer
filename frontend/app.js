@@ -297,14 +297,21 @@
     const available = {start: true, local: loopbackPage, audit: loopbackPage, live: false, results: false};
     let current = "start";
     let resultKind = "batch";
+    function syncSidebarToggle() {
+      const compactView = Boolean(compact && compact.matches);
+      const collapsed = compactView
+        ? !navDetails.open
+        : workspaceNav.classList.contains("sidebar-collapsed");
+      const label = collapsed ? "사이드바 펼치기" : "사이드바 접기";
+      sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+      sidebarToggle.setAttribute("aria-label", label);
+      sidebarToggle.setAttribute("aria-controls", compactView ? "workspace-nav-details" : "workspace-nav-list");
+      sidebarToggle.title = label;
+      sidebarToggle.classList.toggle("sidebar-toggle-collapsed", collapsed);
+    }
     function setSidebarCollapsed(collapsed) {
       workspaceNav.classList.toggle("sidebar-collapsed", collapsed);
       workspaceNav.closest(".app-shell").classList.toggle("sidebar-collapsed", collapsed);
-      sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
-      const label = collapsed ? "사이드바 펼치기" : "사이드바 접기";
-      sidebarToggle.setAttribute("aria-label", label);
-      sidebarToggle.title = label;
-      sidebarToggle.querySelector("span").textContent = label;
       if (collapsed) {
         expandedGroupStates = navGroupElements.map((group) => group.open);
         navGroupElements.forEach((group) => { group.open = true; });
@@ -312,10 +319,15 @@
         navGroupElements.forEach((group, index) => { group.open = expandedGroupStates[index]; });
         expandedGroupStates = null;
       }
+      syncSidebarToggle();
     }
     sidebarToggle.addEventListener("click", () => {
-      setSidebarCollapsed(!workspaceNav.classList.contains("sidebar-collapsed"));
+      if (compact && compact.matches) navDetails.open = !navDetails.open;
+      else setSidebarCollapsed(!workspaceNav.classList.contains("sidebar-collapsed"));
+      syncSidebarToggle();
     });
+    navDetails.addEventListener("toggle", syncSidebarToggle);
+    syncSidebarToggle();
     if (compact) {
       const resetSidebarAtMobileWidth = (event) => {
         if (event.matches && workspaceNav.classList.contains("sidebar-collapsed")) setSidebarCollapsed(false);

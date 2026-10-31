@@ -107,7 +107,7 @@ async function assertWorkspaceReflow(page, label) {
         return clipsX || clipsY;
       });
       const clipped = clippedNodes.length;
-      const targetSelectors = '#workspace-nav-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
+      const targetSelectors = '#workspace-nav-toggle, #workspace-sidebar-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
         '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
         '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
         '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
@@ -115,7 +115,8 @@ async function assertWorkspaceReflow(page, label) {
         '#text-source, #log-text, #text-clear, #local-button';
       const targets = [...document.querySelectorAll(targetSelectors)].filter(visible).map((node) => {
         const rect = node.getBoundingClientRect();
-        return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
+        return {selector: node.matches('#workspace-sidebar-toggle') ? '#workspace-sidebar-toggle' :
+          node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
           node.matches('.workspace-nav-list button') ? '.workspace-nav-list button' :
           node.matches('#case-list .review-detail-link') ? '#case-list .review-detail-link' :
           node.matches('#review-back-link') ? '#review-back-link' :
@@ -229,7 +230,7 @@ async function assertWorkspaceReflow(page, label) {
           scrollWidth: child.scrollWidth, clientWidth: child.clientWidth,
           width: Math.round(child.getBoundingClientRect().width * 100) / 100,
         }))})));
-    const targetSelectors = '#workspace-nav-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
+    const targetSelectors = '#workspace-nav-toggle, #workspace-sidebar-toggle, .workspace-nav-list button, #case-list .review-detail-link, ' +
       '#review-back-link, .workspace-detail-tabs-36-6d button, .workspace-checklist-request-36-6e, ' +
       '.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary, ' +
       '.workspace-evidence-panel-36-6e summary, .workspace-evidence-panel-36-6e select, ' +
@@ -237,7 +238,8 @@ async function assertWorkspaceReflow(page, label) {
       '#text-source, #log-text, #text-clear, #local-button';
     const targets = [...document.querySelectorAll(targetSelectors)].filter(shown).map((node) => {
       const rect = node.getBoundingClientRect();
-      return {selector: node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
+      return {selector: node.matches('#workspace-sidebar-toggle') ? '#workspace-sidebar-toggle' :
+        node.matches('#workspace-nav-toggle') ? '#workspace-nav-toggle' :
         node.matches('.workspace-nav-list button') ? `.workspace-nav-list button#${node.id}` :
         node.matches('#case-list .review-detail-link') ? '#case-list .review-detail-link' :
         node.matches('#review-back-link') ? '#review-back-link' :

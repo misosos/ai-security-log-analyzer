@@ -14,6 +14,7 @@ ICONS = {
     "house", "flask-conical", "files", "scan-line", "clipboard-list",
     "activity", "search", "link", "shield-alert", "folder-search",
     "circle-help", "triangle-alert", "circle-x",
+    "panel-left-close", "panel-left-open",
 }
 PATH_DIGESTS = {
     "house": "745c1bb02f199cd991e6bcbdc6e6d2724f352c462d6007f76b5e3429e1f071f5",
@@ -29,6 +30,8 @@ PATH_DIGESTS = {
     "circle-help": "a480ac7a6a3f9591f8404504f2189ecf34d01018e25607041c71261f66f50545",
     "triangle-alert": "d30df6d5df4ed86dbe908d4779876babe9a5a668d23503ba4e06911f88c103bf",
     "circle-x": "2bc44a6b56f45963ab5a915e80e6084f2a3e4e9560008e397a6ac410871d5523",
+    "panel-left-close": "4a1094f7f22f79c99b93fc6ee007ce4795abdf57abb401c0f654d1b34f898293",
+    "panel-left-open": "742855cb66c064d089eea6313ca8310c5e3305199e6d1f6621b15b1c9e7277a9",
 }
 
 

@@ -68,12 +68,18 @@ def test_sidebar_groups_keep_existing_navigation_targets_and_brand_identity():
 
 
 def test_sidebar_has_accessible_full_collapse_control():
-    assert 'id="workspace-sidebar-toggle"' in HTML
+    assert '<button id="workspace-sidebar-toggle"' in HTML
+    assert 'id="workspace-sidebar-toggle" class="workspace-sidebar-toggle"' in HTML
     assert 'aria-expanded="true"' in HTML and 'aria-controls="workspace-nav-list"' in HTML
+    assert HTML.index('id="workspace-sidebar-toggle"') < HTML.index('</div>\n      <p class="workspace-nav-title"')
+    assert 'panel-close-icon' in HTML and 'panel-open-icon' in HTML
+    assert 'id="icon-panel-left-close"' in HTML and 'id="icon-panel-left-open"' in HTML
+    assert '<span>사이드바 접기</span>' not in HTML
     assert '.app-shell.sidebar-collapsed { grid-template-columns: 88px' in CSS
     assert '.workspace-nav.sidebar-collapsed .nav-group button > span {' in CSS
     assert 'clip: rect(0, 0, 0, 0)' in CSS
     assert 'setSidebarCollapsed(!workspaceNav.classList.contains("sidebar-collapsed"))' in APP
+    assert 'compactView ? "workspace-nav-details" : "workspace-nav-list"' in APP
 
 
 def test_full_width_application_shell_and_start_choices():

@@ -83,6 +83,7 @@
 - [Phase 36.10A-UI2 사이버펑크 워크스페이스 가독성·레이아웃 보완](cyberpunk_ui_readability_layout_refinement_36_10a_ui2.md) — CSS px 기준 Chromium 측정, 반응형/200% equivalent reflow와 사용자 Safari 수용 범위 구분
 - [Phase 36.10A-UI3 Safari 화면 수용 준비 및 Navigation 회귀 종결](cyberpunk_safari_acceptance_navigation_closure_36_10a_ui3.md) — 구형 DOM 기대와 현행 Guidance opt-in 검증을 분리하고, Safari 18.6 자동화 smoke와 사용자 검수 항목 기록
 - [Phase 36.10A-UI4 접이식 사이드바·브랜드 정돈](collapsible_sidebar_brand_refinement_36_10a_ui4.md) — 로고 중심 헤더, 그룹 disclosure, 넓은 내비게이션과 Chromium 반응형·키보드 검사
+- [Phase UI4A 브랜드 헤더 사이드바 토글 정돈](sidebar_collapse_header_refinement_ui4a.md) — 별도 접기 행을 제거하고 로컬 패널 아이콘 토글을 브랜드 헤더 오른쪽에 통합
 - [웹 UI 설계](web_application_design.md) · [실시간 UI 수용](live_monitoring_acceptance_15_1.md) · [live 수용 기록](live_monitoring_acceptance_17.md)
 - [v0.3.0 Safari 수용 기록](v030_safari_acceptance_27_1.md) · [오픈소스 UI 품질 gate](ui_open_source_quality_gate_28_0.md) · [axe/Playwright pilot](ui_accessibility_axe_pilot_28_1.md)
 - [Phase 36.8A 로그 텍스트 직접 입력 설계](log_text_paste_input_design_36_8a.md) · [36.8B bounded local backend](log_text_paste_backend_36_8b.md) — 단일 source 텍스트 API 구현; 브라우저 입력 UI는 Phase 36.8C 예정
