@@ -98,3 +98,4 @@
 - [Phase 36.9G-R2-R2-R1 신뢰된 분석 Provenance 경계 보완](trusted_analysis_provenance_boundary_remediation_36_9g_r2_r2_r1.md)
 - [Phase 36.9G-R2-R2-R2 신뢰된 분석 Provenance 독립 종결 검증](trusted_analysis_provenance_independent_closure_36_9g_r2_r2_r2.md)
 - [Phase 36.10A 탐지 준비도 및 잔여 위험 우선순위 평가](detection_readiness_risk_prioritization_36_10a.md) — Detector·Parser·Consumer 근거 감사, 운영 blocker 및 36.10B/C/D roadmap
+- [Phase 36.10B Password Spray 범위·운영상 오경보 평가](password_spray_scope_false_alert_evaluation_36_10b.md) — 현재 whole-span과 평가 전용 window 후보를 36개 독립 합성 시나리오에서 비교; Production 정책 변경은 추가 근거 전까지 보류
