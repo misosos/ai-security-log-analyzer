@@ -54,6 +54,19 @@ def test_responsive_navigation_is_text_based_and_does_not_fix_sidebar():
     assert 'id="nav-start"' in HTML and 'id="nav-results"' in HTML
 
 
+def test_sidebar_groups_keep_existing_navigation_targets_and_brand_identity():
+    assert '<div class="brand-lockup">' in HTML and 'class="brand-mark"' in HTML
+    assert 'id="nav-group-investigate"' in HTML
+    assert 'id="nav-group-results"' in HTML
+    assert 'id="nav-group-results" hidden' in HTML
+    assert 'id="nav-group-tools"' in HTML
+    assert 'aria-current="page"' in HTML
+    for nav_id in ("nav-start", "nav-local", "nav-audit", "nav-live", "nav-results"):
+        assert f'id="{nav_id}"' in HTML
+    assert '.workspace-nav .nav-group > summary' in CSS
+    assert '.workspace-nav .nav-group > summary:focus-visible' in CSS
+
+
 def test_full_width_application_shell_and_start_choices():
     assert 'class="app-shell"' in HTML
     assert 'class="app-area"' in HTML

@@ -272,6 +272,10 @@
       [key, document.getElementById(`nav-${key}`)]));
     const navDetails = document.getElementById("workspace-nav-details");
     const navToggle = document.getElementById("workspace-nav-toggle");
+    const navGroups = {
+      start: "nav-group-investigate", local: "nav-group-investigate",
+      results: "nav-group-results", audit: "nav-group-tools", live: "nav-group-tools"
+    };
     const compact = window.matchMedia ? window.matchMedia("(max-width: 47.9375rem)") : null;
     const labels = {start: "시작", local: "내 로그 분석", audit: "Linux Audit", live: "실시간 모니터링", results: "결과"};
     const descriptions = {
@@ -298,6 +302,8 @@
     function showView(view, focus = false) {
       if (!available[view]) return;
       current = view;
+      const activeNavGroup = navGroups[view];
+      if (activeNavGroup) document.getElementById(activeNavGroup).open = true;
       for (const key of Object.keys(panels)) {
         const panel = panels[key];
         panel.hidden = key !== view;
@@ -324,6 +330,8 @@
     function setAvailable(view, allowed) {
       available[view] = allowed;
       buttons[view].hidden = !allowed;
+      const group = document.getElementById(navGroups[view]);
+      group.hidden = ![...group.querySelectorAll("button")].some((button) => !button.hidden);
       if (!allowed && current === view) showView("start");
     }
     function showResult(kind) {

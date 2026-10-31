@@ -84,8 +84,18 @@ try {
   await page.setViewportSize({width: 1440, height: 900});
   await page.goto(origin, {waitUntil: 'networkidle'});
   ensure(await page.locator('#nav-start').getAttribute('aria-current') === 'page', 'UI3_START_NAV_FAILED');
+  ensure(await page.locator('.brand-name').innerText() === 'Security Log' &&
+    await page.locator('#nav-group-investigate').evaluate((node) => node.open), 'UI4_BRAND_OR_ACTIVE_GROUP_FAILED');
+  const toolsGroupToggle = page.locator('#nav-group-tools > summary');
+  await toolsGroupToggle.focus();
+  await page.keyboard.press('Space');
+  ensure(await page.locator('#nav-group-tools').evaluate((node) => node.open), 'UI4_GROUP_KEYBOARD_OPEN_FAILED');
+  await page.keyboard.press('Space');
+  ensure(!await page.locator('#nav-group-tools').evaluate((node) => node.open), 'UI4_GROUP_KEYBOARD_CLOSE_FAILED');
   await page.locator('#sample-button').click();
   await page.locator('#results-heading').waitFor({state: 'visible'});
+  ensure(!await page.locator('#nav-group-results').evaluate((node) => node.hidden) &&
+    await page.locator('#nav-group-results').evaluate((node) => node.open), 'UI4_RESULT_GROUP_AVAILABILITY_FAILED');
   await page.locator('#case-list a[data-review-case-ref]').nth(1).waitFor({state: 'attached'});
   const refs = await page.locator('#case-list a[data-review-case-ref]').evaluateAll((nodes) =>
     nodes.map((node) => node.dataset.reviewCaseRef));

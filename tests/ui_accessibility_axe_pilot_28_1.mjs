@@ -182,8 +182,8 @@ async function assertWorkspaceReflow(page, label) {
       };
     });
     if (label === 'WORKSPACE_START') {
-      const expectedSidebar = viewport.width >= 1200 ? 280 : viewport.width >= 901 ? 248 :
-        viewport.width >= 768 ? 220 : viewport.width;
+      const expectedSidebar = viewport.width >= 1200 ? 320 : viewport.width >= 901 ? 276 :
+        viewport.width >= 768 ? 248 : viewport.width;
       requireSafe(Math.abs(readability.sidebar.width - expectedSidebar) < 1 &&
         readability.nav.font >= (viewport.width < 768 ? 16 : 17.5) && readability.title.font >= 32 &&
         readability.lead.font >= 18 && readability.cardTitle.font >= 21 && readability.helper.font >= 16.5 &&
@@ -666,6 +666,7 @@ async function main() {
       await page.addInitScript(eventSourceStub);
       await page.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
       if (stateForPage !== 'DISABLED') {
+        await page.locator('#nav-group-tools > summary').click();
         await page.locator('#nav-live').waitFor({state: 'visible'});
         await page.locator('#nav-live').click();
         await page.waitForFunction(() => !document.querySelector('#live-monitoring').hidden);
@@ -699,6 +700,8 @@ async function main() {
           await page.locator('#nav-local').getAttribute('aria-current') === 'page' &&
           await page.locator('.workspace-panel:visible').count() === 1,
           'WORKSPACE_KEYBOARD_NAV_FAILED');
+        if (!await page.locator('#nav-group-tools').evaluate((node) => node.open))
+          await page.locator('#nav-group-tools > summary').click();
         await page.locator('#nav-audit').click();
         requireSafe(await page.locator('#linux-audit-upload').isVisible() &&
           await page.locator('.workspace-panel:visible').count() === 1,
@@ -821,6 +824,8 @@ async function main() {
           await page.locator('#application-file').getAttribute('aria-invalid') === 'true' &&
           await page.locator('#application-error').isVisible(), 'THREE_FILE_ERROR_LINK_FAILED');
       } else if (stateName === 'linux-audit-error') {
+        if (!await page.locator('#nav-group-tools').evaluate((node) => node.open))
+          await page.locator('#nav-group-tools > summary').click();
         await page.locator('#nav-audit').click();
         await page.locator('#linux-audit-form').evaluate((form) => form.requestSubmit());
         requireSafe(await page.locator('#linux-audit-error').isVisible() &&
@@ -2089,6 +2094,7 @@ async function main() {
     const pairPage = await context.newPage();
     await pairPage.addInitScript(eventSourceStub);
     await pairPage.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
+    await pairPage.locator('#nav-group-tools > summary').click();
     await pairPage.locator('#nav-live').waitFor({state: 'visible'});
     await pairPage.locator('#nav-live').click();
     requireSafe(await pairPage.locator('#live-monitoring').isVisible() &&

@@ -783,6 +783,106 @@ h1, h2, h3, p { overflow-wrap: break-word; }
 .action-card { gap: .62rem; padding: 1.5rem; }
 .action-icon { width: 2.75rem; height: 2.75rem; margin-bottom: .4rem; }
 .action-icon .icon { width: 1.35rem; height: 1.35rem; }
+
+/* Phase 36.10A-UI4: clearer brand hierarchy and grouped workspace navigation. */
+.app-shell { grid-template-columns: 320px minmax(0, 1fr); }
+.workspace-nav { padding: 1.5rem 1.2rem; }
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  min-height: 66px;
+  margin: 0 0 1.35rem;
+  color: var(--cyber-text);
+  text-decoration: none;
+}
+.brand-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #28627a;
+  border-radius: .75rem;
+  color: var(--cyber-cyan);
+  background: #10273a;
+}
+.brand-mark .icon { width: 1.65rem; height: 1.65rem; }
+.brand-copy { display: grid; min-width: 0; gap: .08rem; }
+.brand-name { font-size: 1.3rem; font-weight: 780; line-height: 1.2; letter-spacing: .01em; }
+.brand-caption { color: var(--cyber-muted); font-size: .76rem; line-height: 1.35; letter-spacing: .09em; }
+.workspace-nav-title { margin-bottom: 1rem; font-size: 1.04rem; }
+.workspace-nav-list { display: grid; align-content: start; gap: .55rem; }
+.workspace-nav .nav-group { min-width: 0; border-top: 1px solid var(--cyber-border-quiet); }
+.workspace-nav .nav-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: .55rem .35rem .35rem;
+  color: var(--cyber-muted);
+  font-size: .96rem;
+  font-weight: 720;
+  line-height: 1.4;
+  list-style: none;
+  cursor: pointer;
+  margin-bottom: .5rem;
+}
+.workspace-nav .nav-group > summary::-webkit-details-marker { display: none; }
+.workspace-nav .nav-group > summary::after {
+  width: .55rem;
+  height: .55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: translateY(-.12rem) rotate(45deg);
+  transition: transform 120ms ease;
+}
+.workspace-nav .nav-group[open] > summary::after { transform: translateY(.12rem) rotate(225deg); }
+.workspace-nav .nav-group > summary:hover { color: var(--cyber-text); }
+.workspace-nav .nav-group-items { display: grid; gap: .6rem; padding: 0 0 .7rem; }
+.workspace-nav .nav-group button { min-height: 52px; padding: .75rem .8rem; font-size: 1.08rem; }
+.workspace-nav .nav-group button .icon { width: 1.35rem; height: 1.35rem; }
+.workspace-nav .nav-group button[hidden] { display: none !important; }
+.workspace-nav .nav-group:has(button[aria-current="page"]) > summary { color: var(--cyber-text); }
+.workspace-nav .nav-group > summary:focus-visible { outline-color: var(--cyber-cyan); }
+.sidebar-note { padding-top: 1rem; font-size: .95rem; }
+.sidebar-note-label { display: block; margin-bottom: .35rem; color: var(--cyber-text); font-weight: 740; }
+.analysis-flow { margin-top: 1.9rem; }
+.analysis-flow ol { gap: 1rem; }
+.flow-step { padding: 1.1rem 1.15rem; }
+.start-actions { gap: 1.5rem; margin-top: 1.8rem; }
+.action-card { padding: 1.6rem; }
+.action-card h3 { font-size: 1.36rem; }
+.action-card button { font-size: 1.04rem; }
+
+@media (max-width: 74.9375rem) and (min-width: 56.3125rem) {
+  .app-shell { grid-template-columns: 276px minmax(0, 1fr); }
+}
+@media (max-width: 56.25rem) and (min-width: 48rem) {
+  .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
+  .workspace-nav { padding-inline: 1rem; }
+  .brand-name { font-size: 1.18rem; }
+  .workspace-nav .nav-group button { font-size: 1.05rem; }
+}
+@media (max-width: 47.9375rem) {
+  .workspace-nav { padding: .85rem 1rem; }
+  .brand-lockup { min-height: 54px; margin-bottom: .55rem; }
+  .brand-mark { width: 42px; height: 42px; }
+  .brand-name { font-size: 1.18rem; }
+  .workspace-nav-title { display: none; }
+  .workspace-nav-list { display: grid; gap: .35rem; padding: .4rem 0 .2rem; }
+  .workspace-nav .nav-group { width: 100%; }
+  .workspace-nav .nav-group > summary { min-height: 48px; padding-inline: .4rem; }
+  .workspace-nav .nav-group-items { gap: .6rem; }
+  .workspace-nav .nav-group button { width: 100%; min-height: 48px; flex: none; text-align: start; }
+  .workspace-nav button[aria-current="page"] { border-inline-start-color: var(--cyber-cyan); border-bottom-color: transparent; }
+  .sidebar-note { display: none; }
+}
+@media (max-width: 21rem) {
+  .workspace-nav { padding-inline: .65rem; }
+  .workspace-nav .nav-group button { padding-inline: .65rem; font-size: 1rem; }
+}
 .action-card h3 { font-size: 1.3rem; line-height: 1.35; }
 .action-card p { max-width: 36ch; margin: 0 0 .45rem; font-size: 1rem; line-height: 1.6; word-break: keep-all; }
 .review-card-summary { overflow-wrap: anywhere; word-break: normal; }
@@ -895,4 +995,15 @@ body { background: var(--cyber-bg); }
 }
 @media (max-width: 56.25rem) and (min-width: 48rem) {
   .start-actions, .analysis-flow ol { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* UI4 shell widths follow the existing tablet breakpoints after legacy overrides. */
+@media (min-width: 75rem) {
+  .app-shell { grid-template-columns: 320px minmax(0, 1fr); }
+}
+@media (max-width: 74.9375rem) and (min-width: 56.3125rem) {
+  .app-shell { grid-template-columns: 276px minmax(0, 1fr); }
+}
+@media (max-width: 56.25rem) and (min-width: 48rem) {
+  .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
 }

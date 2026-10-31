@@ -239,6 +239,8 @@ try {
     await page.locator('#local-form').isVisible() &&
     await page.locator('.workspace-panel:visible').count() === 1, 'LOCAL_PANEL_FAILED');
   if (shots) await page.screenshot({path: join(shots, 'local.png'), fullPage: true});
+  if (!await page.locator('#nav-group-tools').evaluate((node) => node.open))
+    await page.locator('#nav-group-tools > summary').click();
   await page.locator('#nav-audit').click();
   ensure(await page.locator('#linux-audit-upload').isVisible() &&
     await page.locator('.workspace-panel:visible').count() === 1, 'AUDIT_PANEL_FAILED');

@@ -82,19 +82,37 @@
   </svg>
   <div class="app-shell">
     <nav id="workspace-nav" class="workspace-nav app-sidebar" aria-label="작업 영역">
-      <p class="brand">AI Security Log Analyzer</p>
-      <p class="workspace-nav-title">로컬 조사 · 작업 영역</p>
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true"><svg class="icon" focusable="false" viewBox="0 0 24 24"><use href="#icon-shield-alert"></use></svg></span>
+        <span class="brand-copy"><span class="brand-name">Security Log</span><span class="brand-caption">LOCAL ANALYZER</span></span>
+      </div>
+      <p class="workspace-nav-title">로컬 조사 작업공간</p>
       <details id="workspace-nav-details" open>
         <summary id="workspace-nav-toggle">현재 영역: 시작 · 작업 영역 선택</summary>
         <div class="workspace-nav-list">
-        <button id="nav-start" type="button" aria-controls="workspace-start" aria-current="page"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-house"></use></svg> 시작</button>
-        <button id="nav-local" type="button" aria-controls="local-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-files"></use></svg> 내 로그 분석</button>
-        <button id="nav-audit" type="button" aria-controls="linux-audit-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-scan-line"></use></svg> Linux Audit</button>
-        <button id="nav-live" type="button" aria-controls="live-monitoring" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-activity"></use></svg> 실시간 모니터링 <span id="nav-live-badge" hidden></span></button>
-        <button id="nav-results" type="button" aria-controls="workspace-results" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg> 결과</button>
+          <details class="nav-group" id="nav-group-investigate" open>
+            <summary><span>조사 시작</span></summary>
+            <div class="nav-group-items">
+              <button id="nav-start" type="button" aria-controls="workspace-start" aria-current="page"><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-house"></use></svg> 시작</button>
+              <button id="nav-local" type="button" aria-controls="local-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-files"></use></svg> 내 로그 분석</button>
+            </div>
+          </details>
+          <details class="nav-group" id="nav-group-results" hidden>
+            <summary><span>분석 결과</span></summary>
+            <div class="nav-group-items">
+              <button id="nav-results" type="button" aria-controls="workspace-results" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg> 결과</button>
+            </div>
+          </details>
+          <details class="nav-group" id="nav-group-tools">
+            <summary><span>보조 도구</span></summary>
+            <div class="nav-group-items">
+              <button id="nav-audit" type="button" aria-controls="linux-audit-upload" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-scan-line"></use></svg> Linux Audit</button>
+              <button id="nav-live" type="button" aria-controls="live-monitoring" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-activity"></use></svg> 실시간 모니터링 <span id="nav-live-badge" hidden></span></button>
+            </div>
+          </details>
         </div>
       </details>
-      <p class="sidebar-note">로컬 조사 보조 도구<br>source checkout으로 실행</p>
+      <p class="sidebar-note"><span class="sidebar-note-label">안내 / 참고</span>로컬 조사 보조 도구<br>source checkout으로 실행</p>
     </nav>
     <div class="app-area">
     <header class="site-header">
