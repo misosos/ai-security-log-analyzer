@@ -38,6 +38,8 @@
 - [Phase 36.9D Brute Force 시간창 의미 평가](brute_force_window_semantics_evaluation_36_9d.md) — whole-span과 세 sliding 계정 범위 후보를 24개 합성 시나리오에서 비교; production detector 불변
 - [Phase 36.9E Brute Force Evidence·Correlation 계약](brute_force_evidence_correlation_contract_36_9e.md) — Candidate C와 실제 Case adapter·Correlation 충돌을 shadow 검증하고 비공개 Window Context 계약 제안
 - [Phase 36.9F Brute Force Sliding Window Production 복구](brute_force_sliding_window_production_remediation_36_9f.md) — Candidate C의 내부 Window Context를 Production Detection·Correlation·Case 경로에 연결하고 전체 IP feature 및 Password Spray 의미를 보존
+- [Phase 36.10B Password Spray scope·운영상 오경보 합성 평가](password_spray_scope_false_alert_evaluation_36_10b.md) — whole-span과 Window 후보 정책을 독립 합성 corpus에서 비교; Production 정책 변경은 `MORE_EVIDENCE_REQUIRED`
+- [Phase 36.10B-R1 Password Spray Evidence·Consumer 계약 설계](password_spray_evidence_consumer_contract_design_36_10b_r1.md) — 전체 IP와 선택 Window 의미, Correlation/Risk/Case/Report 경계 및 추가 근거를 설계; Production은 whole-span 유지
 - [Phase 36.9A 프로젝트 성숙도·실무 준비도 평가](project_maturity_readiness_assessment_36_9a.md) — 현재 합성 검증 범위, 운영 미검증 경계, 다음 개발 우선순위 (docs/index.md)
 - [합성 탐지 평가](detection_evaluation.md) · [웹 공격 관찰](web_attack_observation_design.md) · [incident case/Timeline](incident_case_timeline_design.md)
 - [공개 분석 projection과 기존 API migration](public_analysis_privacy.md)
