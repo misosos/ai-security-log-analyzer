@@ -89,7 +89,14 @@ async function assertWorkspaceReflow(page, label) {
       for (const selector of selectors) {
         for (const node of document.querySelectorAll(selector)) {
           if (!visible(node)) continue;
-          if (node.scrollWidth > node.clientWidth + 1) panel_overflow.push(selector);
+          if (node.scrollWidth > node.clientWidth + 1) panel_overflow.push({selector,
+            scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
+            descendants: [...node.querySelectorAll('*')].filter((child) => visible(child) &&
+              child.scrollWidth > child.clientWidth + 1).slice(0, 6).map((child) => ({
+              tag: child.tagName.toLowerCase(), id: child.id, className: String(child.className).slice(0, 80),
+              scrollWidth: child.scrollWidth, clientWidth: child.clientWidth,
+              text: child.textContent.trim().slice(0, 70),
+            }))});
         }
       }
       const clippedNodes = [...document.querySelectorAll('body *')].filter((node) => {
@@ -148,6 +155,44 @@ async function assertWorkspaceReflow(page, label) {
       };
     });
     measurements.push(measurement);
+    const readability = await page.evaluate(() => {
+      const read = (selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return {font: Number.parseFloat(style.fontSize), height: rect.height,
+          minHeight: Number.parseFloat(style.minHeight),
+          width: rect.width, paddingLeft: Number.parseFloat(style.paddingLeft),
+          paddingRight: Number.parseFloat(style.paddingRight)};
+      };
+      return {
+        viewport: innerWidth,
+        sidebar: read('.workspace-nav'),
+        nav: read('.workspace-nav-list button'),
+        title: read('#page-title'),
+        body: read('.app-content'),
+        lead: read('.lead'),
+        card: read('.action-card'),
+        cardTitle: read('.action-card h3'),
+        helper: read('.action-card p'),
+        button: read('#sample-button'),
+        entryPage: Boolean(document.querySelector('.action-card')),
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    if (label === 'WORKSPACE_START') {
+      const expectedSidebar = viewport.width >= 1200 ? 280 : viewport.width >= 901 ? 248 :
+        viewport.width >= 768 ? 220 : viewport.width;
+      requireSafe(Math.abs(readability.sidebar.width - expectedSidebar) < 1 &&
+        readability.nav.font >= (viewport.width < 768 ? 16 : 17.5) && readability.title.font >= 32 &&
+        readability.lead.font >= 18 && readability.cardTitle.font >= 21 && readability.helper.font >= 16.5 &&
+        readability.button.font >= 16.5 && readability.button.minHeight >= 48 &&
+        readability.card.paddingLeft >= 22 && readability.card.paddingRight >= 22 &&
+        readability.body.paddingLeft >= 10 && readability.body.paddingRight >= 10 && !readability.overflow,
+      `${label}_READABILITY_SCALE_FAILED`);
+      console.log(`WORKSPACE_READABILITY_METRICS ${JSON.stringify(readability)}`);
+    }
     if (measurement.document.scrollWidth > measurement.document.clientWidth ||
         measurement.body.scrollWidth > measurement.body.clientWidth || measurement.panel_overflow.length ||
         measurement.clipped || measurement.target_size_failures.length || measurement.target_gap_failures.length) {

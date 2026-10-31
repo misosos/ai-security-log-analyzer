@@ -75,6 +75,7 @@
 ## UI·접근성·수용 검증
 
 - [Phase 36.10A-UI1 Cyberpunk 조사 워크스페이스 리디자인](cyberpunk_investigation_workspace_redesign_36_10a_ui1.md) — 기존 조사 Projection·Hash Route·Checklist/Guidance 계약을 유지한 Cyberpunk 스타일 및 Chromium 반응형·접근성 회귀
+- [Phase 36.10A-UI2 사이버펑크 워크스페이스 가독성·레이아웃 보완](cyberpunk_ui_readability_layout_refinement_36_10a_ui2.md) — CSS px 기준 Chromium 측정, 반응형/200% equivalent reflow와 사용자 Safari 수용 범위 구분
 - [웹 UI 설계](web_application_design.md) · [실시간 UI 수용](live_monitoring_acceptance_15_1.md) · [live 수용 기록](live_monitoring_acceptance_17.md)
 - [v0.3.0 Safari 수용 기록](v030_safari_acceptance_27_1.md) · [오픈소스 UI 품질 gate](ui_open_source_quality_gate_28_0.md) · [axe/Playwright pilot](ui_accessibility_axe_pilot_28_1.md)
 - [Phase 36.8A 로그 텍스트 직접 입력 설계](log_text_paste_input_design_36_8a.md) · [36.8B bounded local backend](log_text_paste_backend_36_8b.md) — 단일 source 텍스트 API 구현; 브라우저 입력 UI는 Phase 36.8C 예정

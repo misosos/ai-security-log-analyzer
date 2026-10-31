@@ -245,7 +245,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 .workspace-task-citation-36-6e, .workspace-evidence-citation-36-6e { min-width: 0; margin-block: .65rem; padding: .75rem; border-inline-start: 3px solid #8295aa; background: #f7f9fc; overflow-wrap: anywhere; }
 .workspace-task-citation-36-6e h5, .workspace-evidence-citation-36-6e h5 { margin: 0 0 .35rem; }
 .workspace-task-citation-36-6e p, .workspace-evidence-citation-36-6e p { margin: .3rem 0; line-height: 1.55; }
-.workspace-evidence-group-36-6e { display: grid; gap: .6rem; min-width: 0; max-width: 80ch; }
+.workspace-evidence-group-36-6e { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; min-width: 0; max-width: 80ch; overflow-wrap: anywhere; }
 .workspace-evidence-group-36-6e h4, .workspace-evidence-group-36-6e h5, .workspace-evidence-group-36-6e p { margin: 0; }
 .workspace-evidence-group-36-6e p { line-height: 1.55; }
 .workspace-evidence-disclosure-36-6e { max-width: 80ch; }
@@ -619,6 +619,17 @@ a:hover { color: #f08af6; }
 .review-case-card .review-detail-link { margin-top: .1rem; }
 .review-detail-view { max-width: 88rem; }
 .review-detail-view > .case-card { padding: clamp(1.1rem, 2.2vw, 1.75rem); }
+.review-detail-view, .review-detail-view > .case-card, .review-detail-view .case-detail,
+.review-detail-view .case-detail > *, .review-detail-view .case-detail .case-section,
+.review-detail-view .case-detail ol, .review-detail-view .case-detail ul,
+.review-detail-view .case-detail li {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.review-detail-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.investigation-guidance > label { display: flex; width: fit-content; min-width: 0; max-width: 100%; }
+.investigation-guidance select { min-width: 0; max-width: 100%; }
 .review-back-link { margin-bottom: 1.25rem; }
 .workspace-detail-shell-36-6b { gap: 1.5rem; }
 .workspace-overview-36-6c { border-color: var(--cyber-border-quiet); }
@@ -723,4 +734,165 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--cyber-cyan); }
 }
 @media (prefers-reduced-motion: reduce) {
   button, .review-detail-link { transition: none; }
+}
+
+/* Phase 36.10A-UI2: scale the labelled investigation workspace without changing its data flow. */
+:root {
+  font-size: 17px;
+  line-height: 1.58;
+}
+
+.app-shell { grid-template-columns: 280px minmax(0, 1fr); }
+.workspace-nav { padding: 1.4rem 1.1rem; }
+.brand { font-size: 1.18rem; line-height: 1.45; }
+.workspace-nav-title { font-size: 1rem; line-height: 1.5; }
+.workspace-nav-list { gap: .65rem; }
+.workspace-nav button {
+  min-height: 50px;
+  gap: .75rem;
+  padding: .7rem .75rem;
+  font-size: 1.06rem;
+  line-height: 1.45;
+}
+.workspace-nav button .icon { width: 1.3rem; height: 1.3rem; }
+.workspace-nav button[aria-current="page"]::after { font-size: .78em; }
+.sidebar-note { padding-inline: .75rem; font-size: .9rem; line-height: 1.6; }
+#nav-live-badge { font-size: .82rem; }
+
+.site-header { padding: 1rem clamp(1.25rem, 2.2vw, 2rem); }
+.site-header h1 { font-size: 1.45rem; line-height: 1.4; }
+.site-header p { font-size: 1rem; line-height: 1.5; }
+.app-content { padding: clamp(1.5rem, 2.1vw, 2.35rem) clamp(1.5rem, 2.1vw, 2.5rem) 3rem; }
+h2 { font-size: 1.42rem; line-height: 1.35; }
+h3 { font-size: 1.25rem; line-height: 1.4; }
+#page-title { font-size: clamp(2rem, 2.8vw, 2.6rem); line-height: 1.2; }
+.lead { font-size: 1.08rem; line-height: 1.62; }
+.first-visit-note { max-width: 68ch; line-height: 1.6; }
+.workspace-panel > p, .workspace-dashboard-36-6c > p { line-height: 1.6; }
+h1, h2, h3, p { overflow-wrap: break-word; }
+
+.analysis-flow { max-width: none; margin-top: 1.75rem; }
+.analysis-flow h3 { margin-bottom: .75rem; }
+.analysis-flow ol { gap: .9rem; }
+.flow-step { min-height: 0; gap: .75rem; padding: 1rem 1.05rem; line-height: 1.5; }
+.flow-step .icon { width: 1.3rem; height: 1.3rem; }
+.flow-step strong { font-size: 1rem; }
+.flow-step span { font-size: .96rem; line-height: 1.5; }
+
+.start-actions { gap: 1.35rem; margin-block: 1.65rem 1rem; }
+.action-card { gap: .62rem; padding: 1.5rem; }
+.action-icon { width: 2.75rem; height: 2.75rem; margin-bottom: .4rem; }
+.action-icon .icon { width: 1.35rem; height: 1.35rem; }
+.action-card h3 { font-size: 1.3rem; line-height: 1.35; }
+.action-card p { max-width: 36ch; margin: 0 0 .45rem; font-size: 1rem; line-height: 1.6; word-break: keep-all; }
+.review-card-summary { overflow-wrap: anywhere; word-break: normal; }
+button, .review-detail-link { min-height: 48px; font-size: 1rem; line-height: 1.45; }
+.action-card button { margin-top: .1rem; padding: .7rem 1rem; }
+
+.info-panel, .local-upload, .boundaries, .first-visit-details { padding: clamp(1.35rem, 2vw, 1.65rem); }
+.local-upload fieldset { padding: 1.25rem; }
+.file-field { padding-block: .75rem; }
+.file-field label, .local-upload legend { font-size: 1rem; }
+.file-field p, .status, [role="status"] { font-size: .95rem; line-height: 1.55; }
+.file-field input, .text-input-panel select, .text-input-panel textarea,
+.investigation-guidance select, .workspace-evidence-panel-36-6e select { font-size: 1rem; }
+.text-input-panel select { min-height: 48px; }
+.text-input-panel textarea { line-height: 1.6; }
+
+.workspace-dashboard-36-6c { gap: 1.65rem; }
+.workspace-dashboard-36-6c > h2 { font-size: clamp(1.75rem, 2.4vw, 2.2rem); }
+.workspace-dashboard-36-6c .result-notice { line-height: 1.6; }
+.workspace-dashboard-36-6c #summary-cards { gap: 1rem; }
+.workspace-summary-card-36-6c { padding: 1.15rem 1.25rem; }
+.workspace-summary-card-36-6c .summary-top p { font-size: .95rem; line-height: 1.5; }
+.workspace-case-section-36-6c > p { line-height: 1.6; }
+.review-card-number, .review-card-facts, .review-card-summary { font-size: 1rem; line-height: 1.58; }
+.review-card-title { font-size: 1.32rem; line-height: 1.4; }
+.case-summary-meta dt, .review-summary-meta dt, .review-metrics dt { font-size: .92rem; line-height: 1.5; }
+.review-status-badge { min-height: 2.15rem; font-size: .9rem; }
+.case-card.review-case-card { padding: 1.35rem 1.45rem; }
+.workspace-detail-header-36-6c { gap: .9rem; }
+.workspace-detail-number-36-6c { font-size: .9rem; }
+.workspace-detail-tabs-36-6d { gap: .65rem; }
+.workspace-detail-tabs-36-6d button { min-height: 48px; padding-inline: 1rem; font-size: .98rem; }
+.workspace-overview-36-6c > h4, .workspace-timeline-panel-36-6d > h4,
+.workspace-tasks-panel-36-6e > h4, .workspace-evidence-panel-36-6e > h4 { font-size: 1.25rem; }
+.workspace-overview-metrics-36-6c { gap: .9rem; }
+.workspace-overview-metrics-36-6c > div { padding: 1rem 1.1rem; }
+.workspace-overview-metrics-36-6c dt, .workspace-timeline-kind-36-6d { font-size: .92rem; }
+.workspace-timeline-description-36-6d, .workspace-checklist-36-6e > p,
+.workspace-evidence-panel-36-6e > p, .workspace-checklist-explanation-36-6e,
+.workspace-task-detail-36-6e p { font-size: 1rem; line-height: 1.6; }
+.workspace-timeline-item-36-6d { padding-block: .8rem 1.15rem; }
+.workspace-task-master-detail-36-6e { gap: 1.25rem; }
+.workspace-task-choice-36-6e, .workspace-task-detail-36-6e summary,
+.workspace-evidence-panel-36-6e summary { font-size: .98rem; }
+.workspace-checklist-request-36-6e { min-height: 48px; }
+
+/* Keep the three real entry paths broad enough for the larger type. */
+@media (max-width: 74.9375rem) and (min-width: 56.3125rem) {
+  .app-shell { grid-template-columns: 248px minmax(0, 1fr); }
+  .app-content { padding-inline: 1.5rem; }
+}
+@media (max-width: 56.25rem) and (min-width: 48rem) {
+  .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
+  .app-content { padding-inline: 1.35rem; }
+}
+@media (max-width: 47.9375rem) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .workspace-nav { padding: .9rem 1rem; }
+  .workspace-nav button { min-height: 48px; font-size: 1rem; }
+  .workspace-nav-list { gap: .6rem; }
+  .site-header { padding: .9rem 1rem; }
+  .app-content { padding: 1.35rem 1rem 2rem; }
+  .start-actions, .analysis-flow ol { grid-template-columns: minmax(0, 1fr); }
+  .start-actions { gap: 1rem; }
+  .action-card { padding: 1.35rem; }
+  .workspace-dashboard-36-6c #summary-cards { gap: .75rem; }
+  .case-card.review-case-card { padding: 1.15rem; }
+}
+@media (max-width: 40rem) {
+  .app-content { padding-inline: .75rem; }
+}
+@media (max-width: 21rem) {
+  .app-content { padding-inline: .65rem; }
+  .workspace-dashboard-36-6c #summary-cards,
+  .workspace-overview-metrics-36-6c { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Keep the existing navy/cyan identity, with the terminal direction's single-line selection cue. */
+:root {
+  --cyber-border: #2d435a;
+  --cyber-border-quiet: #24364a;
+}
+body { background: var(--cyber-bg); }
+.workspace-nav { background: var(--cyber-surface); }
+.workspace-nav::after { background: rgb(0 217 245 / 24%); }
+.site-header::after { background: rgb(0 217 245 / 22%); }
+.workspace-nav button[aria-current="page"] { box-shadow: none; }
+.info-panel, .local-upload, .boundaries, .first-visit-details,
+.action-card, .summary-card, .case-card, .independent-card,
+.live-status-strip p, .live-state-cell, .review-summary-meta > div, .review-metrics > div {
+  box-shadow: none;
+}
+.workspace-summary-card-36-6c { background: var(--cyber-panel); }
+.action-icon {
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.action-icon .icon { width: 1.35rem; height: 1.35rem; }
+
+@media (max-width: 74.9375rem) and (min-width: 48rem) {
+  .start-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analysis-flow ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 74.9375rem) and (min-width: 56.3125rem) {
+  .start-actions > .action-card:last-child { grid-column: 1 / -1; width: calc((100% - 1.35rem) / 2); justify-self: center; }
+}
+@media (max-width: 56.25rem) and (min-width: 48rem) {
+  .start-actions, .analysis-flow ol { grid-template-columns: minmax(0, 1fr); }
 }
