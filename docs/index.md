@@ -14,6 +14,7 @@
 - [Phase 36.11B OpenSSH Syslog 호환성과 Timestamp Provenance](openssh_syslog_timestamp_provenance_36_11b.md) — 제한된 RFC 5424 `sshd` profile, UTC timestamp 검증 및 RFC 3164 자동 추정 거부
 - [Phase 36.12A 입력 품질 요약 backend core](input_quality_summary_backend_core_36_12a.md) — source별 고정 행 집계와 API 진단 projection; UI 표시는 다음 Phase
 - [Phase 36.12B 입력 품질 요약 Production UI](input_quality_ui_36_12b.md) — 기존 품질 response projection만 사용해 요청 단위 status·count를 표시; 새 Ubuntu CI 및 사용자 이해도 검수 전 local conditional
+- [Phase 36.12C 입력 품질 UI 사용자 수용 기록](input_quality_ui_acceptance_36_12c.md) — 합성 화면 사용자 검수 10/10 PASS; 새 커밋 Ubuntu CI·Safari·실기기 미검증
 
 ## Live monitoring·checkpoint
 
