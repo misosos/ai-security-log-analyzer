@@ -223,6 +223,7 @@
   const resultJump = document.getElementById("result-jump");
   const summaryCards = document.getElementById("summary-cards");
   const caseList = document.getElementById("case-list");
+  const reviewQueue = window.reviewQueueUi36_13a.create();
   const independentList = document.getElementById("independent-list");
   const caseSection = document.getElementById("case-section");
   const independentDetails = document.getElementById("independent-details");
@@ -523,6 +524,7 @@
 
   function showExpiredReviewRoute() {
     workspaceDetailGeneration += 1;
+    reviewQueue.clear();
     caseDetailView.hidden = true;
     resultsDashboard.hidden = true;
     reviewRouteExpired.hidden = false;
@@ -1699,6 +1701,7 @@
 
   function renderCaseOverview(cases) {
     caseSection.hidden = cases.length === 0;
+    reviewQueue.begin(cases.length !== 0);
     caseByRef = new Map();
     const caseRefs = cases.map((item) => item.checklist_ref).filter((caseRef) => caseRef !== null);
     if (new Set(caseRefs).size !== caseRefs.length) failContract();
@@ -1711,7 +1714,7 @@
         unavailable.setAttribute("role", "listitem");
         unavailable.setAttribute("aria-label", "검토 건 상세 정보를 사용할 수 없음");
         unavailable.append(element("h4", "검토 건"), element("p", "안전한 상세 참조가 없어 이 검토 건의 요약을 표시할 수 없습니다."));
-        caseList.append(unavailable);
+        reviewQueue.addUnavailable(unavailable, index);
         return;
       }
       const card = document.createElement("div");
@@ -1726,10 +1729,11 @@
       const riskBand = projection.risk_band;
       const risk = ({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"})[riskBand];
       badges.append(element("span", `위험도 ${risk}`, `review-status-badge ${RISK_CLASSES[riskBand]}`));
-      badges.append(element("span", priorityDisplayLabel(projection.review_priority),
-        "review-status-badge review-priority-pending"));
-      badges.append(element("span", sourceRoleDisplayLabel(projection.source_role),
-        "review-status-badge review-role-pending"));
+      const priorityBadge = element("span", priorityDisplayLabel(projection.review_priority),
+        "review-status-badge review-priority-pending");
+      const roleBadge = element("span", sourceRoleDisplayLabel(projection.source_role),
+        "review-status-badge review-role-pending");
+      badges.append(priorityBadge, roleBadge);
       const facts = element("p", "", "review-card-facts");
       if (projection.start_time_kst !== null) {
         const startTime = document.createElement("time");
@@ -1753,10 +1757,11 @@
       link.id = `review-case-link-${index}`;
       link.dataset.reviewCaseRef = projection.case_ref;
       card.append(link);
+      reviewQueue.add(projection, card, index, priorityBadge, roleBadge);
       caseByRef.set(projection.case_ref, {item, index, projection,
         timeline: createWorkspaceTimelineProjection(item, projection, index)});
-      caseList.append(card);
     });
+    reviewQueue.render();
   }
 
   function priorityDisplayLabel(priority) {
@@ -2301,9 +2306,14 @@
       isLatest: (requestId) => requestId === latestChecklistRequest,
       nextRequestId: () => ++latestChecklistRequest,
       renderCitation: renderChecklistCitation,
-      onReset: () => { resetVerifiedLabels(); renderEvidenceChecklist(null); },
+      onReset: () => {
+        resetVerifiedLabels();
+        reviewQueue.updateVerifiedLabels(projection.case_ref, "unknown", "undetermined");
+        renderEvidenceChecklist(null);
+      },
       onValidated: (checklist) => {
         setVerifiedLabels(checklist.source_role, checklist.review_priority);
+        reviewQueue.updateVerifiedLabels(projection.case_ref, checklist.source_role, checklist.review_priority);
         renderEvidenceChecklist(checklist);
       }
     });
@@ -2421,6 +2431,7 @@
 
   function clearPreviousResult() {
     workspaceDetailGeneration += 1;
+    reviewQueue.clear();
     currentReport = null;
     currentReportMode = null;
     reportDownload.hidden = true;

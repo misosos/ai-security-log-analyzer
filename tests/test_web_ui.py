@@ -20,7 +20,8 @@ from app.security.linux_audit_api import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
-ASSETS = ("/assets/style.css", "/assets/app.js", "/assets/input-quality-ui-36-12b.js")
+ASSETS = ("/assets/style.css", "/assets/app.js", "/assets/input-quality-ui-36-12b.js",
+          "/assets/review-queue-ui-36-13a.js")
 
 
 class _Structure(HTMLParser):
@@ -68,8 +69,10 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/input-quality-ui-36-12b.js" and "defer" in attrs for tag, attrs in nodes)
+    assert any(tag == "script" and attrs.get("src") == "/assets/review-queue-ui-36-13a.js" and "defer" in attrs for tag, attrs in nodes)
     script_sources = [attrs.get("src") for tag, attrs in nodes if tag == "script"]
     assert script_sources.index("/assets/input-quality-ui-36-12b.js") < script_sources.index("/assets/app.js")
+    assert script_sources.index("/assets/review-queue-ui-36-13a.js") < script_sources.index("/assets/app.js")
     for phrase in (
         "예시 데이터로 둘러보기", "내 로그 분석하기", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
         "침해 확정", "추가 확인이 필요한 활동", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
@@ -81,9 +84,12 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "fieldset" for tag, _ in nodes)
     assert any(tag == "legend" for tag, _ in nodes)
     assert any(attrs.get("id") == "local-upload" and "hidden" in attrs for _, attrs in nodes)
-    assert {attrs.get("name") for tag, attrs in nodes if tag == "input"} == {
+    assert {attrs.get("name") for tag, attrs in nodes if tag == "input" and attrs.get("name")} == {
         "application_file", "ssh_file", "access_file", "audit_file", "input_mode"
     }
+    assert any(tag == "input" and attrs.get("type") == "search" and
+               attrs.get("id") == "review-queue-search-36-13a" and attrs.get("maxlength") == "100"
+               for tag, attrs in nodes)
     assert all("required" in attrs and attrs.get("type") == "file"
                for tag, attrs in nodes if tag == "input" and attrs.get("type") == "file")
     assert any(tag == "textarea" and attrs.get("id") == "log-text" and
@@ -206,6 +212,7 @@ def test_static_delivery_is_independent_of_working_directory(monkeypatch, tmp_pa
     assert client.get("/assets/style.css").status_code == 200
     assert client.get("/assets/app.js").status_code == 200
     assert client.get("/assets/input-quality-ui-36-12b.js").status_code == 200
+    assert client.get("/assets/review-queue-ui-36-13a.js").status_code == 200
 
 
 def test_fixed_asset_rejects_symlink_empty_and_oversized_without_path_leak(monkeypatch, tmp_path):
@@ -268,6 +275,7 @@ def test_protected_linux_audit_factory_does_not_gain_public_ui_routes():
     assert client.get("/assets/style.css").status_code == 404
     assert client.get("/assets/app.js").status_code == 404
     assert client.get("/assets/input-quality-ui-36-12b.js").status_code == 404
+    assert client.get("/assets/review-queue-ui-36-13a.js").status_code == 404
     assert "/api/analyze-linux-audit" in protected.openapi()["paths"]
 
 

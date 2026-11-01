@@ -657,6 +657,7 @@ async function main() {
               stateForPage === 'CHECKLIST_RETRY' ? 'CHECKLIST_AVAILABLE' : 'CHECKLIST_REFUSED'))});
         }
       } else if (['/', '/assets/style.css', '/assets/app.js', '/assets/input-quality-ui-36-12b.js',
+        '/assets/review-queue-ui-36-13a.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
         await route.continue();
@@ -1108,8 +1109,9 @@ async function main() {
       const before = await checklistPage.locator('#results').evaluate((node) => {
         const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
         copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
-        copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
-        copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
+        // Explicitly verified role and priority badges may change; analysis content must not.
+        copy.querySelectorAll('.review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+        copy.querySelectorAll('.review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
         return copy.innerText;
       });
       requireSafe(calls.length === 0, 'CHECKLIST_AUTOMATIC_REQUEST');
@@ -1188,8 +1190,8 @@ async function main() {
       requireSafe(await checklistPage.locator('#results').evaluate((node) => {
         const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
         copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
-        copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
-        copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
+        copy.querySelectorAll('.review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+        copy.querySelectorAll('.review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
         return copy.innerText;
       }) === before, 'CHECKLIST_ANALYSIS_MUTATION');
       if (checklistState === 'CHECKLIST_REAL') {
@@ -1222,8 +1224,8 @@ async function main() {
         requireSafe(await checklistPage.locator('#results').evaluate((node) => {
           const copy = node.cloneNode(true); copy.querySelectorAll('.investigation-checklist').forEach((item) => item.remove());
           copy.querySelectorAll('.workspace-checklist-evidence-36-6e').forEach((item) => item.replaceChildren());
-          copy.querySelectorAll('.workspace-detail-header-36-6c .review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
-          copy.querySelectorAll('.workspace-detail-header-36-6c .review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
+          copy.querySelectorAll('.review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+          copy.querySelectorAll('.review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
           return copy.innerText;
         }) === before, 'CHECKLIST_RENDER_EXCEPTION_ANALYSIS_MUTATION');
       }
@@ -1560,14 +1562,21 @@ async function main() {
     const secondProjection = await projectionShellPage.evaluate((ref) =>
       window.workspaceNavigation.projectionForRef(ref), secondRef);
     requireSafe(firstRef !== secondRef, 'WORKSPACE_CASE_REFS_NOT_DISTINCT');
-    const analysisBeforeShellRoute = await projectionShellPage.evaluate(() => document.querySelector('#results-dashboard').textContent);
+    const dashboardAnalysisText = () => projectionShellPage.evaluate(() => {
+      const copy = document.querySelector('#results-dashboard').cloneNode(true);
+      // Checklist verification may update only these separately validated queue labels.
+      copy.querySelectorAll('.review-role-pending').forEach((item) => { item.textContent = 'ROLE_PRESENTATION'; });
+      copy.querySelectorAll('.review-priority-pending').forEach((item) => { item.textContent = 'PRIORITY_PRESENTATION'; });
+      return copy.textContent;
+    });
+    const analysisBeforeShellRoute = await dashboardAnalysisText();
     await projectionShellPage.locator(`#review-case-link-0`).click();
     await projectionShellPage.getByRole('heading', {name: '검토 건 상세'}).waitFor({state: 'visible'});
     requireSafe(new URL(projectionShellPage.url()).hash === `#/investigations/${firstRef}` &&
       await projectionShellPage.locator('.workspace-detail-shell-36-6b').getAttribute('data-case-ref') === firstRef &&
       await projectionShellPage.locator('#case-detail-view .case-detail').count() === 0 &&
       shellChecklistCalls === 0 && shellAnalysisCalls === 0 &&
-      await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute,
+      await dashboardAnalysisText() === analysisBeforeShellRoute,
     'WORKSPACE_SHELL_ROUTE_OR_INVARIANCE_FAILED');
     await projectionShellPage.locator('#review-back-link').focus();
     await projectionShellPage.keyboard.press('Tab');
@@ -1751,7 +1760,7 @@ async function main() {
     requireSafe(shellGuidanceCalls === 1 && workspaceChecklistCalls.length === 1,
       'WORKSPACE_GUIDANCE_NOT_EXPLICIT_OR_MIXED');
     await assertWorkspaceReflow(projectionShellPage, 'WORKSPACE_EVIDENCE_GUIDANCE_AVAILABLE');
-    requireSafe(await projectionShellPage.locator('#results-dashboard').textContent() === analysisBeforeShellRoute &&
+    requireSafe(await dashboardAnalysisText() === analysisBeforeShellRoute &&
       await projectionShellPage.locator('#workspace-tasks-panel-36-6e .workspace-task-choice-36-6e').count() === 1,
     'WORKSPACE_ANALYSIS_MUTATION_OR_GUIDANCE_CHECKLIST_MIX_FAILED');
     const workspaceTaskPanelStats = await projectionShellPage.locator('#workspace-tasks-panel-36-6e').evaluate((node) => ({

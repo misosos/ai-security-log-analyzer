@@ -7,6 +7,7 @@ const vm = require("node:vm");
 
 const script = fs.readFileSync("frontend/app.js", "utf8");
 const qualityUiScript = fs.readFileSync("frontend/input-quality-ui-36-12b.js", "utf8");
+const reviewQueueUiScript = fs.readFileSync("frontend/review-queue-ui-36-13a.js", "utf8");
 const supplied = JSON.parse(fs.readFileSync(0, "utf8"));
 const input = supplied.sample || supplied;
 
@@ -36,6 +37,10 @@ class Node {
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolled = true; }
   addEventListener(name, listener) { this.listeners ||= {}; this.listeners[name] = listener; this.listener = listener; }
+  querySelector(selector) {
+    if (selector === "[data-review-queue-reset]") return this.resetButton || (this.resetButton = new Node("button"));
+    return null;
+  }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
@@ -57,6 +62,9 @@ const ids = [
   ,"local-action-card", "audit-action-card", "audit-choice-button", "linux-audit-file",
   "workspace-current-title", "workspace-current-description"
   ,"input-quality-summary-36-12b", "error-input-quality-36-12b"
+  ,"review-queue-controls-36-13a", "review-queue-search-36-13a", "review-queue-risk-36-13a"
+  ,"review-queue-role-36-13a", "review-queue-priority-36-13a", "review-queue-sort-36-13a"
+  ,"review-queue-reset-36-13a", "review-queue-count-36-13a", "review-queue-empty-36-13a"
 ];
 
 function nodesOf(root, tag) {
@@ -81,6 +89,14 @@ function makeApp(initial, hostname = "127.0.0.1") {
   nodes["text-input-panel"].hidden = true;
   nodes["text-source"].tagName = "select";
   nodes["text-source"].value = "application";
+  nodes["review-queue-search-36-13a"].tagName = "input";
+  nodes["review-queue-search-36-13a"].value = "";
+  for (const id of ["review-queue-risk-36-13a", "review-queue-role-36-13a",
+    "review-queue-priority-36-13a", "review-queue-sort-36-13a"]) {
+    nodes[id].tagName = "select";
+    nodes[id].value = "all";
+  }
+  nodes["review-queue-sort-36-13a"].value = "default";
   nodes["log-text"].tagName = "textarea";
   nodes["text-input-scope-notice"].hidden = true;
   nodes["text-error"].hidden = true;
@@ -148,6 +164,7 @@ function makeApp(initial, hostname = "127.0.0.1") {
     window: {location, history, addEventListener() {}, scrollTo() {}, confirm: () => confirmResult},
     TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl};
   vm.runInNewContext(qualityUiScript, context);
+  vm.runInNewContext(reviewQueueUiScript, context);
   vm.runInNewContext(script, context);
   return {
     nodes, downloads, revoked, body,
