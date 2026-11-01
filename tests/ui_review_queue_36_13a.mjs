@@ -98,11 +98,26 @@ try {
   await page.locator('#sample-button').click();
   await page.locator('#results-heading').waitFor({state: 'visible'});
   const requestsBeforeQueueInteractions = apiRequests;
-  ensure(await page.getByRole('heading', {name: '검토 건 찾기'}).count() === 1, 'QUEUE_CONTROLS_MISSING');
+  const queueHeadingCount = await page.locator('#case-list-heading').count();
+  ensure(queueHeadingCount === 1, `QUEUE_CONTROLS_MISSING_${queueHeadingCount}`);
   const cards = page.locator('#case-list .review-case-card');
   const total = await cards.count();
   ensure(total > 0 && (await page.locator('#review-queue-count-36-13a').innerText()) ===
-    `검토 건 ${total}개 중 ${total}개 표시`, 'QUEUE_INITIAL_ORDER_OR_COUNT_FAILED');
+    `${total}건`, 'QUEUE_INITIAL_ORDER_OR_COUNT_FAILED');
+  ensure(await page.locator('#review-queue-filter-panel-36-13a').count() === 1 &&
+    !(await page.locator('#review-queue-filter-panel-36-13a').evaluate((node) => node.open)) &&
+    await page.locator('#review-queue-risk-36-13a').isHidden() &&
+    await page.locator('#review-queue-reset-36-13a').isHidden() &&
+    await page.locator('#review-queue-filter-chips-36-13a').isHidden(),
+  'QUEUE_COMPACT_DEFAULT_DENSITY_FAILED');
+  const filterToggle = page.locator('#review-queue-filter-toggle-36-13a');
+  ensure(await filterToggle.getAttribute('aria-expanded') === 'false' &&
+    await filterToggle.getAttribute('aria-controls') === 'review-queue-filter-panel-36-13a',
+  'QUEUE_FILTER_DISCLOSURE_RELATION_FAILED');
+  const cardsTop = await cards.first().evaluate((node) => node.getBoundingClientRect().top);
+  const controlsHeight = await page.locator('#review-queue-controls-36-13a')
+    .evaluate((node) => node.getBoundingClientRect().height);
+  ensure(controlsHeight < 180 && cardsTop < 900, 'QUEUE_COMPACT_VERTICAL_DENSITY_FAILED');
   const qualityPanel = page.locator('#input-quality-summary-36-12b');
   await page.evaluate(() => {
     const panel = document.getElementById('input-quality-summary-36-12b');
@@ -119,7 +134,7 @@ try {
   const initialTitles = await cards.locator('.review-card-title').allInnerTexts();
   await search.fill(`  ${firstTitle}  `);
   ensure(await cards.count() === 1 && await page.locator('#review-queue-count-36-13a').innerText() ===
-    `검토 건 ${total}개 중 1개 표시`, 'QUEUE_TRIMMED_SEARCH_FAILED');
+    `전체 ${total}건 중 1건`, 'QUEUE_TRIMMED_SEARCH_FAILED');
   ensure(!page.url().includes(firstTitle), 'QUEUE_SEARCH_LEAKED_IN_URL');
   await search.fill('검색 결과 없음');
   ensure(await cards.count() === 0 && await page.locator('#review-queue-empty-36-13a').isVisible() &&
@@ -130,26 +145,47 @@ try {
   await page.locator('#review-queue-empty-36-13a button').click();
   ensure(await cards.count() === total && await search.inputValue() === '', 'QUEUE_EMPTY_RESET_FAILED');
 
+  await filterToggle.click();
+  ensure(await filterToggle.getAttribute('aria-expanded') === 'true' &&
+    await page.locator('#review-queue-filter-panel-36-13a').isVisible(), 'QUEUE_FILTER_PANEL_OPEN_FAILED');
   const risk = page.locator('#review-queue-risk-36-13a');
   await risk.selectOption('HIGH');
   ensure(await cards.count() === 1 && (await cards.first().locator('.review-status-badge').first().innerText()).includes('높음'),
     'QUEUE_RISK_FILTER_FAILED');
+  ensure(await page.locator('#review-queue-filter-count-36-13a').innerText() === '1개' &&
+    await page.locator('#review-queue-filter-chips-36-13a').isVisible(), 'QUEUE_ACTIVE_FILTER_CHIP_MISSING');
+  await page.waitForFunction(() => document.getElementById('review-queue-count-announcement-36-13a').textContent === '전체 2건 중 1건');
   await risk.selectOption('MEDIUM');
   ensure(await cards.count() === 0, 'QUEUE_RISK_MEDIUM_FILTER_FAILED');
   const role = page.locator('#review-queue-role-36-13a');
   await role.selectOption('application');
   ensure(await cards.count() === 0, 'QUEUE_ROLE_FILTER_FAILED');
+  ensure(await page.locator('#review-queue-active-chip-list-36-13a [data-review-queue-chip="role"]').count() === 1,
+    'QUEUE_ROLE_FILTER_CHIP_MISSING');
+  await page.locator('#review-queue-active-chip-list-36-13a [data-review-queue-chip="role"]').click();
+  ensure(await role.inputValue() === 'all' && await risk.inputValue() === 'MEDIUM', 'QUEUE_FILTER_CHIP_REMOVE_FAILED');
   await role.selectOption('unknown');
   const priority = page.locator('#review-queue-priority-36-13a');
   await priority.selectOption('review_now');
   ensure(await cards.count() === 0, 'QUEUE_PRIORITY_FILTER_FAILED');
   await priority.selectOption('undetermined');
   await risk.selectOption('all');
+  await page.locator('#review-queue-filter-close-36-13a').click();
+  ensure(await page.locator('#review-queue-filter-panel-36-13a').isHidden() &&
+    await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
+  'QUEUE_FILTER_CLOSE_FOCUS_FAILED');
+  await filterToggle.click();
+  await page.keyboard.press('Escape');
+  ensure(await page.locator('#review-queue-filter-panel-36-13a').isHidden() &&
+    await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
+  'QUEUE_FILTER_ESCAPE_FOCUS_FAILED');
   await search.fill(firstTitle);
   ensure(await cards.count() === 1, 'QUEUE_AND_FILTER_COMBINATION_FAILED');
 
   await search.fill('');
+  await filterToggle.click();
   await priority.selectOption('all');
+  await page.locator('#review-queue-filter-close-36-13a').click();
   const sort = page.locator('#review-queue-sort-36-13a');
   await sort.selectOption('oldest');
   const oldestTitles = await cards.locator('.review-card-title').allInnerTexts();
@@ -170,20 +206,27 @@ try {
   ensure(apiRequests === requestsBeforeQueueInteractions, 'QUEUE_FILTER_TRIGGERED_API_REQUEST');
 
   const axe = await new AxeBuilder({page}).analyze();
-  ensure(axe.violations.length === 0, 'QUEUE_AXE_VIOLATIONS');
+  ensure(axe.violations.length === 0, `QUEUE_AXE_VIOLATIONS_${axe.violations.map((item) => item.id).join('_')}`);
   await search.focus();
   await page.keyboard.press('Tab');
-  const focusOutline = await page.locator('#review-queue-risk-36-13a')
+  const focusOutline = await filterToggle
     .evaluate((node) => getComputedStyle(node).outlineStyle !== 'none');
+  ensure(await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
+    'QUEUE_FILTER_BUTTON_KEYBOARD_FOCUS_FAILED');
+  await page.keyboard.press('Enter');
+  ensure(await filterToggle.getAttribute('aria-expanded') === 'true', 'QUEUE_FILTER_BUTTON_KEYBOARD_TOGGLE_FAILED');
   const tabOrder = [await page.evaluate(() => document.activeElement.id)];
-  for (let index = 0; index < 5; index++) {
+  for (let index = 0; index < 8; index++) {
     await page.keyboard.press('Tab');
-    tabOrder.push(await page.evaluate(() => document.activeElement.id));
+    tabOrder.push(await page.evaluate(() => document.activeElement.id ||
+      (document.activeElement.dataset.reviewQueueChip ? `chip-${document.activeElement.dataset.reviewQueueChip}` :
+        document.activeElement.tagName.toLowerCase())));
   }
   ensure(focusOutline && JSON.stringify(tabOrder) === JSON.stringify([
+    'review-queue-filter-toggle-36-13a', 'review-queue-sort-36-13a',
     'review-queue-risk-36-13a', 'review-queue-role-36-13a', 'review-queue-priority-36-13a',
-    'review-queue-sort-36-13a', 'review-queue-reset-36-13a', 'review-case-link-0'
-  ]), 'QUEUE_KEYBOARD_ORDER_FAILED');
+    'review-queue-filter-close-36-13a', 'chip-role', 'review-queue-reset-36-13a', 'review-case-link-0'
+  ]), `QUEUE_KEYBOARD_ORDER_FAILED_${tabOrder.join('_')}`);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({width, height: 900});
     ensure(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth), `QUEUE_HORIZONTAL_OVERFLOW_${width}`);
@@ -229,13 +272,18 @@ try {
     <section id="review-queue-controls-36-13a" aria-labelledby="review-queue-heading-36-13a">
       <h2 id="review-queue-heading-36-13a">검토 건 찾기</h2>
       <label for="review-queue-search-36-13a">검토 건 검색<input id="review-queue-search-36-13a" type="search" maxlength="100"></label>
-      <label for="review-queue-risk-36-13a">위험도<select id="review-queue-risk-36-13a"><option value="all">전체</option><option value="HIGH">높음</option><option value="MEDIUM">보통</option><option value="LOW">낮음</option></select></label>
-      <label for="review-queue-role-36-13a">로그 역할<select id="review-queue-role-36-13a"><option value="all">전체</option><option value="application">애플리케이션 로그</option><option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option><option value="unknown">역할 미확인</option></select></label>
-      <label for="review-queue-priority-36-13a">확인 순서<select id="review-queue-priority-36-13a"><option value="all">전체</option><option value="review_now">먼저 확인</option><option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option><option value="undetermined">확인 순서 미정</option></select></label>
+      <button id="review-queue-filter-toggle-36-13a" aria-expanded="false" aria-controls="review-queue-filter-panel-36-13a">필터 <span id="review-queue-filter-count-36-13a">0개</span></button>
+      <div id="review-queue-filter-panel-36-13a" hidden>
+        <label for="review-queue-risk-36-13a">위험도<select id="review-queue-risk-36-13a"><option value="all">전체</option><option value="HIGH">높음</option><option value="MEDIUM">보통</option><option value="LOW">낮음</option></select></label>
+        <label for="review-queue-role-36-13a">로그 역할<select id="review-queue-role-36-13a"><option value="all">전체</option><option value="application">애플리케이션 로그</option><option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option><option value="unknown">역할 미확인</option></select></label>
+        <label for="review-queue-priority-36-13a">확인 순서<select id="review-queue-priority-36-13a"><option value="all">전체</option><option value="review_now">먼저 확인</option><option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option><option value="undetermined">확인 순서 미정</option></select></label>
+        <button id="review-queue-filter-close-36-13a" type="button">닫기</button>
+      </div>
       <label for="review-queue-sort-36-13a">정렬<select id="review-queue-sort-36-13a"><option value="default">기본 검토 순서</option><option value="risk">위험도 높은 순</option><option value="newest">최근 관찰 순</option><option value="oldest">오래된 관찰 순</option><option value="title">제목 순</option></select></label>
-      <button id="review-queue-reset-36-13a" type="button">검색·필터 초기화</button>
-      <p id="review-queue-count-36-13a" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="review-queue-empty-36-13a" hidden><p>현재 조건에 맞는 검토 건이 없습니다. 분석 결과가 없다는 뜻은 아닙니다.</p><button data-review-queue-reset type="button">검색·필터 초기화</button></div>
+      <div id="review-queue-filter-chips-36-13a" hidden><div id="review-queue-active-chip-list-36-13a"></div><button id="review-queue-reset-36-13a" type="button">조건 초기화</button></div>
+      <span id="review-queue-total-36-13a"></span>
+      <p id="review-queue-count-36-13a"></p><span id="review-queue-count-announcement-36-13a" class="review-queue-sr-only-36-13a" aria-live="polite" aria-atomic="true"></span>
+      <div id="review-queue-empty-36-13a" hidden><p>현재 조건에 맞는 검토 건이 없습니다. 분석 결과가 없다는 뜻은 아닙니다.</p><button data-review-queue-reset type="button">조건 초기화</button></div>
     </section><div id="case-list" role="list"></div></main></body></html>`);
   await fixture.addScriptTag({path: join(root, 'frontend/review-queue-ui-36-13a.js')});
   const fixtureResult = await fixture.evaluate(() => {

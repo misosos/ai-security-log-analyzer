@@ -369,48 +369,68 @@
       <p id="result-empty" class="sample-notice" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-circle-help"></use></svg>확인할 항목이 없습니다. 지원 범위나 입력 내용을 다시 확인해 주세요. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
       <div id="result-body" class="result-body">
         <section id="case-section" aria-labelledby="case-list-heading">
-          <h3 id="case-list-heading">검토 건</h3>
-          <p>위험도는 기존 분석 결과입니다. 확인 순서와 로그 역할은 점검표를 요청하기 전까지 추정하지 않습니다.</p>
-          <section id="review-queue-controls-36-13a" class="review-queue-controls-36-13a" aria-labelledby="review-queue-heading-36-13a" hidden>
-            <h4 id="review-queue-heading-36-13a">검토 건 찾기</h4>
-            <p>확인 순서는 기존 위험도와 별개입니다. 역할 미확인은 안전이나 낮은 위험을 뜻하지 않습니다.</p>
-            <div class="review-queue-fields-36-13a">
+          <div class="review-queue-heading-36-13a">
+            <h3 id="case-list-heading">검토 건</h3>
+            <span id="review-queue-total-36-13a" class="review-queue-total-36-13a"></span>
+          </div>
+          <section id="review-queue-controls-36-13a" class="review-queue-controls-36-13a" aria-label="검토 건 검색과 필터" hidden>
+            <div class="review-queue-toolbar-36-13a">
               <label for="review-queue-search-36-13a">검토 건 검색
                 <input id="review-queue-search-36-13a" type="search" maxlength="100" autocomplete="off" placeholder="제목이나 표시된 범주 검색">
               </label>
-              <label for="review-queue-risk-36-13a">위험도
-                <select id="review-queue-risk-36-13a">
-                  <option value="all">전체</option><option value="HIGH">높음</option>
-                  <option value="MEDIUM">보통</option><option value="LOW">낮음</option>
-                </select>
+              <button id="review-queue-filter-toggle-36-13a" class="review-queue-filter-toggle-36-13a secondary-button" type="button" aria-expanded="false" aria-controls="review-queue-filter-panel-36-13a">필터 <span id="review-queue-filter-count-36-13a">0개</span></button>
+              <label class="review-queue-sort-label-36-13a" for="review-queue-sort-36-13a">정렬
+                <span class="review-queue-select-wrap-36-13a">
+                  <select id="review-queue-sort-36-13a">
+                    <option value="default">기본 검토 순서</option><option value="risk">위험도 높은 순</option>
+                    <option value="newest">최근 관찰 순</option><option value="oldest">오래된 관찰 순</option>
+                    <option value="title">제목 순</option>
+                  </select>
+                </span>
               </label>
-              <label for="review-queue-role-36-13a">로그 역할
-                <select id="review-queue-role-36-13a">
-                  <option value="all">전체</option><option value="application">애플리케이션 로그</option>
-                  <option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option>
-                  <option value="unknown">역할 미확인</option>
-                </select>
-              </label>
-              <label for="review-queue-priority-36-13a">확인 순서
-                <select id="review-queue-priority-36-13a">
-                  <option value="all">전체</option><option value="review_now">먼저 확인</option>
-                  <option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option>
-                  <option value="undetermined">확인 순서 미정</option>
-                </select>
-              </label>
-              <label for="review-queue-sort-36-13a">정렬
-                <select id="review-queue-sort-36-13a">
-                  <option value="default">기본 검토 순서</option><option value="risk">위험도 높은 순</option>
-                  <option value="newest">최근 관찰 순</option><option value="oldest">오래된 관찰 순</option>
-                  <option value="title">제목 순</option>
-                </select>
-              </label>
-              <button id="review-queue-reset-36-13a" type="button">검색·필터 초기화</button>
             </div>
-            <p id="review-queue-count-36-13a" class="review-queue-count-36-13a" role="status" aria-live="polite" aria-atomic="true"></p>
+            <div id="review-queue-filter-panel-36-13a" class="review-queue-filter-panel-36-13a" aria-label="검토 건 세부 필터" hidden>
+              <div class="review-queue-filter-fields-36-13a">
+                <label for="review-queue-risk-36-13a">위험도
+                  <span class="review-queue-select-wrap-36-13a">
+                    <select id="review-queue-risk-36-13a">
+                      <option value="all">전체</option><option value="HIGH">높음</option>
+                      <option value="MEDIUM">보통</option><option value="LOW">낮음</option>
+                    </select>
+                  </span>
+                </label>
+                <label for="review-queue-role-36-13a">로그 역할
+                  <span class="review-queue-select-wrap-36-13a">
+                    <select id="review-queue-role-36-13a">
+                      <option value="all">전체</option><option value="application">애플리케이션 로그</option>
+                      <option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option>
+                      <option value="unknown">역할 미확인</option>
+                    </select>
+                  </span>
+                </label>
+                <label for="review-queue-priority-36-13a">확인 순서
+                  <span class="review-queue-select-wrap-36-13a">
+                    <select id="review-queue-priority-36-13a">
+                      <option value="all">전체</option><option value="review_now">먼저 확인</option>
+                      <option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option>
+                      <option value="undetermined">확인 순서 미정</option>
+                    </select>
+                  </span>
+                </label>
+              </div>
+              <div class="review-queue-filter-actions-36-13a">
+                <button id="review-queue-filter-close-36-13a" class="secondary-button" type="button">닫기</button>
+              </div>
+            </div>
+            <div id="review-queue-filter-chips-36-13a" class="review-queue-filter-chips-36-13a" role="group" aria-label="적용 중인 조건" hidden>
+              <div id="review-queue-active-chip-list-36-13a" class="review-queue-active-chip-list-36-13a"></div>
+              <button id="review-queue-reset-36-13a" class="review-queue-reset-36-13a" type="button">조건 초기화</button>
+            </div>
+            <p id="review-queue-count-36-13a" class="review-queue-count-36-13a"></p>
+            <span id="review-queue-count-announcement-36-13a" class="review-queue-sr-only-36-13a" aria-live="polite" aria-atomic="true"></span>
             <div id="review-queue-empty-36-13a" class="review-queue-empty-36-13a" hidden>
               <p>현재 조건에 맞는 검토 건이 없습니다. 분석 결과가 없다는 뜻은 아닙니다.</p>
-              <button type="button" data-review-queue-reset>검색·필터 초기화</button>
+              <button type="button" class="review-queue-reset-36-13a" data-review-queue-reset>조건 초기화</button>
             </div>
           </section>
           <div id="case-list" class="card-stack workspace-case-list-36-6c" role="list" aria-label="검토 건 목록"></div>

@@ -64,7 +64,10 @@ const ids = [
   ,"input-quality-summary-36-12b", "error-input-quality-36-12b"
   ,"review-queue-controls-36-13a", "review-queue-search-36-13a", "review-queue-risk-36-13a"
   ,"review-queue-role-36-13a", "review-queue-priority-36-13a", "review-queue-sort-36-13a"
-  ,"review-queue-reset-36-13a", "review-queue-count-36-13a", "review-queue-empty-36-13a"
+  ,"review-queue-filter-toggle-36-13a", "review-queue-filter-panel-36-13a", "review-queue-filter-close-36-13a"
+  ,"review-queue-filter-count-36-13a", "review-queue-filter-chips-36-13a", "review-queue-active-chip-list-36-13a"
+  ,"review-queue-total-36-13a", "review-queue-reset-36-13a", "review-queue-count-36-13a"
+  ,"review-queue-count-announcement-36-13a", "review-queue-empty-36-13a"
 ];
 
 function nodesOf(root, tag) {
@@ -91,6 +94,11 @@ function makeApp(initial, hostname = "127.0.0.1") {
   nodes["text-source"].value = "application";
   nodes["review-queue-search-36-13a"].tagName = "input";
   nodes["review-queue-search-36-13a"].value = "";
+  nodes["review-queue-filter-panel-36-13a"].hidden = true;
+  nodes["review-queue-filter-chips-36-13a"].hidden = true;
+  nodes["review-queue-reset-36-13a"].hidden = true;
+  nodes["review-queue-filter-count-36-13a"].textContent = "0개";
+  nodes["review-queue-filter-toggle-36-13a"].setAttribute("aria-expanded", "false");
   for (const id of ["review-queue-risk-36-13a", "review-queue-role-36-13a",
     "review-queue-priority-36-13a", "review-queue-sort-36-13a"]) {
     nodes[id].tagName = "select";
@@ -123,6 +131,7 @@ function makeApp(initial, hostname = "127.0.0.1") {
   const document = {
     getElementById: (id) => nodes[id],
     body,
+    addEventListener() {},
     createElement: (tag) => {
       const node = new Node(tag);
       if (tag === "a") node.click = () => {
@@ -161,7 +170,8 @@ function makeApp(initial, hostname = "127.0.0.1") {
     };
   };
   const context = {document, fetch, FormData: FormDataStub, history, location,
-    window: {location, history, addEventListener() {}, scrollTo() {}, confirm: () => confirmResult},
+    window: {location, history, addEventListener() {}, scrollTo() {}, confirm: () => confirmResult,
+      setTimeout, clearTimeout},
     TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl};
   vm.runInNewContext(qualityUiScript, context);
   vm.runInNewContext(reviewQueueUiScript, context);

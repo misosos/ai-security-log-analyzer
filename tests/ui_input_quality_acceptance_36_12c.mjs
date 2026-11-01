@@ -333,7 +333,7 @@ async function main() {
   if (forbidden.some((value) => ariaText.includes(value)) || /192\.168\.1\.|10\.0\.0\./.test(ariaText))
     throw Object.assign(new Error(), {code: 'PRIVATE_ATTRIBUTE_VISIBLE'});
   if (!cspHeader || !cspHeader.includes("script-src 'self'")) throw Object.assign(new Error(), {code: 'CSP_MISSING'});
-  const expectedParserErrorResource = scenario === 'parser-incompatible' &&
+  const expectedParserErrorResource = ['parser-incompatible', 'text-none'].includes(scenario) &&
     observedApiStatus === 400 && observedErrorCode === 'PARSER_INCOMPATIBLE' &&
     consoleErrors.length === 1 && consoleCategories[0] === 'resource' &&
     httpErrorCategories.length === 1 && httpErrorCategories[0] === 'analysis';

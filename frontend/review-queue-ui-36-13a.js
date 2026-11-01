@@ -26,6 +26,14 @@
   function create() {
     const controls = document.getElementById("review-queue-controls-36-13a");
     const searchInput = document.getElementById("review-queue-search-36-13a");
+    const filterToggle = document.getElementById("review-queue-filter-toggle-36-13a");
+    const filterPanel = document.getElementById("review-queue-filter-panel-36-13a");
+    const filterClose = document.getElementById("review-queue-filter-close-36-13a");
+    const filterCount = document.getElementById("review-queue-filter-count-36-13a");
+    const chips = document.getElementById("review-queue-filter-chips-36-13a");
+    const chipList = document.getElementById("review-queue-active-chip-list-36-13a");
+    const totalText = document.getElementById("review-queue-total-36-13a");
+    const countAnnouncement = document.getElementById("review-queue-count-announcement-36-13a");
     const riskSelect = document.getElementById("review-queue-risk-36-13a");
     const roleSelect = document.getElementById("review-queue-role-36-13a");
     const prioritySelect = document.getElementById("review-queue-priority-36-13a");
@@ -36,6 +44,8 @@
     const list = document.getElementById("case-list");
     const records = [];
     let total = 0;
+    let announcementTimer = 0;
+    const riskLabels = Object.freeze({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"});
 
     function corpus(projection, role) {
       const category = projection.category === "authentication" ? "인증 활동" : "기타 관찰";
@@ -49,6 +59,59 @@
       prioritySelect.value = "all";
       sortSelect.value = "default";
       emptyState.hidden = true;
+      setFilterOpen(false);
+    }
+
+    function setFilterOpen(open, restoreFocus = false) {
+      filterPanel.hidden = !open;
+      filterToggle.setAttribute("aria-expanded", String(open));
+      if (restoreFocus) filterToggle.focus();
+    }
+
+    function renderChips(query, risk, role, priority, sort) {
+      const activeFilterCount = [risk, role, priority].filter((value) => value !== "all").length;
+      filterCount.textContent = `${activeFilterCount}개`;
+      filterToggle.removeAttribute("aria-label");
+      chipList.replaceChildren();
+      const items = [];
+      if (query !== "") items.push({key: "search", text: "검색 조건 적용 중", clear: () => {
+        searchInput.value = "";
+        apply();
+        searchInput.focus();
+      }});
+      if (risk !== "all") items.push({key: "risk", text: `위험도: ${riskLabels[risk] ?? "미정"}`, clear: () => {
+        riskSelect.value = "all";
+        apply();
+        (filterPanel.hidden ? filterToggle : riskSelect).focus();
+      }});
+      if (role !== "all") items.push({key: "role", text: `역할: ${ROLE_LABELS[role] ?? "역할 미확인"}`, clear: () => {
+        roleSelect.value = "all";
+        apply();
+        (filterPanel.hidden ? filterToggle : roleSelect).focus();
+      }});
+      if (priority !== "all") items.push({key: "priority", text: `확인 순서: ${PRIORITY_LABELS[priority] ?? "확인 순서 미정"}`, clear: () => {
+        prioritySelect.value = "all";
+        apply();
+        (filterPanel.hidden ? filterToggle : prioritySelect).focus();
+      }});
+      const sortLabels = {risk: "위험도 높은 순", newest: "최근 관찰 순", oldest: "오래된 관찰 순", title: "제목 순"};
+      if (sort !== "default") items.push({key: "sort", text: `정렬: ${sortLabels[sort]}`, clear: () => {
+        sortSelect.value = "default";
+        apply();
+        sortSelect.focus();
+      }});
+      items.forEach(({key, text, clear}) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "review-queue-chip-36-13a";
+        chip.dataset.reviewQueueChip = key;
+        chip.textContent = `${text} ×`;
+        chip.setAttribute("aria-label", `${text} 조건 제거`);
+        chip.addEventListener("click", clear);
+        chipList.append(chip);
+      });
+      chips.hidden = items.length === 0;
+      resetButton.hidden = items.length === 0;
     }
 
     function compare(left, right, sort) {
@@ -79,6 +142,7 @@
       const role = roleSelect.value;
       const priority = prioritySelect.value;
       const sort = SORTS.has(sortSelect.value) ? sortSelect.value : "default";
+      renderChips(query, risk, role, priority, sort);
       const visible = records.filter((record) =>
         (query === "" || record.searchText.includes(query)) &&
         (risk === "all" || record.risk === risk) &&
@@ -87,7 +151,13 @@
       );
       visible.sort((left, right) => compare(left, right, sort));
       list.replaceChildren(...visible.map((record) => record.card));
-      countText.textContent = `검토 건 ${total}개 중 ${visible.length}개 표시`;
+      const narrowed = query !== "" || risk !== "all" || role !== "all" || priority !== "all";
+      countText.textContent = narrowed ? `전체 ${total}건 중 ${visible.length}건` : `${total}건`;
+      totalText.textContent = `${total}건`;
+      window.clearTimeout(announcementTimer);
+      announcementTimer = window.setTimeout(() => {
+        countAnnouncement.textContent = countText.textContent;
+      }, 350);
       emptyState.hidden = visible.length !== 0;
     }
 
@@ -102,6 +172,14 @@
     });
     resetButton.addEventListener("click", reset);
     emptyState.querySelector("[data-review-queue-reset]").addEventListener("click", reset);
+    filterToggle.addEventListener("click", () => setFilterOpen(filterPanel.hidden));
+    filterClose.addEventListener("click", () => setFilterOpen(false, true));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !filterPanel.hidden) {
+        event.preventDefault();
+        setFilterOpen(false, true);
+      }
+    });
 
     return Object.freeze({
       begin(showControls) {
@@ -109,7 +187,11 @@
         total = 0;
         resetValues();
         controls.hidden = !showControls;
+        window.clearTimeout(announcementTimer);
+        countAnnouncement.textContent = "";
         countText.textContent = "";
+        totalText.textContent = `${total}건`;
+        renderChips("", "all", "all", "all", "default");
       },
       add(projection, card, index, priorityBadge, roleBadge) {
         records.push({projection, card, index, priorityBadge, roleBadge,
@@ -142,7 +224,14 @@
         total = 0;
         resetValues();
         controls.hidden = true;
+        window.clearTimeout(announcementTimer);
+        countAnnouncement.textContent = "";
         countText.textContent = "";
+        totalText.textContent = "";
+        chipList.replaceChildren();
+        chips.hidden = true;
+        resetButton.hidden = true;
+        filterCount.textContent = "0";
       }
     });
   }
