@@ -58,7 +58,8 @@ from app.models.linux_audit_investigation import (
     LinuxAuditInvestigationError, LinuxAuditInvestigationResponse,
 )
 from app.web_ui import (
-    serve_demo_index, serve_demo_script, serve_demo_styles, serve_live_monitoring_script,
+    serve_demo_index, serve_demo_script, serve_demo_styles, serve_input_quality_ui_script,
+    serve_live_monitoring_script,
     serve_multi_source_live_script,
     serve_linux_audit_script,
 )
@@ -474,6 +475,10 @@ def create_app(
         )
         configured_app.add_api_route(
             "/assets/app.js", serve_demo_script, methods=["GET"],
+            include_in_schema=False,
+        )
+        configured_app.add_api_route(
+            "/assets/input-quality-ui-36-12b.js", serve_input_quality_ui_script, methods=["GET"],
             include_in_schema=False,
         )
         configured_app.add_api_route(

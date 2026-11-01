@@ -626,11 +626,13 @@
   resultJump.addEventListener("click", () => workspaceNavigation.show("results", true));
 
   class PublicFailure extends Error {
-    constructor(message, recovery, retryable = null) {
+    constructor(message, recovery, retryable = null, inputQuality = null, errorCode = null) {
       super("Sample request failed");
       this.publicMessage = message;
       this.recovery = recovery;
       this.retryable = retryable;
+      this.inputQuality = inputQuality;
+      this.errorCode = errorCode;
     }
   }
 
@@ -932,13 +934,18 @@
         value.recovery_action !== expected[2] || value.retryable !== expected[3] ||
         value.field !== expected[4]) failContract();
     return {user_message: expected[1], recovery_action: expected[2],
-      retryable: expected[3], field: expected[4]};
+      retryable: expected[3], field: expected[4],
+      input_quality: value.input_quality || null, error_code: value.error_code};
   }
 
   function validateInvestigationResponse(value, mode = "sample") {
-    closedRecord(value, mode === "sample" ? TOP_LEVEL : LOCAL_TOP_LEVEL);
+    const allowed = mode === "sample" ? TOP_LEVEL : LOCAL_TOP_LEVEL;
+    if (mode === "local" && !Object.hasOwn(value, "input_quality"))
+      closedRecord(value, allowed.filter((field) => field !== "input_quality"));
+    else closedRecord(value, allowed);
     if (value.schema_version !== "2") failContract();
-    if (mode === "local") validateInputQuality36_12A(value.input_quality);
+    if (mode === "local" && Object.hasOwn(value, "input_quality"))
+      validateInputQuality36_12A(value.input_quality);
     if (mode === "sample") {
       closedRecord(value.sample_context, ["label", "environment_notice", "certificate_notice"]);
       if (value.sample_context.label !== "합성 샘플 결과" ||
@@ -1167,7 +1174,9 @@
     if (value.user_message !== approved[0] || value.recovery_action !== approved[1] ||
         value.retryable !== approved[2]) failContract();
     return {user_message: approved[0], recovery_action: approved[1],
-      retryable: approved[2], field: mode === "local" ? value.field : null};
+      retryable: approved[2], field: mode === "local" ? value.field : null,
+      input_quality: mode === "local" ? value.input_quality || null : null,
+      error_code: value.error_code};
   }
 
   function element(tag, text, className) {
@@ -2421,6 +2430,16 @@
     workspaceNavigation.setAvailable("results", false);
     errorSummary.hidden = true;
     summaryCards.replaceChildren();
+    const qualitySummary = document.getElementById("input-quality-summary-36-12b");
+    if (qualitySummary) {
+      qualitySummary.replaceChildren();
+      qualitySummary.hidden = true;
+    }
+    const errorQualitySummary = document.getElementById("error-input-quality-36-12b");
+    if (errorQualitySummary) {
+      errorQualitySummary.replaceChildren();
+      errorQualitySummary.hidden = true;
+    }
     caseList.replaceChildren();
     independentList.replaceChildren();
     caseDetailContent.replaceChildren();
@@ -2448,6 +2467,15 @@
       publicFailure.retryable === false ?
         "같은 요청을 그대로 재시도하지 마세요. 위 안내를 확인한 뒤 다시 진행하세요." :
         "연결 또는 응답 상태를 확인한 뒤 다시 시도하세요.";
+    const errorQuality = document.getElementById("error-input-quality-36-12b");
+    if (errorQuality) {
+      if (publicFailure.errorCode === "PARSER_INCOMPATIBLE" && publicFailure.inputQuality) {
+        window.inputQualityUi36_12b.render(errorQuality, publicFailure.inputQuality);
+      } else {
+        errorQuality.replaceChildren();
+        errorQuality.hidden = true;
+      }
+    }
     if (workspaceNav) {
       const holder = mode === "local" ? localSection : document.getElementById("workspace-start");
       holder.prepend(errorSummary);
@@ -2495,7 +2523,8 @@
       const payload = await boundedJson(response);
       if (!response.ok) {
         const error = validateApiError(payload);
-        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
+        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable,
+          error.input_quality, error.error_code);
       }
       const data = validateInvestigationResponse(payload);
       renderResult(data, "sample");
@@ -2522,6 +2551,8 @@
     textScopeNotice.hidden = textScope === null;
     textScopeSourceLabel.textContent = textScope === null ? "" : TEXT_SOURCE_LABELS_36_8C[textScope.source];
     renderSummary(data);
+    window.inputQualityUi36_12b.render(document.getElementById("input-quality-summary-36-12b"),
+      data.input_quality || null, textScope?.source || null);
     renderCaseOverview(data.cases);
     renderIndependentObservations(data.independent_observations);
     resultEmpty.hidden = data.cases.length !== 0 || data.independent_observations.length !== 0;
@@ -2687,7 +2718,8 @@
         if (!response.ok) {
           const error = validateTextApiError36_8C(payload, response.status);
           if (error.field) textFieldError36_8C(error.field, error.user_message);
-          throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
+          throw new PublicFailure(error.user_message, error.recovery_action, error.retryable,
+            error.input_quality, error.error_code);
         }
         const validated = validateTextInvestigationEnvelope36_8C(payload, source);
         if (generation !== localTextRequestGeneration36_8C || localInputMode36_8C !== "text" || localSection.hidden) return;
@@ -2735,7 +2767,8 @@
       if (!response.ok) {
         const error = validateApiError(payload, "local");
         if (error.field) fieldError(error.field, error.user_message);
-        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable);
+        throw new PublicFailure(error.user_message, error.recovery_action, error.retryable,
+          error.input_quality, error.error_code);
       }
       const data = validateInvestigationResponse(payload, "local");
       renderResult(data, "local");

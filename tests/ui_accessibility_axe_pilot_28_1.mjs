@@ -656,7 +656,7 @@ async function main() {
             body: JSON.stringify(checklistPayload(stateForPage === 'CHECKLIST_AVAILABLE' ||
               stateForPage === 'CHECKLIST_RETRY' ? 'CHECKLIST_AVAILABLE' : 'CHECKLIST_REFUSED'))});
         }
-      } else if (['/', '/assets/style.css', '/assets/app.js',
+      } else if (['/', '/assets/style.css', '/assets/app.js', '/assets/input-quality-ui-36-12b.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
         await route.continue();

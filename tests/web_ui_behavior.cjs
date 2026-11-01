@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const script = fs.readFileSync("frontend/app.js", "utf8");
+const qualityUiScript = fs.readFileSync("frontend/input-quality-ui-36-12b.js", "utf8");
 const supplied = JSON.parse(fs.readFileSync(0, "utf8"));
 const input = supplied.sample || supplied;
 
@@ -55,6 +56,7 @@ const ids = [
   "nav-start", "nav-audit", "nav-live", "nav-results"
   ,"local-action-card", "audit-action-card", "audit-choice-button", "linux-audit-file",
   "workspace-current-title", "workspace-current-description"
+  ,"input-quality-summary-36-12b", "error-input-quality-36-12b"
 ];
 
 function nodesOf(root, tag) {
@@ -142,9 +144,11 @@ function makeApp(initial, hostname = "127.0.0.1") {
       })}
     };
   };
-  vm.runInNewContext(script, {document, fetch, FormData: FormDataStub, history, location,
+  const context = {document, fetch, FormData: FormDataStub, history, location,
     window: {location, history, addEventListener() {}, scrollTo() {}, confirm: () => confirmResult},
-    TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl});
+    TextDecoder, TextEncoder, Uint8Array, Date, Blob, URL: objectUrl};
+  vm.runInNewContext(qualityUiScript, context);
+  vm.runInNewContext(script, context);
   return {
     nodes, downloads, revoked, body,
     click: () => nodes["sample-button"].listener(),

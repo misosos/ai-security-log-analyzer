@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>보안 로그 조사 | AI Security Log Analyzer</title>
   <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/input-quality-ui-36-12b.js" defer></script>
   <script src="/assets/app.js" defer></script>
   <script src="/assets/linux-audit.js" defer></script>
   <script src="/assets/live-monitoring.js" defer></script>
@@ -160,6 +161,7 @@
         <p id="error-message"></p>
         <p id="error-recovery"></p>
         <p id="error-retry"></p>
+        <section id="error-input-quality-36-12b" class="input-quality-summary-36-12b" aria-labelledby="error-input-quality-heading-36-12b" hidden></section>
       </div>
     </section>
 
@@ -362,6 +364,7 @@
         <h3 id="summary-heading">결과 요약</h3>
         <div id="summary-cards" class="summary-grid" role="list" aria-label="분석 결과 요약"></div>
       </section>
+      <section id="input-quality-summary-36-12b" class="input-quality-summary-36-12b" aria-labelledby="input-quality-heading-36-12b" hidden></section>
       <p id="result-empty" class="sample-notice" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-circle-help"></use></svg>확인할 항목이 없습니다. 지원 범위나 입력 내용을 다시 확인해 주세요. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
       <div id="result-body" class="result-body">
         <section id="case-section" aria-labelledby="case-list-heading">

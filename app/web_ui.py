@@ -74,6 +74,10 @@ def serve_demo_script() -> Response:
     return _fixed_asset("app.js", "text/javascript")
 
 
+def serve_input_quality_ui_script() -> Response:
+    return _fixed_asset("input-quality-ui-36-12b.js", "text/javascript")
+
+
 def serve_linux_audit_script() -> Response:
     return _fixed_asset("linux-audit.js", "text/javascript")
 

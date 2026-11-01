@@ -20,7 +20,7 @@ from app.security.linux_audit_api import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
-ASSETS = ("/assets/style.css", "/assets/app.js")
+ASSETS = ("/assets/style.css", "/assets/app.js", "/assets/input-quality-ui-36-12b.js")
 
 
 class _Structure(HTMLParser):
@@ -67,6 +67,9 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(attrs.get("id") == "sample-status" and attrs.get("aria-live") == "polite" for _, attrs in nodes)
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
+    assert any(tag == "script" and attrs.get("src") == "/assets/input-quality-ui-36-12b.js" and "defer" in attrs for tag, attrs in nodes)
+    script_sources = [attrs.get("src") for tag, attrs in nodes if tag == "script"]
+    assert script_sources.index("/assets/input-quality-ui-36-12b.js") < script_sources.index("/assets/app.js")
     for phrase in (
         "예시 데이터로 둘러보기", "내 로그 분석하기", "실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다",
         "침해 확정", "추가 확인이 필요한 활동", "인증 없는 공개 웹 업로드는 제공하지 않습니다",
@@ -170,12 +173,13 @@ def test_fixed_routes_headers_and_existing_api_contract(monkeypatch):
     assert index.status_code == 200
     assert index.headers["content-type"].startswith("text/html")
     assert 'lang="ko"' in index.text
-    for route, media_type in ((ASSETS[0], "text/css"), (ASSETS[1], "text/javascript")):
+    for route, media_type in ((ASSETS[0], "text/css"), (ASSETS[1], "text/javascript"),
+                              (ASSETS[2], "text/javascript")):
         response = client.get(route)
         assert response.status_code == 200
         assert response.headers["content-type"].startswith(media_type)
         assert response.headers["cache-control"] == "no-store"
-    for response in (index, client.get(ASSETS[0]), client.get(ASSETS[1])):
+    for response in (index, client.get(ASSETS[0]), client.get(ASSETS[1]), client.get(ASSETS[2])):
         policy = response.headers["content-security-policy"]
         for directive in (
             "default-src 'none'", "script-src 'self'", "style-src 'self'",
@@ -201,6 +205,7 @@ def test_static_delivery_is_independent_of_working_directory(monkeypatch, tmp_pa
     assert client.get("/").status_code == 200
     assert client.get("/assets/style.css").status_code == 200
     assert client.get("/assets/app.js").status_code == 200
+    assert client.get("/assets/input-quality-ui-36-12b.js").status_code == 200
 
 
 def test_fixed_asset_rejects_symlink_empty_and_oversized_without_path_leak(monkeypatch, tmp_path):
@@ -262,6 +267,7 @@ def test_protected_linux_audit_factory_does_not_gain_public_ui_routes():
     assert client.get("/").status_code == 404
     assert client.get("/assets/style.css").status_code == 404
     assert client.get("/assets/app.js").status_code == 404
+    assert client.get("/assets/input-quality-ui-36-12b.js").status_code == 404
     assert "/api/analyze-linux-audit" in protected.openapi()["paths"]
 
 
