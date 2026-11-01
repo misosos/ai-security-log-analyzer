@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
+from app.input_quality_36_12a import InputQualityProjection
 from app.models.investigation_sample_api import LocalInvestigationResponse
 
 
@@ -68,3 +69,4 @@ class LocalTextInvestigationErrorResponse(_ClosedModel):
     recovery_action: StrictStr
     retryable: bool
     field: Literal["source", "log_text"] | None = None
+    input_quality: InputQualityProjection | None = None

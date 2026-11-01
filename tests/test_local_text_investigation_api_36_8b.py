@@ -149,7 +149,7 @@ def test_text_report_has_scope_notice_but_existing_upload_report_does_not():
     assert set(file_result) == {
         "schema_version", "local_context", "analysis_summary", "case_summary", "cases",
         "independent_observations", "interpretation_notices", "capabilities",
-        "bounded_warnings", "report_export",
+        "bounded_warnings", "report_export", "input_quality",
     }
     assert TEXT_NOTICE not in file_result["report_export"]["html"]
 
@@ -175,7 +175,11 @@ def test_closed_request_and_source_validation(payload, code, status):
     assert response.status_code == status
     body = response.json()
     assert body["error_code"] == code
-    assert set(body) == {"error_code", "user_message", "recovery_action", "retryable", "field"}
+    expected_fields = {"error_code", "user_message", "recovery_action", "retryable", "field"}
+    if code == "PARSER_INCOMPATIBLE":
+        expected_fields.add("input_quality")
+        assert body["input_quality"]["aggregate"]["recognition_status"] == "none"
+    assert set(body) == expected_fields
 
 
 @pytest.mark.parametrize("body,code", [

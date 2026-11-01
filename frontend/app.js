@@ -184,7 +184,15 @@
     "independent_observations", "interpretation_notices", "capabilities",
     "bounded_warnings", "report_export"
   ];
-  const LOCAL_TOP_LEVEL = TOP_LEVEL.map((field) => field === "sample_context" ? "local_context" : field);
+  const LOCAL_TOP_LEVEL = [
+    ...TOP_LEVEL.map((field) => field === "sample_context" ? "local_context" : field),
+    "input_quality"
+  ];
+  const INPUT_QUALITY_SOURCES_36_12A = Object.freeze(["application", "ssh", "access"]);
+  const INPUT_QUALITY_REASONS_36_12A = Object.freeze([
+    "unsupported_format", "invalid_timestamp", "invalid_address", "invalid_port",
+    "invalid_header", "incomplete_record", "blank_line", "ignored_record", "other_rejected"
+  ]);
   const FILE_FIELDS = Object.freeze([
     ["application_file", "application-file", "application-error"],
     ["ssh_file", "ssh-file", "ssh-error"],
@@ -647,6 +655,53 @@
     return value;
   }
 
+  function validateInputQualitySummary36_12A(value, expectedSource) {
+    closedRecord(value, ["schema_version", "source", "total_lines", "nonempty_lines",
+      "recognized_lines", "unrecognized_lines", "ignored_lines", "recognition_status",
+      "reason_counts", "limitations"]);
+    if (value.schema_version !== "1" || value.source !== expectedSource ||
+        !["complete", "partial", "none", "empty"].includes(value.recognition_status)) failContract();
+    ["total_lines", "nonempty_lines", "recognized_lines", "unrecognized_lines", "ignored_lines"]
+      .forEach((key) => count(value[key]));
+    if (value.nonempty_lines > value.total_lines ||
+        value.recognized_lines + value.unrecognized_lines + value.ignored_lines !== value.total_lines) failContract();
+    const expectedStatus = value.nonempty_lines === 0 ? "empty" :
+      value.recognized_lines === value.nonempty_lines ? "complete" :
+        value.recognized_lines > 0 ? "partial" : "none";
+    if (value.recognition_status !== expectedStatus) failContract();
+    closedRecord(value.reason_counts, INPUT_QUALITY_REASONS_36_12A);
+    INPUT_QUALITY_REASONS_36_12A.forEach((key) => count(value.reason_counts[key]));
+    if (value.reason_counts.blank_line !== value.total_lines - value.nonempty_lines ||
+        INPUT_QUALITY_REASONS_36_12A.reduce((sum, key) => sum + value.reason_counts[key], 0) !==
+          value.unrecognized_lines + value.ignored_lines) failContract();
+    const limitations = items(value.limitations, 2);
+    if (limitations.length !== 2 || limitations[0] !== "INPUT_RECORD_RECOGNITION_ONLY" ||
+        limitations[1] !== "NOT_COLLECTION_COMPLETENESS_OR_DETECTION_ACCURACY") failContract();
+    return value;
+  }
+
+  function validateInputQuality36_12A(value) {
+    closedRecord(value, ["schema_version", "by_source", "aggregate"]);
+    if (value.schema_version !== "1") failContract();
+    const rows = items(value.by_source, 3);
+    let previous = -1;
+    rows.forEach((row) => {
+      const index = INPUT_QUALITY_SOURCES_36_12A.indexOf(row.source);
+      if (index <= previous) failContract();
+      previous = index;
+      validateInputQualitySummary36_12A(row, row.source);
+    });
+    validateInputQualitySummary36_12A(value.aggregate, "aggregate");
+    ["total_lines", "nonempty_lines", "recognized_lines", "unrecognized_lines", "ignored_lines"]
+      .forEach((key) => {
+        if (value.aggregate[key] !== rows.reduce((sum, row) => sum + row[key], 0)) failContract();
+      });
+    INPUT_QUALITY_REASONS_36_12A.forEach((key) => {
+      if (value.aggregate.reason_counts[key] !== rows.reduce((sum, row) => sum + row.reason_counts[key], 0)) failContract();
+    });
+    return value;
+  }
+
   function items(value, maximum = MAX_ITEMS) {
     if (!Array.isArray(value) || value.length > maximum) failContract();
     return value;
@@ -867,7 +922,11 @@
   }
 
   function validateTextApiError36_8C(value, status) {
-    closedRecord(value, ["error_code", "user_message", "recovery_action", "retryable", "field"]);
+    if (value === null || typeof value !== "object" || Array.isArray(value)) failContract();
+    const names = ["error_code", "user_message", "recovery_action", "retryable", "field"];
+    if (Object.hasOwn(value, "input_quality")) names.push("input_quality");
+    closedRecord(value, names);
+    if (Object.hasOwn(value, "input_quality")) validateInputQuality36_12A(value.input_quality);
     const expected = TEXT_API_ERRORS_36_8C[value.error_code];
     if (!expected || status !== expected[0] || value.user_message !== expected[1] ||
         value.recovery_action !== expected[2] || value.retryable !== expected[3] ||
@@ -879,6 +938,7 @@
   function validateInvestigationResponse(value, mode = "sample") {
     closedRecord(value, mode === "sample" ? TOP_LEVEL : LOCAL_TOP_LEVEL);
     if (value.schema_version !== "2") failContract();
+    if (mode === "local") validateInputQuality36_12A(value.input_quality);
     if (mode === "sample") {
       closedRecord(value.sample_context, ["label", "environment_notice", "certificate_notice"]);
       if (value.sample_context.label !== "합성 샘플 결과" ||
@@ -1089,9 +1149,13 @@
   }
 
   function validateApiError(value, mode = "sample") {
-    closedRecord(value, mode === "sample" ?
+    if (value === null || typeof value !== "object" || Array.isArray(value)) failContract();
+    const names = mode === "sample" ?
       ["error_code", "user_message", "recovery_action", "retryable"] :
-      ["error_code", "user_message", "recovery_action", "retryable", "field"]);
+      ["error_code", "user_message", "recovery_action", "retryable", "field"];
+    if (mode === "local" && Object.hasOwn(value, "input_quality")) names.push("input_quality");
+    closedRecord(value, names);
+    if (mode === "local" && Object.hasOwn(value, "input_quality")) validateInputQuality36_12A(value.input_quality);
     if (typeof value.retryable !== "boolean") failContract();
     if (mode === "sample" && !Object.hasOwn(SAMPLE_ERRORS, value.error_code)) failContract();
     if (mode === "local" && !Object.hasOwn(LOCAL_ERRORS, value.error_code)) failContract();

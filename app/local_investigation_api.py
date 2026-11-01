@@ -3,7 +3,6 @@
 import asyncio
 import codecs
 from collections import deque
-from datetime import datetime
 import json
 import multiprocessing
 import os
@@ -35,8 +34,10 @@ from app.models.local_text_investigation import (
     LocalTextInvestigationResponse,
 )
 from app.investigation_role_snapshot_36_4 import AnalysisWithSourceRoleSnapshot
-from app.parser.access_log import parse_access_log
-from app.parser.ssh_auth import parse_ssh_auth_log
+from app.input_quality_36_12a import (
+    InputQualityAccumulator, InputQualityProjection, InputQualitySummary,
+    aggregate_input_quality,
+)
 from app.local_request_security import classify_local_request
 from app.sample_investigation_api import (
     _EMPTY_WARNINGS, _case, _independent, _report_export,
@@ -127,19 +128,26 @@ _TEXT_ERRORS = {
 
 
 class _UploadError(ValueError):
-    def __init__(self, code: str, field: str | None = None):
+    def __init__(self, code: str, field: str | None = None,
+                 input_quality: InputQualityProjection | None = None):
         super().__init__("Local upload contract failed.")
         self.code = code
         self.field = field if field in _FIELDS else None
+        self.input_quality = input_quality
 
 
-def _error(code: str, field: str | None = None) -> JSONResponse:
+def _error(code: str, field: str | None = None,
+           input_quality: InputQualityProjection | None = None) -> JSONResponse:
     status, message, action, retryable = _ERRORS[code]
     response = LocalInvestigationErrorResponse(
         error_code=code, user_message=message, recovery_action=action,
         retryable=retryable, field=field if field in _FIELDS else None,
+        input_quality=input_quality,
     )
-    return JSONResponse(status_code=status, content=response.model_dump())
+    content = response.model_dump()
+    if input_quality is None:
+        content.pop("input_quality", None)
+    return JSONResponse(status_code=status, content=content)
 
 
 class _LocalLimit:
@@ -218,36 +226,32 @@ def _archive(prefix: bytes) -> bool:
 
 
 def _compatible(source: str, line: str) -> bool:
+    from app.input_quality_36_12a import assess_record
     if not line.strip():
         return True
-    try:
-        if source == "application":
-            parts = line.split()
-            if len(parts) < 4:
-                return False
-            datetime.strptime(" ".join(parts[:2]), "%Y-%m-%d %H:%M:%S")
-            return True
-        if source == "ssh":
-            event = parse_ssh_auth_log(line, "Asia/Seoul")
-            return event is not None and event.authentication is not None
-        return parse_access_log(line) is not None
-    except (ValueError, IndexError, TypeError, OverflowError):
-        return False
+    _outcome, _reason, compatible = assess_record(source, line)
+    return compatible
 
 
 class _TextInputError(ValueError):
-    def __init__(self, code: str):
+    def __init__(self, code: str,
+                 input_quality: InputQualityProjection | None = None):
         super().__init__("Local text input contract failed.")
         self.code = code if code in _TEXT_ERRORS else "INVALID_SCHEMA"
+        self.input_quality = input_quality
 
 
-def _text_error(code: str) -> JSONResponse:
+def _text_error(code: str,
+                input_quality: InputQualityProjection | None = None) -> JSONResponse:
     status, message, action, retryable, field = _TEXT_ERRORS[code]
     response = LocalTextInvestigationErrorResponse(
         error_code=code, user_message=message, recovery_action=action,
-        retryable=retryable, field=field,
+        retryable=retryable, field=field, input_quality=input_quality,
     )
-    return JSONResponse(status_code=status, content=response.model_dump())
+    content = response.model_dump()
+    if input_quality is None:
+        content.pop("input_quality", None)
+    return JSONResponse(status_code=status, content=content)
 
 
 def _reject_duplicate_json_pairs(pairs):
@@ -295,7 +299,9 @@ def _parse_text_request(raw: bytes) -> LocalTextInvestigationRequest:
     return request
 
 
-def _validate_text(source: str, text: str) -> bytes:
+def _validate_text_and_quality(
+    source: str, text: str,
+) -> tuple[bytes, InputQualityProjection]:
     if type(source) is not str or source not in _SOURCES or type(text) is not str:
         raise _TextInputError("INVALID_SCHEMA")
     try:
@@ -318,12 +324,20 @@ def _validate_text(source: str, text: str) -> bytes:
         lines.pop()
     if len(lines) > _MAX_LINES_PER_FILE:
         raise _TextInputError("LINE_COUNT_EXCEEDED")
+    quality = InputQualityAccumulator(source)
+    compatible = True
     for line in lines:
         if len(line.encode("utf-8")) > _MAX_LINE_BYTES:
             raise _TextInputError("LINE_TOO_LONG")
-        if not _compatible(source, line.removesuffix("\r")):
-            raise _TextInputError("PARSER_INCOMPATIBLE")
-    return raw
+        compatible = quality.observe(line.removesuffix("\r")) and compatible
+    projection = aggregate_input_quality({source: quality.summary()})
+    if not compatible:
+        raise _TextInputError("PARSER_INCOMPATIBLE", projection)
+    return raw, projection
+
+
+def _validate_text(source: str, text: str) -> bytes:
+    return _validate_text_and_quality(source, text)[0]
 
 
 async def _bounded_json_body(request: Request) -> bytes:
@@ -384,6 +398,7 @@ def _render_text_local_report(projection):
 
 async def _stage_file(
     upload: UploadFile, *, source: str, field: str, path: Path, total: int,
+    quality: InputQualityAccumulator | None = None,
 ) -> int:
     if not hasattr(os, "O_NOFOLLOW"):
         raise _UploadError("ANALYSIS_FAILED") from None
@@ -399,6 +414,8 @@ async def _stage_file(
     non_whitespace = False
     last_byte = None
     cr_pending = False
+    owns_quality = quality is None
+    quality = quality if quality is not None else InputQualityAccumulator(source)
     with os.fdopen(descriptor, "wb") as staged:
         while True:
             chunk = await upload.read(_CHUNK_BYTES)
@@ -441,8 +458,7 @@ async def _stage_file(
             completed = text_pending.split("\n")
             text_pending = completed.pop()
             for line in completed:
-                if not _compatible(source, line.rstrip("\r")):
-                    raise _UploadError("PARSER_INCOMPATIBLE", field) from None
+                quality.observe(line.rstrip("\r"))
             last_byte = chunk[-1]
             staged.write(chunk)
         try:
@@ -455,29 +471,44 @@ async def _stage_file(
             line_count += 1
             if line_count > _MAX_LINES_PER_FILE:
                 raise _UploadError("LINE_COUNT_EXCEEDED", field) from None
-            if not _compatible(source, text_pending.rstrip("\r")):
-                raise _UploadError("PARSER_INCOMPATIBLE", field) from None
+            quality.observe(text_pending.rstrip("\r"))
         if not non_whitespace:
             raise _UploadError("EMPTY_INPUT", field) from None
     if stat.S_IMODE(path.stat().st_mode) != 0o600:
         raise _UploadError("ANALYSIS_FAILED") from None
+    if owns_quality and not quality.parser_compatible:
+        raise _UploadError("PARSER_INCOMPATIBLE", field) from None
     return total
 
 
 async def _stage(form, directory: Path):
     total = 0
     sources = []
+    quality_by_source = {}
+    rejected_field = None
     for index, (field, source) in enumerate(zip(_FIELDS, _SOURCES), 1):
         upload = form[field]
         path = directory / f"input-{index}.log"
-        total = await _stage_file(upload, source=source, field=field, path=path, total=total)
+        source_quality = InputQualityAccumulator(source)
+        total = await _stage_file(
+            upload, source=source, field=field, path=path, total=total,
+            quality=source_quality,
+        )
+        summary = source_quality.summary()
+        quality_by_source[source] = summary
+        if not source_quality.parser_compatible and rejected_field is None:
+            rejected_field = field
         sources.append({"source": source, "path": str(path)})
-    return sources
+    quality = aggregate_input_quality(quality_by_source)
+    if rejected_field is not None:
+        raise _UploadError("PARSER_INCOMPATIBLE", rejected_field, quality) from None
+    return sources, quality
 
 
 def _local_response(
     analysis: dict, projection: InvestigationCaseProjection,
     report_export: ReportExport,
+    input_quality: InputQualityProjection,
 ) -> LocalInvestigationResponse:
     if (
         (type(analysis) is not dict and not is_owned_analysis_result(analysis))
@@ -537,6 +568,7 @@ def _local_response(
         ),
         bounded_warnings=_EMPTY_WARNINGS if summary.case_count == 0 else (),
         report_export=report_export,
+        input_quality=input_quality,
     )
 
 
@@ -547,7 +579,8 @@ def _render_local_report(projection):
 
 
 def _worker(connection, sources, analyze: Callable, project: Callable,
-            build_report_projection: Callable, render_report: Callable) -> None:
+            build_report_projection: Callable, render_report: Callable,
+            input_quality: InputQualityProjection | None = None) -> None:
     try:
         try:
             analysis_run = analyze(sources)
@@ -581,7 +614,7 @@ def _worker(connection, sources, analyze: Callable, project: Callable,
             connection.send(("error", "REPORT_GENERATION_FAILED"))
             return
         try:
-            response = _local_response(analysis, projection, report_export)
+            response = _local_response(analysis, projection, report_export, input_quality)
             serialized = response.model_dump_json().encode("utf-8")
             if len(serialized) > _MAX_RESPONSE_BYTES:
                 connection.send(("error", "RESPONSE_INVALID"))
@@ -619,12 +652,16 @@ def _stop_process(process) -> None:
         process.join(timeout=1.0)
 
 
-async def _run_worker(sources, analyze, project, build_report_projection, render_report):
+async def _run_worker(
+    sources, analyze, project, build_report_projection, render_report,
+    input_quality: InputQualityProjection | None = None,
+):
     context = multiprocessing.get_context("spawn")
     receiving, sending = context.Pipe(duplex=False)
     process = context.Process(
         target=_worker,
-        args=(sending, sources, analyze, project, build_report_projection, render_report),
+        args=(sending, sources, analyze, project, build_report_projection,
+              render_report, input_quality),
     )
     try:
         process.start()
@@ -692,10 +729,10 @@ def create_local_endpoint(
                         return _error("ANALYSIS_FAILED")
                     async with asyncio.timeout(_UPLOAD_TIMEOUT_SECONDS):
                         form = await _form(request)
-                        sources = await _stage(form, directory)
+                        sources, input_quality = await _stage(form, directory)
                     worker_result = await _run_worker(
                         sources, analyze, project,
-                        build_report_projection, render_report,
+                        build_report_projection, render_report, input_quality,
                     )
                     if (checklist_registry is not None and type(worker_result) is tuple
                             and len(worker_result) == 2
@@ -709,7 +746,7 @@ def create_local_endpoint(
                         return worker_result[0]
                     return worker_result
             except _UploadError as error:
-                return _error(error.code, error.field)
+                return _error(error.code, error.field, error.input_quality)
             except TimeoutError:
                 return _error("UPLOAD_TIMEOUT")
             except (OSError, ValueError):
@@ -756,11 +793,13 @@ def create_local_text_endpoint(
                 async with asyncio.timeout(_UPLOAD_TIMEOUT_SECONDS):
                     raw_body = await _bounded_json_body(request)
                 text_request = _parse_text_request(raw_body)
-                raw_text = _validate_text(text_request.source, text_request.log_text)
+                raw_text, input_quality = _validate_text_and_quality(
+                    text_request.source, text_request.log_text,
+                )
             except TimeoutError:
                 return _text_error("BODY_TIMEOUT")
             except _TextInputError as error:
-                return _text_error(error.code)
+                return _text_error(error.code, error.input_quality)
 
             with tempfile.TemporaryDirectory(prefix="investigation-local-text-") as name:
                 directory = Path(name)
@@ -769,11 +808,11 @@ def create_local_text_endpoint(
                 try:
                     path = _stage_text(raw_text, directory)
                 except _TextInputError as error:
-                    return _text_error(error.code)
+                    return _text_error(error.code, error.input_quality)
                 sources = [{"source": text_request.source, "path": str(path)}]
                 worker_result = await _run_worker(
                     sources, analyze, project, build_report_projection,
-                    _render_text_local_report,
+                    _render_text_local_report, input_quality,
                 )
                 if isinstance(worker_result, JSONResponse):
                     try:
@@ -783,7 +822,7 @@ def create_local_text_endpoint(
                         error_code = None
                     if error_code not in _TEXT_ERRORS:
                         error_code = "ANALYSIS_FAILED"
-                    return _text_error(error_code)
+                    return _text_error(error_code, input_quality)
                 if (
                     type(worker_result) is not tuple
                     or len(worker_result) != 2

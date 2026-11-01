@@ -50,6 +50,15 @@ def test_local_sample_fixture_is_analyzed_without_sample_label():
     assert body["schema_version"] == "2"
     assert body["case_summary"]["case_count"] == 2
     assert body["case_summary"]["independent_observation_count"] == 4
+    quality = body["input_quality"]
+    assert [item["source"] for item in quality["by_source"]] == [
+        "application", "ssh", "access",
+    ]
+    assert quality["aggregate"]["total_lines"] == sum(
+        item["total_lines"] for item in quality["by_source"]
+    )
+    for item in (*quality["by_source"], quality["aggregate"]):
+        assert item["recognized_lines"] + item["unrecognized_lines"] + item["ignored_lines"] == item["total_lines"]
     assert "합성 샘플" not in response.text
     assert body["report_export"]["byte_count"] == len(body["report_export"]["html"].encode("utf-8"))
     assert body["report_export"]["html"].startswith("<!doctype html>\n<html lang=\"ko\">")
@@ -61,7 +70,7 @@ def test_local_sample_fixture_is_analyzed_without_sample_label():
     assert set(body) == {
         "schema_version", "local_context", "analysis_summary", "case_summary", "cases",
         "independent_observations", "interpretation_notices", "capabilities",
-        "bounded_warnings", "report_export",
+        "bounded_warnings", "report_export", "input_quality",
     }
 
 
@@ -324,7 +333,16 @@ def test_worker_calls_existing_analysis_and_projection_once():
     def tracked_render(value):
         calls.append("renderer")
         return local._render_local_report(value)
-    local._worker(pipe, sources, tracked_analyze, tracked_project, tracked_report, tracked_render)
+    from app.input_quality_36_12a import aggregate_input_quality, evaluate_source_text
+    quality = aggregate_input_quality({
+        "application": evaluate_source_text(
+            "application", "2026-11-01 10:30:12 INFO login_failed user=test",
+        ),
+    })
+    local._worker(
+        pipe, sources, tracked_analyze, tracked_project, tracked_report,
+        tracked_render, quality,
+    )
     assert calls == ["analyze", "case", "report_projection", "renderer"]
     assert pipe.value[0] == "ok"
 
@@ -419,7 +437,12 @@ def test_cancellation_cleans_staging_and_closes_form(monkeypatch):
         return form
     async def fake_stage(_form, directory):
         (directory / "input-1.log").write_bytes(b"synthetic")
-        return []
+        from app.input_quality_36_12a import aggregate_input_quality, evaluate_source_text
+        return [], aggregate_input_quality({
+            "application": evaluate_source_text(
+                "application", "2026-11-01 10:30:12 INFO login_failed user=synthetic ip=192.0.2.1",
+            ),
+        })
     entered = asyncio.Event()
     async def fake_worker(*_args):
         entered.set()

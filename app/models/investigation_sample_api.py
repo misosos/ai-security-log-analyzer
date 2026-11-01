@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.input_quality_36_12a import InputQualityProjection
+
 
 class _ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -166,6 +168,7 @@ class LocalInvestigationResponse(_ClosedModel):
     capabilities: LocalCapabilities
     bounded_warnings: tuple[str, ...]
     report_export: ReportExport
+    input_quality: InputQualityProjection
 
 
 class LocalInvestigationErrorResponse(_ClosedModel):
@@ -183,6 +186,7 @@ class LocalInvestigationErrorResponse(_ClosedModel):
     recovery_action: str
     retryable: bool
     field: Literal["application_file", "ssh_file", "access_file"] | None
+    input_quality: InputQualityProjection | None = None
 
 
 class InvestigationErrorResponse(_ClosedModel):

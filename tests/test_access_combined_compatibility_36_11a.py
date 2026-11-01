@@ -172,7 +172,7 @@ def test_text_and_file_apis_accept_combined_and_keep_public_schema_closed():
     assert set(result) == {
         "schema_version", "local_context", "analysis_summary", "case_summary", "cases",
         "independent_observations", "interpretation_notices", "capabilities",
-        "bounded_warnings", "report_export",
+        "bounded_warnings", "report_export", "input_quality",
     }
     private_values = ["referrer.example/PRIVACY-REFERER-CANARY", "SyntheticBrowser",
                       "PRIVACY-UA-CANARY", "UNION SELECT <script>"]

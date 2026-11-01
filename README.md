@@ -99,7 +99,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm run test:a11y
 ```
 
-평가는 작은 **합성 시나리오**와 고정된 기대 결과의 일치도를 측정하며 실제 운영환경 탐지율이 아닙니다. axe/Chromium 통과도 실제 Safari, keyboard-only, VoiceOver 또는 WCAG 준수의 증명이 아닙니다. 접근성 테스트에는 [고정 Chromium 설치 절차](docs/ui_accessibility_axe_pilot_28_1.md)가 추가로 필요합니다. [평가 방법](docs/detection_evaluation.md)을 함께 확인하십시오.
+평가는 작은 **합성 시나리오**와 고정 기대 결과의 일치도를 측정하며 실제 운영환경 탐지율이 아닙니다. axe/Chromium 통과도 Safari, keyboard-only, VoiceOver 또는 WCAG 준수의 증명이 아닙니다. [평가 방법](docs/detection_evaluation.md)을 확인하십시오.
 
 ## 문서
 
@@ -113,7 +113,7 @@ npm run test:a11y
 | 근거 도움말 | 조사 사례 상세의 선택형 lexical citation 도움말; [계약과 검증](docs/local_investigation_guidance_33_4.md) |
 | 접근성·수용 검증 | [axe](docs/ui_accessibility_axe_pilot_28_1.md), [v0.3 Safari](docs/v030_safari_acceptance_27_1.md), [36.6A 설계](docs/investigation_workspace_production_migration_design_36_6a.md), [36.6B shell](docs/investigation_workspace_projection_navigation_36_6b.md), [36.6C dashboard](docs/investigation_workspace_dashboard_overview_36_6c.md), [36.6D Timeline](docs/investigation_workspace_timeline_relation_36_6d.md), [36.6E 작업·근거](docs/investigation_workspace_tasks_evidence_36_6e.md) — 기존 UI 미대체·rollback 유지; Safari·실기기 NOT_TESTED, 실제 자료·운영 NO_GO |
 | 릴리스 | [v0.4.0 노트](docs/releases/v0.4.0.md), [v0.3.0 노트](docs/releases/v0.3.0.md), [변경 이력](CHANGELOG.md) |
-| 개발·보안 검증 기록 | [전체 문서 지도](docs/index.md) |
+| 개발·보안 검증 기록 | [Phase 36.12A 입력 품질 요약](docs/input_quality_summary_backend_core_36_12a.md), [전체 문서 지도](docs/index.md) |
 
 ## 라이선스와 보안 신고
 
