@@ -19,15 +19,31 @@ _FORBIDDEN = (
     "host-canary-5c", "raw-line-canary-5c", "credential-canary-5c",
     "rationale-canary-5c", "exception-canary-5c", "path-canary-5c",
 )
+SSH_SMOKE_LINE = (
+    "2026-09-14 11:00:01 sshd Failed password for account-canary-5c "
+    "from 2001:db8::55 port 22 ssh2: host-canary-5c raw-line-canary-5c "
+    "credential-canary-5c rationale-canary-5c exception-canary-5c"
+)
+_CURRENT_STAGE = "startup"
+_CATEGORIES = {
+    "assertion", "cleanup", "filesystem", "platform", "privacy", "process",
+    "resource", "schema", "unexpected_exception",
+}
 
 
 class _SmokeFailure(Exception):
-    pass
+    def __init__(self, category):
+        self.category = category
 
 
-def _require(condition):
+def _set_stage(stage):
+    global _CURRENT_STAGE
+    _CURRENT_STAGE = stage
+
+
+def _require(condition, category="assertion"):
     if not condition:
-        raise _SmokeFailure()
+        raise _SmokeFailure(category if category in _CATEGORIES else "assertion")
 
 
 def _mode(path):
@@ -43,7 +59,7 @@ def _filesystem_type(path):
         if target == mount or target.startswith(mount.rstrip("/") + "/"):
             if best is None or len(mount) > len(best[0]):
                 best = (mount, fields[fields.index("-") + 1])
-    _require(best is not None)
+    _require(best is not None, "filesystem")
     return best[1]
 
 
@@ -66,7 +82,7 @@ def _run(command, env, answer=APPROVAL):
         text=True, capture_output=True, check=False, env=env, timeout=10,
         preexec_fn=lambda: os.umask(0),
     )
-    _require(result.returncode == 0)
+    _require(result.returncode == 0, "process")
     return result
 
 
@@ -77,9 +93,9 @@ def _no_private_output(result, root, source, output):
 
 def _check_no_private_output(visible, root, source, output):
     canaries = (*_FORBIDDEN, "account-canary-5c", "192.0.2.55", "2001:db8::55")
-    _require(str(root) not in visible and str(source) not in visible and str(output) not in visible)
-    _require(source.name not in visible and output.name not in visible)
-    _require(all(value not in visible for value in canaries))
+    _require(str(root) not in visible and str(source) not in visible and str(output) not in visible, "privacy")
+    _require(source.name not in visible and output.name not in visible, "privacy")
+    _require(all(value not in visible for value in canaries), "privacy")
 
 
 def _role_case(root, role, line, expected):
@@ -95,15 +111,18 @@ def _role_case(root, role, line, expected):
                "--input", str(source), "--output", str(output)]
 
     # Cancellation and EOF create neither a report nor an audit record.
+    _set_stage(f"{role}_cancel")
     cancelled = subprocess.run(command, input="취소\n", text=True, capture_output=True,
                                check=False, env=env, timeout=10)
     _require(cancelled.returncode != 0 and not output.exists() and not (case_dir / AUDIT).exists())
     _check_no_private_output(cancelled.stdout + cancelled.stderr, root, source, output)
+    _set_stage(f"{role}_eof")
     eof = subprocess.run(command, input="", text=True, capture_output=True,
                          check=False, env=env, timeout=10)
     _require(eof.returncode != 0 and not output.exists() and not (case_dir / AUDIT).exists())
     _check_no_private_output(eof.stdout + eof.stderr, root, source, output)
 
+    _set_stage(f"{role}_signals")
     for requested_signal in (signal.SIGINT, signal.SIGTERM):
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True, env=env)
@@ -115,9 +134,12 @@ def _role_case(root, role, line, expected):
         _require(not (case_dir / AUDIT).exists())
         _require(not list(case_dir.glob(".restricted-*.tmp")))
 
+    _set_stage(f"{role}_approved_export")
     result = _run(command, env)
     audit_path = case_dir / AUDIT
+    _set_stage(f"{role}_permissions")
     _require(_mode(case_dir) == 0o700 and _mode(output) == 0o600 and _mode(audit_path) == 0o600)
+    _set_stage(f"{role}_report_schema")
     report_raw = output.read_bytes()
     report = json.loads(report_raw)
     _require(set(report) == {
@@ -132,8 +154,9 @@ def _role_case(root, role, line, expected):
     serialized = report_raw.decode("utf-8")
     for value in (*_FORBIDDEN, "host-canary-5c", str(root), str(source), source.name,
                   str(output), output.name):
-        _require(value not in serialized)
+        _require(value not in serialized, "privacy")
 
+    _set_stage(f"{role}_audit_contract")
     audit_raw = audit_path.read_bytes()
     audit = [json.loads(row) for row in audit_raw.splitlines()]
     _require(len(audit) == 1 and audit[0]["status"] == "success")
@@ -144,20 +167,23 @@ def _role_case(root, role, line, expected):
     })
     for value in (*_FORBIDDEN, "account-canary-5c", "192.0.2.55", "2001:db8::55",
                   str(root), str(source), source.name, output.name):
-        _require(value not in audit_raw.decode("utf-8"))
+        _require(value not in audit_raw.decode("utf-8"), "privacy")
     _no_private_output(result, root, source, output)
+    _set_stage(f"{role}_cli_output")
     for marker in ("schema restricted-investigation-report/v1", " bytes, SHA-256 "):
         _require(marker in result.stdout)
 
     # Existing destination is rejected before approval and does not mutate audit.
     audit_before = audit_path.read_bytes()
     report_before = output.read_bytes()
+    _set_stage(f"{role}_no_clobber")
     retry = subprocess.run(command, input=APPROVAL + "\n", text=True, capture_output=True,
                            check=False, env=env, timeout=10)
     _require(retry.returncode != 0 and output.read_bytes() == report_before)
     _require(audit_path.read_bytes() == audit_before)
     _require(all(value not in retry.stdout + retry.stderr for value in (*_FORBIDDEN, str(root), str(output))))
 
+    _set_stage(f"{role}_second_export")
     second_output = case_dir / "second.json"
     second = _run([*command[:-1], str(second_output)], env)
     second_report = json.loads(second_output.read_text(encoding="utf-8"))
@@ -165,26 +191,34 @@ def _role_case(root, role, line, expected):
     _require(second_report["report_id"] != report["report_id"] and len(audit_after) == 2)
     _require(audit_after[-1]["report_id"] == second_report["report_id"])
     _no_private_output(second, root, source, second_output)
-    _require(not list(case_dir.glob(".restricted-*.tmp")))
+    _set_stage(f"{role}_temporary_cleanup")
+    _require(not list(case_dir.glob(".restricted-*.tmp")), "cleanup")
     return len(audit_after)
 
 
 def main():
-    _require(sys.platform == "linux")
-    temp_base = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()))
-    root = Path(tempfile.mkdtemp(prefix="restricted-report-33-5c-", dir=temp_base))
-    root.chmod(0o700)
-    fs_type = _filesystem_type(root)
-    _require(fs_type in {"ext4", "xfs", "btrfs", "tmpfs", "overlay"})
-    baseline_fds = len(os.listdir("/proc/self/fd"))
+    _set_stage("linux_platform")
+    if sys.platform != "linux":
+        print("RESTRICTED_REPORT_LINUX_SMOKE_FAIL stage=linux_platform category=platform")
+        raise SystemExit(1)
+    root = None
     try:
+        _set_stage("temporary_directory")
+        temp_base = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()))
+        root = Path(tempfile.mkdtemp(prefix="restricted-report-33-5c-", dir=temp_base))
+        root.chmod(0o700)
+        _set_stage("filesystem_probe")
+        fs_type = _filesystem_type(root)
+        _require(fs_type in {"ext4", "xfs", "btrfs", "tmpfs", "overlay"}, "filesystem")
+        _set_stage("descriptor_baseline")
+        baseline_fds = len(os.listdir("/proc/self/fd"))
         roles = {
             "application": (
                 "2026-09-11 10:00:01 INFO login_failed user=account-canary-5c ip=192.0.2.55 hostname=host-canary-5c file=path-canary-5c raw-line-canary-5c credential=credential-canary-5c rationale-canary-5c exception-canary-5c",
                 [("account", "account-canary-5c"), ("ipv4", "192.0.2.55")],
             ),
             "ssh": (
-                "2026-09-14 11:00:01 sshd Failed password for account-canary-5c from 2001:db8::55 port 22 ssh2 host-canary-5c raw-line-canary-5c credential-canary-5c rationale-canary-5c exception-canary-5c",
+                SSH_SMOKE_LINE,
                 [("account", "account-canary-5c"), ("ipv6", "2001:db8::55")],
             ),
             "access": (
@@ -194,18 +228,23 @@ def main():
         }
         audit_rows = 0
         for role, (line, expected) in roles.items():
+            _set_stage(f"{role}_case_setup")
             audit_rows += _role_case(root, role, line, expected)
+        _set_stage("descriptor_cleanup")
         _require(len(os.listdir("/proc/self/fd")) == baseline_fds)
-    except BaseException:
-        shutil.rmtree(root, ignore_errors=True)
-        print("RESTRICTED_REPORT_LINUX_SMOKE_FAIL")
+    except BaseException as exc:
+        if root is not None:
+            shutil.rmtree(root, ignore_errors=True)
+        category = exc.category if isinstance(exc, _SmokeFailure) else "unexpected_exception"
+        print(f"RESTRICTED_REPORT_LINUX_SMOKE_FAIL stage={_CURRENT_STAGE} category={category}")
         raise SystemExit(1) from None
+    _set_stage("root_cleanup")
     try:
         shutil.rmtree(root)
         _require(not root.exists())
     except BaseException:
         shutil.rmtree(root, ignore_errors=True)
-        print("RESTRICTED_REPORT_LINUX_SMOKE_FAIL")
+        print(f"RESTRICTED_REPORT_LINUX_SMOKE_FAIL stage={_CURRENT_STAGE} category=cleanup")
         raise SystemExit(1) from None
     print(f"RESTRICTED_REPORT_LINUX_SMOKE_PASS roles={len(roles)} audit_rows={audit_rows} fs={fs_type}")
 

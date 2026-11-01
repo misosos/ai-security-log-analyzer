@@ -96,6 +96,7 @@
 
 ## 개발·보안 검증 기록
 
+- [2026-11-01 Restricted Report Ubuntu smoke 실패 원인 분석](restricted_report_linux_smoke_failure_20261101.md) — malformed SSH smoke fixture와 strict parser 계약 불일치로 분류; Production 불변, Linux 재검증 필요
 - [PentAGI 격리 평가 pilot 설계 gate](pentagi_evaluation_pilot_31_0.md) · [v2.2.0 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md) · [폐기형 VM 격리 기록·최종 NO-GO](disposable_vm_isolation_31_2a.md) — 무해 probe 실측과 PentAGI 실행 차단 조건
 - [두 로그 동시 모니터링 설계 gate](bounded_multi_source_monitoring_32_0.md) · [Phase 32.1A private v3 설정 계약](multi_source_private_config_32_1.md) · [Phase 32.1B 내부 runtime 검증](multi_source_runtime_32_1b.md) · [Phase 32.2 publication·API·SSE](multi_source_publication_32_2.md) · [Phase 32.3 사용자 실행·관리·production UI](multi_source_user_monitoring_32_3.md) · [Phase 32.4 독립 수용·장애 검증](multi_source_acceptance_32_4.md) · [Safari 수용 체크리스트](safari_multi_source_acceptance_32_3.md)
 - [Semgrep 설계](semgrep_security_gate_23_2.md) · [Semgrep 공급망 검토](semgrep_security_pilot_23_3.md)
