@@ -6,6 +6,7 @@
   <title>보안 로그 조사 | AI Security Log Analyzer</title>
   <link rel="stylesheet" href="/assets/style.css">
   <script src="/assets/input-quality-ui-36-12b.js" defer></script>
+  <script src="/assets/investigation-review-state-36-14d.js" defer></script>
   <script src="/assets/review-queue-ui-36-13a.js" defer></script>
   <script src="/assets/app.js" defer></script>
   <script src="/assets/linux-audit.js" defer></script>
@@ -373,6 +374,14 @@
             <h3 id="case-list-heading">검토 건</h3>
             <span id="review-queue-total-36-13a" class="review-queue-total-36-13a"></span>
           </div>
+          <p id="review-workflow-summary-36-14d" class="review-workflow-summary-36-14d" hidden>
+            <span>검토 상태 개수(현재 분석 전체):</span>
+            <span id="review-workflow-counts-36-14d"></span>
+          </p>
+          <p id="review-workflow-note-36-14d" class="review-workflow-note-36-14d" hidden>
+            검토 상태는 작업 진행 표시이며 안전·해결 판정이 아닙니다.
+          </p>
+          <p id="review-workflow-feedback-36-14d" class="review-workflow-feedback-36-14d" role="status" aria-live="polite" aria-atomic="true" hidden></p>
           <section id="review-queue-controls-36-13a" class="review-queue-controls-36-13a" aria-label="검토 건 검색과 필터" hidden>
             <div class="review-queue-toolbar-36-13a">
               <label for="review-queue-search-36-13a">검토 건 검색
@@ -414,6 +423,15 @@
                       <option value="all">전체</option><option value="review_now">먼저 확인</option>
                       <option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option>
                       <option value="undetermined">확인 순서 미정</option>
+                    </select>
+                  </span>
+                </label>
+                <label id="review-queue-state-filter-label-36-14d" for="review-queue-state-36-14d" hidden>검토 상태
+                  <span class="review-queue-select-wrap-36-13a">
+                    <select id="review-queue-state-36-14d" aria-describedby="review-workflow-note-36-14d">
+                      <option value="all">전체</option><option value="unreviewed">검토 전</option>
+                      <option value="in_review">검토 중</option><option value="reviewed">검토함</option>
+                      <option value="deferred">나중에 확인</option>
                     </select>
                   </span>
                 </label>

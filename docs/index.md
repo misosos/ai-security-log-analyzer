@@ -20,6 +20,7 @@
 - [Phase 36.14A 검토 진행 상태 설계](investigation_review_workflow_state_design_36_14a.md) — 상태 enum, 사례 결합·저장 위협 경계 설계; production 저장과 UI는 미구현
 - [Phase 36.14B 검토 상태 메모리 core](investigation_review_workflow_state_core_36_14b.md) — closed DTO와 CAS 전이; API/UI·영속 저장 미연결
 - [Phase 36.14C 검토 상태 연결 결정](investigation_review_workflow_state_integration_decision_36_14c.md) — API·영속 저장 미채택; 36.14D document-memory 연결 계약
+- [Phase 36.14D 검토 진행 상태 선택·필터 UI](investigation_review_workflow_state_ui_36_14d.md) — document-memory 상태 선택과 queue filter; 자동 상태 변경·영속 저장 없음
 
 ## Live monitoring·checkpoint
 

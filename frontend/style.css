@@ -184,6 +184,10 @@ a { color: #064f96; text-underline-offset: .2em; }
 .review-queue-heading-36-13a { display: flex; align-items: baseline; gap: .6rem; min-width: 0; }
 .review-queue-heading-36-13a h3 { margin: 0; }
 .review-queue-total-36-13a { color: var(--cyber-muted, #c2cedc); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.review-workflow-summary-36-14d, .review-workflow-note-36-14d, .review-workflow-feedback-36-14d { margin: .25rem 0; color: var(--cyber-muted, #c2cedc); font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }
+.review-workflow-summary-36-14d { display: flex; flex-wrap: wrap; gap: .25rem .55rem; }
+.review-workflow-summary-36-14d[hidden], .review-workflow-note-36-14d[hidden], .review-workflow-feedback-36-14d[hidden] { display: none; }
+.review-workflow-feedback-36-14d { min-height: 1.2em; }
 .review-queue-controls-36-13a { min-width: 0; margin-block: .45rem .7rem; }
 .review-queue-controls-36-13a[hidden] { display: none; }
 .review-queue-toolbar-36-13a { display: grid; grid-template-columns: minmax(14rem, 1fr) auto minmax(12rem, 15rem); gap: .6rem; align-items: end; }
@@ -198,7 +202,7 @@ a { color: #064f96; text-underline-offset: .2em; }
 .review-queue-filter-toggle-36-13a span { min-width: 1.3rem; font-variant-numeric: tabular-nums; }
 .review-queue-filter-panel-36-13a { max-width: 50rem; margin-top: .55rem; padding: .85rem; border: 1px solid var(--cyber-border-quiet, #526b84); border-radius: .5rem; background: var(--cyber-panel, #101d33); }
 .review-queue-filter-panel-36-13a[hidden] { display: none; }
-.review-queue-filter-fields-36-13a { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.review-queue-filter-fields-36-13a { display: grid; grid-template-columns: repeat(4, minmax(10rem, 1fr)); gap: .85rem; }
 .review-queue-filter-actions-36-13a { display: flex; justify-content: flex-end; margin-top: .65rem; }
 .review-queue-filter-actions-36-13a button { min-height: 2.75rem; padding: .4rem .85rem; }
 .review-queue-filter-chips-36-13a { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-top: .5rem; }
@@ -217,13 +221,23 @@ a { color: #064f96; text-underline-offset: .2em; }
 @media (max-width: 56.25rem) {
   .review-queue-toolbar-36-13a { grid-template-columns: minmax(0, 1fr) auto; }
   .review-queue-toolbar-36-13a > label:first-child { grid-column: 1 / -1; }
-  .review-queue-filter-fields-36-13a { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 64rem) {
+  .review-queue-filter-fields-36-13a { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 30rem) {
   .review-queue-toolbar-36-13a { grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: .5rem; }
+  .review-queue-filter-fields-36-13a { grid-template-columns: minmax(0, 1fr); }
   .review-queue-filter-toggle-36-13a { justify-self: start; }
   .review-queue-sort-label-36-13a { min-width: 0; }
   .review-queue-reset-36-13a { margin-inline-start: auto; }
+}
+.review-workflow-control-36-14d { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(12rem, 18rem); align-items: center; gap: .55rem; min-width: 0; max-width: 26rem; color: var(--cyber-muted, #c2cedc); font-size: .9rem; font-weight: 650; }
+.review-workflow-control-36-14d select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: .45rem .7rem; border: 1px solid var(--cyber-border, #526b84); border-radius: .45rem; background: var(--cyber-surface, #0b1426); color: var(--cyber-text, #e7edf5); color-scheme: dark; font: inherit; }
+.review-workflow-control-36-14d select:focus-visible { outline: 3px solid var(--cyber-cyan); outline-offset: 2px; }
+.review-detail-view .review-workflow-control-36-14d { margin: 0 clamp(1.1rem, 2.2vw, 1.75rem) 1rem; }
+@media (max-width: 48rem) {
+  .review-workflow-control-36-14d { grid-template-columns: minmax(0, 1fr); gap: .25rem; }
 }
 .workspace-dashboard-36-6c #result-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; margin-top: 0; }
 .workspace-dashboard-36-6c #case-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }

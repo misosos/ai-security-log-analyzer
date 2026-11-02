@@ -60,6 +60,7 @@ from app.models.linux_audit_investigation import (
 from app.web_ui import (
     serve_demo_index, serve_demo_script, serve_demo_styles, serve_input_quality_ui_script,
     serve_review_queue_ui_script_36_13a,
+    serve_investigation_review_state_script_36_14d,
     serve_live_monitoring_script,
     serve_multi_source_live_script,
     serve_linux_audit_script,
@@ -485,6 +486,10 @@ def create_app(
         configured_app.add_api_route(
             "/assets/review-queue-ui-36-13a.js", serve_review_queue_ui_script_36_13a, methods=["GET"],
             include_in_schema=False,
+        )
+        configured_app.add_api_route(
+            "/assets/investigation-review-state-36-14d.js", serve_investigation_review_state_script_36_14d,
+            methods=["GET"], include_in_schema=False,
         )
         configured_app.add_api_route(
             "/assets/linux-audit.js", serve_linux_audit_script, methods=["GET"],

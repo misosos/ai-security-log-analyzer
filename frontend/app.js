@@ -44,6 +44,8 @@
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
   const MAX_CASES = 64;
+  // Single rollback switch: OFF restores the Phase 36.13A1 compact queue without creating a state store.
+  const REVIEW_WORKFLOW_STATE_UI_ENABLED = true;
   const MAX_INDEPENDENT = 128;
   const MAX_EVIDENCE_VALUE = 1000000000;
   const RISK_CLASSES = Object.freeze({HIGH: "risk-high", MEDIUM: "risk-medium", LOW: "risk-low"});
@@ -224,6 +226,8 @@
   const summaryCards = document.getElementById("summary-cards");
   const caseList = document.getElementById("case-list");
   const reviewQueue = window.reviewQueueUi36_13a.create();
+  const reviewWorkflowUi = REVIEW_WORKFLOW_STATE_UI_ENABLED && window.investigationReviewState36_14d ?
+    window.investigationReviewState36_14d.createUi(reviewQueue) : null;
   const independentList = document.getElementById("independent-list");
   const caseSection = document.getElementById("case-section");
   const independentDetails = document.getElementById("independent-details");
@@ -524,6 +528,7 @@
 
   function showExpiredReviewRoute() {
     workspaceDetailGeneration += 1;
+    clearReviewWorkflowState();
     reviewQueue.clear();
     caseDetailView.hidden = true;
     resultsDashboard.hidden = true;
@@ -546,6 +551,8 @@
     const useWorkspaceShell = USE_WORKSPACE_DETAIL_SHELL_36_6B && !legacyWorkspaceDetailForTests;
     caseDetailContent.replaceChildren(useWorkspaceShell ?
       renderWorkspaceDetailShell(entry.projection, entry.timeline, entry.item, generation) : renderCaseDetail(entry.item, entry.index));
+    const workflowControl = reviewWorkflowUi?.createControl(caseRef, "detail", entry.index + 1);
+    if (workflowControl) caseDetailContent.append(workflowControl);
     caseDetailView.setAttribute("aria-labelledby", useWorkspaceShell ? "workspace-shell-heading" : "case-detail-heading");
     reviewDetailContext.textContent = currentInvestigationMode === "sample" ?
       "합성 예시 데이터입니다. 실제 조직 환경이나 사용자의 보안 상태를 나타내지 않습니다." :
@@ -1188,6 +1195,30 @@
     return node;
   }
 
+  function clearReviewWorkflowState() {
+    if (reviewWorkflowUi) reviewWorkflowUi.clear();
+  }
+
+  function installReviewWorkflowState(cases) {
+    clearReviewWorkflowState();
+    if (!REVIEW_WORKFLOW_STATE_UI_ENABLED) return;
+    if (!reviewWorkflowUi) { showReviewWorkflowUnavailable(); return; }
+    reviewWorkflowUi.begin(cases.map((item) => item.checklist_ref).filter((ref) => ref !== null));
+  }
+
+  function showReviewWorkflowUnavailable() {
+    const note = document.getElementById("review-workflow-note-36-14d");
+    const feedback = document.getElementById("review-workflow-feedback-36-14d");
+    if (note) {
+      note.hidden = false;
+      note.textContent = "검토 상태를 사용할 수 없습니다. 분석 결과는 계속 표시됩니다.";
+    }
+    if (feedback) {
+      feedback.hidden = false;
+      feedback.textContent = "검토 상태 저장소를 사용할 수 없습니다.";
+    }
+  }
+
   const ICON_NAMES = new Set(["search", "link", "folder-search", "circle-help", "shield-alert", "triangle-alert"]);
   function icon(name, className = "icon") {
     if (!ICON_NAMES.has(name)) throw new Error("Unsupported fixed icon");
@@ -1701,6 +1732,7 @@
 
   function renderCaseOverview(cases) {
     caseSection.hidden = cases.length === 0;
+    installReviewWorkflowState(cases);
     reviewQueue.begin(cases.length !== 0);
     caseByRef = new Map();
     const caseRefs = cases.map((item) => item.checklist_ref).filter((caseRef) => caseRef !== null);
@@ -1757,6 +1789,8 @@
       link.id = `review-case-link-${index}`;
       link.dataset.reviewCaseRef = projection.case_ref;
       card.append(link);
+      const workflowControl = reviewWorkflowUi?.createControl(projection.case_ref, "card", index + 1);
+      if (workflowControl) card.append(workflowControl);
       reviewQueue.add(projection, card, index, priorityBadge, roleBadge);
       caseByRef.set(projection.case_ref, {item, index, projection,
         timeline: createWorkspaceTimelineProjection(item, projection, index)});
@@ -2431,6 +2465,7 @@
 
   function clearPreviousResult() {
     workspaceDetailGeneration += 1;
+    clearReviewWorkflowState();
     reviewQueue.clear();
     currentReport = null;
     currentReportMode = null;

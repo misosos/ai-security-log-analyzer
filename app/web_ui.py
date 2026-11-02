@@ -82,6 +82,10 @@ def serve_review_queue_ui_script_36_13a() -> Response:
     return _fixed_asset("review-queue-ui-36-13a.js", "text/javascript")
 
 
+def serve_investigation_review_state_script_36_14d() -> Response:
+    return _fixed_asset("investigation-review-state-36-14d.js", "text/javascript")
+
+
 def serve_linux_audit_script() -> Response:
     return _fixed_asset("linux-audit.js", "text/javascript")
 

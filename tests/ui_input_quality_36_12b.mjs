@@ -126,6 +126,13 @@ try {
     await page.locator('#input-quality-summary-36-12b .input-quality-reasons-36-12b').evaluateAll((nodes) =>
       nodes.every((node) => node.textContent.includes('처리 사유 보기') && node.textContent.trim() !== 'Details')),
   'UI_QUALITY_ZERO_REASON_SHOULD_BE_HIDDEN');
+  const workflowControls = page.locator('#case-list .review-workflow-control-card-36-14d select');
+  ensure(await workflowControls.count() > 0, 'UI_QUALITY_WORKFLOW_CONTROL_MISSING');
+  const qualityMarkupBeforeWorkflow = await page.locator('#input-quality-summary-36-12b').evaluate((node) => node.innerHTML);
+  await workflowControls.first().selectOption('in_review');
+  ensure(await page.locator('#input-quality-summary-36-12b').evaluate((node) => node.innerHTML) === qualityMarkupBeforeWorkflow &&
+    (await page.locator('#input-quality-summary-36-12b').innerText()).includes('모두 인식'),
+  'UI_QUALITY_CHANGED_BY_REVIEW_WORKFLOW_STATE');
   console.log(`UI_QUALITY_FILE_COMPLETE status=${await page.locator('#input-quality-status-36-12b').innerText()}`);
   await page.screenshot({path: join(tmpdir(), 'input-quality-ui-36-12b-1440.png'), fullPage: true});
   const benchmarkResults = [await benchmarkQualityMarkup(page, 'file_3_source_complete', '#input-quality-summary-36-12b')];

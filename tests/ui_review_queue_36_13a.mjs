@@ -216,7 +216,7 @@ try {
   await page.keyboard.press('Enter');
   ensure(await filterToggle.getAttribute('aria-expanded') === 'true', 'QUEUE_FILTER_BUTTON_KEYBOARD_TOGGLE_FAILED');
   const tabOrder = [await page.evaluate(() => document.activeElement.id)];
-  for (let index = 0; index < 8; index++) {
+  for (let index = 0; index < 9; index++) {
     await page.keyboard.press('Tab');
     tabOrder.push(await page.evaluate(() => document.activeElement.id ||
       (document.activeElement.dataset.reviewQueueChip ? `chip-${document.activeElement.dataset.reviewQueueChip}` :
@@ -225,7 +225,7 @@ try {
   ensure(focusOutline && JSON.stringify(tabOrder) === JSON.stringify([
     'review-queue-filter-toggle-36-13a', 'review-queue-sort-36-13a',
     'review-queue-risk-36-13a', 'review-queue-role-36-13a', 'review-queue-priority-36-13a',
-    'review-queue-filter-close-36-13a', 'chip-role', 'review-queue-reset-36-13a', 'review-case-link-0'
+    'review-queue-state-36-14d', 'review-queue-filter-close-36-13a', 'chip-role', 'review-queue-reset-36-13a', 'review-case-link-0'
   ]), `QUEUE_KEYBOARD_ORDER_FAILED_${tabOrder.join('_')}`);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({width, height: 900});

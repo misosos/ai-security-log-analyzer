@@ -37,6 +37,7 @@
     const riskSelect = document.getElementById("review-queue-risk-36-13a");
     const roleSelect = document.getElementById("review-queue-role-36-13a");
     const prioritySelect = document.getElementById("review-queue-priority-36-13a");
+    const reviewStateSelect = document.getElementById("review-queue-state-36-14d");
     const sortSelect = document.getElementById("review-queue-sort-36-13a");
     const countText = document.getElementById("review-queue-count-36-13a");
     const emptyState = document.getElementById("review-queue-empty-36-13a");
@@ -45,7 +46,9 @@
     const records = [];
     let total = 0;
     let announcementTimer = 0;
+    let workflowStateProvider = () => null;
     const riskLabels = Object.freeze({HIGH: "높음", MEDIUM: "보통", LOW: "낮음"});
+    const workflowStates = new Set(["unreviewed", "in_review", "reviewed", "deferred"]);
 
     function corpus(projection, role) {
       const category = projection.category === "authentication" ? "인증 활동" : "기타 관찰";
@@ -57,6 +60,7 @@
       riskSelect.value = "all";
       roleSelect.value = "all";
       prioritySelect.value = "all";
+      if (reviewStateSelect) reviewStateSelect.value = "all";
       sortSelect.value = "default";
       emptyState.hidden = true;
       setFilterOpen(false);
@@ -68,8 +72,8 @@
       if (restoreFocus) filterToggle.focus();
     }
 
-    function renderChips(query, risk, role, priority, sort) {
-      const activeFilterCount = [risk, role, priority].filter((value) => value !== "all").length;
+    function renderChips(query, risk, role, priority, workflowState, sort) {
+      const activeFilterCount = [risk, role, priority, workflowState].filter((value) => value !== "all").length;
       filterCount.textContent = `${activeFilterCount}개`;
       filterToggle.removeAttribute("aria-label");
       chipList.replaceChildren();
@@ -93,6 +97,12 @@
         prioritySelect.value = "all";
         apply();
         (filterPanel.hidden ? filterToggle : prioritySelect).focus();
+      }});
+      const workflowLabels = {unreviewed: "검토 전", in_review: "검토 중", reviewed: "검토함", deferred: "나중에 확인"};
+      if (workflowState !== "all" && reviewStateSelect) items.push({key: "workflow-state", text: `검토 상태: ${workflowLabels[workflowState]}`, clear: () => {
+        reviewStateSelect.value = "all";
+        apply();
+        (filterPanel.hidden ? filterToggle : reviewStateSelect).focus();
       }});
       const sortLabels = {risk: "위험도 높은 순", newest: "최근 관찰 순", oldest: "오래된 관찰 순", title: "제목 순"};
       if (sort !== "default") items.push({key: "sort", text: `정렬: ${sortLabels[sort]}`, clear: () => {
@@ -135,23 +145,32 @@
       return left.index - right.index;
     }
 
-    function apply() {
+    function apply(preserveFocusControl = null) {
       if (records.length === 0) return;
+      const shouldPreserveFocus = preserveFocusControl && document.activeElement === preserveFocusControl;
       const query = normalizeSearch(searchInput.value);
       const risk = riskSelect.value;
       const role = roleSelect.value;
       const priority = prioritySelect.value;
+      const workflowState = reviewStateSelect && workflowStates.has(reviewStateSelect.value) ? reviewStateSelect.value : "all";
       const sort = SORTS.has(sortSelect.value) ? sortSelect.value : "default";
-      renderChips(query, risk, role, priority, sort);
+      renderChips(query, risk, role, priority, workflowState, sort);
       const visible = records.filter((record) =>
         (query === "" || record.searchText.includes(query)) &&
         (risk === "all" || record.risk === risk) &&
         (role === "all" || record.role === role) &&
-        (priority === "all" || record.priority === priority)
+        (priority === "all" || record.priority === priority) &&
+        (workflowState === "all" || workflowStateProvider(record.projection.case_ref) === workflowState)
       );
       visible.sort((left, right) => compare(left, right, sort));
       list.replaceChildren(...visible.map((record) => record.card));
-      const narrowed = query !== "" || risk !== "all" || role !== "all" || priority !== "all";
+      if (shouldPreserveFocus) {
+        if (list.contains(preserveFocusControl)) preserveFocusControl.focus({preventScroll: true});
+        else if (!filterPanel.hidden && reviewStateSelect) reviewStateSelect.focus({preventScroll: true});
+        else filterToggle.focus({preventScroll: true});
+      }
+      const narrowed = query !== "" || risk !== "all" || role !== "all" ||
+        priority !== "all" || workflowState !== "all";
       countText.textContent = narrowed ? `전체 ${total}건 중 ${visible.length}건` : `${total}건`;
       totalText.textContent = `${total}건`;
       window.clearTimeout(announcementTimer);
@@ -167,7 +186,7 @@
       searchInput.focus();
     }
 
-    [searchInput, riskSelect, roleSelect, prioritySelect, sortSelect].forEach((control) => {
+    [searchInput, riskSelect, roleSelect, prioritySelect, reviewStateSelect, sortSelect].filter(Boolean).forEach((control) => {
       control.addEventListener(control === searchInput ? "input" : "change", apply);
     });
     resetButton.addEventListener("click", reset);
@@ -191,7 +210,7 @@
         countAnnouncement.textContent = "";
         countText.textContent = "";
         totalText.textContent = `${total}건`;
-        renderChips("", "all", "all", "all", "default");
+        renderChips("", "all", "all", "all", "all", "default");
       },
       add(projection, card, index, priorityBadge, roleBadge) {
         records.push({projection, card, index, priorityBadge, roleBadge,
@@ -209,6 +228,17 @@
         total = records.length;
       },
       render: apply,
+      setWorkflowStateProvider(provider) {
+        if (typeof provider !== "function") return false;
+        workflowStateProvider = provider;
+        apply();
+        return true;
+      },
+      refreshWorkflowState(caseRef, preserveFocusControl = null) {
+        if (!records.some((candidate) => candidate.projection.case_ref === caseRef)) return false;
+        apply(preserveFocusControl);
+        return true;
+      },
       updateVerifiedLabels(caseRef, role, priority) {
         const record = records.find((candidate) => candidate.projection.case_ref === caseRef);
         if (!record || !Object.hasOwn(ROLE_LABELS, role) || !Object.hasOwn(PRIORITY_LABELS, priority)) return;

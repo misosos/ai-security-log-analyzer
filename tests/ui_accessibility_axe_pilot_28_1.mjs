@@ -657,7 +657,7 @@ async function main() {
               stateForPage === 'CHECKLIST_RETRY' ? 'CHECKLIST_AVAILABLE' : 'CHECKLIST_REFUSED'))});
         }
       } else if (['/', '/assets/style.css', '/assets/app.js', '/assets/input-quality-ui-36-12b.js',
-        '/assets/review-queue-ui-36-13a.js',
+        '/assets/review-queue-ui-36-13a.js', '/assets/investigation-review-state-36-14d.js',
         '/assets/linux-audit.js', '/assets/live-monitoring.js',
         '/assets/multi-source-live.js'].includes(url.pathname)) {
         await route.continue();
