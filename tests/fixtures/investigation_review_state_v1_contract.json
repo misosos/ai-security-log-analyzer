@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "synthetic_refs": {
+    "analysis_ref": "a_0123456789abcdef0123456789abcdef",
+    "case_ref": "c_0123456789abcdef01234567",
+    "next_analysis_ref": "a_abcdef0123456789abcdef0123456789",
+    "unknown_case_ref": "c_ffffffffffffffffffffffff"
+  },
+  "review_states": [
+    "unreviewed",
+    "in_review",
+    "reviewed",
+    "deferred"
+  ],
+  "allowed_transitions": [
+    ["unreviewed", "in_review"],
+    ["unreviewed", "reviewed"],
+    ["unreviewed", "deferred"],
+    ["in_review", "reviewed"],
+    ["in_review", "deferred"],
+    ["reviewed", "in_review"],
+    ["reviewed", "deferred"],
+    ["deferred", "in_review"],
+    ["deferred", "reviewed"]
+  ],
+  "same_state_transition": "reject",
+  "reset": {
+    "target_state": "unreviewed",
+    "requires_explicit_command": true
+  },
+  "revision": {
+    "initial": 0,
+    "successful_change_increment": 1,
+    "stale_expected_revision": "reject"
+  },
+  "unknown_reference_errors": {
+    "analysis": "UNKNOWN_ANALYSIS",
+    "case": "UNKNOWN_CASE"
+  },
+  "generation_isolation": "new_generation_starts_unreviewed",
+  "max_cases_per_analysis": 128,
+  "error_categories": [
+    "INVALID_INPUT",
+    "INVALID_IDENTIFIER",
+    "UNSUPPORTED_SCHEMA",
+    "UNKNOWN_ANALYSIS",
+    "UNKNOWN_CASE",
+    "INVALID_TRANSITION",
+    "STALE_REVISION",
+    "CAPACITY_EXCEEDED",
+    "STORE_CLOSED",
+    "ANALYSIS_ALREADY_ACTIVE",
+    "REVISION_LIMIT_REACHED"
+  ],
+  "state_fields": [
+    "schema_version",
+    "analysis_ref",
+    "case_ref",
+    "review_state",
+    "revision"
+  ]
+}
