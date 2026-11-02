@@ -17,6 +17,7 @@
 - [Phase 36.12C 입력 품질 UI 사용자 수용 기록](input_quality_ui_acceptance_36_12c.md) — 합성 화면 사용자 검수 10/10 PASS; 새 커밋 Ubuntu CI·Safari·실기기 미검증
 - [Phase 36.13A 검토 큐 검색·필터·정렬](investigation_review_queue_controls_36_13a.md) — 기존 메모리 projection만 탐색; 새 Ubuntu CI·사용자 수용 검수 전 local conditional
 - [Phase 36.13A1 검토 큐 컨트롤 정보 밀도 개선](investigation_review_queue_compact_controls_36_13a1.md) — 세부 필터 접힘·조건 chip 적용; 새 화면 사용자 재검수 전 `USER_ACCEPTANCE_NOT_TESTED`
+- [Phase 36.14A 검토 진행 상태 설계](investigation_review_workflow_state_design_36_14a.md) — 상태 enum, 사례 결합·저장 위협 경계 설계; production 저장과 UI는 미구현
 
 ## Live monitoring·checkpoint
 
