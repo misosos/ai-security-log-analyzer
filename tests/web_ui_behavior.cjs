@@ -5,7 +5,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-const script = fs.readFileSync("frontend/app.js", "utf8");
+const script = fs.readFileSync("frontend/app.js", "utf8").replace(
+  /^(const REVIEW_WORKFLOW_STATE_UI_ENABLED = true;)\nif \(REVIEW_WORKFLOW_STATE_UI_ENABLED\) await import\("\/assets\/investigation-review-state-36-14d\.js"\);\n/,
+  "$1\n",
+);
 const qualityUiScript = fs.readFileSync("frontend/input-quality-ui-36-12b.js", "utf8");
 const reviewQueueUiScript = fs.readFileSync("frontend/review-queue-ui-36-13a.js", "utf8");
 const supplied = JSON.parse(fs.readFileSync(0, "utf8"));

@@ -21,6 +21,7 @@
 - [Phase 36.14B 검토 상태 메모리 core](investigation_review_workflow_state_core_36_14b.md) — closed DTO와 CAS 전이; API/UI·영속 저장 미연결
 - [Phase 36.14C 검토 상태 연결 결정](investigation_review_workflow_state_integration_decision_36_14c.md) — API·영속 저장 미채택; 36.14D document-memory 연결 계약
 - [Phase 36.14D 검토 진행 상태 선택·필터 UI](investigation_review_workflow_state_ui_36_14d.md) — document-memory 상태 선택과 queue filter; 자동 상태 변경·영속 저장 없음
+- [Phase 36.14E 검토 상태 보안·접근성 E2E](investigation_review_workflow_state_security_accessibility_36_14e.md) — 합성 격리 브라우저에서 전이·수명·privacy·reflow 검사; 사용자 수용 및 새 Ubuntu CI는 별도
 
 ## Live monitoring·checkpoint
 

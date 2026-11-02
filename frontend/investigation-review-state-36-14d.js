@@ -23,13 +23,11 @@
   }
 
   function validateIdentity(identity) {
-    if (identity === null || typeof identity !== "object" || Array.isArray(identity) ||
-        Object.keys(identity).sort().join(",") !== "analysis_ref,case_ref,schema_version" ||
-        !Number.isSafeInteger(identity.schema_version) || identity.schema_version !== SCHEMA_VERSION ||
-        typeof identity.analysis_ref !== "string" || !ANALYSIS_REF.test(identity.analysis_ref) ||
-        typeof identity.case_ref !== "string" || !CASE_REF.test(identity.case_ref)) {
-      return "INVALID_IDENTIFIER";
-    }
+    if (identity === null || typeof identity !== "object" || Array.isArray(identity)) return "INVALID_INPUT";
+    if (Object.keys(identity).sort().join(",") !== "analysis_ref,case_ref,schema_version") return "INVALID_INPUT";
+    if (!Number.isSafeInteger(identity.schema_version) || identity.schema_version !== SCHEMA_VERSION) return "UNSUPPORTED_SCHEMA";
+    if (typeof identity.analysis_ref !== "string" || !ANALYSIS_REF.test(identity.analysis_ref) ||
+        typeof identity.case_ref !== "string" || !CASE_REF.test(identity.case_ref)) return "INVALID_IDENTIFIER";
     return null;
   }
 
@@ -44,11 +42,11 @@
     }
 
     function beginGeneration(caseRefs) {
-      clear();
       if (!Array.isArray(caseRefs)) return failure("INVALID_INPUT");
       if (caseRefs.length > MAX_CASES_PER_ANALYSIS) return failure("CAPACITY_EXCEEDED");
-      if (caseRefs.some((ref) => typeof ref !== "string" || !CASE_REF.test(ref)) ||
-          new Set(caseRefs).size !== caseRefs.length) return failure("INVALID_IDENTIFIER");
+      if (caseRefs.some((ref) => typeof ref !== "string" || !CASE_REF.test(ref))) return failure("INVALID_IDENTIFIER");
+      if (new Set(caseRefs).size !== caseRefs.length) return failure("INVALID_INPUT");
+      clear();
       if (!cryptoProvider || typeof cryptoProvider.getRandomValues !== "function") {
         return failure("STORE_UNAVAILABLE");
       }
@@ -261,6 +259,7 @@
       const label = document.createElement("label");
       const select = document.createElement("select");
       select.id = `review-workflow-${context}-${order}-36-14d`;
+      select.setAttribute("aria-label", `검토 건 ${order} 검토 상태`);
       select.setAttribute("aria-describedby", "review-workflow-note-36-14d review-workflow-feedback-36-14d");
       label.htmlFor = select.id;
       label.textContent = "검토 상태";

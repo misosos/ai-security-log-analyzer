@@ -67,7 +67,7 @@ def test_landing_has_semantic_static_accessible_contract():
     assert "error-retry" in ids
     assert any(attrs.get("id") == "sample-status" and attrs.get("aria-live") == "polite" for _, attrs in nodes)
     assert any(tag == "link" and attrs.get("href") == "/assets/style.css" for tag, attrs in nodes)
-    assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and "defer" in attrs for tag, attrs in nodes)
+    assert any(tag == "script" and attrs.get("src") == "/assets/app.js" and attrs.get("type") == "module" for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/input-quality-ui-36-12b.js" and "defer" in attrs for tag, attrs in nodes)
     assert any(tag == "script" and attrs.get("src") == "/assets/review-queue-ui-36-13a.js" and "defer" in attrs for tag, attrs in nodes)
     script_sources = [attrs.get("src") for tag, attrs in nodes if tag == "script"]

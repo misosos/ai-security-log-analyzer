@@ -1,4 +1,5 @@
-"use strict";
+const REVIEW_WORKFLOW_STATE_UI_ENABLED = true;
+if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review-state-36-14d.js");
 
 (() => {
   const ENDPOINT = "/api/v1/investigations/sample";
@@ -44,8 +45,7 @@
   const MAX_TEXT = 1000;
   const MAX_ITEMS = 256;
   const MAX_CASES = 64;
-  // Single rollback switch: OFF restores the Phase 36.13A1 compact queue without creating a state store.
-  const REVIEW_WORKFLOW_STATE_UI_ENABLED = true;
+  // The module-level switch also prevents loading the optional workflow asset when rolled back.
   const MAX_INDEPENDENT = 128;
   const MAX_EVIDENCE_VALUE = 1000000000;
   const RISK_CLASSES = Object.freeze({HIGH: "risk-high", MEDIUM: "risk-medium", LOW: "risk-low"});
