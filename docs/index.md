@@ -53,6 +53,7 @@
 - [ER-1C 합성 Holdout 독립 라벨 감사](counterfactual_holdout_validation_er1c.md) — 기존 ER-1A 개발 corpus와 별도 합성 holdout의 입력 사실·정책 label 감사 및 Production replay 비교; 사람의 독립 검토는 PENDING
 - [ER-0 Evidence Research Contract](evidence_research_er0.md) — Observation·Evidence·Claim·불확실성과 parser/detection/comparison 판정, 합성 반사실 평가 경계를 설계; ER-1A 구현 전용 Gate
 - [ER-1B 반사실 Detector 재실행·근거 비교](counterfactual_detector_replay_er1b.md) — ER-1A 합성 baseline/variant를 독립 Production 경로로 재실행하고 fail-closed 비교; 실환경 성능 평가는 아님
+- [ER-2A 오프라인 합성 근거 검토 보고서](counterfactual_analyst_report_er2a.md) — ER-1B/ER-1C replay 결과의 fail-closed·읽기 전용 Markdown projection; 사람 검토는 PENDING
 - [Phase 36.9B 지원 로그 형식 호환성 프로파일](supported_log_format_compatibility_36_9b.md) — 합성 fixture의 Parser 의미 검증; false acceptance 3건으로 UNSAFE_ACCEPTANCE_HOLD
 - [Phase 36.9B-R1 Parser false acceptance 복구](parser_false_acceptance_remediation_36_9b_r1.md) — 최초 RED 보존, source IP·SSH process·HTTP status 경계 수정 및 회귀 검증
 - [Phase 36.9B-R2 합성 로그 형식 호환성 종결 및 회귀 수용](log_format_compatibility_closure_36_9b_r2.md) — 21개 compatibility fixture와 R1의 세 오해석 수정 독립 재검증; 로컬 합성 범위에 한정
