@@ -49,6 +49,7 @@
 
 ## 탐지·평가·개인정보
 
+- [ER-1C-R 독립 사람 검토 준비 및 승인 Gate](counterfactual_independent_review_er1c_r.md) — 30개 합성 사례의 Label-Blind Packet, 응답·비교 계약; 사람 검토는 PENDING
 - [ER-1C 합성 Holdout 독립 라벨 감사](counterfactual_holdout_validation_er1c.md) — 기존 ER-1A 개발 corpus와 별도 합성 holdout의 입력 사실·정책 label 감사 및 Production replay 비교; 사람의 독립 검토는 PENDING
 - [ER-0 Evidence Research Contract](evidence_research_er0.md) — Observation·Evidence·Claim·불확실성과 parser/detection/comparison 판정, 합성 반사실 평가 경계를 설계; ER-1A 구현 전용 Gate
 - [ER-1B 반사실 Detector 재실행·근거 비교](counterfactual_detector_replay_er1b.md) — ER-1A 합성 baseline/variant를 독립 Production 경로로 재실행하고 fail-closed 비교; 실환경 성능 평가는 아님
