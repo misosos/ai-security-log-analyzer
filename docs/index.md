@@ -49,6 +49,7 @@
 
 ## 탐지·평가·개인정보
 
+- [ER-0 Evidence Research Contract](evidence_research_er0.md) — Observation·Evidence·Claim·불확실성과 parser/detection/comparison 판정, 합성 반사실 평가 경계를 설계; ER-1A 구현 전용 Gate
 - [Phase 36.9B 지원 로그 형식 호환성 프로파일](supported_log_format_compatibility_36_9b.md) — 합성 fixture의 Parser 의미 검증; false acceptance 3건으로 UNSAFE_ACCEPTANCE_HOLD
 - [Phase 36.9B-R1 Parser false acceptance 복구](parser_false_acceptance_remediation_36_9b_r1.md) — 최초 RED 보존, source IP·SSH process·HTTP status 경계 수정 및 회귀 검증
 - [Phase 36.9B-R2 합성 로그 형식 호환성 종결 및 회귀 수용](log_format_compatibility_closure_36_9b_r2.md) — 21개 compatibility fixture와 R1의 세 오해석 수정 독립 재검증; 로컬 합성 범위에 한정
