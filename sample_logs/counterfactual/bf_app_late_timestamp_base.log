@@ -1,0 +1,5 @@
+2026-11-04 09:00:00 INFO login_failed user=synthetic_user_01 ip=192.0.2.10 service=ssh
+2026-11-04 09:00:10 INFO login_failed user=synthetic_user_01 ip=192.0.2.10 service=ssh
+2026-11-04 09:00:20 INFO login_failed user=synthetic_user_01 ip=192.0.2.10 service=ssh
+2026-11-04 09:00:30 INFO login_failed user=synthetic_user_01 ip=192.0.2.10 service=ssh
+2026-11-04 09:00:40 INFO login_failed user=synthetic_user_01 ip=192.0.2.10 service=ssh

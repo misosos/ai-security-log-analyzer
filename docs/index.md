@@ -110,6 +110,7 @@
 
 ## 개발·보안 검증 기록
 
+- [ER-1A 합성 반사실 Corpus와 입력 변형 계약](counterfactual_corpus_er1a.md) — 합성 입력, 7 byte mutation, 독립 label 및 Parser 사전 검증; Detector 비교는 ER-1B 이관
 - [Phase 36.15B PyInstaller onedir feasibility](pyinstaller_onedir_feasibility_36_15b.md) — unsigned macOS arm64 prototype, loopback-only synthetic smoke; Linux/Windows and release packaging NOT_TESTED
 - [2026-11-01 Restricted Report Ubuntu smoke 실패 원인 분석](restricted_report_linux_smoke_failure_20261101.md) — malformed SSH smoke fixture와 strict parser 계약 불일치로 분류; Production 불변, Linux 재검증 필요
 - [PentAGI 격리 평가 pilot 설계 gate](pentagi_evaluation_pilot_31_0.md) · [v2.2.0 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md) · [폐기형 VM 격리 기록·최종 NO-GO](disposable_vm_isolation_31_2a.md) — 무해 probe 실측과 PentAGI 실행 차단 조건

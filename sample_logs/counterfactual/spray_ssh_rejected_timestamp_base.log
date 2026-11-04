@@ -1,0 +1,4 @@
+<34>1 2026-11-04T00:00:00Z synthetic-gateway sshd 123 ER1A - Failed password for synthetic_user_01 from 203.0.113.20 port 51000 ssh2
+<34>1 2026-11-04T00:00:10Z synthetic-gateway sshd 123 ER1A - Failed password for synthetic_user_02 from 203.0.113.20 port 51000 ssh2
+<34>1 2026-11-04T00:00:20Z synthetic-gateway sshd 123 ER1A - Failed password for synthetic_user_03 from 203.0.113.20 port 51000 ssh2
+<34>1 2026-11-04T00:00:30Z synthetic-gateway sshd 123 ER1A - Failed password for synthetic_user_01 from 203.0.113.20 port 51000 ssh2
