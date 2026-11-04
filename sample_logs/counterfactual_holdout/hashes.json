@@ -1,0 +1,20 @@
+{
+  "fixtures": {
+    "er1c_bf_app_61_to_60_base": "1b5b04e97c8347954dc149c7e992a45f14fbd25943308b876a1ef60371e219ad",
+    "er1c_bf_app_partial_missing_user_base": "adf6f9333a7014348946a5b9cc79db2ebac430b56362b4961933d06c420cb475",
+    "er1c_bf_app_subject_membership_change_base": "0d2fd4b3fbb1aac729cb6986cd970aa2d045ea26f19f1e2ef0f290b51419aa93",
+    "er1c_bf_app_window_with_late_ip_noise_base": "03607adc43c7b1173c04908e58f8cc0c965de2c80b053350c554ac69b4a34c9e",
+    "er1c_bf_ssh_61_second_crossing_base": "c890676cf47ca0c45616a1f69605a875024416d668bdab0c3749546785fd3df5",
+    "er1c_bf_ssh_rejected_timestamp_base": "dd6777707094fd0d855fc062a5e25b4ba3b71a5c0ce046c89ce7992bf54a0a87",
+    "er1c_bf_ssh_two_qualifying_accounts_base": "f0b4bebd94355be02217ea88c276b06f93a8e6c16bf7e78f785e73b8071daa5c",
+    "er1c_spray_app_absent_permutation_base": "e41c23b9d1871efbadf4f531097f1964bae40cd56d19e2ad9636d26011e6a2c7",
+    "er1c_spray_app_exact60_permutation_base": "e36d9b5c495cbcf0947ada999740ff2471e26fb83d07ebc9f3bba8fcb35eaf84",
+    "er1c_spray_app_partial_account_base": "8000172aa8cca6406a613715e31d7226accb39d8c5cca5d90480bcffbd7d3283",
+    "er1c_spray_app_remove_boundary_base": "4d52296cc682d31474b772692fc8bdb1316d55e605ade9b8c1add47224f0f1db",
+    "er1c_spray_app_third_account_added_base": "4f86f390e92fb1d0b3273c2db5dd05b75c8b09532816a751b829aecbfe2ce37f",
+    "er1c_spray_ssh_fourth_failure_at60_base": "82f169826589c55a0f9e3e41ba80f44a6f9d5dff0f8206f1ba3d32585454ddb8",
+    "er1c_spray_ssh_span_61_base": "14f83c5c81c6c126d9c983132fc1a8ea199acd86d2037739a7d110906de5a311"
+  },
+  "manifest_sha256": "392127d5ad7fb61cfca361d0b9c21a6c349d94313c14bd3c1f4ead48f9393739",
+  "schema_version": 1
+}

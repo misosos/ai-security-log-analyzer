@@ -30,6 +30,7 @@ from app.evaluation.counterfactual_comparison import (
 )
 from app.evaluation.counterfactual_corpus import (
     CounterfactualScenario,
+    PreparedScenario,
     _thaw,
     load_corpus,
     load_fixture,
@@ -445,6 +446,27 @@ def run_scenario(scenario: CounterfactualScenario) -> ReplayScenarioResult:
         if error.code == "parser_execution_failed":
             return _failed_result(scenario, "ANALYSIS_EXECUTION_FAILED")
         raise CounterfactualReplayError("CORPUS_INVALID") from None
+
+    return _replay_prevalidated_scenario(scenario, baseline_bytes, variant_bytes, prepared)
+
+
+def _replay_prevalidated_scenario(
+    scenario: CounterfactualScenario,
+    baseline_bytes: bytes,
+    variant_bytes: bytes,
+    prepared,
+) -> ReplayScenarioResult:
+    """Run independently validated bytes through two fresh Production runs."""
+    if (
+        type(scenario) is not CounterfactualScenario
+        or type(baseline_bytes) is not bytes
+        or type(variant_bytes) is not bytes
+        or type(prepared) is not PreparedScenario
+        or prepared.scenario_id != scenario.scenario_id
+        or prepared.detector_id != scenario.detector_id
+        or not prepared.label_validated
+    ):
+        raise CounterfactualReplayError("INVALID_INTERNAL_CONTRACT")
 
     baseline_facts = _safe_facts(prepared.baseline_event_facts)
     variant_facts = None if prepared.event_facts is None else _safe_facts(prepared.event_facts)

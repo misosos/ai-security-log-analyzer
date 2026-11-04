@@ -49,6 +49,7 @@
 
 ## 탐지·평가·개인정보
 
+- [ER-1C 합성 Holdout 독립 라벨 감사](counterfactual_holdout_validation_er1c.md) — 기존 ER-1A 개발 corpus와 별도 합성 holdout의 입력 사실·정책 label 감사 및 Production replay 비교; 사람의 독립 검토는 PENDING
 - [ER-0 Evidence Research Contract](evidence_research_er0.md) — Observation·Evidence·Claim·불확실성과 parser/detection/comparison 판정, 합성 반사실 평가 경계를 설계; ER-1A 구현 전용 Gate
 - [ER-1B 반사실 Detector 재실행·근거 비교](counterfactual_detector_replay_er1b.md) — ER-1A 합성 baseline/variant를 독립 Production 경로로 재실행하고 fail-closed 비교; 실환경 성능 평가는 아님
 - [Phase 36.9B 지원 로그 형식 호환성 프로파일](supported_log_format_compatibility_36_9b.md) — 합성 fixture의 Parser 의미 검증; false acceptance 3건으로 UNSAFE_ACCEPTANCE_HOLD

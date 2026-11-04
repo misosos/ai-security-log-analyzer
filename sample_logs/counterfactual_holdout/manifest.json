@@ -1,0 +1,531 @@
+{
+  "schema_version": 1,
+  "data_scope": "synthetic-only",
+  "corpus_id": "er1c_independent_holdout_v1",
+  "label_provenance": "INDEPENDENT_INPUT_FACTS_AND_POLICY_TABLE",
+  "human_review_status": "INDEPENDENT_HUMAN_REVIEW_PENDING",
+  "scenarios": [
+    {
+      "scenario_id": "er1c_bf_app_window_with_late_ip_noise",
+      "detector_id": "brute_force",
+      "source": "application",
+      "baseline_fixture_id": "er1c_bf_app_window_with_late_ip_noise_base",
+      "mutation_type": "add_failure_row",
+      "mutation_target": "end",
+      "mutation_parameters": {
+        "timestamp": "2026-11-04 08:02:00",
+        "account": "synthetic_user_02",
+        "source_ip": "192.0.2.51"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 6,
+        "login_failed_count": 6,
+        "known_account_count": 2,
+        "source_ip_count": 1,
+        "target_failure_count": 6,
+        "target_known_account_count": 2,
+        "target_failure_span_seconds": 120
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "The selected-account window remains sixty seconds while another same-IP account expands the whole-IP span.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.51",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 60
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_bf_ssh_61_second_crossing",
+      "detector_id": "brute_force",
+      "source": "ssh",
+      "baseline_fixture_id": "er1c_bf_ssh_61_second_crossing_base",
+      "mutation_type": "change_timestamp",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "timestamp": "2026-11-04T08:01:01Z"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 61
+      },
+      "expected_behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Moving the fifth selected-account failure from second sixty to sixty-one crosses the inclusive boundary.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "203.0.113.51",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 60
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_bf_app_61_to_60",
+      "detector_id": "brute_force",
+      "source": "application",
+      "baseline_fixture_id": "er1c_bf_app_61_to_60_base",
+      "mutation_type": "change_timestamp",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "timestamp": "2026-11-04 08:01:00"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 60
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Moving the final event from second sixty-one to sixty reaches the selected-window boundary.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.52",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 61
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_ABSENT"
+    },
+    {
+      "scenario_id": "er1c_bf_ssh_two_qualifying_accounts",
+      "detector_id": "brute_force",
+      "source": "ssh",
+      "baseline_fixture_id": "er1c_bf_ssh_two_qualifying_accounts_base",
+      "mutation_type": "change_account",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "account": "synthetic_user_05"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 10,
+        "login_failed_count": 10,
+        "known_account_count": 2,
+        "source_ip_count": 1,
+        "target_failure_count": 10,
+        "target_known_account_count": 2,
+        "target_failure_span_seconds": 42
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Two accounts initially each have a qualifying window; transferring one row leaves the second account qualified.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "203.0.113.52",
+      "baseline_expected_event_facts": {
+        "event_count": 10,
+        "login_failed_count": 10,
+        "known_account_count": 2,
+        "source_ip_count": 1,
+        "target_failure_count": 10,
+        "target_known_account_count": 2,
+        "target_failure_span_seconds": 42
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_bf_app_partial_missing_user",
+      "detector_id": "brute_force",
+      "source": "application",
+      "baseline_fixture_id": "er1c_bf_app_partial_missing_user_base",
+      "mutation_type": "damage_format",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "damage_type": "remove_account_field"
+      },
+      "expected_parser_disposition": "PARTIAL",
+      "expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 40
+      },
+      "expected_behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "A parsed failure without account identity makes the whole-input pattern label undetermined.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.53",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 40
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_bf_ssh_rejected_timestamp",
+      "detector_id": "brute_force",
+      "source": "ssh",
+      "baseline_fixture_id": "er1c_bf_ssh_rejected_timestamp_base",
+      "mutation_type": "damage_format",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "damage_type": "invalid_timestamp"
+      },
+      "expected_parser_disposition": "REJECTED",
+      "expected_event_facts": null,
+      "expected_behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "An invalid RFC 5424 timestamp rejects the variant rather than producing a detector negative.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "203.0.113.53",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 40
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_bf_app_subject_membership_change",
+      "detector_id": "brute_force",
+      "source": "application",
+      "baseline_fixture_id": "er1c_bf_app_subject_membership_change_base",
+      "mutation_type": "change_source_ip",
+      "mutation_target": "row:4",
+      "mutation_parameters": {
+        "source_ip": "198.51.100.54"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 2,
+        "target_failure_count": 4,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 30
+      },
+      "expected_behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Moving one row to another reserved IP leaves four failures in the original target subject.",
+      "policy_id": "brute_force_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.54",
+      "baseline_expected_event_facts": {
+        "event_count": 5,
+        "login_failed_count": 5,
+        "known_account_count": 1,
+        "source_ip_count": 1,
+        "target_failure_count": 5,
+        "target_known_account_count": 1,
+        "target_failure_span_seconds": 40
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_spray_app_exact60_permutation",
+      "detector_id": "password_spraying_like",
+      "source": "application",
+      "baseline_fixture_id": "er1c_spray_app_exact60_permutation_base",
+      "mutation_type": "reorder_rows",
+      "mutation_target": "all_rows",
+      "mutation_parameters": {
+        "order": [
+          3,
+          1,
+          2,
+          0
+        ]
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 60
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Four failures across three accounts at an exact sixty-second whole span remain after reordering.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.61",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 60
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_spray_ssh_span_61",
+      "detector_id": "password_spraying_like",
+      "source": "ssh",
+      "baseline_fixture_id": "er1c_spray_ssh_span_61_base",
+      "mutation_type": "change_timestamp",
+      "mutation_target": "row:3",
+      "mutation_parameters": {
+        "timestamp": "2026-11-04T08:01:01Z"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 61
+      },
+      "expected_behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "The whole-IP span crosses to sixty-one seconds with count and account cardinality unchanged.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "203.0.113.61",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 60
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_spray_app_third_account_added",
+      "detector_id": "password_spraying_like",
+      "source": "application",
+      "baseline_fixture_id": "er1c_spray_app_third_account_added_base",
+      "mutation_type": "change_account",
+      "mutation_target": "row:3",
+      "mutation_parameters": {
+        "account": "synthetic_user_19"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 30
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Changing one duplicate target creates a third distinct account without changing count or span.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.62",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 2,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 2,
+        "target_failure_span_seconds": 30
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_ABSENT"
+    },
+    {
+      "scenario_id": "er1c_spray_ssh_fourth_failure_at60",
+      "detector_id": "password_spraying_like",
+      "source": "ssh",
+      "baseline_fixture_id": "er1c_spray_ssh_fourth_failure_at60_base",
+      "mutation_type": "add_failure_row",
+      "mutation_target": "end",
+      "mutation_parameters": {
+        "timestamp": "2026-11-04T08:01:00Z",
+        "account": "synthetic_user_23",
+        "source_ip": "203.0.113.62"
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 60
+      },
+      "expected_behavioral_pattern": "PATTERN_PRESENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Adding a fourth failure at second sixty reaches the count and whole-span boundaries.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "203.0.113.62",
+      "baseline_expected_event_facts": {
+        "event_count": 3,
+        "login_failed_count": 3,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 3,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 40
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_ABSENT"
+    },
+    {
+      "scenario_id": "er1c_spray_app_absent_permutation",
+      "detector_id": "password_spraying_like",
+      "source": "application",
+      "baseline_fixture_id": "er1c_spray_app_absent_permutation_base",
+      "mutation_type": "reorder_rows",
+      "mutation_target": "all_rows",
+      "mutation_parameters": {
+        "order": [
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 61
+      },
+      "expected_behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Reordering a four-failure, three-account set with sixty-one-second span preserves its absent pattern.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.63",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 61
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_ABSENT"
+    },
+    {
+      "scenario_id": "er1c_spray_app_partial_account",
+      "detector_id": "password_spraying_like",
+      "source": "application",
+      "baseline_fixture_id": "er1c_spray_app_partial_account_base",
+      "mutation_type": "damage_format",
+      "mutation_target": "row:3",
+      "mutation_parameters": {
+        "damage_type": "remove_account_field"
+      },
+      "expected_parser_disposition": "PARTIAL",
+      "expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 30
+      },
+      "expected_behavioral_pattern": "PATTERN_UNDETERMINED",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "A failure without account remains partial input; the full-input spray label is withheld.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.64",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 30
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    },
+    {
+      "scenario_id": "er1c_spray_app_remove_boundary",
+      "detector_id": "password_spraying_like",
+      "source": "application",
+      "baseline_fixture_id": "er1c_spray_app_remove_boundary_base",
+      "mutation_type": "remove_failure_row",
+      "mutation_target": "row:3",
+      "mutation_parameters": {},
+      "expected_parser_disposition": "VERIFIED",
+      "expected_event_facts": {
+        "event_count": 3,
+        "login_failed_count": 3,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 3,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 20
+      },
+      "expected_behavioral_pattern": "PATTERN_ABSENT",
+      "operational_context": "UNVERIFIED",
+      "label_basis": "Removing the duplicated fourth failure leaves only three failures, below the whole-IP minimum while retaining three known accounts.",
+      "policy_id": "password_spray_whole_span_production_v1",
+      "comparison_scope": "target_source_ip",
+      "target_subject": "192.0.2.65",
+      "baseline_expected_event_facts": {
+        "event_count": 4,
+        "login_failed_count": 4,
+        "known_account_count": 3,
+        "source_ip_count": 1,
+        "target_failure_count": 4,
+        "target_known_account_count": 3,
+        "target_failure_span_seconds": 30
+      },
+      "baseline_expected_behavioral_pattern": "PATTERN_PRESENT"
+    }
+  ]
+}
