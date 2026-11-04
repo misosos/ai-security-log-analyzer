@@ -84,14 +84,14 @@ uv run python -m app.local_web --monitor
 | 보조 브라우저 | Safari secondary compatibility; 모든 흐름을 검증한 것은 아님 |
 | Windows | batch-only 설계 대상, 아직 `NOT_TESTED` |
 | 모바일 | 반응형 Chromium 자동 검사만 수행; 실제 모바일 미지원 |
-| 배포 | `STANDALONE_BUNDLE_FIRST` 설계 완료; artifact·installer는 아직 없음 |
+| 배포 | macOS arm64 onedir 로컬 prototype만 검증; 다운로드 artifact·installer 없음 |
 | 접근성 | 자동 axe 검사는 WCAG 2.2 AA 인증을 의미하지 않음 |
 
 <details>
 <summary><strong>검증·파일럿 기록과 역사적 경계</strong></summary>
 
 - 검토 큐의 검색·필터·정렬과 document memory 검토 상태는 분석 projection과 분리됩니다. Phase 36.14F 합성 사용자 수용은 **12/12 PASS**였고 API·SQLite·Web Storage 없음이 현재 계약입니다. [설계](docs/investigation_review_workflow_state_design_36_14a.md) · [수용 기록](docs/investigation_review_workflow_state_acceptance_36_14f.md)
-- Phase 36.15A 결정은 **`STANDALONE_BUNDLE_FIRST`**입니다. standalone bundle은 아직 구현·배포되지 않음이 현재 상태이며 서명·notarization·Windows·실제 artifact 검증은 후속 gate입니다. [배포 설계](docs/local_first_distribution_design_36_15a.md)
+- Phase 36.15A 결정은 **`STANDALONE_BUNDLE_FIRST`**입니다. Phase 36.15B는 macOS arm64 onedir 로컬 prototype만 검증했으며 다운로드 가능한 Release artifact는 미제공입니다. 서명·notarization·Windows/Linux 검증은 후속 gate입니다. [배포 설계](docs/local_first_distribution_design_36_15a.md) · [prototype 기록](docs/pyinstaller_onedir_feasibility_36_15b.md)
 - Phase 33.1의 결정적 lexical retrieval은 조사 사례 안에서 사용자가 요청할 때만 citation을 표시하고 분석을 생성·변경하지 않습니다. **Embedding production 통합은 NO_GO**이며 Phase 33.2B 결론은 “production 통합은 보류합니다”입니다. Phase 33.3B·33.3C `ISOLATION_BLOCKED`, 33.3D `SUPPLY_CHAIN_BLOCKED`, 33.3E `RESOURCE_NO_GO`, 33.3F `STORAGE_SETUP_BLOCKED`; 모델 inference 없음이 경계입니다. **Local Gemini 실패 시 fallback은 없습니다.** 기존 Gemini helper는 별도 호출 시 IP가 포함된 projection을 보내고 자유 문자열을 검증 없이 반환합니다. [AI triage](docs/ai_investigation_triage_design_36_0.md) · [33.2A](docs/local_embedding_supply_chain_gate_33_2a.md) · [33.2B](docs/local_embedding_retrieval_pilot_33_2b.md) · [33.3C](docs/local_llm_pilot_33_3c.md) · [33.3D](docs/local_llm_pilot_33_3d.md) · [33.3E](docs/local_llm_artifact_closure_33_3e.md) · [33.3F](docs/local_llm_acquisition_environment_33_3f.md) · [근거 도움말](docs/local_investigation_guidance_33_4.md)
 - 결정적 조사 우선순위 기준선과 citation checklist는 risk와 분리되며 명시적 사용자 요청만 사용합니다. [기준선](docs/deterministic_investigation_triage_36_1.md) · [checklist](docs/lexical_investigation_checklist_36_2.md) · [API/UI](docs/investigation_checklist_api_ui_36_3.md) · [verified role](docs/investigation_checklist_verified_role_36_4.md). Phase 36.4의 역사적 판정은 `CONDITIONAL_GO`이며 현재 운영 승인이 아닙니다.
 - 작업공간 shell은 기존 UI 미대체·rollback 계약을 유지했습니다. [navigation](docs/investigation_workspace_projection_navigation_36_6b.md) · [dashboard](docs/investigation_workspace_dashboard_overview_36_6c.md). Phase 33.4A synthetic IP canary 노출은 후속 공개 projection에서 수정됐습니다.

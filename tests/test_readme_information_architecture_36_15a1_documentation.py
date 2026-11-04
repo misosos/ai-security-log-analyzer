@@ -65,7 +65,9 @@ def test_readme_folds_history_and_states_current_acceptance_and_distribution():
     assert "document memory" in text
     assert "API·SQLite·Web Storage 없음" in text
     assert "Phase 36.15A" in text and "STANDALONE_BUNDLE_FIRST" in text
-    assert "standalone bundle은 아직 구현·배포되지 않음" in text
+    assert "macOS arm64 onedir 로컬 prototype만 검증" in text
+    assert "다운로드 가능한 Release artifact는 미제공" in text
+    assert "docs/pyinstaller_onedir_feasibility_36_15b.md" in text
 
 
 def test_readme_links_are_local_reachable_and_content_is_bounded():
