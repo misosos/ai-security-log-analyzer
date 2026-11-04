@@ -24,6 +24,7 @@
 - [Phase 36.14E 검토 상태 보안·접근성 E2E](investigation_review_workflow_state_security_accessibility_36_14e.md) — 합성 격리 브라우저에서 전이·수명·privacy·reflow 검사; 사용자 수용 및 새 Ubuntu CI는 별도
 - [Phase 36.14F 검토 진행 상태 사용자 수용](investigation_review_workflow_state_acceptance_36_14f.md) — 격리 Chromium 합성 화면 12개 문항 사용자 PASS; 실제 자료·조직 운영·자동 대응은 NO_GO
 - [Phase 36.15A local-first 배포·실행 준비도 설계](local_first_distribution_design_36_15a.md) — `STANDALONE_BUNDLE_FIRST` 결정과 OS별 onedir·loopback·서명·자료 수명 gate; bundle·installer·Pages는 미구현
+- [Phase 36.15A1 README 정보 구조](readme_information_architecture_36_15a1.md) — 제품 가치·합성 화면·빠른 시작을 앞세우고 검증 이력과 안전 경계를 분리한 문서 계약
 
 ## Live monitoring·checkpoint
 
