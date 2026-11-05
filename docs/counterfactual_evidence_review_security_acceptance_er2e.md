@@ -125,4 +125,4 @@ Safari·실제 기기·수동 보조기술 검수는 남아 있다. Digest는 �
 
 ## 27. Final Decision
 
-자동 보안 검증과 전체 회귀가 통과하면 `ER_2E_AUTOMATED_SECURITY_LOCAL_CONDITIONAL_GO`를 부여한다. 실제 Safari·모바일·Screen Reader 및 사용자 검수는 별도로 `ER_2E_USER_ACCEPTANCE_PENDING`으로 둔다. 해결되지 않은 보안 실패가 있으면 `ER_2E_SECURITY_HOLD`다.
+자동 검증의 Viewer 회귀 및 전체 pytest는 통과했지만, strict console-error-zero 조건은 충족하지 않았다. WebKit 시작 화면에서 기존 CSP `style-src` 경고 6건, Chromium OFF 기본 앱에서 기존 `/api/v1/live/status` 404 경고 2건이 관측됐다. OFF의 기존 HTML/CSP를 수정하면 이번 허용 범위를 벗어나므로 이 단계의 최종 판정은 `ER_2E_SECURITY_HOLD`다. 이는 Viewer가 추가한 오류나 검증 우회가 확인됐다는 뜻은 아니다. 실제 Safari·모바일·Screen Reader 및 사용자 검수는 `ER_2E_USER_ACCEPTANCE_PENDING`으로 둔다. 운영 적용이나 ER-1D Gate 승인은 없다.
