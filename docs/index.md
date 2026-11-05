@@ -145,3 +145,5 @@
 - [ER-2D-B fixed synthetic snapshot delivery](counterfactual_snapshot_delivery_er2d_b.md)
 
 - [ER-2D-C isolated evidence review viewer](counterfactual_evidence_review_viewer_er2d_c.md)
+- [ER-2E Evaluation Viewer 보안·접근성 검수](counterfactual_evidence_review_security_acceptance_er2e.md)
+- [ER-2E 사용자 수용 체크리스트](counterfactual_evidence_review_user_acceptance_er2e.md)

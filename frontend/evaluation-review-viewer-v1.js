@@ -33,14 +33,14 @@ function render(){
   const title=heading();const live=element("p","합성 평가 자료를 확인했습니다.","eval-status");live.setAttribute("aria-live","polite");
   const summary=element("section");append(summary,element("h3","평가 범위"));
   const list=element("dl",undefined,"eval-summary");
-  for(const [name,value] of [["평가 범위","SYNTHETIC_ONLY"],["Development",snapshot.corpora.find(c=>c.corpus_id==="er1a_development").scenario_count],["Holdout",snapshot.corpora.find(c=>c.corpus_id==="er1c_independent_holdout_v1").scenario_count],["전체 시나리오",snapshot.summary.scenario_count],["비교 가능",snapshot.summary.comparable_count],["비교 제외",snapshot.summary.excluded_comparisons],["사람 독립 검토","미완료"],["운영 검증","승인되지 않음"]])append(list,element("dt",name),element("dd",String(value)));
+  for(const [name,value] of [["평가 범위","SYNTHETIC_ONLY"],["Development",snapshot.corpora.find(c=>c.corpus_id==="er1a_development").scenario_count],["Holdout",snapshot.corpora.find(c=>c.corpus_id==="er1c_independent_holdout_v1").scenario_count],["전체 시나리오",snapshot.summary.scenario_count],["비교 가능",snapshot.summary.comparable_count],["비교 제외",snapshot.summary.excluded_comparisons],["사람 독립 검토","INDEPENDENT_HUMAN_REVIEW_PENDING (미완료)"],["운영 검증","NOT_APPROVED (승인되지 않음)"]])append(list,element("dt",name),element("dd",String(value)));
   summary.append(list);
   const distribution=element("section");append(distribution,element("h3","비교 결과 분포"));
   const dist=element("ul",undefined,"eval-distribution");for(const [key,label] of Object.entries(labels))dist.append(element("li",`${label} (${key}) ${snapshot.summary.comparison_counts[key]} / ${snapshot.summary.scenario_count}`));distribution.append(dist);
   const limit=element("p","합성 평가 전용입니다. 독립 사람 검토와 운영 정확도 검증은 완료되지 않았습니다. 탐지는 침해 확정이 아니며, Parser 불완전성과 미탐지는 다릅니다. 자동 대응을 수행하지 않습니다.","eval-limits");
   const refresh=element("button","평가 자료 다시 확인");refresh.type="button";refresh.addEventListener("click",load);
   const controls=element("section",undefined,"eval-controls");controls.append(element("h3","시나리오 찾기"));
-  function control(label,id,values){const wrap=element("div");const l=element("label",label);l.htmlFor=id;const s=element("select");s.id=id;for(const [v,t] of values){const o=element("option",t);o.value=v;s.append(o);}append(wrap,l,s);controls.append(wrap);return s;}
+  function control(label,id,values){const group=element("fieldset",undefined,"eval-filter");group.id=id;group.append(element("legend",label));const options=element("div",undefined,"eval-filter-options");let selected=values[0][0];for(const [index,[value,text]] of values.entries()){const optionLabel=element("label",undefined,"eval-filter-option");const input=element("input");input.type="radio";input.name=id;input.value=value;input.checked=index===0;input.addEventListener("change",()=>{if(input.checked){selected=input.value;renderRows();}});append(optionLabel,input,element("span",text));options.append(optionLabel);}group.append(options);controls.append(group);return {get value(){return selected;},reset(){selected=values[0][0];group.querySelector("input").checked=true;}};}
   const searchWrap=element("div");const searchLabel=element("label","검색");searchLabel.htmlFor="eval-search";const search=element("input");search.type="search";search.id="eval-search";search.maxLength=64;append(searchWrap,searchLabel,search);controls.append(searchWrap);
   const corpus=control("Corpus","eval-corpus",[["","전체"],...snapshot.corpora.map(c=>[c.corpus_id,c.corpus_id])]);
   const detector=control("탐지 규칙","eval-detector",[["","전체"],["brute_force","brute_force"],["password_spraying_like","password_spraying_like"]]);
@@ -62,8 +62,8 @@ function render(){
       const card=element("article",undefined,"eval-card");const cardButton=element("button",row.scenario_id,"eval-row-button");cardButton.type="button";cardButton.addEventListener("click",()=>open(row,cardButton));const dl=element("dl");for(const [k,v] of [["Corpus",row.corpus_id],["탐지 규칙",row.detector_id],["변형",row.mutation_type],["Baseline",`${row.baseline_parser_state} / ${row.baseline_detection_state}`],["Variant",`${row.variant_parser_state} / ${row.variant_detection_state}`],["비교",`${labels[row.comparison_state]} (${row.comparison_state})`],["이유",row.reason_codes.join(", ")]])append(dl,element("dt",k),element("dd",v));append(card,cardButton,dl);cards.append(card);}
     append(table,caption,header,body);append(tableHost,table,cards);
   }
-  for(const c of [search,corpus,detector,comparison,sorting])c.addEventListener(c===search?"input":"change",renderRows);
-  reset.addEventListener("click",()=>{search.value="";corpus.value="";detector.value="";comparison.value="";sorting.value="scenario";renderRows();});
+  search.addEventListener("input",renderRows);
+  reset.addEventListener("click",()=>{search.value="";corpus.reset();detector.reset();comparison.reset();sorting.reset();renderRows();});
   detail.addEventListener("keydown",e=>{if(e.key==="Escape"&&!detail.hidden){detail.hidden=true;tableHost.hidden=false;opener?.focus();}});
   renderRows();title.focus();
 }

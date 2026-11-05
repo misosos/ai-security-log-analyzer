@@ -9,9 +9,15 @@
 .eval-distribution li { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .eval-controls { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap: 1rem; align-items: end; }
 .eval-controls h3 { grid-column: 1 / -1; }
-.eval-controls label { display: block; margin-bottom: .35rem; }
-.eval-controls input, .eval-controls select, .eval-controls button, .eval-row-button, .eval-detail button { min-height: 44px; max-width: 100%; }
-.eval-controls input, .eval-controls select { width: 100%; }
+.eval-controls > label { display: block; margin-bottom: .35rem; }
+.eval-controls input, .eval-controls button, .eval-row-button, .eval-detail button { min-height: 44px; max-width: 100%; }
+.eval-controls input[type="search"] { width: 100%; }
+.eval-filter { min-width: 0; margin: 0; padding: .4rem .65rem .65rem; border: 1px solid #465464; border-radius: .35rem; }
+.eval-filter legend { padding-inline: .25rem; }
+.eval-filter-options { display: flex; flex-wrap: wrap; gap: .25rem .6rem; }
+.eval-filter-option { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; margin: 0; overflow-wrap: anywhere; }
+.eval-filter-option input { width: 1rem; min-width: 1rem; min-height: 1rem; accent-color: #00d9f5; }
+.eval-filter-option:focus-within { outline: 3px solid #00d9f5; outline-offset: 2px; }
 .eval-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: .8rem; }
 .eval-table th, .eval-table td { text-align: left; vertical-align: top; padding: .5rem; border-bottom: 1px solid #465464; overflow-wrap: anywhere; }
 .eval-table caption { text-align: left; }

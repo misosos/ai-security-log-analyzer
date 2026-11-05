@@ -9,6 +9,7 @@ for(const v of vectors)assert.equal(canonical(v.value),v.canonical);
 assert.deepEqual(strictParse(raw.toString()),good);
 for(const text of ['{"a":1,"a":2}\n','{"a":{"b":1,"b":2}}\n','{"a":1,"\\u0061":2}\n','{"b":2,"a":1,"b":3}\n'])assert.throws(()=>strictParse(text));
 assert.deepEqual(strictParse('{"a":1,"b":2}\n'),{a:1,b:2});
+const pollution='{"__proto__":{"polluted":true}}\n';assert.throws(()=>validateStructure(strictParse(pollution)));assert.equal(Object.prototype.polluted,undefined);
 assert.throws(()=>canonical({x:1.5}));
 const safe=await validateBytes(new Uint8Array(raw));assert(Object.isFrozen(safe));assert(Object.isFrozen(safe.scenarios));assert.equal(FILE_PIN,'9f39bb5c814acf8627151681525c7d169e880feb8bd24dc106b5d87075559195');
 assert.throws(()=>strictUtf8(new Uint8Array([0xff])),/INVALID/);
@@ -21,6 +22,7 @@ for(const mutate of [
  d=>d.scenarios[0].reason_codes=['OUTCOME_LOST'],d=>d.scenarios[0].scenario_id='__proto__',
 ]) { const v=structuredClone(good);mutate(v);assert.throws(()=>validateStructure(v)); }
 const altered=new Uint8Array(raw);altered[0]^=1;await assert.rejects(validateBytes(altered),/INVALID/);
+const coTampered=structuredClone(good);coTampered.summary.scenario_count++;const coBody={...coTampered};delete coBody.snapshot_sha256;coTampered.snapshot_sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(coBody)))),b=>b.toString(16).padStart(2,'0')).join('');await assert.rejects(validateBytes(new TextEncoder().encode(canonical(coTampered)+'\n')),/INVALID/);
 globalThis.isSecureContext=false;await assert.rejects(validateBytes(new Uint8Array(raw)),/UNAVAILABLE/);globalThis.isSecureContext=true;
 globalThis.location={origin:'http://127.0.0.1:8000'};
 let cancelled=false;globalThis.fetch=async()=>({status:200,ok:true,redirected:false,url:'http://127.0.0.1:8000/assets/evaluation-snapshot-v1.json',headers:new Headers({'content-type':'application/json; charset=utf-8'}),body:{getReader(){let n=0;return {async read(){return n++===0?{done:false,value:new Uint8Array(131073)}:{done:true};},async cancel(){cancelled=true;}};}}});
@@ -39,6 +41,9 @@ for (const variant of [
 let readerCanceled=false;
 globalThis.fetch=async()=>({status:200,ok:true,redirected:false,url:'http://127.0.0.1:8000/a',headers:new Headers({'content-type':'application/json; charset=utf-8'}),body:{getReader(){let i=0;return {async read(){return i++===0?{done:false,value:new Uint8Array(131072)}:i===2?{done:false,value:new Uint8Array(1)}:{done:true};},async cancel(){readerCanceled=true;}};}}});
 await assert.rejects(loadSnapshot(),/INVALID/);assert(readerCanceled);
+let exactLimitCancelled=false;
+globalThis.fetch=async()=>({status:200,ok:true,redirected:false,url:'http://127.0.0.1:8000/a',headers:new Headers({'content-type':'application/json; charset=utf-8'}),body:{getReader(){let sent=false;return {async read(){if(!sent){sent=true;return {done:false,value:new Uint8Array(131072)};}return {done:true};},async cancel(){exactLimitCancelled=true;}};}}});
+await assert.rejects(loadSnapshot(),/INVALID/);assert.equal(exactLimitCancelled,false);
 console.log('ER2DC_RESPONSE PASS invalid_response=5 chunk_limit=131072+1');
 for(const [from,to,reason] of [['LOST','PRESERVED','OUTCOME_PRESERVED'],['GAINED','LOST','OUTCOME_LOST'],['PRESERVED','GAINED','OUTCOME_GAINED'],['UNCHANGED_ABSENT','PRESERVED','OUTCOME_PRESERVED']]){
  const d=structuredClone(good);const row=d.scenarios.find(r=>r.comparison_state===from);const corpus=d.corpora.find(c=>c.corpus_id===row.corpus_id);
