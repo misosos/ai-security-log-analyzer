@@ -191,3 +191,94 @@ def test_report_cli_rejects_arguments_and_outputs_markdown(replay_results):
     assert one.stdout == two.stdout
     assert one.stdout.startswith(b"# ER-2A")
     assert one.stderr == two.stderr == b""
+
+
+@pytest.mark.parametrize("corpus_name", ["development", "holdout"])
+@pytest.mark.parametrize(("actual", "forged"), [
+    ("LOST", "PRESERVED"),
+    ("GAINED", "LOST"),
+    ("PRESERVED", "GAINED"),
+    ("UNCHANGED_ABSENT", "PRESERVED"),
+])
+def test_r1_rejects_forged_outcome_even_with_reconciled_counts(replay_results, corpus_name, actual, forged):
+    development, holdout = replay_results
+    source = development if corpus_name == "development" else holdout
+    original = next(row for row in source.results if row.comparison_state == actual)
+    altered = replace(original, comparison_state=forged)
+    rows = tuple(altered if row is original else row for row in source.results)
+    counts = dict(source.counts)
+    comparison = dict(counts["comparison"])
+    comparison[actual] -= 1
+    comparison[forged] += 1
+    counts["comparison"] = comparison
+    source = replace(source, results=rows, counts=counts)
+    args = (source, holdout) if corpus_name == "development" else (development, source)
+    with pytest.raises(AnalystReportError, match="INVALID_REPORT_INPUT"):
+        build_report(*args)
+
+
+@pytest.mark.parametrize("kind", ["missing", "wrong", "multiple"])
+def test_r1_rejects_outcome_reason_mismatch_with_reconciled_counts(replay_results, kind):
+    development, holdout = replay_results
+    original = next(row for row in development.results if row.comparison_state == "LOST")
+    reasons = set(original.reason_codes) - {"OUTCOME_LOST"}
+    if kind in ("wrong", "multiple"):
+        reasons.add("OUTCOME_PRESERVED")
+    if kind == "multiple":
+        reasons.add("OUTCOME_LOST")
+    altered = replace(original, reason_codes=tuple(sorted(reasons)))
+    rows = tuple(altered if row is original else row for row in development.results)
+    source = replace(development, results=rows, counts=_recount_development(rows))
+    with pytest.raises(AnalystReportError, match="INVALID_REPORT_INPUT"):
+        build_report(source, holdout)
+
+
+def test_r1_render_rejects_inconsistent_projection_with_reconciled_counts(replay_results):
+    report = build_report(*replay_results)
+    original = next(row for row in report.scenarios if row.corpus_id == "er1a_development" and row.comparison_state == "LOST")
+    altered = replace(original, comparison_state="PRESERVED")
+    comparison = dict(report.development.comparison_counts)
+    comparison["LOST"] -= 1
+    comparison["PRESERVED"] += 1
+    forged = replace(report, development=replace(report.development, comparison_counts=comparison), scenarios=tuple(altered if row is original else row for row in report.scenarios))
+    with pytest.raises(AnalystReportError, match="INVALID_REPORT_INPUT"):
+        render_markdown(forged)
+
+
+@pytest.mark.parametrize(("state", "reason"), [
+    ("INCOMPARABLE", "SUBJECT_MISMATCH"),
+    ("INCOMPARABLE", "SOURCE_SCOPE_MISMATCH"),
+    ("UNDETERMINED", "EVIDENCE_BINDING_FAILED"),
+    ("UNDETERMINED", "LABEL_PROVENANCE_MISSING"),
+])
+def test_r1_preserves_non_outcome_scope_and_evidence_results(replay_results, state, reason):
+    development, holdout = replay_results
+    original = next(row for row in development.results if row.comparison_state == "LOST")
+    reasons = tuple(sorted((set(original.reason_codes) - {"OUTCOME_LOST"}) | {reason}))
+    altered = replace(original, comparison_state=state, reason_codes=reasons)
+    rows = tuple(altered if row is original else row for row in development.results)
+    report = build_report(replace(development, results=rows, counts=_recount_development(rows)), holdout)
+    projected = next(row for row in report.scenarios if row.scenario_id == original.scenario_id)
+    assert projected.comparison_state == state
+    assert reason in projected.reason_codes
+    assert state in render_markdown(report)
+
+
+def test_r1_preserves_partial_and_rejected_rows(replay_results):
+    report = build_report(*replay_results)
+    rows = [row for row in report.scenarios if row.variant_parser_state in ("PARTIAL", "REJECTED")]
+    assert {row.variant_parser_state for row in rows} == {"PARTIAL", "REJECTED"}
+    assert all(row.comparison_state in ("INCOMPARABLE", "UNDETERMINED") for row in rows)
+    assert all(row.variant_detection_state == "NOT_EVALUATED" for row in rows if row.variant_parser_state == "REJECTED")
+
+
+def test_r1_rejects_forged_projection_reason_even_if_counts_match(replay_results):
+    report = build_report(*replay_results)
+    original = next(row for row in report.scenarios if row.corpus_id == "er1a_development" and row.comparison_state == "LOST")
+    reasons = tuple(sorted(set(original.reason_codes) | {"OUTCOME_PRESERVED"}))
+    altered = replace(original, reason_codes=reasons)
+    counts = dict(report.development.reason_code_counts)
+    counts["OUTCOME_PRESERVED"] += 1
+    forged = replace(report, development=replace(report.development, reason_code_counts=counts), scenarios=tuple(altered if row is original else row for row in report.scenarios))
+    with pytest.raises(AnalystReportError, match="INVALID_REPORT_INPUT"):
+        render_markdown(forged)

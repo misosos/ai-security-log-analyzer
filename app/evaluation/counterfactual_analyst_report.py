@@ -142,6 +142,31 @@ def _reason_codes(value: object) -> tuple[str, ...]:
     return normalized
 
 
+def _validate_outcome(parser_baseline: str, parser_variant: str,
+                      detector_baseline: str, detector_variant: str,
+                      comparison: str, reasons: tuple[str, ...]) -> None:
+    """Check public result invariants; private provenance stays with the producer."""
+    outcomes = {
+        "PRESERVED": (("DETECTED", "DETECTED"), "OUTCOME_PRESERVED"),
+        "LOST": (("DETECTED", "NOT_DETECTED"), "OUTCOME_LOST"),
+        "GAINED": (("NOT_DETECTED", "DETECTED"), "OUTCOME_GAINED"),
+        "UNCHANGED_ABSENT": (("NOT_DETECTED", "NOT_DETECTED"), "OUTCOME_ABSENT_BOTH"),
+    }
+    for parser, detection in ((parser_baseline, detector_baseline), (parser_variant, detector_variant)):
+        if parser in ("REJECTED", "NOT_EVALUATED") and detection != "NOT_EVALUATED":
+            raise _invalid()
+    if comparison not in outcomes:
+        return
+    expected_states, expected_reason = outcomes[comparison]
+    outcome_reasons = {reason for reason in reasons if reason in {item[1] for item in outcomes.values()}}
+    if (
+        (parser_baseline, parser_variant) != ("VERIFIED", "VERIFIED")
+        or (detector_baseline, detector_variant) != expected_states
+        or outcome_reasons != {expected_reason}
+    ):
+        raise _invalid()
+
+
 def _validate_row(row: object, *, metadata: Mapping[str, tuple[str, str]], corpus_id: str) -> ScenarioProjection:
     if type(row) is not ReplayScenarioResult:
         raise _invalid()
@@ -188,6 +213,7 @@ def _validate_row(row: object, *, metadata: Mapping[str, tuple[str, str]], corpu
     if type(row.reason_codes) is not tuple:
         raise _invalid()
     reasons = _reason_codes(row.reason_codes)
+    _validate_outcome(parser_baseline, parser_variant, detector_baseline, detector_variant, comparison, reasons)
     outcome_comparisons = {
         ComparisonState.PRESERVED.value,
         ComparisonState.LOST.value,
@@ -430,7 +456,10 @@ def _validate_projection(report: AnalystReport) -> None:
         _closed_state(item.baseline_detection_state, DetectionState)
         _closed_state(item.variant_detection_state, DetectionState)
         _closed_state(item.comparison_state, ComparisonState)
-        _reason_codes(item.reason_codes)
+        reasons = _reason_codes(item.reason_codes)
+        _validate_outcome(item.baseline_parser_state, item.variant_parser_state,
+                          item.baseline_detection_state, item.variant_detection_state,
+                          item.comparison_state, reasons)
         if (
             type(item.label_validation_baseline) is not str
             or type(item.label_validation_variant) is not str
