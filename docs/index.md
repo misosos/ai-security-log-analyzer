@@ -139,3 +139,5 @@
 - [ER-2A-R1 comparison integrity remediation](counterfactual_analyst_report_integrity_remediation_er2a_r1.md)
 
 - [ER-2C safe evaluation projection](counterfactual_safe_evaluation_projection_er2c.md)
+
+- [ER-2D-A snapshot delivery security gate](counterfactual_snapshot_delivery_security_gate_er2d_a.md)
