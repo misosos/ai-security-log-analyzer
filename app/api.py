@@ -480,6 +480,7 @@ def create_app(
     )
     if enable_evidence_review_viewer:
         from app.evaluation_snapshot_delivery import serve_snapshot
+        from app.web_ui import _fixed_asset, serve_evaluation_index
 
         async def evaluation_snapshot(request: Request) -> Response:
             return await serve_snapshot(request, evidence_review_port)
@@ -488,10 +489,27 @@ def create_app(
             "/assets/evaluation-snapshot-v1.json", evaluation_snapshot,
             methods=["GET"], include_in_schema=False,
         )
+        def evaluation_asset(filename: str, media_type: str):
+            def serve() -> Response:
+                return _fixed_asset(filename, media_type)
+            return serve
+
+        for filename, media_type in (
+            ("evaluation-snapshot-validator-v1.js", "text/javascript"),
+            ("evaluation-review-viewer-v1.js", "text/javascript"),
+            ("evaluation-review-viewer-v1.css", "text/css"),
+        ):
+            configured_app.add_api_route(
+                f"/assets/{filename}", evaluation_asset(filename, media_type),
+                methods=["GET"], include_in_schema=False,
+            )
+        def evaluation_index() -> Response:
+            return serve_evaluation_index(live_monitoring_service is not None)
     if not enable_linux_audit_api:
         local_admission = create_local_admission()
         configured_app.add_api_route(
-            "/", serve_demo_index, methods=["GET"], include_in_schema=False,
+            "/", evaluation_index if enable_evidence_review_viewer else serve_demo_index,
+            methods=["GET"], include_in_schema=False,
         )
         configured_app.add_api_route(
             "/assets/style.css", serve_demo_styles, methods=["GET"],

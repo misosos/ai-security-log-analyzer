@@ -143,3 +143,5 @@
 - [ER-2D-A snapshot delivery security gate](counterfactual_snapshot_delivery_security_gate_er2d_a.md)
 
 - [ER-2D-B fixed synthetic snapshot delivery](counterfactual_snapshot_delivery_er2d_b.md)
+
+- [ER-2D-C isolated evidence review viewer](counterfactual_evidence_review_viewer_er2d_c.md)

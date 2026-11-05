@@ -66,6 +66,27 @@ def serve_demo_index() -> Response:
     return _fixed_asset("index.html", "text/html")
 
 
+def serve_evaluation_index(live_enabled: bool) -> Response:
+    response = serve_demo_index()
+    html = response.body.decode("utf-8", "strict")
+    replacements = (
+        ('</head>', '<link rel="stylesheet" href="/assets/evaluation-review-viewer-v1.css"><script type="module" src="/assets/evaluation-review-viewer-v1.js"></script></head>'),
+        ('<details class="nav-group" id="nav-group-tools">', '<details class="nav-group" id="nav-group-tools" open>'),
+        ('<div class="nav-group-items">\n              <button id="nav-audit"', '<div class="nav-group-items">\n              <button id="nav-evaluation" type="button" aria-controls="evaluation-review-root">합성 평가</button>\n              <button id="nav-audit"'),
+        ('</main>', '</main><main id="evaluation-review-root" class="app-content" aria-label="합성 평가" hidden></main>'),
+    )
+    for needle, replacement in replacements:
+        if html.count(needle) != 1:
+            raise HTTPException(status_code=404, detail="Not Found")
+        html = html.replace(needle, replacement, 1)
+    if not live_enabled:
+        marker = '<script src="/assets/live-monitoring.js" defer></script>'
+        if html.count(marker) != 1:
+            raise HTTPException(status_code=404, detail="Not Found")
+        html = html.replace(marker, "", 1)
+    return Response(content=html, media_type="text/html", headers=_HEADERS)
+
+
 def serve_demo_styles() -> Response:
     return _fixed_asset("style.css", "text/css")
 

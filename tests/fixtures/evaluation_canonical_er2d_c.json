@@ -1,0 +1,29 @@
+[
+  {
+    "value": {
+      "z": true,
+      "a": null,
+      "n": 0,
+      "arr": [
+        1,
+        2,
+        false
+      ]
+    },
+    "canonical": "{\"a\":null,\"arr\":[1,2,false],\"n\":0,\"z\":true}"
+  },
+  {
+    "value": {
+      "key": "\ud55c\uae00 \ud83d\ude00 / \" \\ \n",
+      "z": 127
+    },
+    "canonical": "{\"key\":\"\\ud55c\\uae00 \\ud83d\\ude00 / \\\" \\\\ \\n\",\"z\":127}"
+  },
+  {
+    "value": {
+      "b": 1,
+      "a": 2
+    },
+    "canonical": "{\"a\":2,\"b\":1}"
+  }
+]

@@ -1,0 +1,23 @@
+#evaluation-review-root { min-width: 0; color: #e1e7f0; }
+#evaluation-review-root section { margin-block: 1.5rem; min-width: 0; }
+#evaluation-review-root h2 { font-size: clamp(1.35rem, 2vw, 2rem); overflow-wrap: anywhere; }
+#evaluation-review-root h3 { font-size: 1.1rem; }
+.eval-banner, .eval-limits { border-left: 3px solid #00d9f5; padding: .75rem 1rem; background: #101b2a; }
+.eval-summary, .eval-detail-list, .eval-card dl { display: grid; grid-template-columns: minmax(8rem,auto) minmax(0,1fr); gap: .5rem 1rem; }
+.eval-summary dd, .eval-detail-list dd, .eval-card dd { margin: 0; overflow-wrap: anywhere; }
+.eval-distribution { padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.eval-distribution li { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.eval-controls { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap: 1rem; align-items: end; }
+.eval-controls h3 { grid-column: 1 / -1; }
+.eval-controls label { display: block; margin-bottom: .35rem; }
+.eval-controls input, .eval-controls select, .eval-controls button, .eval-row-button, .eval-detail button { min-height: 44px; max-width: 100%; }
+.eval-controls input, .eval-controls select { width: 100%; }
+.eval-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: .8rem; }
+.eval-table th, .eval-table td { text-align: left; vertical-align: top; padding: .5rem; border-bottom: 1px solid #465464; overflow-wrap: anywhere; }
+.eval-table caption { text-align: left; }
+.eval-row-button { overflow-wrap: anywhere; text-align: left; }
+.eval-cards { display: none; }
+#evaluation-review-root :focus-visible { outline: 3px solid #00d9f5; outline-offset: 3px; }
+@media (max-width: 1024px) { .eval-table { display: none; } .eval-cards { display: grid; gap: 1rem; } .eval-card { border: 1px solid #465464; padding: 1rem; min-width: 0; } }
+@media (max-width: 390px) { .eval-summary, .eval-detail-list, .eval-card dl { grid-template-columns: 1fr; } .eval-controls { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { #evaluation-review-root * { scroll-behavior: auto; transition: none; animation: none; } }
