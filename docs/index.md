@@ -141,3 +141,5 @@
 - [ER-2C safe evaluation projection](counterfactual_safe_evaluation_projection_er2c.md)
 
 - [ER-2D-A snapshot delivery security gate](counterfactual_snapshot_delivery_security_gate_er2d_a.md)
+
+- [ER-2D-B fixed synthetic snapshot delivery](counterfactual_snapshot_delivery_er2d_b.md)

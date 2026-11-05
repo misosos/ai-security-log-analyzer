@@ -383,14 +383,26 @@ def _create_linux_audit_analysis_endpoint(
     return analyze_linux_audit_logs
 
 
+EVIDENCE_REVIEW_VIEWER_ENABLED = False
+
+
 def create_app(
     *,
     enable_linux_audit_api: bool = False,
+    enable_evidence_review_viewer: bool = EVIDENCE_REVIEW_VIEWER_ENABLED,
+    evidence_review_port: int | None = None,
     linux_audit_api_security: LinuxAuditApiSecurityConfig | None = None,
     linux_audit_api_audit_sink: LinuxAuditApiAccessAuditSink | None = None,
     live_monitoring_service: LiveMonitoringService | None = None,
     live_monitoring_runner: LiveMonitoringRunner | None = None,
 ) -> FastAPI:
+    if type(enable_evidence_review_viewer) is not bool:
+        raise TypeError("invalid evaluation setting")
+    if enable_evidence_review_viewer:
+        if enable_linux_audit_api or type(evidence_review_port) is not int or not 1024 <= evidence_review_port <= 65535:
+            raise TypeError("invalid evaluation setting")
+    elif evidence_review_port is not None:
+        raise TypeError("invalid evaluation setting")
     checklist_registry = ChecklistRegistry()
     from app.live_monitoring.pair_service import PairMonitoringService, PairRunner
     from app.models.multi_source_live import PairStatusResponse
@@ -466,6 +478,16 @@ def create_app(
         version="0.1.0",
         lifespan=live_lifespan if live_monitoring_runner is not None else None,
     )
+    if enable_evidence_review_viewer:
+        from app.evaluation_snapshot_delivery import serve_snapshot
+
+        async def evaluation_snapshot(request: Request) -> Response:
+            return await serve_snapshot(request, evidence_review_port)
+
+        configured_app.add_api_route(
+            "/assets/evaluation-snapshot-v1.json", evaluation_snapshot,
+            methods=["GET"], include_in_schema=False,
+        )
     if not enable_linux_audit_api:
         local_admission = create_local_admission()
         configured_app.add_api_route(
