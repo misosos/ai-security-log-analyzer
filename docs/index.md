@@ -137,3 +137,5 @@
 - [Phase 36.10B-R1 Password Spray Evidence·Consumer Contract 설계](password_spray_evidence_consumer_contract_design_36_10b_r1.md) · [R2 Consumer 경계 독립 검증](password_spray_consumer_boundary_validation_36_10b_r2.md) · [R3 Trusted Context Prototype](password_spray_trusted_context_prototype_36_10b_r3.md) · [R4 Consumer 통합 Security Gate 설계](password_spray_consumer_integration_security_gate_36_10b_r4.md) — Production은 whole-span으로 유지하며 Window 통합·운영 전환은 별도 Gate 대상
 
 - [ER-2A-R1 comparison integrity remediation](counterfactual_analyst_report_integrity_remediation_er2a_r1.md)
+
+- [ER-2C safe evaluation projection](counterfactual_safe_evaluation_projection_er2c.md)
