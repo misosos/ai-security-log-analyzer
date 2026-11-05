@@ -1088,22 +1088,26 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
     const section = detailSection("근거 도움말");
     section.classList.add("investigation-guidance");
     section.append(element("p", "승인된 보안 지식의 짧은 요약과 출처를 확인합니다. 이 도움말은 탐지 결과를 변경하지 않습니다."));
-    const label = document.createElement("label");
-    label.textContent = "도움말 주제 ";
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", "근거 도움말 주제");
+    const topicGroup = document.createElement("fieldset");
+    topicGroup.className = "guidance-topic-choices";
+    const topicLegend = document.createElement("legend");
+    topicLegend.textContent = "근거 도움말 주제";
+    topicGroup.append(topicLegend);
     const options = [
       ["EXPLAIN_CASE", "조사 사례 설명"], ["EXPLAIN_DETECTION", "탐지 관찰 설명"],
       ["EXPLAIN_RELATION", "관계 설명"], ["EXPLAIN_RISK", "위험도와 신뢰도 설명"],
       ["NEXT_CHECKS", "다음 확인 항목"], ["EXPLAIN_LIMITATION", "해석 한계"]
     ];
-    options.forEach(([value, title]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = title;
-      select.append(option);
+    options.forEach(([value, title], index) => {
+      const optionLabel = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "guidance-topic";
+      radio.value = value;
+      radio.checked = index === 0;
+      optionLabel.append(radio, document.createTextNode(title));
+      topicGroup.append(optionLabel);
     });
-    label.append(select);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "guidance-request";
@@ -1127,7 +1131,8 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
           method: "POST", credentials: "omit",
           headers: {Accept: "application/json", "Content-Type": "application/json"},
           body: JSON.stringify({schema_version: 1,
-            case: {case_id: caseId, ...fields}, category: select.value,
+            case: {case_id: caseId, ...fields},
+            category: topicGroup.querySelector('input[name="guidance-topic"]:checked')?.value ?? "EXPLAIN_CASE",
             corpus_digest: GUIDANCE_CORPUS_DIGEST})
         });
         const payload = await boundedJson(response, 6144);
@@ -1160,7 +1165,7 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
         if (isCurrent()) button.disabled = false;
       }
     });
-    section.append(label, button, status, result);
+    section.append(topicGroup, button, status, result);
     return section;
   }
 
@@ -2648,6 +2653,10 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
     target.setAttribute("aria-invalid", "true");
     textError.textContent = message;
     textError.hidden = false;
+    const focusTarget = field === "source" ?
+      (textSource.querySelector('input[name="text_source"]:checked') ||
+        textSource.querySelector('input[name="text_source"]')) : logText;
+    focusTarget?.focus();
   }
 
   function updateTextCounts36_8C() {
@@ -2738,7 +2747,7 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
     clearTextFieldError36_8C();
     clearPreviousResult();
     if (localInputMode36_8C === "text") {
-      const source = textSource.value;
+      const source = textSource.querySelector('input[name="text_source"]:checked')?.value ?? "application";
       const logValue = logText.value;
       const invalid = validateTextInputLocally36_8C(source, logValue);
       if (invalid) {

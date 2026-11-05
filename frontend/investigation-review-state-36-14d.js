@@ -135,8 +135,12 @@
     const note = document.getElementById("review-workflow-note-36-14d");
     const countsNode = document.getElementById("review-workflow-counts-36-14d");
     const feedback = document.getElementById("review-workflow-feedback-36-14d");
-    const stateFilterLabel = document.getElementById("review-queue-state-filter-label-36-14d");
     const stateFilter = document.getElementById("review-queue-state-36-14d");
+
+    function resetStateFilter() {
+      const all = stateFilter.querySelector('input[type="radio"][value="all"]');
+      if (all) all.checked = true;
+    }
 
     function showUnavailable() {
       note.hidden = false;
@@ -157,8 +161,8 @@
       countsNode.textContent = "";
       feedback.hidden = true;
       feedback.textContent = "";
-      stateFilterLabel.hidden = true;
-      stateFilter.value = "all";
+      stateFilter.hidden = true;
+      resetStateFilter();
     }
 
     function begin(caseRefs) {
@@ -175,7 +179,7 @@
         available = true;
         summary.hidden = false;
         note.hidden = false;
-        stateFilterLabel.hidden = false;
+        stateFilter.hidden = false;
         updateCounts();
         return true;
       } catch {
@@ -205,22 +209,27 @@
         `${STATE_LABELS.deferred} ${values.deferred}`;
     }
 
-    function fillOptions(select, state, revision) {
-      select.replaceChildren();
-      [state, ...TRANSITIONS[state]].forEach((value) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = STATE_LABELS[value];
-        select.append(option);
+    function fillChoices(group, state, revision) {
+      const legend = group.querySelector("legend");
+      const label = legend?.textContent || "검토 상태";
+      const choices = [state, ...TRANSITIONS[state]];
+      if (state !== "unreviewed") choices.push("__reset__");
+      const nodes = [legend];
+      choices.forEach((value) => {
+        const optionLabel = document.createElement("label");
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = group.id;
+        radio.value = value;
+        radio.checked = value === state;
+        radio.setAttribute("aria-describedby", "review-workflow-note-36-14d review-workflow-feedback-36-14d");
+        const text = document.createTextNode(value === "__reset__" ? "상태 초기화 — 검토 전으로" : STATE_LABELS[value]);
+        optionLabel.append(radio, text);
+        nodes.push(optionLabel);
       });
-      if (state !== "unreviewed") {
-        const resetOption = document.createElement("option");
-        resetOption.value = "__reset__";
-        resetOption.textContent = "상태 초기화 — 검토 전으로";
-        select.append(resetOption);
-      }
-      select.value = state;
-      revisions.set(select, revision);
+      group.replaceChildren(...nodes.filter(Boolean));
+      group.setAttribute("aria-label", label);
+      revisions.set(group, revision);
     }
 
     function feedbackFor(code) {
@@ -239,14 +248,23 @@
 
     function synchronize(caseRef, current, sourceControl = null) {
       const group = controls.get(caseRef);
+      let focusedGroup = null;
+      let restoreWorkflowFocus = false;
       if (group) {
-        for (const select of group) {
-          if (!select.isConnected) { group.delete(select); continue; }
-          fillOptions(select, current.review_state, current.revision);
+        for (const control of group) {
+          if (!control.isConnected) { group.delete(control); continue; }
+          if (sourceControl && control.contains(sourceControl)) {
+            focusedGroup = control;
+            restoreWorkflowFocus = control.contains(document.activeElement);
+          }
+          fillChoices(control, current.review_state, current.revision);
         }
         if (!group.size) controls.delete(caseRef);
       }
-      queue.refreshWorkflowState(caseRef, sourceControl);
+      queue.refreshWorkflowState(caseRef, restoreWorkflowFocus);
+      if (focusedGroup?.isConnected && restoreWorkflowFocus) {
+        focusedGroup.querySelector('input[type="radio"]:checked')?.focus({preventScroll: true});
+      }
       updateCounts();
     }
 
@@ -254,38 +272,36 @@
       if (!available) return null;
       const initial = snapshot(caseRef);
       if (!initial) return null;
-      const group = document.createElement("div");
+      const group = document.createElement("fieldset");
       group.className = `review-workflow-control-36-14d review-workflow-control-${context}-36-14d`;
-      const label = document.createElement("label");
-      const select = document.createElement("select");
-      select.id = `review-workflow-${context}-${order}-36-14d`;
-      select.setAttribute("aria-label", `검토 건 ${order} 검토 상태`);
-      select.setAttribute("aria-describedby", "review-workflow-note-36-14d review-workflow-feedback-36-14d");
-      label.htmlFor = select.id;
-      label.textContent = "검토 상태";
-      fillOptions(select, initial.review_state, initial.revision);
+      group.id = `review-workflow-${context}-${order}-36-14d`;
+      const legend = document.createElement("legend");
+      legend.textContent = `검토 건 ${order} 검토 상태`;
+      group.append(legend);
+      fillChoices(group, initial.review_state, initial.revision);
       if (!controls.has(caseRef)) controls.set(caseRef, new Set());
       const registered = controls.get(caseRef);
       for (const existing of registered) if (!existing.isConnected) registered.delete(existing);
-      registered.add(select);
-      select.addEventListener("change", () => {
+      registered.add(group);
+      group.addEventListener("change", (event) => {
+        const radio = event.target;
+        if (!(radio instanceof HTMLInputElement) || radio.type !== "radio" || !radio.checked) return;
         const key = identity(caseRef);
         const previous = snapshot(caseRef);
-        const target = select.value;
-        const result = target === "__reset__" ? store.reset(key, revisions.get(select)) :
-          store.transition(key, target, revisions.get(select));
+        const target = radio.value;
+        const result = target === "__reset__" ? store.reset(key, revisions.get(group)) :
+          store.transition(key, target, revisions.get(group));
         if (!result.ok) {
           const latest = snapshot(caseRef);
-          if (latest) synchronize(caseRef, latest, select);
-          else if (previous) fillOptions(select, previous.review_state, previous.revision);
-          else select.disabled = true;
+          if (latest) synchronize(caseRef, latest, radio);
+          else if (previous) fillChoices(group, previous.review_state, previous.revision);
+          else group.disabled = true;
           feedbackFor(result.code);
           return;
         }
-        synchronize(caseRef, result.snapshot, select);
+        synchronize(caseRef, result.snapshot, radio);
         feedbackFor("SUCCESS");
       });
-      group.append(label, select);
       return group;
     }
 

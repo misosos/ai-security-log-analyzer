@@ -367,9 +367,23 @@ async function unusedPort() {
 async function startServer(home) {
   const port = await unusedPort();
   const origin = `http://127.0.0.1:${port}`;
+  const liveAppFixture = [
+    'from pathlib import Path',
+    'import sys, uvicorn',
+    'from app.api import create_app',
+    'from app.live_monitoring import LiveDetectionAccumulator, LiveMonitorConfig, LiveProcessingWorker, open_live_tail_session',
+    'from app.live_monitoring.service import LiveMonitoringService',
+    'home, port = Path(sys.argv[1]), int(sys.argv[2])',
+    'path = home / "live-monitoring-synthetic.log"',
+    'path.write_bytes(b"past line\\n")',
+    'session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))',
+    'worker = LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 16, 4096)',
+    'app = create_app(live_monitoring_service=LiveMonitoringService(worker))',
+    'app.router.on_shutdown.append(worker.close)',
+    'uvicorn.run(app, host="127.0.0.1", port=port, workers=1, proxy_headers=False, log_level="critical", access_log=False)',
+  ].join('\n');
   const child = spawn(join(ROOT, '.venv', 'bin', 'python'), [
-    '-m', 'uvicorn', 'app.api:app', '--host', '127.0.0.1', '--port', String(port),
-    '--no-access-log',
+    '-c', liveAppFixture, home, String(port),
   ], {
     cwd: ROOT, stdio: 'ignore',
     env: {...process.env, HOME: home, XDG_CONFIG_HOME: join(home, 'config'), PYTHONDONTWRITEBYTECODE: '1'},
@@ -514,7 +528,8 @@ async function scan(page, state) {
       landmarks: ['nav', 'header', 'main'].every((tag) => document.querySelector(tag)) &&
         document.querySelector('nav').compareDocumentPosition(document.querySelector('header')) === Node.DOCUMENT_POSITION_FOLLOWING &&
         document.querySelector('header').compareDocumentPosition(document.querySelector('main')) === Node.DOCUMENT_POSITION_FOLLOWING,
-      labels: inputs.every((node) => document.querySelector(`label[for="${node.id}"]`)),
+      labels: inputs.every((node) => node.closest('label') ||
+        (node.id && document.querySelector(`label[for="${node.id}"]`))),
       buttons: buttons.every((node) => Boolean(node.textContent.trim() || node.getAttribute('aria-label'))),
       idsUnique: ids.length === new Set(ids).size,
       hiddenLive: document.querySelector('#live-monitoring').hidden,
@@ -547,7 +562,8 @@ async function scan(page, state) {
   try { results = await new AxeBuilder({page}).analyze(); }
   catch { throw new Error('AXE_ANALYSIS_FAILED'); }
   const summary = results.violations
-    .map((item) => ({impact: item.impact, id: item.id, nodes: item.nodes.length}))
+    .map((item) => ({impact: item.impact, id: item.id, nodes: item.nodes.length,
+      targets: item.nodes.map((node) => node.target), failures: item.nodes.map((node) => node.failureSummary)}))
     .sort((a, b) => a.id.localeCompare(b.id));
   console.log(`${state} ${JSON.stringify(summary)}`);
   requireSafe(summary.length === 0, 'AXE_VIOLATIONS_PRESENT');
@@ -589,7 +605,10 @@ async function main() {
       } else if (url.pathname === '/assets/style.css' && UI1_BASELINE_CSS !== null) {
         await route.fulfill({status: 200, contentType: 'text/css', body: UI1_BASELINE_CSS});
       } else if (url.pathname === '/api/v1/live/status') {
-        if (stateForPage === 'DISABLED') await route.continue();
+        if (stateForPage === 'DISABLED') await route.fulfill({status: 404, contentType: 'application/json',
+          body: JSON.stringify({error_code: 'LIVE_MONITORING_NOT_ENABLED',
+            user_message: '로컬 모니터링이 활성화되지 않았습니다.',
+            recovery_action: '명시적 로컬 설정으로 서버를 실행하십시오.', retryable: false})});
         else await route.fulfill({status: 200, contentType: 'application/json',
           body: JSON.stringify(stateForPage === 'MULTI' ? pairStatus() : status(stateForPage))});
       } else if (url.pathname === '/api/v1/investigations/text') {
@@ -676,7 +695,18 @@ async function main() {
       await page.goto(`${server.origin}/`, {waitUntil: 'networkidle'});
       if (stateForPage !== 'DISABLED') {
         await page.locator('#nav-group-tools > summary').click();
-        await page.locator('#nav-live').waitFor({state: 'visible'});
+        try {
+          await page.locator('#nav-live').waitFor({state: 'visible'});
+        } catch (error) {
+          const diagnostics = await page.evaluate(() => ({
+            navLiveHidden: document.querySelector('#nav-live')?.hidden,
+            liveScript: [...document.scripts].map((script) => script.src).filter((src) => src.includes('live-monitoring')),
+            statusText: document.querySelector('#live-status')?.textContent,
+            livePanelHidden: document.querySelector('#live-monitoring')?.hidden,
+          }));
+          console.error(`LIVE_NAV_DIAGNOSTIC ${JSON.stringify({stateName, stateForPage, diagnostics})}`);
+          throw error;
+        }
         await page.locator('#nav-live').click();
         await page.waitForFunction(() => !document.querySelector('#live-monitoring').hidden);
         const expectedIcon = stateForPage === 'DEGRADED' ? '#icon-triangle-alert' :
@@ -876,7 +906,7 @@ async function main() {
     if (!(await textApiPage.locator('#local-choice-details').evaluate((node) => node.open)))
       await textApiPage.locator('#local-choice-details summary').click();
     await textApiPage.locator('#input-mode-text').check();
-    await textApiPage.locator('#text-source').selectOption('ssh');
+    await textApiPage.locator('#text-source input[value="ssh"]').check();
     const textCanary = 'TEXT_E2E_PRIVATE_CANARY';
     const syntheticSsh = (await readFile(join(ROOT, 'sample_logs', 'ssh_auth.log'), 'utf8'))
       .replace('admin', textCanary);
@@ -981,7 +1011,7 @@ async function main() {
       if (!(await sourcePage.locator('#local-choice-details').evaluate((node) => node.open)))
         await sourcePage.locator('#local-choice-details summary').click();
       await sourcePage.locator('#input-mode-text').check();
-      await sourcePage.locator('#text-source').selectOption(source);
+      await sourcePage.locator(`#text-source input[value="${source}"]`).check();
       const logText = await readFile(join(ROOT, 'sample_logs',
         source === 'application' ? 'brute_force.log' : 'web_shell.log'), 'utf8');
       await sourcePage.locator('#log-text').fill(logText);
@@ -1734,7 +1764,7 @@ async function main() {
     requireSafe(!(await meaningDisclosureSummary.evaluate((node) => node.parentElement.open)),
       'WORKSPACE_EVIDENCE_DISCLOSURE_CLOSE_FAILED');
     const guidanceTargets = await projectionShellPage.evaluate(() =>
-      ['.workspace-evidence-panel-36-6e .guidance-request', '.workspace-evidence-panel-36-6e select',
+      ['.workspace-evidence-panel-36-6e .guidance-request', '.workspace-evidence-panel-36-6e .guidance-topic-choices label',
         '.workspace-evidence-panel-36-6e details summary'].map((selector) => {
         const rect = document.querySelector(selector).getBoundingClientRect();
         return {selector, width: rect.width, height: rect.height, left: rect.left, top: rect.top,

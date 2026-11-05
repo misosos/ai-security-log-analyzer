@@ -127,7 +127,7 @@ async function submitText(page, value) {
   await prepareLocal(page);
   stage = 'prepare_synthetic_text';
   if (!(await page.locator('#input-mode-text').isChecked())) await page.locator('#input-mode-text').check();
-  await page.locator('#text-source').selectOption('application');
+  await page.locator('#text-source input[value="application"]').check();
   await page.locator('#log-text').fill(value);
   await page.locator('#local-button').click();
   stage = 'text_analysis_response';
@@ -296,7 +296,7 @@ async function main() {
   } else if (scenario === 'parser-incompatible') {
     await prepareLocal(page);
     if (!(await page.locator('#input-mode-text').isChecked())) await page.locator('#input-mode-text').check();
-    await page.locator('#text-source').selectOption('access');
+    await page.locator('#text-source input[value="access"]').check();
     await page.locator('#log-text').fill(`UNSUPPORTED_${canary}`);
     await page.locator('#local-button').click();
     await page.locator('#error-summary').waitFor({state: 'visible'});

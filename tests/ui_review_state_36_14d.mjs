@@ -17,6 +17,8 @@ const child = spawn(join(root, '.venv', 'bin', 'python'), ['-m', 'uvicorn', 'app
   {cwd: root, stdio: 'ignore', env: {...process.env, HOME: home, XDG_CONFIG_HOME: join(home, 'config')}});
 let browser; let context; let externalRequests = 0; let apiRequests = 0; let checklistPosts = 0; let samplePosts = 0; let pageErrors = 0; let consoleErrors = 0;
 const ensure = (condition, code) => { if (!condition) throw new Error(code); };
+const chooseRadio = (group, value) => group.locator(`input[type="radio"][value="${value}"]`).click();
+const checkedValue = (group) => group.locator('input[type="radio"]:checked').inputValue();
 try {
   let ready = false;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -122,57 +124,57 @@ try {
   const qualityHtmlBefore = await page.locator('#input-quality-summary-36-12b').evaluate((node)=>node.innerHTML);
   const resultSummaryBefore = await page.locator('#summary-cards').innerText();
   const cards = page.locator('#case-list .review-case-card');
-  ensure(await cards.count() === 2 && await cards.first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'unreviewed', 'WORKFLOW_INITIAL_STATE_FAILED');
+  ensure(await cards.count() === 2 && await checkedValue(cards.first().locator('.review-workflow-control-card-36-14d')) === 'unreviewed', 'WORKFLOW_INITIAL_STATE_FAILED');
   ensure((await page.locator('#review-workflow-counts-36-14d').innerText()).includes('검토 전 2') &&
     (await page.locator('#review-workflow-note-36-14d').innerText()).includes('안전·해결 판정이 아닙니다'), 'WORKFLOW_SUMMARY_OR_COPY_FAILED');
   const initialApiRequests = apiRequests;
-  const firstControl = cards.first().locator('.review-workflow-control-card-36-14d select');
-  await firstControl.focus();
-  ensure(await firstControl.evaluate((node) => document.activeElement === node && node.matches(':focus-visible')),
+  const firstControl = cards.first().locator('.review-workflow-control-card-36-14d');
+  await firstControl.locator('input:checked').focus();
+  ensure(await firstControl.locator('input:checked').evaluate((node) => document.activeElement === node),
     'WORKFLOW_KEYBOARD_FOCUS_FAILED');
   await page.keyboard.press('Tab');
   ensure(await page.evaluate(() => document.activeElement?.tagName === 'A'), 'WORKFLOW_KEYBOARD_TAB_EXIT_FAILED');
   await firstControl.focus();
-  await firstControl.selectOption('in_review');
-  ensure(await firstControl.evaluate((node) => node.isConnected && document.activeElement === node),
+  await chooseRadio(firstControl, 'in_review');
+  ensure(await firstControl.evaluate((node) => node.isConnected && node.contains(document.activeElement)),
     'WORKFLOW_FOCUS_LOST_AFTER_TRANSITION');
-  ensure(await firstControl.inputValue() === 'in_review' && (await page.locator('#review-workflow-counts-36-14d').innerText()).includes('검토 중 1'), 'WORKFLOW_TRANSITION_FAILED');
-  await firstControl.selectOption('deferred');
-  ensure(await firstControl.inputValue() === 'deferred', 'WORKFLOW_SECOND_CAS_FAILED');
+  ensure(await checkedValue(firstControl) === 'in_review' && (await page.locator('#review-workflow-counts-36-14d').innerText()).includes('검토 중 1'), 'WORKFLOW_TRANSITION_FAILED');
+  await chooseRadio(firstControl, 'deferred');
+  ensure(await checkedValue(firstControl) === 'deferred', 'WORKFLOW_SECOND_CAS_FAILED');
   const firstLink = cards.first().locator('a.review-detail-link');
   const caseHash = await firstLink.getAttribute('href');
   await firstLink.click();
   ensure(page.url().endsWith(caseHash) && !page.url().includes('in_review') && !page.url().includes('deferred'), 'WORKFLOW_ROUTE_STATE_LEAK');
-  const detailControl = page.locator('#case-detail-content .review-workflow-control-detail-36-14d select');
-  ensure(await detailControl.inputValue() === 'deferred', 'WORKFLOW_LIST_DETAIL_STATE_MISMATCH');
-  await detailControl.selectOption('reviewed');
-  ensure(await detailControl.inputValue() === 'reviewed', 'WORKFLOW_DETAIL_TRANSITION_FAILED');
+  const detailControl = page.locator('#case-detail-content .review-workflow-control-detail-36-14d');
+  ensure(await checkedValue(detailControl) === 'deferred', 'WORKFLOW_LIST_DETAIL_STATE_MISMATCH');
+  await chooseRadio(detailControl, 'reviewed');
+  ensure(await checkedValue(detailControl) === 'reviewed', 'WORKFLOW_DETAIL_TRANSITION_FAILED');
   await page.locator('#review-back-link').click();
-  ensure(await cards.first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'reviewed', 'WORKFLOW_BACK_STATE_NOT_RESTORED');
+  ensure(await checkedValue(cards.first().locator('.review-workflow-control-card-36-14d')) === 'reviewed', 'WORKFLOW_BACK_STATE_NOT_RESTORED');
   await page.locator('#review-queue-filter-toggle-36-13a').click();
   const stateFilter = page.locator('#review-queue-state-36-14d');
-  await stateFilter.selectOption('unreviewed');
+  await chooseRadio(stateFilter, 'unreviewed');
   ensure(await cards.count() === 1, 'WORKFLOW_STATUS_FILTER_FAILED');
   ensure((await page.locator('#review-workflow-counts-36-14d').innerText()).includes('검토함 1'),
     'WORKFLOW_GENERATION_COUNTS_TRACKED_FILTERED_SUBSET');
-  const filteredControl = cards.first().locator('.review-workflow-control-card-36-14d select');
-  await filteredControl.focus();
-  await filteredControl.selectOption('in_review');
-  ensure(await cards.count() === 0 && await page.evaluate(() => document.activeElement.id) === 'review-queue-state-36-14d',
+  const filteredControl = cards.first().locator('.review-workflow-control-card-36-14d');
+  await filteredControl.locator('input:checked').focus();
+  await chooseRadio(filteredControl, 'in_review');
+  ensure(await cards.count() === 0 && await page.evaluate(() => document.activeElement.closest('fieldset')?.id) === 'review-queue-state-36-14d',
     'WORKFLOW_FILTERED_CARD_FOCUS_FALLBACK_FAILED');
-  await page.locator('#review-queue-risk-36-13a').selectOption('HIGH');
+  await chooseRadio(page.locator('#review-queue-risk-36-13a'), 'HIGH');
   ensure(await cards.count() === 0, 'WORKFLOW_AND_FILTER_FAILED');
   await page.locator('#review-queue-reset-36-13a').click();
-  ensure(await cards.count() === 2 && await cards.first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'reviewed', 'QUEUE_RESET_CHANGED_WORKFLOW_STATE');
+  ensure(await cards.count() === 2 && await checkedValue(cards.first().locator('.review-workflow-control-card-36-14d')) === 'reviewed', 'QUEUE_RESET_CHANGED_WORKFLOW_STATE');
   ensure((await page.locator('#summary-cards').innerText()) === resultSummaryBefore &&
     (await page.locator('#input-quality-summary-36-12b').innerText().catch(() => '')) === qualityBefore &&
     (await page.locator('#input-quality-summary-36-12b').evaluate((node)=>node.innerHTML)) === qualityHtmlBefore,
   'WORKFLOW_CHANGED_ANALYSIS_OR_INPUT_QUALITY_SUMMARY');
-  const reviewedControl = cards.first().locator('.review-workflow-control-card-36-14d select');
-  await reviewedControl.selectOption('__reset__');
-  ensure(await reviewedControl.inputValue() === 'unreviewed', 'WORKFLOW_EXPLICIT_RESET_FAILED');
+  const reviewedControl = cards.first().locator('.review-workflow-control-card-36-14d');
+  await chooseRadio(reviewedControl, '__reset__');
+  ensure(await checkedValue(reviewedControl) === 'unreviewed', 'WORKFLOW_EXPLICIT_RESET_FAILED');
   await page.locator('#review-queue-filter-toggle-36-13a').click();
-  await page.locator('#review-queue-state-36-14d').selectOption('reviewed');
+  await chooseRadio(page.locator('#review-queue-state-36-14d'), 'reviewed');
   ensure(await cards.count() === 0 && await page.locator('#review-queue-empty-36-13a').isVisible(), 'WORKFLOW_EMPTY_FILTER_FAILED');
   await page.locator('#review-queue-reset-36-13a').click();
   ensure(await cards.count() === 2, 'WORKFLOW_FILTER_RESET_FAILED');
@@ -189,7 +191,7 @@ try {
     const queueControlBounds = await page.locator('#review-queue-search-36-13a, #review-queue-filter-toggle-36-13a, #review-queue-sort-36-13a')
       .evaluateAll((nodes)=>nodes.map((node)=>{const rect=node.getBoundingClientRect();return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};}));
     ensure(queueControlBounds.every((rect)=>rect.left>=0&&rect.right<=width+1&&rect.bottom>=0), `WORKFLOW_QUEUE_CONTROL_BOUNDS_${width}`);
-    const controlSizes = await page.locator('.review-workflow-control-36-14d select').evaluateAll((items) => items.filter((item) => item.getClientRects().length > 0).map((item) => ({w:item.getBoundingClientRect().width,h:item.getBoundingClientRect().height})));
+    const controlSizes = await page.locator('.review-workflow-control-36-14d label').evaluateAll((items) => items.filter((item) => item.getClientRects().length > 0).map((item) => ({w:item.getBoundingClientRect().width,h:item.getBoundingClientRect().height})));
     ensure(controlSizes.every((size) => size.w > 0 && size.h >= 44), `WORKFLOW_TARGET_SIZE_${width}`);
   }
   await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
@@ -257,7 +259,7 @@ try {
   await page.locator('#nav-start').click();
   await page.locator('#sample-button').click();
   await page.locator('#review-workflow-summary-36-14d').waitFor({state: 'visible'});
-  ensure(await cards.first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'unreviewed', 'WORKFLOW_NEW_GENERATION_REUSED_STATE');
+  ensure(await checkedValue(cards.first().locator('.review-workflow-control-card-36-14d')) === 'unreviewed', 'WORKFLOW_NEW_GENERATION_REUSED_STATE');
 
   // Rollback switch OFF is exercised by serving a test-only copy of app.js with only its fixed switch changed.
   const rollbackPage = await context.newPage();
@@ -271,7 +273,7 @@ try {
   await rollbackPage.locator('#results-heading').waitFor({state: 'visible'});
   ensure(await rollbackPage.locator('.review-workflow-control-36-14d').count() === 0 &&
     await rollbackPage.locator('#review-workflow-summary-36-14d').isHidden() &&
-    await rollbackPage.locator('#review-queue-state-filter-label-36-14d').isHidden() &&
+    await rollbackPage.locator('#review-queue-state-36-14d').isHidden() &&
     await rollbackPage.locator('#case-list .review-case-card').count() === 2, 'WORKFLOW_ROLLBACK_OFF_FAILED');
   await rollbackPage.close();
   const stateApiPaths = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => new URL(entry.name).pathname)

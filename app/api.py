@@ -535,8 +535,11 @@ def create_app(
             "/assets/linux-audit.js", serve_linux_audit_script, methods=["GET"],
             include_in_schema=False,
         )
+        def live_monitoring_script() -> Response:
+            return serve_live_monitoring_script(live_monitoring_service is not None)
+
         configured_app.add_api_route(
-            "/assets/live-monitoring.js", serve_live_monitoring_script, methods=["GET"],
+            "/assets/live-monitoring.js", live_monitoring_script, methods=["GET"],
             include_in_schema=False,
         )
         configured_app.add_api_route(

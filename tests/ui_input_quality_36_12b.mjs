@@ -21,6 +21,7 @@ const child = spawn(join(root, '.venv', 'bin', 'python'), [
 let browser;
 let externalRequests = 0;
 function ensure(value, code) { if (!value) throw new Error(code); }
+const chooseWorkflowState = (group, value) => group.locator(`input[type="radio"][value="${value}"]`).check();
 
 async function benchmarkQualityMarkup(page, label, selector) {
   const result = await page.locator(selector).evaluate((source, label) => {
@@ -64,6 +65,8 @@ try {
   const context = await browser.newContext({serviceWorkers: 'block'});
   let responseMutation = null;
   let textSuccessPayload = null;
+  let sourceContractCapture = false;
+  const sourceRequestPayloads = [];
   await context.route('**/*', async (route) => {
     if (new URL(route.request().url()).origin !== origin) {
       externalRequests += 1;
@@ -73,6 +76,14 @@ try {
     await route.continue();
   });
   await context.route(`${origin}/api/v1/investigations/text`, async (route) => {
+    if (sourceContractCapture) {
+      sourceRequestPayloads.push(route.request().postDataJSON());
+      await route.fulfill({status: 422, contentType: 'application/json', body: JSON.stringify({
+        error_code: 'PARSER_INCOMPATIBLE', user_message: '합성 회귀 검사용 응답입니다.',
+        recovery_action: '로그 입력을 확인하십시오.', retryable: false, field: null
+      })});
+      return;
+    }
     if (!responseMutation) return route.continue();
     const upstream = textSuccessPayload === null ? await route.fetch() : null;
     const payload = textSuccessPayload === null ? await upstream.json() : structuredClone(textSuccessPayload);
@@ -126,10 +137,10 @@ try {
     await page.locator('#input-quality-summary-36-12b .input-quality-reasons-36-12b').evaluateAll((nodes) =>
       nodes.every((node) => node.textContent.includes('처리 사유 보기') && node.textContent.trim() !== 'Details')),
   'UI_QUALITY_ZERO_REASON_SHOULD_BE_HIDDEN');
-  const workflowControls = page.locator('#case-list .review-workflow-control-card-36-14d select');
+  const workflowControls = page.locator('#case-list .review-workflow-control-card-36-14d');
   ensure(await workflowControls.count() > 0, 'UI_QUALITY_WORKFLOW_CONTROL_MISSING');
   const qualityMarkupBeforeWorkflow = await page.locator('#input-quality-summary-36-12b').evaluate((node) => node.innerHTML);
-  await workflowControls.first().selectOption('in_review');
+  await chooseWorkflowState(workflowControls.first(), 'in_review');
   ensure(await page.locator('#input-quality-summary-36-12b').evaluate((node) => node.innerHTML) === qualityMarkupBeforeWorkflow &&
     (await page.locator('#input-quality-summary-36-12b').innerText()).includes('모두 인식'),
   'UI_QUALITY_CHANGED_BY_REVIEW_WORKFLOW_STATE');
@@ -196,17 +207,19 @@ try {
   console.log('UI_QUALITY_FILE_PARTIAL error=PARSER_INCOMPATIBLE summary=partial analysis=not_admitted');
   benchmarkResults.push(await benchmarkQualityMarkup(page, 'file_3_source_partial', '#error-input-quality-36-12b'));
   const textSource = 'application';
-  const textForm = async (value, expectedStatus) => {
+  const textForm = async (value, expectedStatus, source = textSource) => {
     await page.locator('#nav-local').click();
     if (!(await page.locator('#local-choice-details').evaluate((node) => node.open)))
       await page.locator('#local-choice-details summary').click();
     if (!(await page.locator('#input-mode-text').isChecked())) await page.locator('#input-mode-text').check();
-    await page.locator('#text-source').selectOption(textSource);
+    await page.locator(`#text-source input[value="${source}"]`).check();
     await page.locator('#log-text').fill(value);
     const previousRequests = requests.length;
     await page.locator('#local-button').click();
     await page.waitForFunction(() => !document.querySelector('#local-button').disabled);
     ensure(requests.length === previousRequests + 1, 'UI_QUALITY_TEXT_REQUEST_COUNT_FAILED');
+    ensure(requests.at(-1).postDataJSON()?.source === source, 'UI_QUALITY_TEXT_SOURCE_NOT_SENT');
+    if (expectedStatus === 'request-only') return null;
     const summary = page.locator('#input-quality-summary-36-12b');
     const errorSummary = page.locator('#error-input-quality-36-12b');
     if (expectedStatus === 'legacy') {
@@ -237,6 +250,12 @@ try {
   textSuccessPayload = await requests.at(-1).response().then((response) => response.json());
   ensure(await page.locator('#input-quality-summary-36-12b .input-quality-source-list-36-12b > div').count() === 1 &&
     !await page.locator('#error-input-quality-36-12b').isVisible(), 'UI_QUALITY_TEXT_SOURCE_OR_STALE_ERROR_FAILED');
+  sourceContractCapture = true;
+  await textForm('synthetic source selection canary', 'request-only', 'ssh');
+  await textForm('synthetic source selection canary', 'request-only', 'access');
+  sourceContractCapture = false;
+  ensure(sourceRequestPayloads.map((item) => item.source).join('|') === 'ssh|access',
+    'UI_QUALITY_TEXT_RADIO_SOURCE_PAYLOAD_FAILED');
   const partial = await textForm(`${appLine}\nnot a supported application record`, 'partial');
   const reasonButton = partial.locator('summary').filter({hasText: '처리 사유 보기'});
   ensure(await reasonButton.count() === 1 &&
@@ -248,7 +267,10 @@ try {
       text.includes('지원하지 않는 형식') || text.includes('기타 거부')),
   'UI_QUALITY_REASON_DISCLOSURE_KEYBOARD_FAILED');
   const axeDisclosure = await new AxeBuilder({page}).analyze();
-  ensure(axeDisclosure.violations.length === 0, 'UI_QUALITY_DISCLOSURE_AXE_FAILED');
+  ensure(axeDisclosure.violations.length === 0,
+    `UI_QUALITY_DISCLOSURE_AXE_FAILED_${JSON.stringify(axeDisclosure.violations.map((item) => ({
+      id: item.id, targets: item.nodes.map((node) => node.target), summaries: item.nodes.map((node) => node.failureSummary)
+    })))}`);
   benchmarkResults.push(await benchmarkQualityMarkup(page, 'reason_disclosure_open', '#error-input-quality-36-12b'));
   const textNone = await textForm('not a supported application record', 'none');
   benchmarkResults.push(await benchmarkQualityMarkup(page, 'text_none', '#error-input-quality-36-12b'));
@@ -301,7 +323,7 @@ try {
   if (!(await page.locator('#local-choice-details').evaluate((node) => node.open)))
     await page.locator('#local-choice-details summary').click();
   if (!(await page.locator('#input-mode-text').isChecked())) await page.locator('#input-mode-text').check();
-  await page.locator('#text-source').selectOption(textSource);
+  await page.locator(`#text-source input[value="${textSource}"]`).check();
   await page.locator('#log-text').fill('   ');
   await page.locator('#local-button').click();
   await page.locator('#error-summary').waitFor({state: 'visible'});

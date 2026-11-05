@@ -126,3 +126,11 @@ Safari·실제 기기·수동 보조기술 검수는 남아 있다. Digest는 �
 ## 27. Final Decision
 
 자동 검증의 Viewer 회귀 및 전체 pytest는 통과했지만, strict console-error-zero 조건은 충족하지 않았다. WebKit 시작 화면에서 기존 CSP `style-src` 경고 6건, Chromium OFF 기본 앱에서 기존 `/api/v1/live/status` 404 경고 2건이 관측됐다. OFF의 기존 HTML/CSP를 수정하면 이번 허용 범위를 벗어나므로 이 단계의 최종 판정은 `ER_2E_SECURITY_HOLD`다. 이는 Viewer가 추가한 오류나 검증 우회가 확인됐다는 뜻은 아니다. 실제 Safari·모바일·Screen Reader 및 사용자 검수는 `ER_2E_USER_ACCEPTANCE_PENDING`으로 둔다. 운영 적용이나 ER-1D Gate 승인은 없다.
+
+### ER-2E-R1 후속 기록
+
+R1은 Chromium OFF의 Live Status 404 원인을 확인하고, 비활성 앱에서 고정 Live JS Asset을 no-op으로 제공하여 정상 페이지의 불필요한 status 요청을 제거했다. WebKit `style-src` 6건은 axe 전부터 발생하고 최소 재현의 단일 네이티브 `<select>`만으로 확인되어 CSP나 OFF HTML Body 동일성 계약을 보존하는 범위에서는 제거되지 않았다. 따라서 원래 `ER_2E_SECURITY_HOLD`를 해제하지 않는다. 상세 증거와 변경 내용은 [ER-2E-R1 복구 기록](counterfactual_browser_console_remediation_er2e_r1.md)을 참조한다. 실제 Safari·모바일·Screen Reader 및 사용자 수용은 계속 `NOT_TESTED` / `ER_2E_USER_ACCEPTANCE_PENDING`이다.
+
+### ER-2E-R2 후속 기록
+
+R1의 HOLD 당시 결론은 역사적 상태로 보존한다. R2에서 승인된 정적 컨트롤 변경으로 WebKit native-select CSP 오류를 radio group으로 해소하고 Chromium/WebKit OFF/ON 회귀를 다시 수행했다. R1 Live Status 복구와 CSP/Production 격리는 유지된다. 자동 검증 범위와 남은 구형 테스트/Safari·모바일·Screen Reader 제한은 [ER-2E-R2 복구 기록](counterfactual_webkit_csp_control_migration_er2e_r2.md)에 기록한다. 사용자 Acceptance는 별도 완료되지 않았다.

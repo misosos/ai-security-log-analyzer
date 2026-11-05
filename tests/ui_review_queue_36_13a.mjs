@@ -1,5 +1,5 @@
 // Phase 36.13A review queue interaction contract; synthetic sample only.
-import {chromium} from '@playwright/test';
+import {chromium, webkit} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {spawn} from 'node:child_process';
 import {mkdtemp, mkdir, rm, stat} from 'node:fs/promises';
@@ -8,6 +8,8 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
+const chooseRadio = (group, value) => group.locator(`input[type="radio"][value="${value}"]`).check();
+const selectedRadio = (group) => group.locator('input[type="radio"]:checked').inputValue();
 const home = await mkdtemp(join(tmpdir(), 'review-queue-36-13a-'));
 await mkdir(join(home, 'config'));
 const socket = createServer();
@@ -29,6 +31,7 @@ let consoleErrors = 0;
 const consoleErrorCategories = {favicon: 0, asset_resource: 0, sample_api_resource: 0,
   checklist_api_resource: 0, text_api_resource: 0, file_api_resource: 0,
   other_api_resource: 0, other_resource: 0, csp: 0, runtime: 0, other: 0};
+const consoleErrorDetails = [];
 let syntheticBenchmark = null;
 let productionAssetBytes = null;
 const ensure = (value, code) => { if (!value) throw new Error(code); };
@@ -42,7 +45,9 @@ try {
     await new Promise((done) => setTimeout(done, 50));
   }
   ensure(ready, 'QUEUE_SERVER_START_FAILED');
-  browser = await chromium.launch({headless: true, args: ['--disable-background-networking', '--no-first-run']});
+  const browserType = process.env.UI_BROWSER === 'webkit' ? webkit : chromium;
+  if (!['chromium', 'webkit'].includes(process.env.UI_BROWSER || 'chromium')) throw new Error('QUEUE_UNSUPPORTED_BROWSER');
+  browser = await browserType.launch({headless: true, args: ['--disable-background-networking', '--no-first-run']});
   context = await browser.newContext({serviceWorkers: 'block'});
   await context.route('**/*', async (route) => {
     if (new URL(route.request().url()).origin !== origin) {
@@ -86,6 +91,7 @@ try {
     else if (text.includes('Uncaught')) category = 'runtime';
     else category = 'other';
     consoleErrorCategories[category]++;
+    consoleErrorDetails.push({category, text, location: message.location()});
   });
   page.on('request', (request) => {
     const url = new URL(request.url());
@@ -149,27 +155,27 @@ try {
   ensure(await filterToggle.getAttribute('aria-expanded') === 'true' &&
     await page.locator('#review-queue-filter-panel-36-13a').isVisible(), 'QUEUE_FILTER_PANEL_OPEN_FAILED');
   const risk = page.locator('#review-queue-risk-36-13a');
-  await risk.selectOption('HIGH');
+  await chooseRadio(risk, 'HIGH');
   ensure(await cards.count() === 1 && (await cards.first().locator('.review-status-badge').first().innerText()).includes('높음'),
     'QUEUE_RISK_FILTER_FAILED');
   ensure(await page.locator('#review-queue-filter-count-36-13a').innerText() === '1개' &&
     await page.locator('#review-queue-filter-chips-36-13a').isVisible(), 'QUEUE_ACTIVE_FILTER_CHIP_MISSING');
   await page.waitForFunction(() => document.getElementById('review-queue-count-announcement-36-13a').textContent === '전체 2건 중 1건');
-  await risk.selectOption('MEDIUM');
+  await chooseRadio(risk, 'MEDIUM');
   ensure(await cards.count() === 0, 'QUEUE_RISK_MEDIUM_FILTER_FAILED');
   const role = page.locator('#review-queue-role-36-13a');
-  await role.selectOption('application');
+  await chooseRadio(role, 'application');
   ensure(await cards.count() === 0, 'QUEUE_ROLE_FILTER_FAILED');
   ensure(await page.locator('#review-queue-active-chip-list-36-13a [data-review-queue-chip="role"]').count() === 1,
     'QUEUE_ROLE_FILTER_CHIP_MISSING');
   await page.locator('#review-queue-active-chip-list-36-13a [data-review-queue-chip="role"]').click();
-  ensure(await role.inputValue() === 'all' && await risk.inputValue() === 'MEDIUM', 'QUEUE_FILTER_CHIP_REMOVE_FAILED');
-  await role.selectOption('unknown');
+  ensure(await selectedRadio(role) === 'all' && await selectedRadio(risk) === 'MEDIUM', 'QUEUE_FILTER_CHIP_REMOVE_FAILED');
+  await chooseRadio(role, 'unknown');
   const priority = page.locator('#review-queue-priority-36-13a');
-  await priority.selectOption('review_now');
+  await chooseRadio(priority, 'review_now');
   ensure(await cards.count() === 0, 'QUEUE_PRIORITY_FILTER_FAILED');
-  await priority.selectOption('undetermined');
-  await risk.selectOption('all');
+  await chooseRadio(priority, 'undetermined');
+  await chooseRadio(risk, 'all');
   await page.locator('#review-queue-filter-close-36-13a').click();
   ensure(await page.locator('#review-queue-filter-panel-36-13a').isHidden() &&
     await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
@@ -184,55 +190,74 @@ try {
 
   await search.fill('');
   await filterToggle.click();
-  await priority.selectOption('all');
+  await chooseRadio(priority, 'all');
   await page.locator('#review-queue-filter-close-36-13a').click();
   const sort = page.locator('#review-queue-sort-36-13a');
-  await sort.selectOption('oldest');
+  await chooseRadio(sort, 'oldest');
   const oldestTitles = await cards.locator('.review-card-title').allInnerTexts();
-  await sort.selectOption('newest');
+  await chooseRadio(sort, 'newest');
   const newestTitles = await cards.locator('.review-card-title').allInnerTexts();
   ensure(oldestTitles.length === total && newestTitles.length === total &&
     (total < 2 || oldestTitles[0] !== newestTitles[0]), 'QUEUE_TIME_SORT_FAILED');
-  await sort.selectOption('title');
+  await chooseRadio(sort, 'title');
   const titleSorted = await cards.locator('.review-card-title').allInnerTexts();
   ensure(JSON.stringify(titleSorted) === JSON.stringify([...titleSorted].sort((a, b) => {
     const left = a.normalize('NFKC').trim().toLowerCase();
     const right = b.normalize('NFKC').trim().toLowerCase();
     return left < right ? -1 : left > right ? 1 : 0;
   })), 'QUEUE_TITLE_SORT_FAILED');
-  await sort.selectOption('default');
+  await chooseRadio(sort, 'default');
   ensure(JSON.stringify(await cards.locator('.review-card-title').allInnerTexts()) === JSON.stringify(initialTitles),
     'QUEUE_DEFAULT_ORDER_NOT_PRESERVED');
   ensure(apiRequests === requestsBeforeQueueInteractions, 'QUEUE_FILTER_TRIGGERED_API_REQUEST');
 
   const axe = await new AxeBuilder({page}).analyze();
   ensure(axe.violations.length === 0, `QUEUE_AXE_VIOLATIONS_${axe.violations.map((item) => item.id).join('_')}`);
-  await search.focus();
-  await page.keyboard.press('Tab');
-  const focusOutline = await filterToggle
-    .evaluate((node) => getComputedStyle(node).outlineStyle !== 'none');
-  ensure(await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
-    'QUEUE_FILTER_BUTTON_KEYBOARD_FOCUS_FAILED');
-  await page.keyboard.press('Enter');
-  ensure(await filterToggle.getAttribute('aria-expanded') === 'true', 'QUEUE_FILTER_BUTTON_KEYBOARD_TOGGLE_FAILED');
-  const tabOrder = [await page.evaluate(() => document.activeElement.id)];
-  for (let index = 0; index < 9; index++) {
+  let focusOutline;
+  if (process.env.UI_BROWSER === 'webkit') {
+    // Playwright's macOS WebKit honors the platform setting that Tab skips buttons.
+    // Focus the native button explicitly, then exercise its keyboard activation.
+    await filterToggle.focus();
+    focusOutline = await filterToggle.evaluate((node) => getComputedStyle(node).outlineStyle !== 'none');
+    await page.keyboard.press('Enter');
+  } else {
+    await search.click();
     await page.keyboard.press('Tab');
-    tabOrder.push(await page.evaluate(() => document.activeElement.id ||
-      (document.activeElement.dataset.reviewQueueChip ? `chip-${document.activeElement.dataset.reviewQueueChip}` :
-        document.activeElement.tagName.toLowerCase())));
+    focusOutline = await filterToggle.evaluate((node) => getComputedStyle(node).outlineStyle !== 'none');
+    ensure(await page.evaluate(() => document.activeElement.id) === 'review-queue-filter-toggle-36-13a',
+      'QUEUE_FILTER_BUTTON_KEYBOARD_FOCUS_FAILED');
+    await page.keyboard.press('Enter');
   }
-  ensure(focusOutline && JSON.stringify(tabOrder) === JSON.stringify([
-    'review-queue-filter-toggle-36-13a', 'review-queue-sort-36-13a',
-    'review-queue-risk-36-13a', 'review-queue-role-36-13a', 'review-queue-priority-36-13a',
-    'review-queue-state-36-14d', 'review-queue-filter-close-36-13a', 'chip-role', 'review-queue-reset-36-13a', 'review-case-link-0'
-  ]), `QUEUE_KEYBOARD_ORDER_FAILED_${tabOrder.join('_')}`);
+  ensure(await filterToggle.getAttribute('aria-expanded') === 'true', 'QUEUE_FILTER_BUTTON_KEYBOARD_TOGGLE_FAILED');
+  if (process.env.UI_BROWSER === 'webkit') {
+    const allRisk = risk.locator('input[value="all"]');
+    await allRisk.focus();
+    await page.keyboard.press('ArrowRight');
+    const webkitRadioResult = {selected: await selectedRadio(risk), focusVisible:
+      await allRisk.evaluate((node) => node.matches(':focus-visible')),
+      active: await page.evaluate(() => ({name: document.activeElement.name, value: document.activeElement.value}))};
+    ensure(webkitRadioResult.selected === 'HIGH' && webkitRadioResult.active.name === 'review-queue-risk-36-13a',
+      `QUEUE_WEBKIT_RADIO_KEYBOARD_OPERATION_FAILED_${JSON.stringify(webkitRadioResult)}`);
+  } else {
+    const tabOrder = [await page.evaluate(() => document.activeElement.id)];
+    for (let index = 0; index < 9; index++) {
+      await page.keyboard.press('Tab');
+      tabOrder.push(await page.evaluate(() => document.activeElement.name || document.activeElement.id ||
+        (document.activeElement.dataset.reviewQueueChip ? `chip-${document.activeElement.dataset.reviewQueueChip}` :
+          document.activeElement.tagName.toLowerCase())));
+    }
+    ensure(focusOutline && JSON.stringify(tabOrder) === JSON.stringify([
+      'review-queue-filter-toggle-36-13a', 'review-queue-sort-36-13a',
+      'review-queue-risk-36-13a', 'review-queue-role-36-13a', 'review-queue-priority-36-13a',
+      'review-queue-state-36-14d', 'review-queue-filter-close-36-13a', 'chip-role', 'review-queue-reset-36-13a', 'review-case-link-0'
+    ]), `QUEUE_KEYBOARD_ORDER_FAILED_${tabOrder.join('_')}`);
+  }
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({width, height: 900});
     ensure(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth), `QUEUE_HORIZONTAL_OVERFLOW_${width}`);
     const controls = await page.locator('#review-queue-controls-36-13a').evaluate((node) => ({
       width: node.getBoundingClientRect().width,
-      targets: [...node.querySelectorAll('input,select,button')].filter((target) => target.getClientRects().length > 0).map((target) => ({
+      targets: [...node.querySelectorAll('input[type="search"],button,.review-queue-radio-options-36-13a label')].filter((target) => target.getClientRects().length > 0).map((target) => ({
         width: target.getBoundingClientRect().width, height: target.getBoundingClientRect().height
       }))
     }));
@@ -274,12 +299,12 @@ try {
       <label for="review-queue-search-36-13a">검토 건 검색<input id="review-queue-search-36-13a" type="search" maxlength="100"></label>
       <button id="review-queue-filter-toggle-36-13a" aria-expanded="false" aria-controls="review-queue-filter-panel-36-13a">필터 <span id="review-queue-filter-count-36-13a">0개</span></button>
       <div id="review-queue-filter-panel-36-13a" hidden>
-        <label for="review-queue-risk-36-13a">위험도<select id="review-queue-risk-36-13a"><option value="all">전체</option><option value="HIGH">높음</option><option value="MEDIUM">보통</option><option value="LOW">낮음</option></select></label>
-        <label for="review-queue-role-36-13a">로그 역할<select id="review-queue-role-36-13a"><option value="all">전체</option><option value="application">애플리케이션 로그</option><option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option><option value="unknown">역할 미확인</option></select></label>
-        <label for="review-queue-priority-36-13a">확인 순서<select id="review-queue-priority-36-13a"><option value="all">전체</option><option value="review_now">먼저 확인</option><option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option><option value="undetermined">확인 순서 미정</option></select></label>
+        <fieldset id="review-queue-risk-36-13a"><legend>위험도</legend><label><input type="radio" name="review-queue-risk-36-13a" value="all" checked>전체</label><label><input type="radio" name="review-queue-risk-36-13a" value="HIGH">높음</label><label><input type="radio" name="review-queue-risk-36-13a" value="MEDIUM">보통</label><label><input type="radio" name="review-queue-risk-36-13a" value="LOW">낮음</label></fieldset>
+        <fieldset id="review-queue-role-36-13a"><legend>로그 역할</legend><label><input type="radio" name="review-queue-role-36-13a" value="all" checked>전체</label><label><input type="radio" name="review-queue-role-36-13a" value="application">애플리케이션 로그</label><label><input type="radio" name="review-queue-role-36-13a" value="ssh">SSH 인증 로그</label><label><input type="radio" name="review-queue-role-36-13a" value="access">접근 로그</label><label><input type="radio" name="review-queue-role-36-13a" value="unknown">역할 미확인</label></fieldset>
+        <fieldset id="review-queue-priority-36-13a"><legend>확인 순서</legend><label><input type="radio" name="review-queue-priority-36-13a" value="all" checked>전체</label><label><input type="radio" name="review-queue-priority-36-13a" value="review_now">먼저 확인</label><label><input type="radio" name="review-queue-priority-36-13a" value="review_soon">우선 확인</label><label><input type="radio" name="review-queue-priority-36-13a" value="review_later">일반 확인</label><label><input type="radio" name="review-queue-priority-36-13a" value="undetermined">확인 순서 미정</label></fieldset>
         <button id="review-queue-filter-close-36-13a" type="button">닫기</button>
       </div>
-      <label for="review-queue-sort-36-13a">정렬<select id="review-queue-sort-36-13a"><option value="default">기본 검토 순서</option><option value="risk">위험도 높은 순</option><option value="newest">최근 관찰 순</option><option value="oldest">오래된 관찰 순</option><option value="title">제목 순</option></select></label>
+      <fieldset id="review-queue-sort-36-13a"><legend>정렬</legend><label><input type="radio" name="review-queue-sort-36-13a" value="default" checked>기본 검토 순서</label><label><input type="radio" name="review-queue-sort-36-13a" value="risk">위험도 높은 순</label><label><input type="radio" name="review-queue-sort-36-13a" value="newest">최근 관찰 순</label><label><input type="radio" name="review-queue-sort-36-13a" value="oldest">오래된 관찰 순</label><label><input type="radio" name="review-queue-sort-36-13a" value="title">제목 순</label></fieldset>
       <div id="review-queue-filter-chips-36-13a" hidden><div id="review-queue-active-chip-list-36-13a"></div><button id="review-queue-reset-36-13a" type="button">조건 초기화</button></div>
       <span id="review-queue-total-36-13a"></span>
       <p id="review-queue-count-36-13a"></p><span id="review-queue-count-announcement-36-13a" class="review-queue-sr-only-36-13a" aria-live="polite" aria-atomic="true"></span>
@@ -320,6 +345,7 @@ try {
     const role = document.getElementById('review-queue-role-36-13a');
     const priority = document.getElementById('review-queue-priority-36-13a');
     const sort = document.getElementById('review-queue-sort-36-13a');
+    const choose = (group, value) => { group.querySelector(`input[value="${value}"]`).checked = true; };
     const measure = (fn) => { const start = performance.now(); fn(); return performance.now() - start; };
     for (let run = 0; run < 25; run++) {
       queue.begin(true);
@@ -327,13 +353,13 @@ try {
         row.index, row.priorityBadge, row.roleBadge)); queue.render(); });
       search.value = 'synthetic case 042';
       const searched = measure(() => search.dispatchEvent(new Event('input', {bubbles: true})));
-      search.value = 'synthetic case 042'; risk.value = 'HIGH'; role.value = 'access'; priority.value = 'review_later';
+      search.value = 'synthetic case 042'; choose(risk, 'HIGH'); choose(role, 'access'); choose(priority, 'review_later');
       const combined = measure(() => [risk, role, priority].forEach((control) =>
         control.dispatchEvent(new Event('change', {bubbles: true}))));
-      search.value = ''; [risk, role, priority].forEach((control) => { control.value = 'all'; });
-      sort.value = 'risk';
+      search.value = ''; [risk, role, priority].forEach((control) => choose(control, 'all'));
+      choose(sort, 'risk');
       const riskSort = measure(() => sort.dispatchEvent(new Event('change', {bubbles: true})));
-      sort.value = 'title';
+      choose(sort, 'title');
       const titleSort = measure(() => sort.dispatchEvent(new Event('change', {bubbles: true})));
       const reset = measure(() => document.getElementById('review-queue-reset-36-13a').click());
       if (run >= 5) {
@@ -368,46 +394,48 @@ try {
     search.dispatchEvent(new Event('input', {bubbles: true}));
     const injectionElements = document.querySelectorAll('#case-list img, #case-list script').length;
     const riskOrder = (() => {
-      search.value = ''; risk.value = 'all'; role.value = 'all'; priority.value = 'all'; sort.value = 'risk';
+      search.value = ''; choose(risk, 'all'); choose(role, 'all'); choose(priority, 'all'); choose(sort, 'risk');
       sort.dispatchEvent(new Event('change', {bubbles: true}));
       return [...document.querySelectorAll('#case-list [data-test-row]')].slice(0, 5).map((node) => Number(node.dataset.testRow));
     })();
     const roleCounts = {};
     for (const roleValue of ['application', 'ssh', 'access', 'unknown']) {
-      role.value = roleValue; role.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(role, roleValue); role.dispatchEvent(new Event('change', {bubbles: true}));
       roleCounts[roleValue] = document.querySelectorAll('#case-list [data-test-row]').length;
     }
-    role.value = 'all'; role.dispatchEvent(new Event('change', {bubbles: true}));
+    choose(role, 'all'); role.dispatchEvent(new Event('change', {bubbles: true}));
     const priorityCounts = {};
     for (const priorityValue of ['review_now', 'review_soon', 'review_later', 'undetermined']) {
-      priority.value = priorityValue; priority.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(priority, priorityValue); priority.dispatchEvent(new Event('change', {bubbles: true}));
       priorityCounts[priorityValue] = document.querySelectorAll('#case-list [data-test-row]').length;
     }
-    priority.value = 'all'; priority.dispatchEvent(new Event('change', {bubbles: true}));
-    search.value = 'synthetic case 042'; risk.value = 'HIGH'; role.value = 'access'; priority.value = 'review_later';
+    choose(priority, 'all'); priority.dispatchEvent(new Event('change', {bubbles: true}));
+    search.value = 'synthetic case 042'; choose(risk, 'HIGH'); choose(role, 'access'); choose(priority, 'review_later');
     search.dispatchEvent(new Event('input', {bubbles: true}));
     const andFilterCount = document.querySelectorAll('#case-list [data-test-row]').length;
-    search.value = ''; [risk, role, priority].forEach((control) => { control.value = 'all'; });
+    search.value = ''; [risk, role, priority].forEach((control) => choose(control, 'all'));
     [search, risk, role, priority].forEach((control) => control.dispatchEvent(new Event(
       control === search ? 'input' : 'change', {bubbles: true})));
     const newestOrder = (() => {
-      sort.value = 'newest'; sort.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(sort, 'newest'); sort.dispatchEvent(new Event('change', {bubbles: true}));
       return [...document.querySelectorAll('#case-list [data-test-row]')].map((node) => Number(node.dataset.testRow));
     })();
     const oldestOrder = (() => {
-      sort.value = 'oldest'; sort.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(sort, 'oldest'); sort.dispatchEvent(new Event('change', {bubbles: true}));
       return [...document.querySelectorAll('#case-list [data-test-row]')].map((node) => Number(node.dataset.testRow));
     })();
     const titleOrder = (() => {
-      sort.value = 'title'; sort.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(sort, 'title'); sort.dispatchEvent(new Event('change', {bubbles: true}));
       return [...document.querySelectorAll('#case-list [data-test-row]')].map((node) => Number(node.dataset.testRow));
     })();
     const finalOrder = (() => {
-      sort.value = 'default'; sort.dispatchEvent(new Event('change', {bubbles: true}));
+      choose(sort, 'default'); sort.dispatchEvent(new Event('change', {bubbles: true}));
       return [...document.querySelectorAll('#case-list [data-test-row]')].map((node) => Number(node.dataset.testRow));
     })();
     const labelNames = ['검토 건 검색', '위험도', '로그 역할', '확인 순서', '정렬']
-      .map((label) => [...document.querySelectorAll('label')].find((node) => node.textContent.includes(label)) !== undefined);
+      .map((label, index) => index === 0 ?
+        [...document.querySelectorAll('label')].some((node) => node.textContent.includes(label)) :
+        [...document.querySelectorAll('fieldset')].some((node) => node.querySelector('legend')?.textContent === label));
     return {stats, domNodes, htmlBytes, searchBound, normalizedSearchCount, unicodeSearchCount,
       canaryDomLeak, injectionElements, riskOrder, roleCounts, priorityCounts, andFilterCount,
       titleTieStable: titleOrder.indexOf(0) < titleOrder.indexOf(70), newestOrder: newestOrder.slice(-10),
@@ -434,8 +462,8 @@ try {
   const requestCount = samplePosts + checklistPosts;
   ensure(externalRequests === 0, 'QUEUE_EXTERNAL_REQUESTS_NONZERO');
   ensure(pageErrors === 0, 'QUEUE_BROWSER_PAGE_ERROR');
-  ensure(consoleErrors === 0, `QUEUE_BROWSER_CONSOLE_ERROR_${Object.entries(consoleErrorCategories)
-    .filter(([, count]) => count > 0).map(([category]) => category.toUpperCase()).join('_')}`);
+  ensure(consoleErrors === 0, `QUEUE_BROWSER_CONSOLE_ERROR_${JSON.stringify({categories: consoleErrorCategories,
+    details: consoleErrorDetails})}`);
   ensure(requestCount === 2 && samplePosts === 2 && checklistPosts === 0, 'QUEUE_ANALYSIS_REQUEST_COUNT_MISMATCH');
 } finally {
   if (context) await context.close();

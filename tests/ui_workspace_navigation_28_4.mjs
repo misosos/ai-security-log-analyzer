@@ -92,13 +92,19 @@ try {
     await page.locator('#nav-start').getAttribute('aria-current') === 'page' &&
     await page.locator('#nav-live').isHidden() && await page.locator('#nav-results').isHidden(),
     'INITIAL_WORKSPACE_FAILED');
-  ensure(await page.evaluate(() =>
-    document.querySelectorAll('#analysis-flow .flow-step').length === 4 &&
-    [...document.querySelectorAll('svg:not(#icon-sprite)')].every((node) =>
-      node.getAttribute('aria-hidden') === 'true' && node.getAttribute('focusable') === 'false') &&
-    [...document.querySelectorAll('svg use')].every((node) =>
-      (node.getAttribute('href') || '').startsWith('#icon-')) &&
-    [...document.querySelectorAll('button')].every((node) => node.textContent.trim().length > 0)),
+  const flowDiagnostics = await page.evaluate(() => ({
+    flowSteps: document.querySelectorAll('#analysis-flow .flow-step').length,
+    svg: [...document.querySelectorAll('svg:not(#icon-sprite)')].map((node) => ({
+      id: node.id, className: node.getAttribute('class'), ariaHidden: node.getAttribute('aria-hidden'),
+      focusable: node.getAttribute('focusable'), hiddenByAncestor: Boolean(node.closest('[aria-hidden="true"]'))})),
+    uses: [...document.querySelectorAll('svg use')].map((node) => node.getAttribute('href')),
+    emptyButtons: [...document.querySelectorAll('button')].filter((node) => !node.textContent.trim())
+      .map((node) => ({id: node.id, ariaLabel: node.getAttribute('aria-label')})),
+  }));
+  ensure(flowDiagnostics.flowSteps === 4 && flowDiagnostics.svg.every((node) =>
+      (node.ariaHidden === 'true' || node.hiddenByAncestor) && node.focusable === 'false') &&
+    flowDiagnostics.uses.every((href) => (href || '').startsWith('#icon-')) &&
+    flowDiagnostics.emptyButtons.every((node) => Boolean(node.ariaLabel)),
   'ICON_OR_FLOW_ACCESSIBILITY_FAILED');
   if (shots) await page.screenshot({path: join(shots, 'start.png'), fullPage: true});
   await page.locator('#sample-button').click();
@@ -108,7 +114,7 @@ try {
     await page.locator('#results-heading').evaluate((node) => {
       const rect = node.getBoundingClientRect(); return rect.top >= 0 && rect.top < innerHeight;
   }) && !new URL(page.url()).hash, 'RESULT_REQUIRES_SCROLL');
-  ensure(await page.locator('.guidance-request').count() === 2 && guidanceRequests === 0,
+  ensure(guidanceRequests === 0 && await page.locator('.guidance-citation').count() === 0,
     'GUIDANCE_MUST_BE_OPT_IN');
   const resultMetrics = await page.evaluate(() => ({
     viewport: innerWidth,
@@ -119,7 +125,7 @@ try {
     caseColumns: getComputedStyle(document.querySelector('#case-list')).gridTemplateColumns,
     railRightOfCases: document.querySelector('#result-rail').getBoundingClientRect().left >
       document.querySelector('#case-section').getBoundingClientRect().right,
-    paragraphCh: getComputedStyle(document.querySelector('#results > p')).maxWidth,
+    paragraphCh: getComputedStyle(document.querySelector('#result-context')).maxWidth,
     resultFontPx: parseFloat(getComputedStyle(document.querySelector('#results')).fontSize),
     lineHeightPx: parseFloat(getComputedStyle(document.querySelector('#results')).lineHeight),
     summaryColumns: getComputedStyle(document.querySelector('#summary-cards')).gridTemplateColumns.split(' ').length,
@@ -182,15 +188,15 @@ try {
     p95_ms: guidanceDomSamples[Math.ceil(guidanceDomSamples.length * 0.95) - 1],
     max_ms: guidanceDomSamples.at(-1), request_payload_bytes: guidanceRequestBytes,
     response_payload_bytes: guidanceResponseBytes})}`);
-  const guidanceCategory = guidanceCard.locator('select[aria-label="근거 도움말 주제"]');
-  await guidanceCategory.selectOption('EXPLAIN_RISK');
+  const guidanceCategory = guidanceCard.locator('.guidance-topic-choices');
+  await guidanceCategory.locator('input[value="EXPLAIN_RISK"]').check();
   await guidanceButton.focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !document.querySelector('.guidance-request').disabled &&
     document.querySelector('.guidance-status').textContent.includes('승인된 근거 도움말'));
   ensure(await guidanceCard.locator('.guidance-citation').count() === 0,
     'GUIDANCE_REFUSAL_RENDER_FAILED');
-  await guidanceCategory.selectOption('NEXT_CHECKS');
+  await guidanceCategory.locator('input[value="NEXT_CHECKS"]').check();
   await guidanceButton.focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !document.querySelector('.guidance-request').disabled &&

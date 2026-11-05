@@ -55,11 +55,30 @@ def test_live_script_is_fixed_self_hosted_asset_only_in_demo_app():
         assert response.headers["content-type"].startswith("text/javascript")
         assert response.headers["cache-control"] == "no-store"
         assert "script-src 'self'" in response.headers["content-security-policy"]
+        assert response.content == b"// Live Monitoring is not configured for this app instance.\n"
+        assert b"/api/v1/live/status" not in response.content
         assert client.get("/api/v1/live/status").json()["error_code"] == "LIVE_MONITORING_NOT_ENABLED"
         assert "/assets/live-monitoring.js" not in client.get("/openapi.json").json()["paths"]
     source = (ROOT / "app" / "api.py").read_text(encoding="utf-8")
     assert 'if not enable_linux_audit_api:' in source
-    assert '"/assets/live-monitoring.js", serve_live_monitoring_script' in source
+    assert '"/assets/live-monitoring.js", live_monitoring_script' in source
+
+
+def test_live_script_is_enabled_only_with_configured_service(tmp_path):
+    from app.live_monitoring import LiveDetectionAccumulator, LiveMonitorConfig, LiveProcessingWorker, open_live_tail_session
+    from app.live_monitoring.service import LiveMonitoringService
+
+    path = tmp_path / "synthetic.log"
+    path.write_bytes(b"past line\n")
+    session = open_live_tail_session(LiveMonitorConfig("application", path.resolve()))
+    worker = LiveProcessingWorker(session, LiveDetectionAccumulator("application", 64, 65536), 16, 4096)
+    try:
+        with TestClient(create_app(live_monitoring_service=LiveMonitoringService(worker))) as client:
+            response = client.get("/assets/live-monitoring.js")
+            assert response.status_code == 200
+            assert response.content == JS.read_bytes()
+    finally:
+        worker.close()
 
 
 def test_live_script_has_no_unsafe_dom_storage_or_remote_resource():

@@ -85,7 +85,9 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "legend" for tag, _ in nodes)
     assert any(attrs.get("id") == "local-upload" and "hidden" in attrs for _, attrs in nodes)
     assert {attrs.get("name") for tag, attrs in nodes if tag == "input" and attrs.get("name")} == {
-        "application_file", "ssh_file", "access_file", "audit_file", "input_mode"
+        "application_file", "ssh_file", "access_file", "audit_file", "input_mode", "text_source",
+        "review-queue-sort-36-13a", "review-queue-risk-36-13a", "review-queue-role-36-13a",
+        "review-queue-priority-36-13a", "review-queue-state-36-14d",
     }
     assert any(tag == "input" and attrs.get("type") == "search" and
                attrs.get("id") == "review-queue-search-36-13a" and attrs.get("maxlength") == "100"
@@ -95,7 +97,26 @@ def test_landing_has_semantic_static_accessible_contract():
     assert any(tag == "textarea" and attrs.get("id") == "log-text" and
                attrs.get("aria-describedby") == "text-help text-byte-count text-line-count text-error"
                for tag, attrs in nodes)
-    assert any(tag == "select" and attrs.get("id") == "text-source" for tag, attrs in nodes)
+    assert not any(tag == "select" and attrs.get("id") in {
+        "text-source", "review-queue-sort-36-13a", "review-queue-risk-36-13a",
+        "review-queue-role-36-13a", "review-queue-priority-36-13a",
+        "review-queue-state-36-14d",
+    } for tag, attrs in nodes)
+    text_source_radios = [attrs for tag, attrs in nodes if tag == "input" and attrs.get("name") == "text_source"]
+    assert {attrs.get("value") for attrs in text_source_radios} == {"application", "ssh", "access"}
+    assert sum("checked" in attrs for attrs in text_source_radios) == 1
+    assert any(tag == "fieldset" and attrs.get("id") == "text-source" for tag, attrs in nodes)
+    for group_id, expected_values in {
+        "review-queue-sort-36-13a": {"default", "risk", "newest", "oldest", "title"},
+        "review-queue-risk-36-13a": {"all", "HIGH", "MEDIUM", "LOW"},
+        "review-queue-role-36-13a": {"all", "application", "ssh", "access", "unknown"},
+        "review-queue-priority-36-13a": {"all", "review_now", "review_soon", "review_later", "undetermined"},
+        "review-queue-state-36-14d": {"all", "unreviewed", "in_review", "reviewed", "deferred"},
+    }.items():
+        group = next(attrs for tag, attrs in nodes if tag == "fieldset" and attrs.get("id") == group_id)
+        assert "aria-labelledby" in group
+        assert {attrs.get("value") for tag, attrs in nodes if tag == "input" and
+                attrs.get("type") == "radio" and attrs.get("name") == group_id} == expected_values
     assert not any(attr.startswith("on") or attr == "style" for _, attrs in nodes for attr in attrs)
     assert not any(attrs.get("src", "").startswith(("http:", "https:", "data:")) for _, attrs in nodes)
     assert "<style" not in source.lower() and "<script>" not in source.lower()

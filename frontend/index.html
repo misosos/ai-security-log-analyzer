@@ -271,12 +271,14 @@
         </fieldset>
         <section id="text-input-panel" class="text-input-panel" aria-labelledby="text-input-heading" hidden>
           <h3 id="text-input-heading">로그 텍스트 직접 입력</h3>
-          <label for="text-source">로그 종류</label>
-          <select id="text-source" name="text_source" aria-describedby="text-help text-error">
-            <option value="application">애플리케이션 인증 로그</option>
-            <option value="ssh">SSH 인증 로그</option>
-            <option value="access">웹 접근 로그</option>
-          </select>
+          <fieldset id="text-source" class="text-source-options" aria-describedby="text-help text-error">
+            <legend>로그 종류</legend>
+            <div class="text-source-options-list">
+              <label><input type="radio" name="text_source" value="application" checked> 애플리케이션 인증 로그</label>
+              <label><input type="radio" name="text_source" value="ssh"> SSH 인증 로그</label>
+              <label><input type="radio" name="text_source" value="access"> 웹 접근 로그</label>
+            </div>
+          </fieldset>
           <label for="log-text">로그 내용</label>
           <textarea id="log-text" name="log_text" rows="10" spellcheck="false" autocomplete="off"
             aria-describedby="text-help text-byte-count text-line-count text-error"
@@ -387,53 +389,54 @@
                 <input id="review-queue-search-36-13a" type="search" maxlength="100" autocomplete="off" placeholder="제목이나 표시된 범주 검색">
               </label>
               <button id="review-queue-filter-toggle-36-13a" class="review-queue-filter-toggle-36-13a secondary-button" type="button" aria-expanded="false" aria-controls="review-queue-filter-panel-36-13a">필터 <span id="review-queue-filter-count-36-13a">0개</span></button>
-              <label class="review-queue-sort-label-36-13a" for="review-queue-sort-36-13a">정렬
-                <span class="review-queue-select-wrap-36-13a">
-                  <select id="review-queue-sort-36-13a">
-                    <option value="default">기본 검토 순서</option><option value="risk">위험도 높은 순</option>
-                    <option value="newest">최근 관찰 순</option><option value="oldest">오래된 관찰 순</option>
-                    <option value="title">제목 순</option>
-                  </select>
-                </span>
-              </label>
+              <fieldset id="review-queue-sort-36-13a" class="review-queue-radio-group review-queue-sort-36-13a" aria-labelledby="review-queue-sort-legend-36-13a">
+                <legend id="review-queue-sort-legend-36-13a">정렬</legend>
+                <div class="review-queue-radio-options-36-13a">
+                  <label><input type="radio" name="review-queue-sort-36-13a" value="default" checked> 기본 검토 순서</label>
+                  <label><input type="radio" name="review-queue-sort-36-13a" value="risk"> 위험도 높은 순</label>
+                  <label><input type="radio" name="review-queue-sort-36-13a" value="newest"> 최근 관찰 순</label>
+                  <label><input type="radio" name="review-queue-sort-36-13a" value="oldest"> 오래된 관찰 순</label>
+                  <label><input type="radio" name="review-queue-sort-36-13a" value="title"> 제목 순</label>
+                </div>
+              </fieldset>
             </div>
             <div id="review-queue-filter-panel-36-13a" class="review-queue-filter-panel-36-13a" aria-label="검토 건 세부 필터" hidden>
               <div class="review-queue-filter-fields-36-13a">
-                <label for="review-queue-risk-36-13a">위험도
-                  <span class="review-queue-select-wrap-36-13a">
-                    <select id="review-queue-risk-36-13a">
-                      <option value="all">전체</option><option value="HIGH">높음</option>
-                      <option value="MEDIUM">보통</option><option value="LOW">낮음</option>
-                    </select>
-                  </span>
-                </label>
-                <label for="review-queue-role-36-13a">로그 역할
-                  <span class="review-queue-select-wrap-36-13a">
-                    <select id="review-queue-role-36-13a">
-                      <option value="all">전체</option><option value="application">애플리케이션 로그</option>
-                      <option value="ssh">SSH 인증 로그</option><option value="access">접근 로그</option>
-                      <option value="unknown">역할 미확인</option>
-                    </select>
-                  </span>
-                </label>
-                <label for="review-queue-priority-36-13a">확인 순서
-                  <span class="review-queue-select-wrap-36-13a">
-                    <select id="review-queue-priority-36-13a">
-                      <option value="all">전체</option><option value="review_now">먼저 확인</option>
-                      <option value="review_soon">우선 확인</option><option value="review_later">일반 확인</option>
-                      <option value="undetermined">확인 순서 미정</option>
-                    </select>
-                  </span>
-                </label>
-                <label id="review-queue-state-filter-label-36-14d" for="review-queue-state-36-14d" hidden>검토 상태
-                  <span class="review-queue-select-wrap-36-13a">
-                    <select id="review-queue-state-36-14d" aria-describedby="review-workflow-note-36-14d">
-                      <option value="all">전체</option><option value="unreviewed">검토 전</option>
-                      <option value="in_review">검토 중</option><option value="reviewed">검토함</option>
-                      <option value="deferred">나중에 확인</option>
-                    </select>
-                  </span>
-                </label>
+                <fieldset id="review-queue-risk-36-13a" class="review-queue-radio-group" aria-labelledby="review-queue-risk-legend-36-13a">
+                  <legend id="review-queue-risk-legend-36-13a">위험도</legend><div class="review-queue-radio-options-36-13a">
+                    <label><input type="radio" name="review-queue-risk-36-13a" value="all" checked> 전체</label>
+                    <label><input type="radio" name="review-queue-risk-36-13a" value="HIGH"> 높음</label>
+                    <label><input type="radio" name="review-queue-risk-36-13a" value="MEDIUM"> 보통</label>
+                    <label><input type="radio" name="review-queue-risk-36-13a" value="LOW"> 낮음</label>
+                  </div>
+                </fieldset>
+                <fieldset id="review-queue-role-36-13a" class="review-queue-radio-group" aria-labelledby="review-queue-role-legend-36-13a">
+                  <legend id="review-queue-role-legend-36-13a">로그 역할</legend><div class="review-queue-radio-options-36-13a">
+                    <label><input type="radio" name="review-queue-role-36-13a" value="all" checked> 전체</label>
+                    <label><input type="radio" name="review-queue-role-36-13a" value="application"> 애플리케이션 로그</label>
+                    <label><input type="radio" name="review-queue-role-36-13a" value="ssh"> SSH 인증 로그</label>
+                    <label><input type="radio" name="review-queue-role-36-13a" value="access"> 접근 로그</label>
+                    <label><input type="radio" name="review-queue-role-36-13a" value="unknown"> 역할 미확인</label>
+                  </div>
+                </fieldset>
+                <fieldset id="review-queue-priority-36-13a" class="review-queue-radio-group" aria-labelledby="review-queue-priority-legend-36-13a">
+                  <legend id="review-queue-priority-legend-36-13a">확인 순서</legend><div class="review-queue-radio-options-36-13a">
+                    <label><input type="radio" name="review-queue-priority-36-13a" value="all" checked> 전체</label>
+                    <label><input type="radio" name="review-queue-priority-36-13a" value="review_now"> 먼저 확인</label>
+                    <label><input type="radio" name="review-queue-priority-36-13a" value="review_soon"> 우선 확인</label>
+                    <label><input type="radio" name="review-queue-priority-36-13a" value="review_later"> 일반 확인</label>
+                    <label><input type="radio" name="review-queue-priority-36-13a" value="undetermined"> 확인 순서 미정</label>
+                  </div>
+                </fieldset>
+                <fieldset id="review-queue-state-36-14d" class="review-queue-radio-group" aria-labelledby="review-queue-state-legend-36-14d" aria-describedby="review-workflow-note-36-14d" hidden>
+                  <legend id="review-queue-state-legend-36-14d">검토 상태</legend><div class="review-queue-radio-options-36-13a">
+                    <label><input type="radio" name="review-queue-state-36-14d" value="all" checked> 전체</label>
+                    <label><input type="radio" name="review-queue-state-36-14d" value="unreviewed"> 검토 전</label>
+                    <label><input type="radio" name="review-queue-state-36-14d" value="in_review"> 검토 중</label>
+                    <label><input type="radio" name="review-queue-state-36-14d" value="reviewed"> 검토함</label>
+                    <label><input type="radio" name="review-queue-state-36-14d" value="deferred"> 나중에 확인</label>
+                  </div>
+                </fieldset>
               </div>
               <div class="review-queue-filter-actions-36-13a">
                 <button id="review-queue-filter-close-36-13a" class="secondary-button" type="button">닫기</button>

@@ -111,7 +111,15 @@ def serve_linux_audit_script() -> Response:
     return _fixed_asset("linux-audit.js", "text/javascript")
 
 
-def serve_live_monitoring_script() -> Response:
+def serve_live_monitoring_script(enabled: bool) -> Response:
+    if type(enabled) is not bool:
+        raise TypeError("invalid live UI setting")
+    if not enabled:
+        return Response(
+            content=b"// Live Monitoring is not configured for this app instance.\n",
+            media_type="text/javascript",
+            headers=_HEADERS,
+        )
     return _fixed_asset("live-monitoring.js", "text/javascript")
 
 

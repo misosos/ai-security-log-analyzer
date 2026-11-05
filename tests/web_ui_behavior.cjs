@@ -42,8 +42,12 @@ class Node {
   addEventListener(name, listener) { this.listeners ||= {}; this.listeners[name] = listener; this.listener = listener; }
   querySelector(selector) {
     if (selector === "[data-review-queue-reset]") return this.resetButton || (this.resetButton = new Node("button"));
+    if (selector.includes(":checked")) return this.radioOptions?.find((radio) => radio.checked) || null;
+    const value = selector.match(/\[value="([^"]+)"\]/)?.[1];
+    if (value !== undefined) return this.radioOptions?.find((radio) => radio.value === value) || null;
     return null;
   }
+  querySelectorAll(selector) { return selector.includes("radio") ? (this.radioOptions || []) : []; }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
@@ -93,8 +97,11 @@ function makeApp(initial, hostname = "127.0.0.1") {
   nodes["file-input-panel"].tagName = "fieldset";
   nodes["text-input-panel"].tagName = "section";
   nodes["text-input-panel"].hidden = true;
-  nodes["text-source"].tagName = "select";
-  nodes["text-source"].value = "application";
+  function radioGroup(node, values, initial) {
+    node.tagName = "fieldset";
+    node.radioOptions = values.map((value) => ({value, checked: value === initial, focus() { this.focused = true; }}));
+  }
+  radioGroup(nodes["text-source"], ["application", "ssh", "access"], "application");
   nodes["review-queue-search-36-13a"].tagName = "input";
   nodes["review-queue-search-36-13a"].value = "";
   nodes["review-queue-filter-panel-36-13a"].hidden = true;
@@ -104,8 +111,12 @@ function makeApp(initial, hostname = "127.0.0.1") {
   nodes["review-queue-filter-toggle-36-13a"].setAttribute("aria-expanded", "false");
   for (const id of ["review-queue-risk-36-13a", "review-queue-role-36-13a",
     "review-queue-priority-36-13a", "review-queue-sort-36-13a"]) {
-    nodes[id].tagName = "select";
-    nodes[id].value = "all";
+    radioGroup(nodes[id], id === "review-queue-sort-36-13a" ?
+      ["default", "risk", "newest", "oldest", "title"] :
+      id === "review-queue-risk-36-13a" ? ["all", "HIGH", "MEDIUM", "LOW"] :
+        id === "review-queue-role-36-13a" ? ["all", "application", "ssh", "access", "unknown"] :
+          ["all", "review_now", "review_soon", "review_later", "undetermined"],
+    id === "review-queue-sort-36-13a" ? "default" : "all");
   }
   nodes["review-queue-sort-36-13a"].value = "default";
   nodes["log-text"].tagName = "textarea";
@@ -349,7 +360,7 @@ async function main() {
     const local = makeApp(supplied.local);
     assert.equal(local.nodes["input-mode-file"].checked, true, "file upload remains the default mode");
     assert.equal(local.nodes["text-input-panel"].hidden, true);
-    assert.equal(local.nodes["text-source"].tagName, "select");
+    assert.equal(local.nodes["text-source"].tagName, "fieldset");
     assert.equal(local.nodes["log-text"].tagName, "textarea");
     assert.equal(local.fetchCount(), 0, "opening the input screen never submits text");
     const selected = {name: "browser-only-name.log"};
@@ -456,7 +467,7 @@ async function main() {
     text.nodes["input-mode-text"].listeners.change();
     assert.equal(text.nodes["text-input-panel"].hidden, false);
     assert.equal(text.fetchCount(), 0, "choosing text mode never submits automatically");
-    text.nodes["text-source"].value = "ssh";
+    text.nodes["text-source"].radioOptions.forEach((radio) => { radio.checked = radio.value === "ssh"; });
     text.nodes["log-text"].value = "synthetic ssh line";
     const textResult = JSON.parse(JSON.stringify(supplied.local));
     const notice = "입력한 로그 범위에서만 분석한 결과입니다. 다른 로그나 누락된 시간대에 발생한 활동은 포함되지 않을 수 있습니다.";
@@ -499,7 +510,7 @@ async function main() {
     }, result: supplied.local};
     text.nodes["input-mode-text"].checked = true;
     text.nodes["input-mode-text"].listeners.change();
-    text.nodes["text-source"].value = "ssh";
+    text.nodes["text-source"].radioOptions.forEach((radio) => { radio.checked = radio.value === "ssh"; });
     text.nodes["log-text"].value = "synthetic input";
     text.setResponse(invalidEnvelope);
     await text.submit();

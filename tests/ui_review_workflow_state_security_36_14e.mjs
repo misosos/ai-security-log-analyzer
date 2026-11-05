@@ -31,6 +31,9 @@ let consoleErrors = 0;
 let checklistBodySafe = true;
 const requestCounts = new Map();
 const ensure = (condition, code) => { if (!condition) throw new Error(code); };
+const chooseState = (group, value) => group.locator(`input[type="radio"][value="${value}"]`).click();
+const stateValue = (group) => group.locator('input[type="radio"]:checked').inputValue();
+const chooseRadio = (group, value) => group.locator(`input[type="radio"][value="${value}"]`).check();
 const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const axeTarget = async (target, stage) => {
   const AxeBuilder = (await import('@axe-core/playwright')).default;
@@ -225,7 +228,7 @@ try {
     report_export: firstAnalysis.report_export
   })).digest('hex');
   await page.locator('#review-workflow-summary-36-14d').waitFor({state: 'visible'});
-  const cardControls = page.locator('#case-list .review-workflow-control-card-36-14d select');
+  const cardControls = page.locator('#case-list .review-workflow-control-card-36-14d');
   ensure(await cardControls.count() === 2, 'E_EXPECT_TWO_SYNTHETIC_CASE_CONTROLS');
   const accessibleNames = await cardControls.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
   ensure(accessibleNames.every((name) => name?.includes('검토 건') && name.includes('검토 상태')) &&
@@ -258,7 +261,7 @@ try {
   const tabSequence = [];
   for (let index = 0; index < 6; index++) {
     await page.keyboard.press('Tab');
-    tabSequence.push(await page.evaluate(() => document.activeElement.id));
+    tabSequence.push(await page.evaluate(() => document.activeElement.name || document.activeElement.id));
   }
   ensure(JSON.stringify(tabSequence) === JSON.stringify([
     'review-queue-sort-36-13a', 'review-queue-risk-36-13a', 'review-queue-role-36-13a',
@@ -271,13 +274,13 @@ try {
 
   await filterToggle.focus(); await page.keyboard.press('Enter');
   const stateFilter = page.locator('#review-queue-state-36-14d');
-  await stateFilter.focus();
-  ensure(await stateFilter.evaluate((node) => node.matches(':focus-visible')), 'E_STATE_FILTER_KEYBOARD_FOCUS_NOT_VISIBLE');
+  await stateFilter.locator('input[type="radio"][value="all"]').focus();
+  ensure(await stateFilter.locator('input[type="radio"][value="all"]').evaluate((node) => node.matches(':focus-visible')), 'E_STATE_FILTER_KEYBOARD_FOCUS_NOT_VISIBLE');
   for (let index = 0; index < 4; index++) await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  const keyboardSelectedFilter = await stateFilter.inputValue();
-  if (keyboardSelectedFilter !== 'deferred') await stateFilter.selectOption('deferred');
-  ensure(await stateFilter.inputValue() === 'deferred' && await page.locator('#case-list .review-case-card').count() === 0,
+  const keyboardSelectedFilter = await stateFilter.locator('input[type="radio"]:checked').inputValue();
+  if (keyboardSelectedFilter !== 'deferred') await chooseRadio(stateFilter, 'deferred');
+  ensure(await stateFilter.locator('input[type="radio"]:checked').inputValue() === 'deferred' && await page.locator('#case-list .review-case-card').count() === 0,
     'E_NATIVE_KEYBOARD_STATE_FILTER_FAILED');
   const emptyCopy = await page.locator('#review-queue-empty-36-13a').innerText();
   ensure(emptyCopy.includes('현재 조건에 맞는 검토 건이 없습니다') &&
@@ -286,10 +289,10 @@ try {
   await capture('03-filter-empty-1440.png');
   await axe('filter-empty');
   await page.locator('#review-queue-filter-close-36-13a').focus(); await page.keyboard.press('Escape');
-  ensure(await filterToggle.evaluate((node) => document.activeElement === node), 'E_PANEL_CLOSE_FOCUS_NOT_RESTORED');
+  ensure(await filterToggle.evaluate((node) => node.contains(document.activeElement)), 'E_PANEL_CLOSE_FOCUS_NOT_RESTORED');
   await page.locator('#review-queue-reset-36-13a').click();
   ensure(await page.locator('#case-list .review-case-card').count() === 2 &&
-    (await cardControls.first().inputValue()) === 'unreviewed', 'E_FILTER_RESET_CHANGED_WORKFLOW_STATE');
+    (await stateValue(cardControls.first())) === 'unreviewed', 'E_FILTER_RESET_CHANGED_WORKFLOW_STATE');
 
   const search = page.locator('#review-queue-search-36-13a');
   await search.focus(); await page.keyboard.type('인증 활동');
@@ -300,54 +303,54 @@ try {
   const firstControl = cardControls.first();
   const firstCaseBefore = await page.locator('#case-list .review-case-card').first().innerText();
   const firstRiskBefore = await page.locator('#case-list .review-case-card').first().locator('.review-status-badge').first().innerText();
-  await firstControl.focus();
-  ensure(await firstControl.evaluate((node) => node.matches(':focus-visible')), 'E_CARD_STATE_KEYBOARD_FOCUS_NOT_VISIBLE');
-  await firstControl.selectOption('in_review');
-  ensure(await firstControl.inputValue() === 'in_review' && await firstControl.evaluate((node) => document.activeElement === node),
+  await firstControl.locator('input:checked').focus();
+  ensure(await firstControl.locator('input:checked').evaluate((node) => document.activeElement === node), 'E_CARD_STATE_KEYBOARD_FOCUS_NOT_RESTORED');
+  await chooseState(firstControl, 'in_review');
+  ensure(await stateValue(firstControl) === 'in_review' && await firstControl.evaluate((node) => node.contains(document.activeElement)),
     'E_NATIVE_KEYBOARD_STATE_TRANSITION_FAILED');
   await capture('04-state-in-review-1440.png'); await axe('in-review');
-  await firstControl.selectOption('reviewed');
-  ensure(await firstControl.inputValue() === 'reviewed', 'E_REVIEWED_TRANSITION_NOT_REACHABLE_BY_KEYBOARD');
+  await chooseState(firstControl, 'reviewed');
+  ensure(await stateValue(firstControl) === 'reviewed', 'E_REVIEWED_TRANSITION_NOT_REACHABLE_BY_KEYBOARD');
   await capture('05-state-reviewed-1440.png'); await axe('reviewed');
-  await firstControl.selectOption('deferred');
-  ensure(await firstControl.inputValue() === 'deferred', 'E_DEFERRED_TRANSITION_NOT_REACHABLE_BY_KEYBOARD');
+  await chooseState(firstControl, 'deferred');
+  ensure(await stateValue(firstControl) === 'deferred', 'E_DEFERRED_TRANSITION_NOT_REACHABLE_BY_KEYBOARD');
   await capture('06-state-deferred-1440.png'); await axe('deferred');
-  const stateCardText = await firstControl.locator('xpath=ancestor::div[contains(@class,"review-workflow-control")][1]').innerText();
+  const stateCardText = await firstControl.innerText();
   ensure(stateCardText.includes('검토 상태') && stateCardText.includes('나중에 확인') &&
     !/낮은 위험|무시 가능|검토 불필요/.test(stateCardText), 'E_DEFERRED_MEANING_MIXED_WITH_RISK');
-  const deferredOption = firstControl.locator('option:checked');
-  ensure((await deferredOption.innerText()) === '나중에 확인', 'E_DEFERRED_FIXED_LABEL_MISMATCH');
+  const deferredOption = firstControl.locator('input[value="deferred"]');
+  ensure((await deferredOption.evaluate((node) => node.closest('label').textContent.trim())) === '나중에 확인', 'E_DEFERRED_FIXED_LABEL_MISMATCH');
   ensure((await page.locator('#review-workflow-feedback-36-14d').getAttribute('aria-live')) === 'polite' &&
     (await page.locator('#review-workflow-feedback-36-14d').innerText()) === '검토 상태를 변경했습니다.',
   'E_STATUS_LIVE_REGION_NOT_FIXED_POLITE_SUCCESS');
   ensure((await page.locator('#case-list .review-case-card').first().locator('.review-status-badge').first().innerText()) === firstRiskBefore &&
     firstCaseBefore.includes(firstRiskBefore), 'E_STATUS_CHANGE_ALTERED_RISK_BADGE');
-  const stateResetOption = firstControl.locator('option[value="__reset__"]');
+  const stateResetOption = firstControl.locator('input[value="__reset__"]');
   ensure(await stateResetOption.count() === 1, 'E_EXPLICIT_RESET_OPTION_MISSING');
-  await firstControl.selectOption('__reset__');
-  ensure(await firstControl.inputValue() === 'unreviewed', 'E_KEYBOARD_EXPLICIT_STATE_RESET_FAILED');
+  await chooseState(firstControl, '__reset__');
+  ensure(await stateValue(firstControl) === 'unreviewed', 'E_KEYBOARD_EXPLICIT_STATE_RESET_FAILED');
   await page.locator('#review-queue-reset-36-13a').click();
-  ensure(await cardControls.first().inputValue() === 'unreviewed', 'E_QUEUE_FILTER_RESET_CHANGED_WORKFLOW_STATE');
+  ensure(await stateValue(cardControls.first()) === 'unreviewed', 'E_QUEUE_FILTER_RESET_CHANGED_WORKFLOW_STATE');
 
   // List/detail/history share the active document-memory store and never issue checklist POST implicitly.
   const listCard = page.locator('#case-list .review-case-card').first();
   const detailLink = listCard.locator('a.review-detail-link');
   const detailHref = await detailLink.getAttribute('href');
   await detailLink.click();
-  const detailControl = page.locator('#case-detail-content .review-workflow-control-detail-36-14d select');
+  const detailControl = page.locator('#case-detail-content .review-workflow-control-detail-36-14d');
   ensure(page.url().endsWith(detailHref) && !/a_[0-9a-f]{32}|\b(?:unreviewed|in_review|reviewed|deferred)\b/.test(page.url()) &&
-    await detailControl.inputValue() === 'unreviewed', 'E_DETAIL_DID_NOT_USE_ACTIVE_STATE_OR_ROUTE_LEAK');
+    await stateValue(detailControl) === 'unreviewed', 'E_DETAIL_DID_NOT_USE_ACTIVE_STATE_OR_ROUTE_LEAK');
   ensure(!/a_[0-9a-f]{32}|\b(?:unreviewed|in_review|reviewed|deferred)\b/.test(JSON.stringify(await page.evaluate(() => history.state))),
     'E_WORKFLOW_STATE_IN_HISTORY');
-  await detailControl.selectOption('in_review');
+  await chooseState(detailControl, 'in_review');
   await capture('07-detail-state-1440.png'); await axe('detail-state');
   await page.goBack();
   await page.locator('#results-dashboard').waitFor({state: 'visible'});
-  ensure(await page.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'in_review',
+  ensure(await page.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d').locator('input:checked').inputValue() === 'in_review',
     'E_BACK_NAVIGATION_DID_NOT_RESTORE_STATE');
   await page.goForward();
   await page.locator('#case-detail-view').waitFor({state: 'visible'});
-  ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d select').inputValue() === 'in_review',
+  ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d').locator('input:checked').inputValue() === 'in_review',
     'E_FORWARD_NAVIGATION_DID_NOT_RESTORE_STATE');
   await page.locator('#workspace-tasks-tab-36-6e').click();
   const explicitChecklist = page.locator('#case-detail-content .checklist-request');
@@ -357,11 +360,11 @@ try {
     request.method() === 'POST');
   await explicitChecklist.click();
   await checklistRequest;
-  ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d select').inputValue() === 'in_review',
+  ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d').locator('input:checked').inputValue() === 'in_review',
     'E_CHECKLIST_RESPONSE_CHANGED_WORKFLOW_STATE');
   await page.locator('#review-back-link').click();
   await page.locator('#results-dashboard').waitFor({state: 'visible'});
-  ensure(await page.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d select').inputValue() === 'in_review',
+  ensure(await page.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d').locator('input:checked').inputValue() === 'in_review',
     'E_LIST_STATE_NOT_RESTORED_AFTER_CHECKLIST');
   ensure(checklistPosts === 1 && checklistBodySafe, 'E_EXPLICIT_CHECKLIST_POST_CONTRACT_INVALID');
 
@@ -374,10 +377,10 @@ try {
     response.request().method() === 'POST');
   await secondTab.locator('#sample-button').click();
   const secondPayload = await (await secondSample).json();
-  const secondControl = secondTab.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d select');
-  const primaryTabStateBeforeOtherTabChange = await cardControls.first().inputValue();
-  await secondControl.selectOption('deferred');
-  ensure((await cardControls.first().inputValue()) === primaryTabStateBeforeOtherTabChange && await secondControl.inputValue() === 'deferred',
+  const secondControl = secondTab.locator('#case-list .review-case-card').first().locator('.review-workflow-control-card-36-14d');
+  const primaryTabStateBeforeOtherTabChange = await stateValue(cardControls.first());
+  await chooseState(secondControl, 'deferred');
+  ensure((await stateValue(cardControls.first())) === primaryTabStateBeforeOtherTabChange && await stateValue(secondControl) === 'deferred',
     'E_SAME_ANALYSIS_IN_OTHER_TAB_SHARED_STATE');
   await secondTab.close();
 
@@ -411,7 +414,7 @@ try {
   ensure(apiRequests >= 1 && checklistPosts === 1 && externalRequests === 0 && pageErrors === 0 && consoleErrors === 0,
     'E_BROWSER_REQUEST_OR_RUNTIME_BOUNDARY');
   // Starting another analysis replaces the document generation and initializes same-looking refs.
-  const oldState = await cardControls.first().inputValue();
+  const oldState = await stateValue(cardControls.first());
   const samplePostCount = requestCounts.get('POST /api/v1/investigations/sample') || 0;
   await page.locator('#nav-start').click();
   await page.locator('#sample-button').waitFor({state: 'visible'});
@@ -419,9 +422,9 @@ try {
     response.request().method() === 'POST');
   await page.locator('#sample-button').click();
   const replacementPayload = await (await replacementResponse).json();
-  const replacementControls = page.locator('#case-list .review-case-card .review-workflow-control-card-36-14d select');
+  const replacementControls = page.locator('#case-list .review-case-card .review-workflow-control-card-36-14d');
   ensure(oldState === 'in_review' && replacementPayload.cases.length === firstAnalysis.cases.length &&
-    await replacementControls.evaluateAll((nodes) => nodes.every((node) => node.value === 'unreviewed')),
+    await replacementControls.evaluateAll((nodes) => nodes.every((node) => node.querySelector('input[type="radio"]:checked')?.value === 'unreviewed')),
     'E_NEW_GENERATION_REUSED_PREVIOUS_STATE');
   ensure(JSON.stringify(await storageSnapshot(page)) === JSON.stringify(storageBefore), 'E_NEW_GENERATION_PERSISTED_WORKFLOW_STATE');
 
@@ -444,9 +447,9 @@ try {
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({width, height: 900});
     const layout = await page.evaluate(() => ({scrollWidth: document.documentElement.scrollWidth, width: innerWidth,
-      visibleControls: [...document.querySelectorAll('.review-workflow-control-36-14d select')]
+      visibleControls: [...document.querySelectorAll('.review-workflow-control-36-14d label')]
         .filter((node) => node.getClientRects().length).map((node) => ({height: node.getBoundingClientRect().height,
-          right: node.getBoundingClientRect().right, label: node.getAttribute('aria-label')})),
+          right: node.getBoundingClientRect().right, label: node.closest('fieldset')?.getAttribute('aria-label')})),
       textOverflow: [...document.querySelectorAll('.review-case-card *')].filter((node) =>
         node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== 'auto').length}));
     ensure(layout.scrollWidth === layout.width && layout.visibleControls.every((control) => control.height >= 44 &&
@@ -458,14 +461,14 @@ try {
   }
   await page.locator('#case-list .review-case-card a.review-detail-link').first().click();
   await page.setViewportSize({width: 390, height: 844});
-  await ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d select').isVisible(),
+  await ensure(await page.locator('#case-detail-content .review-workflow-control-detail-36-14d').isVisible(),
     'E_DETAIL_WORKFLOW_CONTROL_MISSING_NARROW');
   await capture('10-detail-390.png'); await axe('detail-390');
   await page.locator('#review-back-link').click();
   await page.setViewportSize({width: 640, height: 900});
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
   const reflow = await page.evaluate(() => ({scrollWidth: document.documentElement.scrollWidth, width: innerWidth,
-    visible: [...document.querySelectorAll('.review-workflow-control-36-14d select')].filter((node) => node.getClientRects().length)
+    visible: [...document.querySelectorAll('.review-workflow-control-36-14d label')].filter((node) => node.getClientRects().length)
       .map((node) => ({right: node.getBoundingClientRect().right, height: node.getBoundingClientRect().height}))}));
   ensure(reflow.scrollWidth === reflow.width && reflow.visible.every((item) => item.right <= reflow.width + 1 && item.height >= 44),
     'E_200_PERCENT_REFLOW_LAYOUT');
@@ -504,7 +507,7 @@ try {
   await rollbackPage.locator('#results-heading').waitFor({state: 'visible'});
   ensure(await rollbackPage.locator('.review-workflow-control-36-14d').count() === 0 &&
     await rollbackPage.locator('#review-workflow-summary-36-14d').isHidden() &&
-    await rollbackPage.locator('#review-queue-state-filter-label-36-14d').isHidden() &&
+    await rollbackPage.locator('#review-queue-state-36-14d').isHidden() &&
     await rollbackPage.evaluate(() => typeof window.investigationReviewState36_14d === 'undefined') &&
     await rollbackPage.evaluate(() => performance.getEntriesByName(`${location.origin}/assets/investigation-review-state-36-14d.js`).length === 0) &&
     await rollbackPage.locator('#case-list .review-case-card').count() === 2, 'E_ROLLBACK_OFF_MUST_NOT_LOAD_OR_EXECUTE_STATE_ASSET');

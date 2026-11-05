@@ -23,6 +23,19 @@
     return bound(bound(value.replace(CONTROL_CHARS, "")).normalize("NFKC").trim().toLowerCase());
   }
 
+  function selectedValue(group, fallback) {
+    return group?.querySelector('input[type="radio"]:checked')?.value ?? fallback;
+  }
+
+  function chooseValue(group, value) {
+    const choice = [...group.querySelectorAll('input[type="radio"]')].find((radio) => radio.value === value);
+    if (choice) choice.checked = true;
+  }
+
+  function focusChoice(group) {
+    (group.querySelector('input[type="radio"]:checked') || group.querySelector('input[type="radio"]'))?.focus();
+  }
+
   function create() {
     const controls = document.getElementById("review-queue-controls-36-13a");
     const searchInput = document.getElementById("review-queue-search-36-13a");
@@ -34,11 +47,11 @@
     const chipList = document.getElementById("review-queue-active-chip-list-36-13a");
     const totalText = document.getElementById("review-queue-total-36-13a");
     const countAnnouncement = document.getElementById("review-queue-count-announcement-36-13a");
-    const riskSelect = document.getElementById("review-queue-risk-36-13a");
-    const roleSelect = document.getElementById("review-queue-role-36-13a");
-    const prioritySelect = document.getElementById("review-queue-priority-36-13a");
-    const reviewStateSelect = document.getElementById("review-queue-state-36-14d");
-    const sortSelect = document.getElementById("review-queue-sort-36-13a");
+    const riskGroup = document.getElementById("review-queue-risk-36-13a");
+    const roleGroup = document.getElementById("review-queue-role-36-13a");
+    const priorityGroup = document.getElementById("review-queue-priority-36-13a");
+    const reviewStateGroup = document.getElementById("review-queue-state-36-14d");
+    const sortGroup = document.getElementById("review-queue-sort-36-13a");
     const countText = document.getElementById("review-queue-count-36-13a");
     const emptyState = document.getElementById("review-queue-empty-36-13a");
     const resetButton = document.getElementById("review-queue-reset-36-13a");
@@ -57,11 +70,11 @@
 
     function resetValues() {
       searchInput.value = "";
-      riskSelect.value = "all";
-      roleSelect.value = "all";
-      prioritySelect.value = "all";
-      if (reviewStateSelect) reviewStateSelect.value = "all";
-      sortSelect.value = "default";
+      chooseValue(riskGroup, "all");
+      chooseValue(roleGroup, "all");
+      chooseValue(priorityGroup, "all");
+      if (reviewStateGroup) chooseValue(reviewStateGroup, "all");
+      chooseValue(sortGroup, "default");
       emptyState.hidden = true;
       setFilterOpen(false);
     }
@@ -84,31 +97,31 @@
         searchInput.focus();
       }});
       if (risk !== "all") items.push({key: "risk", text: `위험도: ${riskLabels[risk] ?? "미정"}`, clear: () => {
-        riskSelect.value = "all";
+        chooseValue(riskGroup, "all");
         apply();
-        (filterPanel.hidden ? filterToggle : riskSelect).focus();
+        if (filterPanel.hidden) filterToggle.focus(); else focusChoice(riskGroup);
       }});
       if (role !== "all") items.push({key: "role", text: `역할: ${ROLE_LABELS[role] ?? "역할 미확인"}`, clear: () => {
-        roleSelect.value = "all";
+        chooseValue(roleGroup, "all");
         apply();
-        (filterPanel.hidden ? filterToggle : roleSelect).focus();
+        if (filterPanel.hidden) filterToggle.focus(); else focusChoice(roleGroup);
       }});
       if (priority !== "all") items.push({key: "priority", text: `확인 순서: ${PRIORITY_LABELS[priority] ?? "확인 순서 미정"}`, clear: () => {
-        prioritySelect.value = "all";
+        chooseValue(priorityGroup, "all");
         apply();
-        (filterPanel.hidden ? filterToggle : prioritySelect).focus();
+        if (filterPanel.hidden) filterToggle.focus(); else focusChoice(priorityGroup);
       }});
       const workflowLabels = {unreviewed: "검토 전", in_review: "검토 중", reviewed: "검토함", deferred: "나중에 확인"};
-      if (workflowState !== "all" && reviewStateSelect) items.push({key: "workflow-state", text: `검토 상태: ${workflowLabels[workflowState]}`, clear: () => {
-        reviewStateSelect.value = "all";
+      if (workflowState !== "all" && reviewStateGroup) items.push({key: "workflow-state", text: `검토 상태: ${workflowLabels[workflowState]}`, clear: () => {
+        chooseValue(reviewStateGroup, "all");
         apply();
-        (filterPanel.hidden ? filterToggle : reviewStateSelect).focus();
+        if (filterPanel.hidden) filterToggle.focus(); else focusChoice(reviewStateGroup);
       }});
       const sortLabels = {risk: "위험도 높은 순", newest: "최근 관찰 순", oldest: "오래된 관찰 순", title: "제목 순"};
       if (sort !== "default") items.push({key: "sort", text: `정렬: ${sortLabels[sort]}`, clear: () => {
-        sortSelect.value = "default";
+        chooseValue(sortGroup, "default");
         apply();
-        sortSelect.focus();
+        focusChoice(sortGroup);
       }});
       items.forEach(({key, text, clear}) => {
         const chip = document.createElement("button");
@@ -147,13 +160,16 @@
 
     function apply(preserveFocusControl = null) {
       if (records.length === 0) return;
-      const shouldPreserveFocus = preserveFocusControl && document.activeElement === preserveFocusControl;
+      const shouldPreserveFocus = preserveFocusControl === true ||
+        (preserveFocusControl && document.activeElement === preserveFocusControl);
       const query = normalizeSearch(searchInput.value);
-      const risk = riskSelect.value;
-      const role = roleSelect.value;
-      const priority = prioritySelect.value;
-      const workflowState = reviewStateSelect && workflowStates.has(reviewStateSelect.value) ? reviewStateSelect.value : "all";
-      const sort = SORTS.has(sortSelect.value) ? sortSelect.value : "default";
+      const risk = selectedValue(riskGroup, "all");
+      const role = selectedValue(roleGroup, "all");
+      const priority = selectedValue(priorityGroup, "all");
+      const selectedWorkflowState = selectedValue(reviewStateGroup, "all");
+      const workflowState = reviewStateGroup && workflowStates.has(selectedWorkflowState) ? selectedWorkflowState : "all";
+      const selectedSort = selectedValue(sortGroup, "default");
+      const sort = SORTS.has(selectedSort) ? selectedSort : "default";
       renderChips(query, risk, role, priority, workflowState, sort);
       const visible = records.filter((record) =>
         (query === "" || record.searchText.includes(query)) &&
@@ -165,8 +181,8 @@
       visible.sort((left, right) => compare(left, right, sort));
       list.replaceChildren(...visible.map((record) => record.card));
       if (shouldPreserveFocus) {
-        if (list.contains(preserveFocusControl)) preserveFocusControl.focus({preventScroll: true});
-        else if (!filterPanel.hidden && reviewStateSelect) reviewStateSelect.focus({preventScroll: true});
+        if (preserveFocusControl !== true && list.contains(preserveFocusControl)) preserveFocusControl.focus({preventScroll: true});
+        else if (!filterPanel.hidden && reviewStateGroup) focusChoice(reviewStateGroup);
         else filterToggle.focus({preventScroll: true});
       }
       const narrowed = query !== "" || risk !== "all" || role !== "all" ||
@@ -186,8 +202,8 @@
       searchInput.focus();
     }
 
-    [searchInput, riskSelect, roleSelect, prioritySelect, reviewStateSelect, sortSelect].filter(Boolean).forEach((control) => {
-      control.addEventListener(control === searchInput ? "input" : "change", apply);
+    [searchInput, riskGroup, roleGroup, priorityGroup, reviewStateGroup, sortGroup].filter(Boolean).forEach((control) => {
+      control.addEventListener(control === searchInput ? "input" : "change", () => apply());
     });
     resetButton.addEventListener("click", reset);
     emptyState.querySelector("[data-review-queue-reset]").addEventListener("click", reset);
