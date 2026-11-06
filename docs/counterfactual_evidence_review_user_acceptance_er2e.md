@@ -14,6 +14,17 @@
 
 자동 브라우저 검증 결과를 아래 수동 항목의 PASS로 전환하지 않습니다.
 
+## ER-2F Desktop Safari 사용자 피드백 기록
+
+- 검수 기준 SHA: `c56fd375b0bcb8effc03a51cc772a7e916b7fb04`
+- Exact CI: `42199657196`, `push / completed / success`, Artifact 0개
+- 사용자 피드백: “다 괜찮은것같아.”
+- 확인 범위: 합성 평가 화면의 디자인과 가독성, Summary 및 Comparison 정보 이해도, 검색·필터·정렬·상세 보기 사용성, 사용자가 직접 창 크기를 변경했을 때의 UI 표시
+- 범위 판정: 위 네 가지 Desktop Safari 항목은 `PASS`
+- 전체 판정: Keyboard, 정확한 viewport별 반응형 측정, VoiceOver, 모바일 실기기, 기존 Investigation 왕복 및 장애 상태가 남아 있어 `ER_2F_USER_ACCEPTANCE_PENDING`
+
+이 기록은 사용자가 제공한 정성적 피드백 범위에 한정한다. 조작 횟수, 정확한 창 크기, 확대 비율, 성능 수치 또는 별도로 언급되지 않은 기능의 PASS를 추정하지 않는다. Playwright WebKit 자동 검증과 실제 Safari 사용자 피드백도 서로 다른 증거로 유지한다.
+
 ## Safari 검수 환경
 
 현재 checkout에서 다음 명령으로 명시적인 Evaluation ON 서버를 시작합니다. 일반 Local Launcher의 기본값은 계속 OFF입니다.
@@ -26,11 +37,11 @@ Safari에서 `http://127.0.0.1:8000/`을 열고 `합성 평가` 메뉴를 선택
 
 ## 검수 기록
 
-- 실행 환경 / 브라우저 버전:
-- 화면 크기 및 확대 비율:
-- Safari 키보드 탐색 설정:
-- 날짜 및 검수자 기록(선택):
-- 사용한 코드 SHA:
+- 실행 환경 / 브라우저 버전: macOS Safari 수동 확인; 설치 확인 버전 18.6
+- 화면 크기 및 확대 비율: 사용자가 창 크기 변경 후 긍정적으로 평가; 정확한 수치 및 확대 비율은 `NOT_TESTED`
+- Safari 키보드 탐색 설정: `NOT_TESTED`
+- 날짜 및 검수자 기록(선택): 2026-11-06, 식별 정보 미기록
+- 사용한 코드 SHA: `c56fd375b0bcb8effc03a51cc772a7e916b7fb04`
 - 사용한 자료: 고정 합성 Snapshot만
 
 각 항목의 기본 상태는 `NOT_TESTED`입니다. 실제로 해본 뒤 `PASS` 또는 `FAIL`로 바꾸고 관찰 내용, 재현 방법, 화면 캡처 필요 여부를 기록합니다. 검수자 신원이나 화면 캡처가 포함된 응답 원본은 공개 저장소에 커밋하지 않습니다.
@@ -39,11 +50,12 @@ Safari에서 `http://127.0.0.1:8000/`을 열고 `합성 평가` 메뉴를 선택
 
 | 확인 항목 | 상태 | 관찰 내용 | 재현 방법 | 화면 캡처 |
 |---|---|---|---|---|
-| Evaluation 화면 진입 | NOT_TESTED |  |  | 필요 여부 기록 |
-| Summary 가독성 | NOT_TESTED |  |  | 필요 여부 기록 |
-| 여섯 Comparison 분포 이해 | NOT_TESTED |  |  | 필요 여부 기록 |
-| Scenario 검색·필터·정렬 | NOT_TESTED |  |  | 필요 여부 기록 |
-| Scenario 상세와 목록 복귀 | NOT_TESTED |  |  | 필요 여부 기록 |
+| Evaluation 화면 진입 및 디자인·가독성 | PASS | 사용자가 실제 Safari 화면을 확인하고 긍정적으로 평가 | 합성 평가 화면 확인 | 미요청 |
+| Summary 가독성 | PASS | Summary 정보 이해도에 대한 긍정적 피드백 | Summary 확인 | 미요청 |
+| 여섯 Comparison 분포 이해 | PASS | Comparison 정보 이해도에 대한 긍정적 피드백 | Comparison 영역 확인 | 미요청 |
+| Scenario 검색·필터·정렬 | PASS | 검색·필터·정렬 사용성에 대한 긍정적 피드백 | Scenario 탐색 | 미요청 |
+| Scenario 상세 보기 | PASS | 상세 보기 사용성에 대한 긍정적 피드백 | Scenario 상세 확인 | 미요청 |
+| Scenario 상세에서 목록 복귀 | NOT_TESTED | 별도 피드백 없음 |  | 필요 여부 기록 |
 | 기존 조사 화면으로 이동·복귀 | NOT_TESTED |  |  | 필요 여부 기록 |
 | Snapshot 재확인 결과 반영 | NOT_TESTED |  |  | 필요 여부 기록 |
 
@@ -66,6 +78,7 @@ Safari에서 `http://127.0.0.1:8000/`을 열고 `합성 평가` 메뉴를 선택
 
 | 확인 항목 | 상태 | 관찰 내용 | 재현 방법 | 화면 캡처 |
 |---|---|---|---|---|
+| 사용자가 직접 창 크기를 변경했을 때 UI 표시 | PASS | 창 크기 변경 시 UI 표시에 대한 긍정적 피드백 | 정확한 폭 미측정 | 미요청 |
 | 1440px 폭 | NOT_TESTED |  |  | 필요 여부 기록 |
 | 1024px 폭 | NOT_TESTED |  |  | 필요 여부 기록 |
 | 768px 폭 | NOT_TESTED |  |  | 필요 여부 기록 |
