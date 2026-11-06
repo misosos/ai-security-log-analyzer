@@ -1,5 +1,5 @@
-// Synthetic Chromium navigation check. Screenshots are opt-in, local, and never uploaded.
-import {chromium} from '@playwright/test';
+// Synthetic Chromium/WebKit navigation check. Screenshots are opt-in, local, and never uploaded.
+import {chromium, webkit} from '@playwright/test';
 import {spawn} from 'node:child_process';
 import {mkdtemp, mkdir, rm} from 'node:fs/promises';
 import {createServer} from 'node:net';
@@ -26,6 +26,7 @@ let unexpected = 0;
 let disabled404 = 0;
 let sampleRequests = 0;
 let guidanceRequests = 0;
+const guidanceCategories = [];
 let guidanceRequestBytes = 0;
 let guidanceResponseBytes = 0;
 function ensure(value, code) { if (!value) throw new Error(code); }
@@ -42,7 +43,10 @@ try {
   const csp = response.headers.get('content-security-policy') || '';
   ensure(response.ok && csp.includes("script-src 'self'") && csp.includes("connect-src 'self'") &&
     !csp.includes('unsafe-inline'), 'CSP_CONTRACT_FAILED');
-  browser = await chromium.launch({headless: true, args: ['--disable-background-networking', '--no-first-run']});
+  const browserName = process.env.UI_BROWSER || 'chromium';
+  if (!['chromium', 'webkit'].includes(browserName)) throw new Error('UNSUPPORTED_BROWSER');
+  const browserType = browserName === 'webkit' ? webkit : chromium;
+  browser = await browserType.launch({headless: true, args: ['--disable-background-networking', '--no-first-run']});
   context = await browser.newContext({serviceWorkers: 'block', acceptDownloads: false});
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -51,6 +55,7 @@ try {
     if (url.pathname === '/api/v1/investigations/guidance') {
       guidanceRequests++;
       const body = route.request().postDataJSON();
+      guidanceCategories.push(body.category);
       guidanceRequestBytes = route.request().postDataBuffer().byteLength;
       ensure(Object.keys(body).sort().join('|') === 'case|category|corpus_digest|schema_version' &&
         Object.keys(body.case).sort().join('|') ===
@@ -83,8 +88,7 @@ try {
     else if (value.status() >= 400) unexpected++;
   });
   page.on('console', (value) => {
-    if (value.type() === 'error' &&
-      !(disabled404 && value.text().startsWith('Failed to load resource'))) unexpected++;
+    if (value.type() === 'error') unexpected++;
   });
   await page.setViewportSize({width: 1440, height: 900});
   await page.goto(origin, {waitUntil: 'networkidle'});
@@ -116,48 +120,59 @@ try {
   }) && !new URL(page.url()).hash, 'RESULT_REQUIRES_SCROLL');
   ensure(guidanceRequests === 0 && await page.locator('.guidance-citation').count() === 0,
     'GUIDANCE_MUST_BE_OPT_IN');
-  const resultMetrics = await page.evaluate(() => ({
+  const listingMetrics = await page.evaluate(() => ({
     viewport: innerWidth,
-    workspace: Math.round(document.querySelector('.app-shell').getBoundingClientRect().width),
-    content: Math.round(document.querySelector('#workspace-results').getBoundingClientRect().width),
-    height: document.documentElement.scrollHeight,
-    cases: document.querySelectorAll('#case-list .case-card').length,
-    caseColumns: getComputedStyle(document.querySelector('#case-list')).gridTemplateColumns,
-    railRightOfCases: document.querySelector('#result-rail').getBoundingClientRect().left >
-      document.querySelector('#case-section').getBoundingClientRect().right,
-    paragraphCh: getComputedStyle(document.querySelector('#result-context')).maxWidth,
-    resultFontPx: parseFloat(getComputedStyle(document.querySelector('#results')).fontSize),
-    lineHeightPx: parseFloat(getComputedStyle(document.querySelector('#results')).lineHeight),
-    summaryColumns: getComputedStyle(document.querySelector('#summary-cards')).gridTemplateColumns.split(' ').length,
-    summaryIcons: document.querySelectorAll('#summary-cards .summary-icon').length,
-    sidebarLeft: Math.round(document.querySelector('.workspace-nav').getBoundingClientRect().left),
-    summaryTextLines: [...document.querySelectorAll('#case-list .case-summary')].reduce((total, summary) => {
-      const walker = document.createTreeWalker(summary, NodeFilter.SHOW_TEXT);
-      let lines = 0;
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (!node.textContent.trim()) continue;
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        lines += range.getClientRects().length;
-      }
-      return total + lines;
-    }, 0),
-    summaryTimeCount: document.querySelectorAll('#case-list .case-short-time').length,
-    lastCaseBottom: Math.round([...document.querySelectorAll('#case-list .case-card')].at(-1).getBoundingClientRect().bottom),
-    viewportHeight: innerHeight,
+    caseCount: document.querySelectorAll('#case-list .review-case-card').length,
+    detailLinkCount: document.querySelectorAll('#case-list a.review-detail-link').length,
+    summaryCount: document.querySelectorAll('#case-list .review-card-summary').length,
+    horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+    resultHeading: document.querySelector('#results-heading')?.textContent.trim(),
   }));
-  resultMetrics.expandedHeight = await page.evaluate(() => {
-    const details = [...document.querySelectorAll('#case-list details')];
-    details.forEach((node) => { node.open = true; });
-    const height = document.documentElement.scrollHeight;
-    details.reverse().forEach((node) => { node.open = false; });
-    return height;
-  });
-  const caseSummaryForGuidance = page.locator('#case-list .case-card').first().locator(':scope > summary');
-  const guidanceCard = page.locator('#case-list .case-card').first();
-  await caseSummaryForGuidance.focus();
+  ensure(listingMetrics.viewport === 1440 && listingMetrics.caseCount === 2 &&
+    listingMetrics.detailLinkCount === 2 && listingMetrics.summaryCount === 2 &&
+    !listingMetrics.horizontalOverflow && guidanceRequests === 0 &&
+    await page.locator('.guidance-citation').count() === 0,
+  'RESULT_LIST_CONTRACT_FAILED');
+  const summaryBeforeDetail = await page.locator('#summary-cards').innerText();
+  const reviewListBeforeDetail = await page.locator('#case-list').innerText();
+
+  const firstCaseLink = page.locator('#review-case-link-0');
+  const expectedCaseRef = await firstCaseLink.getAttribute('data-review-case-ref');
+  ensure(/^c_[0-9a-f]{24}$/.test(expectedCaseRef), 'REVIEW_CASE_REFERENCE_INVALID');
+  await firstCaseLink.focus();
   await page.keyboard.press('Enter');
-  const guidanceButton = page.locator('.guidance-request').first();
+  await page.locator('#workspace-shell-heading').waitFor({state: 'visible'});
+  ensure(new URL(page.url()).hash === `#/investigations/${expectedCaseRef}` &&
+    await page.locator('#review-case-link-0').count() === 1 &&
+    await page.locator('#case-detail-view').isVisible() &&
+    await page.locator('#workspace-overview-tab-36-6d').getAttribute('aria-selected') === 'true' &&
+    await page.locator('.workspace-detail-header-36-6c .workspace-overview-title').isVisible() &&
+    await page.locator('#workspace-current-title').evaluate((node) => document.activeElement === node),
+  'INVESTIGATION_DETAIL_ROUTE_OR_FOCUS_FAILED');
+  ensure(guidanceRequests === 0 && await page.locator('.guidance-citation').count() === 0,
+    'GUIDANCE_MUST_BE_OPT_IN');
+
+  const timelineTab = page.locator('#workspace-timeline-tab-36-6d');
+  await timelineTab.focus();
+  await page.keyboard.press('Enter');
+  ensure(await timelineTab.getAttribute('aria-selected') === 'true' &&
+    await page.locator('#workspace-timeline-panel-36-6d').isVisible() &&
+    await page.locator('.workspace-timeline-item-36-6d').count() >= 5 &&
+    await page.locator('.workspace-timeline-observation-36-6d').count() > 0 &&
+    await page.locator('.workspace-timeline-detection-36-6d').count() > 0 &&
+    await page.locator('.workspace-timeline-relation-36-6d').count() > 0 &&
+    (await page.locator('#workspace-timeline-panel-36-6d').innerText()).includes('인과관계나 공격 성공을 확정하지 않습니다'),
+  'WORKSPACE_TIMELINE_SEMANTICS_FAILED');
+  await page.keyboard.press('ArrowRight');
+  ensure(await page.locator('#workspace-tasks-tab-36-6e').getAttribute('aria-selected') === 'true' &&
+    await page.evaluate(() => document.activeElement.id) === 'workspace-tasks-tab-36-6e',
+  'DETAIL_TAB_KEYBOARD_NAVIGATION_FAILED');
+
+  await page.locator('#workspace-evidence-tab-36-6e').click();
+  const guidanceCard = page.locator('#case-detail-content');
+  const guidanceButton = guidanceCard.locator('.guidance-request');
+  ensure(await guidanceButton.count() === 1 && guidanceRequests === 0,
+    'GUIDANCE_CONTROL_MISSING_OR_AUTOMATIC');
   await guidanceButton.focus();
   const guidanceDomSamples = [];
   for (let sample = 0; sample < 9; sample++) {
@@ -189,6 +204,17 @@ try {
     max_ms: guidanceDomSamples.at(-1), request_payload_bytes: guidanceRequestBytes,
     response_payload_bytes: guidanceResponseBytes})}`);
   const guidanceCategory = guidanceCard.locator('.guidance-topic-choices');
+  ensure(await guidanceCategory.locator('input[type="radio"]').count() >= 3 &&
+    await guidanceCategory.getAttribute('role') === null,
+  'GUIDANCE_NATIVE_RADIO_CONTRACT_FAILED');
+  const guidanceDefault = guidanceCategory.locator('input[value="EXPLAIN_CASE"]');
+  await guidanceDefault.focus();
+  await page.keyboard.press('ArrowRight');
+  ensure(await guidanceCategory.locator('input:checked').inputValue() === 'EXPLAIN_DETECTION',
+    'GUIDANCE_RADIO_ARROW_FORWARD_FAILED');
+  await page.keyboard.press('ArrowLeft');
+  ensure(await guidanceCategory.locator('input:checked').inputValue() === 'EXPLAIN_CASE',
+    'GUIDANCE_RADIO_ARROW_REVERSE_FAILED');
   await guidanceCategory.locator('input[value="EXPLAIN_RISK"]').check();
   await guidanceButton.focus();
   await page.keyboard.press('Enter');
@@ -203,42 +229,18 @@ try {
     document.querySelector('.guidance-status').textContent.includes('최신 분석 결과에서 다시 선택'));
   ensure(await guidanceCard.locator('.guidance-citation').count() === 0,
     'GUIDANCE_STALE_RENDER_FAILED');
-  await caseSummaryForGuidance.focus();
+  const selectedGuidanceCategory = await guidanceCategory.locator('input:checked').inputValue();
+  ensure(selectedGuidanceCategory === 'NEXT_CHECKS', 'GUIDANCE_RADIO_STATE_NOT_PRESERVED');
+  await page.locator('#review-back-link').focus();
   await page.keyboard.press('Enter');
-  console.log(`result_metrics=${JSON.stringify(resultMetrics)}`);
-  ensure(resultMetrics.workspace === 1440 && resultMetrics.sidebarLeft === 0 &&
-    resultMetrics.summaryColumns === 4 && resultMetrics.summaryIcons === 4 && resultMetrics.cases === 2 &&
-    resultMetrics.caseColumns.split(' ').length === 2 && resultMetrics.railRightOfCases &&
-    resultMetrics.summaryTextLines < 32 && resultMetrics.summaryTimeCount === 2 &&
-    resultMetrics.height < 1253 && resultMetrics.lastCaseBottom <= resultMetrics.viewportHeight &&
-    resultMetrics.expandedHeight > resultMetrics.height &&
-    parseFloat(resultMetrics.paragraphCh) >= 600 && parseFloat(resultMetrics.paragraphCh) <= 760 &&
-    resultMetrics.resultFontPx >= 16 &&
-    resultMetrics.lineHeightPx >= 24 && resultMetrics.height < 1926,
-    'WIDE_RESULT_LAYOUT_NOT_COMPACT');
-  const caseSummary = page.locator('#case-list .case-card').first().locator(':scope > summary');
-  ensure((await page.locator('#case-list .case-summary').allTextContents()).some((value) =>
-    value.includes('로그인 실패 후 성공 기록 포함')), 'CASE_RELATION_CONTEXT_MISSING');
-  ensure(!(await page.locator('#case-list .case-card').first().evaluate((node) => node.open)),
-    'CASE_DETAIL_DEFAULT_OPEN');
-  await caseSummary.focus();
-  await page.keyboard.press('Enter');
-  ensure(await page.locator('#case-list .case-card').first().evaluate((node) => node.open) &&
-    !(await page.locator('#case-list .timeline-disclosure').first().evaluate((node) => node.open)),
-    'CASE_DETAIL_KEYBOARD_OPEN_FAILED');
-  const timelineSummary = page.locator('#case-list .timeline-disclosure').first().locator('summary');
-  await timelineSummary.focus();
-  await page.keyboard.press('Space');
-  ensure(await page.locator('#case-list .timeline-disclosure').first().evaluate((node) => node.open) &&
-    await page.locator('#case-list .timeline-item').count() >= 5,
-    'TIMELINE_KEYBOARD_OPEN_FAILED');
-  await page.keyboard.press('Space');
-  ensure(!(await page.locator('#case-list .timeline-disclosure').first().evaluate((node) => node.open)),
-    'TIMELINE_KEYBOARD_CLOSE_FAILED');
-  await caseSummary.focus();
-  await page.keyboard.press('Enter');
-  ensure(!(await page.locator('#case-list .case-card').first().evaluate((node) => node.open)),
-    'CASE_DETAIL_KEYBOARD_CLOSE_FAILED');
+  await page.locator('#results-heading').waitFor({state: 'visible'});
+  ensure(!new URL(page.url()).hash && await page.locator('#case-detail-view').isHidden() &&
+    await page.evaluate(() => document.activeElement.id) === 'review-case-link-0' &&
+    (await page.locator('#summary-cards').innerText()) === summaryBeforeDetail &&
+    (await page.locator('#case-list').innerText()) === reviewListBeforeDetail &&
+    await page.locator('#case-list .review-case-card').count() === 2,
+  'INVESTIGATION_LIST_RETURN_OR_RESULT_IMMUTABILITY_FAILED');
+  console.log(`result_listing=${JSON.stringify(listingMetrics)} detail_case=${expectedCaseRef}`);
   if (shots) await page.screenshot({path: join(shots, 'result.png'), fullPage: true});
   await page.locator('#nav-local').click();
   ensure(await page.locator('#local-upload').isVisible() &&
@@ -250,9 +252,15 @@ try {
   await page.locator('#nav-audit').click();
   ensure(await page.locator('#linux-audit-upload').isVisible() &&
     await page.locator('.workspace-panel:visible').count() === 1, 'AUDIT_PANEL_FAILED');
+  await page.locator('#nav-audit').focus();
   await page.keyboard.press('Shift+Tab');
-  ensure(await page.locator('#nav-results').evaluate((node) =>
-    document.activeElement === node && node.matches(':focus-visible')),
+  ensure(await page.evaluate(() => document.activeElement.matches('#nav-group-tools > summary')),
+    'TOOLS_DISCLOSURE_KEYBOARD_ORDER_FAILED');
+  await page.locator('#nav-results').focus();
+  const resultsNavigationFocus = await page.locator('#nav-results').evaluate((node) => ({
+    active: document.activeElement === node, visible: node.matches(':focus-visible'),
+  }));
+  ensure(resultsNavigationFocus.active && resultsNavigationFocus.visible,
     'NAV_FOCUS_NOT_VISIBLE');
   await page.keyboard.press('Enter');
   ensure(await page.locator('#results-heading').isVisible(), 'KEYBOARD_RESULT_NAV_FAILED');
@@ -330,7 +338,7 @@ try {
     parseFloat(wideStartMetrics.heroParagraphMax) <= 760, 'START_SHELL_OR_READING_WIDTH');
   console.log(`wide_result_metrics=${JSON.stringify(wideMetrics)}`);
   ensure(wideMetrics.workspace === wideMetrics.viewport &&
-    wideMetrics.sidebar >= 220 && wideMetrics.sidebar <= 250 &&
+    wideMetrics.sidebar >= 280 && wideMetrics.sidebar <= 340 &&
     wideMetrics.main === wideMetrics.viewport - wideMetrics.sidebar &&
     wideMetrics.sidebarLeft === 0 && wideMetrics.headerLeft === wideMetrics.sidebar &&
     wideMetrics.mainLeft === wideMetrics.sidebar,
@@ -342,8 +350,12 @@ try {
   ensure(await page.locator('#results .risk').evaluateAll((nodes) =>
     nodes.length >= 2 && nodes.every((node) => ['HIGH', 'MEDIUM', 'LOW'].includes(node.textContent.trim()))) &&
     await page.locator('#nav-results').textContent() !== '', 'FORCED_COLORS_TEXT_FAILED');
-  ensure(sampleRequests === 1 && guidanceRequests === 11 && external === 0 && unexpected === 0, 'NETWORK_OR_CONSOLE_FAILED');
-  console.log(`panels=4 widths=320,640,767,768,1024,1200,1440,1600,2000 sample_requests=${sampleRequests} guidance_requests=${guidanceRequests} external=${external} unexpected_errors=${unexpected} expected_disabled_status_404=${disabled404}`);
+  ensure(sampleRequests === 1 && guidanceRequests === 11 && external === 0 && unexpected === 0 && disabled404 === 0,
+    'NETWORK_OR_CONSOLE_FAILED');
+  ensure(guidanceCategories.length === 11 && guidanceCategories.slice(0, 9).every((category) =>
+    category === 'EXPLAIN_CASE') && guidanceCategories[9] === 'EXPLAIN_RISK' &&
+    guidanceCategories[10] === 'NEXT_CHECKS', 'GUIDANCE_CATEGORY_REQUEST_MISMATCH');
+  console.log(`WORKSPACE_NAVIGATION_28_4_PASS engine=${browserName} panels=4 widths=320,640,767,768,1024,1200,1440,1600,2000 sample_requests=${sampleRequests} guidance_requests=${guidanceRequests} external=${external} console_page_http_errors=${unexpected} disabled_status_404=${disabled404}`);
 } finally {
   await context?.close();
   await browser?.close();

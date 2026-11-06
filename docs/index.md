@@ -148,4 +148,5 @@
 - [ER-2E Evaluation Viewer 보안·접근성 검수](counterfactual_evidence_review_security_acceptance_er2e.md)
 - [ER-2E-R1 기존 브라우저 콘솔 오류 복구 기록](counterfactual_browser_console_remediation_er2e_r1.md)
 - [ER-2E-R2 WebKit CSP 호환 컨트롤 복구 기록](counterfactual_webkit_csp_control_migration_er2e_r2.md)
+- [ER-2E-R3 기존 Workspace 브라우저 회귀 복구](counterfactual_legacy_workspace_navigation_recovery_er2e_r3.md)
 - [ER-2E 사용자 수용 체크리스트](counterfactual_evidence_review_user_acceptance_er2e.md)
