@@ -121,6 +121,7 @@
 - [ER-1D-S0 1인 연구 트랙 설계](counterfactual_solo_research_track_er1d_s0.md) — 연구 설계와 독립 검토를 구분하고 구현 HOLD 및 별도 승인 조건 유지
 - [ER-1D-S0-G1 연구 Governance 결정 자료](counterfactual_solo_research_governance_er1d_s0_g1.md) — 제한적 정책 개정 제안과 S1 기술 경계 검토; 소유자 승인 대기
 - [ER-1D-S0-G2 연구 입력 범위 제안](counterfactual_research_input_scope_governance_er1d_s0_g2.md) — 고정 Corpus와 사용자 입력의 분리 및 후속 승인·보안 Gate 설계
+- [ER-1D-S0-G3 연구 정책 방향 결정 기록](counterfactual_solo_research_policy_decision_er1d_s0_g3.md) — 사용자 Option B 방향 승인 기록, 정책 효력 확인 대기 및 별도 S1 구현 Gate
 - [Phase 36.15B PyInstaller onedir feasibility](pyinstaller_onedir_feasibility_36_15b.md) — unsigned macOS arm64 prototype, loopback-only synthetic smoke; Linux/Windows and release packaging NOT_TESTED
 - [2026-11-01 Restricted Report Ubuntu smoke 실패 원인 분석](restricted_report_linux_smoke_failure_20261101.md) — malformed SSH smoke fixture와 strict parser 계약 불일치로 분류; Production 불변, Linux 재검증 필요
 - [PentAGI 격리 평가 pilot 설계 gate](pentagi_evaluation_pilot_31_0.md) · [v2.2.0 정적 공급망 감사](pentagi_supply_chain_audit_31_1.md) · [폐기형 VM 격리 기록·최종 NO-GO](disposable_vm_isolation_31_2a.md) — 무해 probe 실측과 PentAGI 실행 차단 조건
