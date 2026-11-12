@@ -2,7 +2,7 @@
 
 (() => {
   const STATUS = Object.freeze({
-    complete: ["모두 인식", "비어 있지 않은 입력 형식을 모두 인식했습니다. 안전하거나 위협이 없다는 뜻은 아닙니다."],
+    complete: ["모두 인식", "비어 있지 않은 입력 형식을 모두 인식했습니다. 모든 탐지에 필요한 정보가 갖춰졌거나 탐지 평가가 완료됐다는 뜻은 아닙니다. 안전하거나 위협이 없다는 뜻은 아닙니다."],
     partial: ["일부 인식", "일부 줄을 해석하지 못해 분석 범위가 제한될 수 있습니다. 인식한 줄의 분석 결과는 유지됩니다."],
     none: ["인식하지 못함", "비어 있지 않은 입력이 있었지만 지원 형식으로 해석하지 못했습니다. 탐지 없음이나 안전 판정이 아닙니다."],
     empty: ["분석할 내용 없음", "분석할 비어 있지 않은 줄이 없습니다. 정상 또는 안전을 뜻하지 않습니다."]
@@ -23,7 +23,7 @@
     return node;
   }
 
-  function render(container, projection, selectedSource = null) {
+  function render(container, projection, selectedSource = null, {requestRejected = false} = {}) {
     container.replaceChildren();
     container.hidden = true;
     if (!projection) return;
@@ -37,7 +37,9 @@
     status.id = "input-quality-status-36-12b";
     status.className = "input-quality-state-36-12b";
     status.append(text("strong", state[0]));
-    status.append(document.createTextNode(` — ${state[1]}`));
+    const description = requestRejected ?
+      "입력이 거부되어 이 요청의 분석 결과는 생성되지 않았습니다." : state[1];
+    status.append(document.createTextNode(` — ${description}`));
     const counts = document.createElement("dl");
     counts.className = "input-quality-counts-36-12b";
     [["전체 입력 줄", aggregate.total_lines], ["인식", aggregate.recognized_lines],

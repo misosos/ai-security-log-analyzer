@@ -2521,7 +2521,8 @@ if (REVIEW_WORKFLOW_STATE_UI_ENABLED) await import("/assets/investigation-review
     const errorQuality = document.getElementById("error-input-quality-36-12b");
     if (errorQuality) {
       if (publicFailure.errorCode === "PARSER_INCOMPATIBLE" && publicFailure.inputQuality) {
-        window.inputQualityUi36_12b.render(errorQuality, publicFailure.inputQuality);
+        window.inputQualityUi36_12b.render(errorQuality, publicFailure.inputQuality,
+          null, {requestRejected: true});
       } else {
         errorQuality.replaceChildren();
         errorQuality.hidden = true;
