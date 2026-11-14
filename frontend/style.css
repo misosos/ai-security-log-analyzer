@@ -397,6 +397,9 @@ a { color: #064f96; text-underline-offset: .2em; }
 .summary-card p { margin: 0; }
 .summary-value { font-size: 1.8rem; line-height: 1.2; font-weight: 750; margin-top: .45rem !important; }
 #result-empty .icon { margin-right: .45rem; color: #164c89; }
+#result-empty h3 { margin: 0 0 .5rem; font-size: 1.1rem; }
+#result-empty ol { margin: .75rem 0; padding-inline-start: 1.4rem; }
+#result-empty li + li { margin-top: .35rem; }
 .card-stack { display: grid; gap: 1rem; }
 .case-card h4, .independent-card h4 { margin: 0 0 .5rem; font-size: 1.13rem; }
 .case-card { padding: 0; }
