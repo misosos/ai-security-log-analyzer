@@ -230,6 +230,7 @@ async function main() {
   assert.equal(nodes["summary-cards"].textContent.includes("독립 관찰"), true);
   assert.equal(nodes["summary-cards"].textContent.includes("추가 확인 필요"), false);
   assert.equal(nodes["independent-list"].children.length, 4);
+  assert.equal(nodes["result-empty"].hidden, true, "observed results do not show no-case guidance");
   assert.equal(nodes["report-download"].hidden, false);
   assert.equal(app.downloads.length, 0, "no automatic download");
   const callsBeforeDownload = app.fetchCount();
@@ -356,6 +357,52 @@ async function main() {
   assert.equal(nodes["case-section"].hidden, true);
   assert.equal(nodes["independent-details"].hidden, true);
   assert.equal(nodes["result-empty"].hidden, false, "one empty state carries the safety limit");
+  if (supplied.noCase) {
+    const text = makeApp(input);
+    text.nodes["input-mode-text"].checked = true;
+    text.nodes["input-mode-text"].listeners.change();
+    for (const fixture of supplied.noCase.empty) {
+      const before = JSON.stringify(fixture.response);
+      text.setResponse(fixture.response);
+      text.nodes["log-text"].value = fixture.log_text;
+      const requests = text.fetchCount();
+      await text.submit();
+      assert.equal(text.nodes.results.hidden, false, `${fixture.label} analysis succeeds`);
+      assert.equal(text.nodes["result-empty"].hidden, false, `${fixture.label} shows the same static guidance`);
+      assert.equal(text.nodes["case-section"].hidden, true);
+      assert.equal(text.nodes["independent-details"].hidden, true);
+      assert.equal(text.fetchCount(), requests + 1, "guidance makes no additional request");
+      assert.equal(text.fetchCalls.at(-1).url, "/api/v1/investigations/text");
+      assert.equal(text.nodes["log-text"].value, "", "guidance does not retain the input");
+      assert.equal(JSON.stringify(fixture.response), before, "rendering does not add evidence or report data");
+    }
+    const positive = supplied.noCase.positive;
+    text.setResponse(positive.response);
+    text.nodes["log-text"].value = positive.log_text;
+    await text.submit();
+    assert.equal(text.nodes.results.hidden, false);
+    assert.equal(text.nodes["result-empty"].hidden, true, "an independent detection without a case suppresses guidance");
+    assert.equal(text.nodes["independent-details"].hidden, false);
+
+    for (const failure of supplied.noCase.errors) {
+      text.setHttpStatus(200);
+      text.setResponse(supplied.noCase.empty[0].response);
+      text.nodes["log-text"].value = supplied.noCase.empty[0].log_text;
+      await text.submit();
+      assert.equal(text.nodes["result-empty"].hidden, false);
+      text.setResponse(failure.response);
+      text.setHttpStatus(failure.status);
+      text.nodes["log-text"].value = failure.log_text;
+      const release = text.holdFetch();
+      const request = text.submit();
+      assert.equal(text.nodes["result-empty"].hidden, true, "a new pending request clears prior guidance");
+      release();
+      await request;
+      assert.equal(text.nodes.results.hidden, true, "rejection or failure is not a successful negative");
+      assert.equal(text.nodes["result-empty"].hidden, true);
+      assert.equal(text.nodes["error-summary"].hidden, false);
+    }
+  }
   if (supplied.local) {
     const local = makeApp(supplied.local);
     assert.equal(local.nodes["input-mode-file"].checked, true, "file upload remains the default mode");

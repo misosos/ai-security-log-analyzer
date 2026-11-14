@@ -368,7 +368,16 @@
         <div id="summary-cards" class="summary-grid" role="list" aria-label="분석 결과 요약"></div>
       </section>
       <section id="input-quality-summary-36-12b" class="input-quality-summary-36-12b" aria-labelledby="input-quality-heading-36-12b" hidden></section>
-      <p id="result-empty" class="sample-notice" hidden><svg class="icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#icon-circle-help"></use></svg>확인할 항목이 없습니다. 지원 범위나 입력 내용을 다시 확인해 주세요. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
+      <section id="result-empty" class="sample-notice" aria-labelledby="result-empty-heading" hidden>
+        <h3 id="result-empty-heading">다음 조사 단계</h3>
+        <p>표시할 조사 사례와 독립 관찰이 없습니다. 결과가 없다는 것은 안전을 뜻하지 않습니다.</p>
+        <ol>
+          <li>입력 로그의 수집 범위·인식 범위와 누락 가능성을 확인하세요.</li>
+          <li>원문에서 IP·계정·시각별 인증 실패 분포를 확인하세요.</li>
+          <li>관련 탐지 규칙의 집계 단위·임계값·시간 범위와 대조하세요.</li>
+        </ol>
+        <p>입력 인식 완료는 전체 규칙 평가 완료가 아닙니다. 위 절차는 직접 수행할 조사 작업이며, 프로그램이 계정 누락이나 탐지 조건 미충족을 확인한 결과가 아닙니다.</p>
+      </section>
       <div id="result-body" class="result-body">
         <section id="case-section" aria-labelledby="case-list-heading">
           <div class="review-queue-heading-36-13a">
