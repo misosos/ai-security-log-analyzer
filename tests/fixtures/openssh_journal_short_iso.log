@@ -1,0 +1,6 @@
+2026-04-17T14:00:00+0530 journal-fixture-node sshd[8101]: Failed password for journal-fixture-user from 198.51.100.87 port 42001 ssh2
+2026-04-17T14:00:01+0530 journal-fixture-node sshd[8102]: Failed password for journal-fixture-user from 198.51.100.87 port 42002 ssh2
+2026-04-17T14:00:02+0530 journal-fixture-node sshd[8103]: Failed password for journal-fixture-user from 198.51.100.87 port 42003 ssh2
+2026-04-17T14:00:03+05:30 journal-fixture-node sshd[8104]: Failed password for journal-fixture-user from 198.51.100.87 port 42004 ssh2
+2026-04-17T14:00:04+05:30 journal-fixture-node sshd[8105]: Failed password for journal-fixture-user from 198.51.100.87 port 42005 ssh2
+2026-04-17T14:00:10+05:30 journal-fixture-node sshd[8106]: Accepted publickey for journal-fixture-user from 198.51.100.87 port 42006 ssh2: ED25519 SHA256:synthetic-key-canary

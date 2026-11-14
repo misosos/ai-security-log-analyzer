@@ -159,3 +159,26 @@ RFC 5424의 모든 Structured Data/transport framing, OpenSSH 버전·배포판�
 ## 16. 최종 판정
 
 `PHASE_36_11B_OPENSSH_SYSLOG_COMPATIBILITY_LOCAL_CONDITIONAL_GO`는 필수 전체 회귀가 성공하고 변경 범위가 유지된 경우에만 적용한다. 이는 명시한 RFC5424 subset에 대한 합성 parser/API/Live-parser parity 성공이다. 모든 OpenSSH/Linux Syslog 형식, 실제 운영 정확도, live collector 통합, 사용자 자료 또는 조직 운영을 승인하지 않는다.
+
+## 17. REAL-LOG-1 journalctl short-iso 추가 지원
+
+기존 ISO-style 및 제한 RFC 5424는 유지하며, `ssh` 입력 역할에 다음 단일 행 하위집합을 추가한다. 아래는 실제 수집물이 아닌 비민감 합성 예시다.
+
+```text
+2026-04-17T14:00:00+0530 host.example.test sshd[7312]: Failed password for example-user from 192.0.2.71 port 41001 ssh2
+```
+
+Linux에서 해당 형식을 내보내는 명령 예시이며 새 수집 기능은 아니다. 생성 파일에는 민감한 원문이 포함될 수 있으므로 공개하거나 저장소에 추가하지 않는다.
+
+```bash
+SYSTEMD_COLORS=0 SYSTEMD_URLIFY=0 journalctl --output=short-iso --no-pager --quiet SYSLOG_IDENTIFIER=sshd > ssh-journal.log
+```
+
+- 공식 근거 확인: 2026-11-14. [journalctl 문서](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html)는 출력 형식 근거이고 [OpenSSH 9.6p1 `auth_log`](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/auth.c)는 인증 메시지 생성 근거다. 버전 고정 소스로 동작을 확인했으며 모든 배포판·OpenSSH 버전을 대표하지 않는다.
+- 명시적 연도·초 단위 시각·숫자 UTC offset 필수. [systemd v252](https://github.com/systemd/systemd/blob/v252/src/shared/logs-show.c)의 `+HHMM`과 [v257](https://github.com/systemd/systemd/blob/v257/src/shared/logs-show.c)의 `+HH:MM` 표기를 검증해 UTC로 정규화한다. 현재 시각·연도·Registry 시간대로 보정하지 않는다.
+- 출력에 printable ASCII hostname 토큰(1–255자)과 정확한 `sshd` 태그가 있어야 한다. systemd 출력에서 hostname/PID는 metadata·옵션에 따라 생략될 수 있으나 이 하위집합은 hostname을 요구하며 숫자 `[PID]`만 선택적으로 허용한다. hostname/PID는 구조 확인용이며 원격 IP·인증 주체·출처 신뢰의 증거가 아니다.
+- 인증 메시지는 `Failed/Accepted password/publickey for [invalid user ]USER from IP port PORT ssh2[: 부가 정보]`로 제한한다. 기존 인증 해석 로직을 재사용해 timestamp→UTC, 원격 IP literal→`src_ip`, USER→`user`, outcome/method/port/invalid-user→기존 `AuthenticationContext`로 매핑한다. IP 및 ASCII port 1–65535를 검증하고, 잘린 인증 메시지는 거부한다. 사용자명은 실제 계정 존재의 증명이 아니다.
+- 일반 `sshd` 메시지는 기존처럼 인증 정보 없는 레코드로 남을 수 있다. PAM·Partial·Postponed를 인증 성공/실패로 만들지 않는다. `Failed/Accepted`로 시작해도 지원 문법에 맞지 않으면 거부한다. Detector/Correlation/Risk의 집계 단위·임계값·시간 범위와 기존 공개 Evidence/API/HTML schema는 바꾸지 않는다.
+- 미지원: `short-iso-precise`, `Z`/시간대 결손/`-00:00`(compact `-0000` 포함), 연도 없는 RFC 3164, JSON·monotonic·custom 출력, hostname 생략, `sshd-session` 등 다른 태그, ANSI·멀티라인·잘못된 날짜/IP/port. Parser는 최대 8192문자이며 로컬 입력/Live의 기존 2048-byte 행 제한도 유지한다. 입력 문자열로 실제 journald 출처나 무변조를 인증하지 않는다.
+- 고정 합성 검증 입력은 `tests/fixtures/openssh_journal_short_iso.log`다. Batch/Live Parser·Live 분석·기존 탐지/상관관계/위험도·Text/File API 및 비공개 원문 projection 경계를 검사한다. Snapshot은 기존 offline producer 결과와 byte-identical임을 재검증한 뒤 전달 모듈의 SSH Parser source pin 한 개만 갱신한다. Snapshot/Corpus/Label은 변경하지 않는다.
+- `FORMAT_SUPPORTED_BY_IMPLEMENTATION` · `SYNTHETIC_COMPATIBILITY_TESTED` · **`REAL_LOG_VALIDATION_PENDING`**. 공식 소스 기반 합성 호환성만 검증했으며 실제 Linux journal 출력·배포판별 변형·수집기 통합·운영 탐지율은 검증하지 않았다. 기존 운영 `NO_GO` 및 S1 HOLD는 유지한다.
