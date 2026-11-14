@@ -40,6 +40,50 @@ _RFC5424_HEADER = re.compile(
     r"(?P<msgid>[^ ]{1,32}) - (?P<message>.+)$"
 )
 _AUTHENTICATION_PREFIX = re.compile(r"^(?:Failed|Accepted)\b")
+_JOURNAL_SHORT_ISO_PREFIX = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T")
+_JOURNAL_SHORT_ISO_TIMESTAMP = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"[+-][0-9]{2}:?[0-9]{2}$"
+)
+_JOURNAL_SHORT_ISO_HEADER = re.compile(
+    r"^(?P<timestamp>[^ ]+) (?P<hostname>[!-~]{1,255}) "
+    r"sshd(?:\[[0-9]+\])?: (?P<message>.+)$"
+)
+
+
+def _parse_journal_short_iso(log):
+    # A bounded, single physical line with hostname and the exact sshd tag.
+    # Journal metadata is not authenticated server/account/remote identity.
+    if len(log) > 8192 or "\r" in log or "\n" in log:
+        raise ValueError("Unsupported journal short-iso record.") from None
+    header = _JOURNAL_SHORT_ISO_HEADER.fullmatch(log)
+    if header is None:
+        raise ValueError("Unsupported journal short-iso header.") from None
+    value = header.group("timestamp")
+    if _JOURNAL_SHORT_ISO_TIMESTAMP.fullmatch(value) is None:
+        raise ValueError("Unsupported journal short-iso timestamp.") from None
+    # systemd v252 uses %z (+HHMM); v257 inserts the colon (+HH:MM).
+    if value[-3] != ":":
+        value = value[:-2] + ":" + value[-2:]
+    try:
+        timestamp = _parse_rfc5424_timestamp(value)
+    except (ValueError, OverflowError):
+        raise ValueError("Unsupported journal short-iso timestamp.") from None
+    message_text = header.group("message")
+    try:
+        _validate_rfc5424_text(message_text)
+    except ValueError:
+        raise ValueError("Unsupported journal short-iso text.") from None
+    message = AUTHENTICATION_MESSAGE.fullmatch(message_text)
+    if message is not None:
+        # Upstream auth_log includes port and ssh2. Do not accept a truncated
+        # record merely because the legacy message grammar permits no port.
+        port = message.group("source_port")
+        if port is None:
+            raise ValueError("Malformed SSH authentication message.") from None
+        if not port.isascii():
+            raise ValueError("Unsupported SSH source port.") from None
+    return _event_from_message(timestamp, message_text, log, strict=True)
 
 
 def _parse_rfc5424_timestamp(value):
@@ -183,6 +227,8 @@ def parse_ssh_auth_log(log, timezone=None):
         raise ValueError("Unsupported SSH log record.") from None
     if log.startswith("<"):
         return _parse_rfc5424_ssh(log)
+    if _JOURNAL_SHORT_ISO_PREFIX.match(log):
+        return _parse_journal_short_iso(log)
     parts = log.split()
     if len(parts) < 3:
         raise ValueError("Unsupported SSH log record.") from None

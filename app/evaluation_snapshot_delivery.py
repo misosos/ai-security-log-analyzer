@@ -90,7 +90,7 @@ _SOURCE_VERSION_PINS = (
     (('app', 'parser'), 'auth_log.py', 'a6360da532cfc98e02faaa70a6b45b1795d27ad202b3f43f41fa3e33d59b1132'),
     (('app', 'parser'), 'linux_audit.py', '73a873991fc497c4488994327f2757cd797fb7f45497840e4b4c04edadb45a72'),
     (('app', 'parser'), 'registry.py', 'b670de3e785fb375108dc9309426363588c5879ce1466e65dfb5651f8104c65b'),
-    (('app', 'parser'), 'ssh_auth.py', '84cfa9246349e83f18524c8594eb028cdc4b86b188b6360789d286303f75f787'),
+    (('app', 'parser'), 'ssh_auth.py', '18afc4b0ec6063afb9ca62ee8e492ab70526ee1f455231cf168e42f33093d036'),
     (('app', 'parser'), 'time_utils.py', 'de75ea48f327978a56281b632936cbeb066b2b218086d3c5085abbe3ad97b694'),
     (('app',), 'public_identifiers.py', '3a1ce00163869db78b6b51a075ed4c29b4e9b5a980f6d0aec261375d55d28992'),
 )

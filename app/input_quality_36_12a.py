@@ -128,6 +128,10 @@ def _reason_for_exception(source: str, line: str, error: Exception) -> str:
     # Categorize only fixed parser messages. Never copy exception text to a DTO.
     message = str(error)
     if source == "ssh":
+        if message == "Unsupported journal short-iso timestamp.":
+            return "invalid_timestamp"
+        if message == "Unsupported journal short-iso header.":
+            return "invalid_header"
         if re.match(r"^<[0-9]{1,3}>1 ", line):
             fields = line.split(" ", 3)
             if len(fields) > 1:

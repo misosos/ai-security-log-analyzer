@@ -60,6 +60,8 @@ uv run python -m app.local_web --monitor
 
 탐지 유형에는 Brute Force, Password Spraying-like, Path Traversal, SQL Injection-like, XSS-like 등이 있습니다. 합성 평가 범위는 [탐지 평가](docs/detection_evaluation.md), 형식 범위는 [지원 로그 형식](docs/supported_log_format_compatibility_36_9b.md)을 참조하십시오.
 
+OpenSSH의 기존 ISO-style·제한 RFC 5424와 `journalctl --output=short-iso` 하위집합을 지원합니다. [정확한 형식·명령 예시·검증 한계](docs/openssh_syslog_timestamp_provenance_36_11b.md#17-real-log-1-journalctl-short-iso-추가-지원)를 확인하십시오. 실제 Linux journal 출력 검증은 `REAL_LOG_VALIDATION_PENDING`입니다.
+
 ## 결과를 읽는 법
 
 - 탐지는 조사할 관찰이며 결과가 없다고 안전한 것은 아닙니다.
